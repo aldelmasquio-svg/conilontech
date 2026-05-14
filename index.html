@@ -3,19 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ConilonTech · Gestão Agrícola</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>ConilonTech · Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
-<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, collection, onSnapshot, addDoc, updateDoc, deleteDoc, getDocs, query, orderBy, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -30,942 +25,267 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ─── Estado global ───
-let usuarioAtual = null;
-let perfilAtual = {};  // { modulos: { mapa:'operador', atividades:'encarregado', ... } }
-let talhoes = [];
-let talhoesAtividades = []; // talhões com dados extras (quadras, carreiras, plantas)
-let funcionarios = [];
-let atividades = []; // tipos de atividade configuráveis
-let registrosAtividade = [];
-let empreiteiros = [];
-let _suprimirRenderTalhoes = false;
-let unsubListeners = [];
+// Modo offline
+enableIndexedDbPersistence(db).catch(() => {});
 
-// ─── AUTH ───
+let perfilAtual = {};
+let talhoes = [], registros = [], planosAdubacao = [], pulverizacoes = [];
+let chartStatus = null, chartAtividade = null;
+
 onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    usuarioAtual = user;
-    const snap = await getDoc(doc(db, 'usuarios', user.uid));
-    if (snap.exists()) {
-      const dados = snap.data();
-      perfilAtual = dados;
-      document.getElementById('userNome').textContent = dados.nome || user.email;
-      document.getElementById('userEmail').textContent = user.email;
-      mostrarApp();
-      aplicarPermissoes();
-      iniciarListeners();
-    } else {
-      await signOut(auth);
-      mostrarLogin();
-      mostrarErroLogin('Sua conta ainda não foi ativada. Aguarde o administrador.');
-    }
-  } else {
-    usuarioAtual = null;
-    perfilAtual = {};
-    unsubListeners.forEach(u => u());
-    unsubListeners = [];
-    mostrarLogin();
+  if (!user) { window.location.href = 'login.html'; return; }
+  const snap = await getDoc(doc(db, 'usuarios', user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
+    perfilAtual.modulos = { mapa:'admin', atividades:'admin', adubacao:'admin', config:'admin', pulverizacao:'admin', pedidos:'admin', admin:'admin' };
   }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+  iniciarListeners();
 });
 
-window.fazerLogin = async function() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const senha = document.getElementById('loginSenha').value;
-  const btn = document.getElementById('btnLogin');
-  if (!email || !senha) { mostrarErroLogin('Preencha e-mail e senha.'); return; }
-  btn.disabled = true; btn.textContent = 'Entrando...';
-  try {
-    await signInWithEmailAndPassword(auth, email, senha);
-  } catch(e) {
-    mostrarErroLogin('E-mail ou senha incorretos.');
-    btn.disabled = false; btn.textContent = 'Entrar';
-  }
-};
-
-window.fazerLogout = async function() { await signOut(auth); };
-
-window.abrirCadastro = function() {
-  document.getElementById('telaLogin').style.display = 'none';
-  document.getElementById('telaCadastro').style.display = 'flex';
-};
-window.voltarLogin = function() {
-  document.getElementById('telaCadastro').style.display = 'none';
-  document.getElementById('telaLogin').style.display = 'flex';
-};
-
-window.fazerCadastro = async function() {
-  const nome   = document.getElementById('cadNome').value.trim();
-  const email  = document.getElementById('cadEmail').value.trim();
-  const senha  = document.getElementById('cadSenha').value;
-  const conf   = document.getElementById('cadConf').value;
-  const codigo = document.getElementById('cadCodigo').value.trim();
-  if (!nome || !email || !senha) { mostrarErroCad('Preencha todos os campos.'); return; }
-  if (senha !== conf) { mostrarErroCad('As senhas não coincidem.'); return; }
-  if (senha.length < 6) { mostrarErroCad('Senha mínima de 6 caracteres.'); return; }
-
-  const snap = await getDocs(collection(db, 'usuarios'));
-  const primeiroUsuario = snap.empty;
-
-  let modulos = {};
-  if (primeiroUsuario) {
-    modulos = { mapa:'admin', atividades:'admin', adubacao:'admin', config:'admin' };
-  } else {
-    const configSnap = await getDoc(doc(db, 'config', 'geral'));
-    const codigoCorreto = configSnap.exists() ? (configSnap.data().codigoCadastro || '') : '';
-    if (codigoCorreto && codigo !== codigoCorreto) {
-      mostrarErroCad('Código de acesso incorreto.');
-      return;
-    }
-    // Perfil padrão — sem acesso, admin vai configurar depois
-    modulos = { mapa:'nenhum', atividades:'encarregado', adubacao:'nenhum', config:'nenhum' };
-  }
-
-  const btn = document.getElementById('btnCadastro');
-  btn.disabled = true; btn.textContent = 'Criando conta...';
-  try {
-    const cred = await createUserWithEmailAndPassword(auth, email, senha);
-    await setDoc(doc(db, 'usuarios', cred.user.uid), {
-      nome, email, modulos, criadoEm: new Date().toISOString()
-    });
-    if (primeiroUsuario) {
-      await setDoc(doc(db, 'config', 'geral'), {
-        codigoCadastro: '',
-        atividades: ['Colheita', 'Desbrota', 'Poda', 'Roçada'],
-        fazendas: []
-      });
-    }
-    toast('✅ Conta criada com sucesso!');
-  } catch(e) {
-    let msg = 'Erro ao criar conta.';
-    if (e.code === 'auth/email-already-in-use') msg = 'E-mail já em uso.';
-    mostrarErroCad(msg);
-    btn.disabled = false; btn.textContent = 'Criar Conta';
-  }
-};
-
-// ─── LISTENERS ───
-function iniciarListeners() {
-  // Talhões (compartilhados com app de mapa)
-  const u1 = onSnapshot(collection(db, 'talhoes'), snap => {
-    talhoes = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
-    if (window._moduloAtivo === 'mapa') renderizarTodos();
-    popularSelectTalhaoAtividade();
-  });
-
-  // Talhões de atividades (dados extras: quadras, carreiras, plantas)
-  const u2 = onSnapshot(collection(db, 'talhoesAtividades'), snap => {
-    talhoesAtividades = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
-    if (window._moduloAtivo === 'atividades' && !_suprimirRenderTalhoes) renderizarTalhoesAtividades();
-  });
-
-  // Funcionários
-  const u3 = onSnapshot(collection(db, 'funcionarios'), snap => {
-    funcionarios = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
-    if (window._moduloAtivo === 'atividades') renderizarFuncionarios();
-  });
-
-  // Empreiteiros
-  const u6 = onSnapshot(collection(db, 'empreiteiros'), snap => {
-    empreiteiros = snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
-    if (window._moduloAtivo === 'atividades') renderizarEmpreiteiros();
-  });
-
-  // Config (atividades configuráveis)
-  const u4 = onSnapshot(doc(db, 'config', 'geral'), snap => {
-    if (snap.exists()) {
-      const d = snap.data();
-      if (d.atividades) atividades = d.atividades;
-      const el = document.getElementById('codigoAtualDisplay');
-      if (el) el.textContent = d.codigoCadastro || '(vazio)';
-    }
-  });
-
-  // Registros de atividade
-  const u5 = onSnapshot(collection(db, 'registrosAtividade'), snap => {
-    registrosAtividade = snap.docs.map(d => ({ _docId: d.id, ...d.data() }))
-      .sort((a,b) => (b.data||'').localeCompare(a.data||''));
-    if (window._moduloAtivo === 'atividades') renderizarRegistros();
-  });
-
-  unsubListeners = [u1, u2, u3, u4, u5, u6];
-}
-
-// ─── PERMISSÕES ───
-function nivelAcesso(modulo) {
-  // Suporta formato novo (modulos.mapa) e legado (perfil)
-  if (perfilAtual.modulos && perfilAtual.modulos[modulo]) return perfilAtual.modulos[modulo];
+function nivelAcesso(mod) {
+  if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
   if (perfilAtual.perfil === 'admin') return 'admin';
   return 'nenhum';
 }
-function temAcesso(modulo) {
-  return nivelAcesso(modulo) !== 'nenhum';
-}
-window.isAdmin = function(modulo) { return nivelAcesso(modulo) === 'admin'; };
-window.podeEditar = function(modulo) {
-  const n = nivelAcesso(modulo);
-  return n === 'admin' || n === 'operador' || n === 'encarregado';
-};
 
-function aplicarPermissoes() {
-  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = { mapa:'admin', atividades:'admin', adubacao:'admin', config:'admin' };
-  }
-  // Montar menu lateral com módulos disponíveis
-  const menuItems = [
-    { id: 'mapa', ico: '🗺️', label: 'Mapa de Talhões' },
-    { id: 'atividades', ico: '🌾', label: 'Atividades de Campo' },
-    { id: 'adubacao', ico: '🧪', label: 'Adubações' },
+function gerarMenu() {
+  const isAdmin = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
+  const items = [
+    { href:'index.html', ico:'📊', label:'Dashboard', sempre:true },
+    { href:'mapa.html', ico:'🗺️', label:'Mapa de Talhões', acesso:'mapa' },
+    { href:'atividades.html', ico:'🌾', label:'Atividades de Campo', acesso:'atividades' },
+    { href:'adubacoes.html', ico:'🧪', label:'Adubações', acesso:'adubacao' },
+    { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações', acesso:'pulverizacao' },
+    { href:'pedidos.html', ico:'📦', label:'Pedidos de Insumos', acesso:'pedidos' },
+    { href:'admin.html', ico:'⚙️', label:'Administração', admin:true },
   ];
-  const menuEl = document.getElementById('menuModulos');
-  menuEl.innerHTML = menuItems.map(m => {
-    if (!temAcesso(m.id)) return '';
-    return `<button class="menu-item" id="menu-${m.id}" onclick="abrirModulo('${m.id}')">
-      <span class="menu-ico">${m.ico}</span>
-      <span class="menu-label">${m.label}</span>
-    </button>`;
+  document.getElementById('menuModulos').innerHTML = items.map(m => {
+    if (m.admin && !isAdmin) return '';
+    if (m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
+    const ativo = window.location.pathname.endsWith('index.html') || window.location.pathname === '/' ? m.href === 'index.html' : false;
+    return `<a class="menu-item ${ativo?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
   }).join('');
-
-  // Config só para admin de qualquer módulo
-  const isAnyAdmin = Object.values(perfilAtual.modulos || {}).includes('admin');
-  if (isAnyAdmin) {
-    menuEl.innerHTML += `<button class="menu-item" id="menu-config" onclick="abrirModulo('config')">
-      <span class="menu-ico">⚙️</span>
-      <span class="menu-label">Configurações</span>
-    </button>`;
-  }
-
-  // Abrir primeiro módulo disponível
-  const primeiro = menuItems.find(m => temAcesso(m.id));
-  if (primeiro) abrirModulo(primeiro.id);
-  else if (isAnyAdmin) abrirModulo('config');
 }
 
-window.abrirModulo = function(modulo) {
-  window._moduloAtivo = modulo;
-  document.querySelectorAll('.modulo').forEach(el => el.style.display = 'none');
-  document.querySelectorAll('.menu-item').forEach(el => el.classList.remove('ativo'));
-  const el = document.getElementById('mod-' + modulo);
-  const menuEl = document.getElementById('menu-' + modulo);
-  if (el) el.style.display = 'flex';
-  if (menuEl) menuEl.classList.add('ativo');
-  fecharMenu();
-
-  if (modulo === 'mapa') { iniciarMapa(); }
-  if (modulo === 'atividades') { renderizarTalhoesAtividades(); renderizarFuncionarios(); renderizarRegistros(); }
-  if (modulo === 'config') { carregarUsuarios(); renderizarAtividadesConfig(); }
-};
-
-// ─── SALVAR TALHÃO (mapa) ───
-window.salvarTalhao = async function() {
-  if (!podeEditar('mapa')) { toast('⛔ Sem permissão.'); return; }
-  const fazendas = window._getFazendas ? window._getFazendas() : [];
-  const selVal = document.getElementById('fFazenda').value;
-  const novaVal = document.getElementById('fFazendaNova').value.trim();
-  const fazenda = selVal === '__nova__' ? novaVal : selVal;
-  if (!fazenda) { alert('Informe o nome da fazenda.'); return; }
-  if (selVal === '__nova__' && novaVal && !fazendas.includes(novaVal)) {
-    fazendas.push(novaVal); fazendas.sort();
-    await updateDoc(doc(db,'config','geral'), { fazendas });
-  }
-  const id = document.getElementById('fId').value.trim();
-  const nome = document.getElementById('fNome').value.trim();
-  const area = parseFloat(document.getElementById('fArea').value) || 0;
-  const status = document.getElementById('fStatus').value;
-  const clone = document.getElementById('fClone').value.trim();
-  const dataPlantio = document.getElementById('fDataPlantio').value;
-  const espacamento = document.getElementById('fEspacamento').value.trim();
-  const irrigacao = document.getElementById('fIrrigacao').value;
-  const observacoes = document.getElementById('fObs').value.trim();
-  const historico = [];
-  document.querySelectorAll('.historico-row').forEach(row => {
-    const safra = row.querySelector('.h-safra').value.trim();
-    const valor = row.querySelector('.h-valor').value.trim();
-    if (safra || valor) historico.push({ safra, valor });
+function iniciarListeners() {
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
   });
-  if (!id || !nome) { alert('Preencha ID e Nome.'); return; }
-  const dados = { id, fazenda, nome, area, status, clone, dataPlantio, espacamento, irrigacao, observacoes, historico, coordenadas: [] };
-  if (editandoId) {
-    const t = talhoes.find(x => x.id === editandoId);
-    if (t) { dados.coordenadas = t.coordenadas || []; await updateDoc(doc(db,'talhoes',t._docId), dados); toast('Talhão atualizado! ✅'); fecharModal(); selecionarTalhao(editandoId); }
-  } else {
-    if (talhoes.find(t => t.id === id)) { alert('ID já existe.'); return; }
-    await addDoc(collection(db,'talhoes'), dados);
-    fecharModal(); toast('Talhão criado!'); setTimeout(() => selecionarTalhao(id), 800);
-  }
-};
-
-window.deletarAtual = async function() {
-  if (!isAdmin('mapa')) { toast('⛔ Sem permissão.'); return; }
-  if (!talhaoAtualId) return;
-  if (!confirm(`Excluir "${talhaoAtualId}"?`)) return;
-  const t = talhoes.find(x => x.id === talhaoAtualId);
-  if (t) await deleteDoc(doc(db,'talhoes',t._docId));
-  fecharPainel(); toast('Talhão excluído.');
-};
-
-window.salvarCoordenadas = async function(id, coords) {
-  if (!podeEditar('mapa')) return;
-  const t = talhoes.find(x => x.id === id);
-  if (t) await updateDoc(doc(db,'talhoes',t._docId), { coordenadas: coords });
-};
-
-// ─── ATIVIDADES ───
-window.salvarEmpreiteiro = async function() {
-  if (!isAdmin('atividades')) { toast('⛔ Sem permissão.'); return; }
-  const nome = document.getElementById('inpNovoEmp').value.trim();
-  if (!nome) { toast('Informe o nome.'); return; }
-  if (empreiteiros.find(e => e.nome.toLowerCase() === nome.toLowerCase())) { toast('Já cadastrado.'); return; }
-  await addDoc(collection(db,'empreiteiros'), { nome, funcionarios: [], criadoEm: new Date().toISOString() });
-  document.getElementById('inpNovoEmp').value = '';
-  toast('✅ ' + nome + ' adicionado!');
-};
-
-window.deletarEmpreiteiro = async function(docId) {
-  if (!isAdmin('atividades')) return;
-  if (!confirm('Remover este empreiteiro e sua turma?')) return;
-  await deleteDoc(doc(db,'empreiteiros',docId));
-};
-
-window.salvarFuncEmpreiteiro = async function(empDocId) {
-  if (!isAdmin('atividades')) return;
-  const nome = document.getElementById('inpFuncEmp-' + empDocId).value.trim();
-  if (!nome) { toast('Informe o nome.'); return; }
-  const emp = empreiteiros.find(e => e._docId === empDocId);
-  if (!emp) return;
-  const funcs = emp.funcionarios || [];
-  if (funcs.find(f => f.nome.toLowerCase() === nome.toLowerCase())) { toast('Já cadastrado nesta turma.'); return; }
-  funcs.push({ id: 'f' + Date.now(), nome });
-  await updateDoc(doc(db,'empreiteiros',empDocId), { funcionarios: funcs });
-  document.getElementById('inpFuncEmp-' + empDocId).value = '';
-  toast('✅ ' + nome + ' adicionado!');
-};
-
-window.removerFuncEmpreiteiro = async function(empDocId, funcId) {
-  if (!isAdmin('atividades')) return;
-  const emp = empreiteiros.find(e => e._docId === empDocId);
-  if (!emp) return;
-  const funcs = (emp.funcionarios || []).filter(f => f.id !== funcId);
-  await updateDoc(doc(db,'empreiteiros',empDocId), { funcionarios: funcs });
-};
-
-window.salvarFuncionario = async function() {
-  if (!isAdmin('atividades')) { toast('⛔ Sem permissão.'); return; }
-  const nome = document.getElementById('inpNovoFunc').value.trim();
-  if (!nome) { toast('Informe o nome.'); return; }
-  if (funcionarios.find(f => f.nome.toLowerCase() === nome.toLowerCase())) { toast('Já cadastrado.'); return; }
-  await addDoc(collection(db,'funcionarios'), { nome, criadoEm: new Date().toISOString() });
-  document.getElementById('inpNovoFunc').value = '';
-  toast('✅ ' + nome + ' adicionado!');
-};
-
-window.deletarFuncionario = async function(docId) {
-  if (!isAdmin('atividades')) return;
-  if (!confirm('Remover este funcionário?')) return;
-  await deleteDoc(doc(db,'funcionarios',docId));
-};
-
-window.salvarTalhaoAtividade = async function() {
-  if (!isAdmin('atividades')) { toast('⛔ Sem permissão.'); return; }
-  const talhaoId = document.getElementById('selTalhaoAtiv').value;
-  const talhao = talhoes.find(t => t.id === talhaoId);
-  if (!talhao) { toast('Selecione um talhão.'); return; }
-  const existente = talhoesAtividades.find(t => t.talhaoId === talhaoId);
-  if (existente) {
-    toast('Este talhão já está na lista de atividades.');
-    return;
-  }
-  await addDoc(collection(db,'talhoesAtividades'), {
-    talhaoId, nome: talhao.nome, fazenda: talhao.fazenda || '',
-    quadras: [], criadoEm: new Date().toISOString()
+  onSnapshot(collection(db,'registrosAtividade'), snap => {
+    registros = snap.docs.map(d => ({_docId:d.id,...d.data()}))
+      .sort((a,b) => (b.salvoEm||'').localeCompare(a.salvoEm||''));
+    atualizarDashboard();
   });
-  toast('✅ Talhão adicionado às atividades!');
-};
-
-window.salvarQuadra = async function(talhaoDocId) {
-  if (!isAdmin('atividades')) return;
-  const nome = document.getElementById('inpQNome-' + talhaoDocId).value.trim();
-  const carreiras = parseInt(document.getElementById('inpQCarr-' + talhaoDocId).value);
-  if (!nome || !carreiras) { toast('Preencha nome e nº de carreiras.'); return; }
-  const t = talhoesAtividades.find(x => x._docId === talhaoDocId);
-  if (!t) return;
-  const quadras = t.quadras || [];
-  // Montar pés por carreira com valor padrão 0
-  const pesCarreira = {};
-  for (let i = 1; i <= carreiras; i++) pesCarreira[i] = 0;
-  quadras.push({ id: 'q' + Date.now(), nome, carreiras, pesCarreira });
-  await updateDoc(doc(db,'talhoesAtividades',talhaoDocId), { quadras });
-  document.getElementById('inpQNome-' + talhaoDocId).value = '';
-  document.getElementById('inpQCarr-' + talhaoDocId).value = '';
-  toast('✅ Quadra adicionada!');
-};
-
-window.atualizarPesCarreira = async function(talhaoDocId, quadraId, carreira, valor) {
-  if (!isAdmin('atividades')) return;
-  const t = talhoesAtividades.find(x => x._docId === talhaoDocId);
-  if (!t) return;
-  const quadras = t.quadras.map(q => {
-    if (q.id !== quadraId) return q;
-    const pc = { ...q.pesCarreira };
-    const v = parseInt(valor);
-    if (v > 0) pc[carreira] = v; else delete pc[carreira];
-    return { ...q, pesCarreira: pc };
+  onSnapshot(collection(db,'planosAdubacao'), snap => {
+    planosAdubacao = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
   });
-  _suprimirRenderTalhoes = true;
-  await updateDoc(doc(db,'talhoesAtividades',talhaoDocId), { quadras });
-  setTimeout(() => { _suprimirRenderTalhoes = false; }, 2000);
-};
+  onSnapshot(collection(db,'pulverizacoes'), snap => {
+    pulverizacoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
+  });
+}
 
-window.removerQuadra = async function(talhaoDocId, quadraId) {
-  if (!isAdmin('atividades')) return;
-  if (!confirm('Remover esta quadra?')) return;
-  const t = talhoesAtividades.find(x => x._docId === talhaoDocId);
-  if (!t) return;
-  const quadras = t.quadras.filter(q => q.id !== quadraId);
-  await updateDoc(doc(db,'talhoesAtividades',talhaoDocId), { quadras });
-};
+function atualizarDashboard() {
+  atualizarKPIs();
+  atualizarGraficoStatus();
+  atualizarAtividadesRecentes();
+  atualizarProximasOps();
+}
 
-window.removerTalhaoAtividade = async function(docId) {
-  if (!isAdmin('atividades')) return;
-  if (!confirm('Remover este talhão das atividades?')) return;
-  await deleteDoc(doc(db,'talhoesAtividades',docId));
-};
+function atualizarKPIs() {
+  document.getElementById('kpiTalhoes').textContent = talhoes.length;
+  document.getElementById('kpiAtivos').textContent = talhoes.filter(t => t.status === 'ativo').length;
+  const totalAps = planosAdubacao.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
+  const feitasAps = planosAdubacao.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
+  document.getElementById('kpiAdubacoes').textContent = totalAps ? `${feitasAps}/${totalAps}` : '—';
+  const totalReg = registros.length;
+  const totalCarreiras = registros.reduce((s,r) => s + Object.keys(r.atribuicoes||{}).length, 0);
+  document.getElementById('kpiRegistros').textContent = totalReg;
+  document.getElementById('kpiCarreiras').textContent = totalCarreiras.toLocaleString('pt-BR');
+}
 
-// ─── SESSÃO DE ATIVIDADE ───
-let sessaoAtual = null;
-let abaAtual = null;
-const CORES = ['#2d6a2d','#1d4ed8','#b45309','#7c3aed','#be123c','#0e7490','#65a30d','#c2410c'];
-const inic = n => n.split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
-const corFunc = id => { const idx = (sessaoAtual?.funcDia||[]).findIndex(f=>f.id===id); return CORES[idx>=0?idx%CORES.length:0]; };
+function atualizarGraficoStatus() {
+  const ativo = talhoes.filter(t => t.status === 'ativo').length;
+  const reforma = talhoes.filter(t => t.status === 'reforma').length;
+  const colhido = talhoes.filter(t => t.status === 'colhido').length;
+  const ctx = document.getElementById('chartStatus');
+  if (!ctx) return;
+  if (chartStatus) chartStatus.destroy();
+  chartStatus = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Ativo', 'Em Reforma', 'Colhido'],
+      datasets: [{
+        data: [ativo, reforma, colhido],
+        backgroundColor: ['#2d6a2d', '#f59e0b', '#6b7280'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Barlow', size: 11 }, padding: 12 } } },
+      cutout: '65%'
+    }
+  });
+}
 
-window.iniciarSessaoAtividade = async function() {
-  const talhaoDocId = document.getElementById('selSessaoTalhao').value;
-  const atividade = document.getElementById('selSessaoAtividade').value;
-  const data = document.getElementById('inpSessaoData').value;
-  if (!talhaoDocId || !atividade || !data) { toast('Preencha todos os campos.'); return; }
-  const t = talhoesAtividades.find(x => x._docId === talhaoDocId);
-  if (!t || !t.quadras.length) { toast('Este talhão não tem quadras cadastradas.'); return; }
+function atualizarAtividadesRecentes() {
+  const lista = document.getElementById('listaAtivRecentes');
+  const recentes = registros.slice(0, 5);
+  if (!recentes.length) { lista.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma atividade registrada.</div>`; return; }
+  lista.innerHTML = recentes.map(r => {
+    const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
+    const at = Object.keys(r.atribuicoes||{}).length;
+    const pct = tot ? Math.round(at/tot*100) : 0;
+    return `<a href="atividades.html" class="atv-item">
+      <div class="atv-item-info">
+        <div class="atv-item-nome">🌾 ${r.atividade||'Atividade'} · ${r.talhaoNome||''}</div>
+        <div class="atv-item-meta">${r.fazenda||''} · ${r.data?formatarData(r.data):''}</div>
+      </div>
+      <div class="atv-item-pct">${pct}%</div>
+    </a>`;
+  }).join('');
+}
 
-  // Coletar empreiteiros selecionados e seus funcionários
-  const empsSel = [...document.querySelectorAll('.emp-check-item:checked')].map(el => el.value);
-  if (!empsSel.length) { toast('Selecione pelo menos um empreiteiro.'); return; }
+function atualizarProximasOps() {
+  const lista = document.getElementById('listaProximasOps');
+  const hoje = new Date();
+  const ops = [];
 
-  // Montar funcDia com referência ao empreiteiro
-  const funcDia = [];
-  const empsDia = [];
-  empsSel.forEach(empId => {
-    const emp = empreiteiros.find(e => e._docId === empId);
-    if (!emp) return;
-    empsDia.push({ id: empId, nome: emp.nome });
-    const funcsSel = [...document.querySelectorAll(`.func-check-item[data-emp="${empId}"]:checked`)];
-    funcsSel.forEach(el => {
-      funcDia.push({ id: el.value, nome: el.dataset.nome, empId, empNome: emp.nome });
+  // Adubações pendentes
+  planosAdubacao.forEach(p => {
+    (p.aplicacoes||[]).filter(a => !a.feito).forEach(a => {
+      ops.push({ tipo: '🧪', label: `Adubação · ${p.talhaoNome}`, sub: a.semana || p.mesAno, link: 'adubacoes.html' });
     });
   });
 
-  if (!funcDia.length) { toast('Nenhum funcionário selecionado nas turmas.'); return; }
-
-  sessaoAtual = {
-    talhaoDocId, talhaoNome: t.nome, fazenda: t.fazenda || '',
-    atividade, data,
-    quadras: t.quadras.map(q => ({ ...q })),
-    funcDia, empsDia, atribuicoes: {}
-  };
-  abaAtual = sessaoAtual.quadras[0]?.id || null;
-  mostrarTelaConferencia();
-};
-
-window.salvarSessao = async function() {
-  if (!sessaoAtual) return;
-  const docRef = await addDoc(collection(db,'registrosAtividade'), {
-    ...sessaoAtual, salvoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
+  // Pulverizações pendentes
+  pulverizacoes.filter(p => !p.realizada).forEach(p => {
+    ops.push({ tipo: '💧', label: `Pulverização · ${p.talhaoNome||''}`, sub: p.dataFormatada || p.data, link: 'pulverizacoes.html' });
   });
-  toast('💾 Sessão salva!');
-  return docRef.id;
-};
 
-window.carregarRegistro = async function(docId) {
-  const snap = await getDoc(doc(db,'registrosAtividade',docId));
-  if (!snap.exists()) return;
-  sessaoAtual = { _docId: docId, ...snap.data() };
-  abaAtual = sessaoAtual.quadras[0]?.id || null;
-  mostrarTelaConferencia();
-};
+  if (!ops.length) { lista.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma operação pendente.</div>`; return; }
+  lista.innerHTML = ops.slice(0, 6).map(op => `
+    <a href="${op.link}" class="op-item">
+      <span class="op-ico">${op.tipo}</span>
+      <div class="op-info"><div class="op-nome">${op.label}</div><div class="op-sub">${op.sub||'—'}</div></div>
+      <span class="op-seta">›</span>
+    </a>`).join('');
+}
 
-window.atualizarAtribuicao = async function() {
-  if (!sessaoAtual?._docId) return;
-  await updateDoc(doc(db,'registrosAtividade',sessaoAtual._docId), {
-    atribuicoes: sessaoAtual.atribuicoes, salvoEm: new Date().toISOString()
-  });
-};
+function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return`${dd}/${m}/${a}`; }
 
-window.deletarRegistro = async function(docId) {
-  if (!isAdmin('atividades')) return;
-  if (!confirm('Excluir este registro?')) return;
-  await deleteDoc(doc(db,'registrosAtividade',docId));
+window.toggleMenu = function() {
+  document.getElementById('menuLateral').classList.toggle('aberto');
+  document.getElementById('menuOverlay').classList.toggle('aberto');
 };
-
-// ─── CONFIG ───
-window.carregarUsuarios = async function() {
-  const snap = await getDocs(collection(db,'usuarios'));
-  const lista = document.getElementById('listaUsuarios'); if (!lista) return;
-  const modulos = [
-    { id:'mapa', label:'Mapa' },
-    { id:'atividades', label:'Atividades' },
-    { id:'adubacao', label:'Adubação' },
-  ];
-  const opcoes = ['nenhum','encarregado','operador','gerente','admin'];
-  lista.innerHTML = '';
-  snap.forEach(d => {
-    const u = d.data();
-    const div = document.createElement('div');
-    div.className = 'usuario-card';
-    div.innerHTML = `
-      <div class="usuario-info">
-        <div class="usuario-nome">${u.nome||u.email}</div>
-        <div class="usuario-email">${u.email}</div>
-      </div>
-      <div class="usuario-modulos">
-        ${modulos.map(m => `
-          <div class="usuario-modulo-row">
-            <span class="usuario-modulo-label">${m.label}</span>
-            <select class="sel-perfil" onchange="alterarAcesso('${d.id}','${m.id}',this.value)">
-              ${opcoes.map(o => `<option value="${o}" ${(u.modulos||{})[m.id]===o?'selected':''}>${o}</option>`).join('')}
-            </select>
-          </div>`).join('')}
-      </div>`;
-    lista.appendChild(div);
-  });
+window.fecharMenu = function() {
+  document.getElementById('menuLateral').classList.remove('aberto');
+  document.getElementById('menuOverlay').classList.remove('aberto');
 };
-
-window.alterarAcesso = async function(uid, modulo, nivel) {
-  const snap = await getDoc(doc(db,'usuarios',uid));
-  if (!snap.exists()) return;
-  const modulos = { ...snap.data().modulos, [modulo]: nivel };
-  await updateDoc(doc(db,'usuarios',uid), { modulos });
-  toast('✅ Acesso atualizado!');
-};
-
-window.salvarCodigoCadastro = async function() {
-  const novo = document.getElementById('inputCodigoCad').value.trim();
-  await updateDoc(doc(db,'config','geral'), { codigoCadastro: novo });
-  toast('✅ Código salvo!');
-};
-
-window.salvarAtividadesConfig = async function() {
-  await updateDoc(doc(db,'config','geral'), { atividades });
-  toast('✅ Atividades salvas!');
-};
-
-// Expor globais
-window._getDb = () => db;
-    // Expor verificador de permissão robusto
-    window._nivelAcesso = function(modulo) {
-      if (perfilAtual.modulos && perfilAtual.modulos[modulo]) return perfilAtual.modulos[modulo];
-      if (perfilAtual.perfil === 'admin') return 'admin';
-      return 'nenhum';
-    };
-    window._podeEditar = function(modulo) {
-      const n = window._nivelAcesso(modulo);
-      return n === 'admin' || n === 'operador' || n === 'encarregado';
-    };
-    window._isAdmin = function(modulo) { return window._nivelAcesso(modulo) === 'admin'; };
-    window._temAcesso = function(modulo) { return window._nivelAcesso(modulo) !== 'nenhum'; };
-window._getTalhoes = () => talhoes;
-window._getFazendas = () => {
-  const snap = [];
-  // Extrair fazendas dos talhões
-  const faz = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))];
-  return faz;
-};
-window._getAtividades = () => atividades;
-window._getFuncionarios = () => funcionarios;
-window._getTalhoesAtividades = () => talhoesAtividades;
-window._getRegistros = () => registrosAtividade;
-    window._getEmpreiteiros = () => empreiteiros;
-window._getSessao = () => sessaoAtual;
-window._getAbaAtual = () => abaAtual;
-window._setAbaAtual = (v) => { abaAtual = v; };
-window._setSessao = (v) => { sessaoAtual = v; };
-window._podeEditar = podeEditar;
-window._isAdmin = isAdmin;
-window._temAcesso = temAcesso;
+window.fazerLogout = async function() { await signOut(auth); window.location.href = 'login.html'; };
 </script>
 
 <style>
-:root {
-  --verde:#2d6a2d; --verde-escuro:#1a3d1a; --verde-bg:#e8f5e8; --verde-claro:#7bc67e;
-  --azul:#1d4ed8; --azul-bg:#eff6ff;
-  --amarelo:#f5c842; --laranja:#e07b2a;
-  --cinza:#6b7280; --cinza-claro:#f3f4f6; --cinza-borda:#d1d5db;
-  --texto:#1a1a1a; --texto-suave:#4b5563;
-  --danger:#ef4444;
-  --sombra:0 2px 8px rgba(0,0,0,.12); --sombra-forte:0 4px 16px rgba(0,0,0,.2);
-  --radius:10px; --radius-sm:6px;
-  --menu-w:260px;
-}
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--texto);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
-
-/* ─── AUTH ─── */
-.auth-screen{position:fixed;inset:0;background:linear-gradient(135deg,#0d1f0d,#1a3d1a);display:flex;align-items:center;justify-content:center;z-index:9000;padding:20px;overflow-y:auto;}
-.auth-card{background:white;border-radius:16px;width:100%;max-width:380px;padding:28px 24px;box-shadow:0 30px 80px rgba(0,0,0,.4);max-height:95vh;overflow-y:auto;}
-.auth-logo{display:flex;align-items:center;gap:10px;margin-bottom:20px;}
-.auth-logo-icon{width:40px;height:40px;background:var(--verde);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
-.auth-logo-name{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;color:var(--verde-escuro);}
-.auth-logo-sub{font-size:.6rem;color:var(--cinza);letter-spacing:.15em;text-transform:uppercase;}
-.auth-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.6rem;color:var(--texto);margin-bottom:4px;}
-.auth-sub{font-size:.8rem;color:var(--cinza);margin-bottom:20px;}
-.auth-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
-.auth-field label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--verde);font-weight:700;}
-.auth-field input{border:1.5px solid var(--cinza-borda);border-radius:8px;padding:11px 13px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;transition:border .2s;}
-.auth-field input:focus{border-color:var(--verde);}
-.btn-auth{width:100%;background:var(--verde);border:none;color:white;border-radius:8px;padding:12px;font-size:.95rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;margin-top:4px;transition:all .2s;}
-.btn-auth:hover{background:var(--verde-escuro);}
-.btn-auth:disabled{opacity:.5;cursor:not-allowed;}
-.auth-link{text-align:center;margin-top:14px;font-size:.78rem;color:var(--cinza);}
-.auth-link a{color:var(--verde);cursor:pointer;font-weight:600;}
-.auth-error{background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:9px 13px;font-size:.78rem;color:#dc2626;margin-bottom:12px;display:none;}
-.auth-info{background:var(--verde-bg);border:1px solid #a7d7a7;border-radius:8px;padding:9px 13px;font-size:.73rem;color:var(--verde-escuro);margin-bottom:12px;line-height:1.5;}
-
-/* ─── LOADING ─── */
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;z-index:8000;flex-direction:column;gap:16px;}
-.spinner{width:36px;height:36px;border:3px solid var(--cinza-borda);border-top-color:var(--verde);border-radius:50%;animation:spin .8s linear infinite;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-
-/* ─── LAYOUT APP ─── */
-#appHeader{background:var(--verde-escuro);color:white;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:54px;flex-shrink:0;z-index:200;box-shadow:var(--sombra-forte);}
-.header-logo{display:flex;align-items:center;gap:10px;}
-.header-logo-icon{width:30px;height:30px;background:rgba(255,255,255,.15);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;}
-.header-logo-name{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
-.header-logo-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;}
-.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-.header-user{font-size:.7rem;opacity:.7;text-align:right;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-
-#appMain{flex:1;display:flex;overflow:hidden;position:relative;}
-
-/* ─── MENU LATERAL ─── */
-.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1999;display:none;}
+/* HEADER */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* MENU */
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
 .menu-overlay.aberto{display:block;}
-.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--verde-escuro);z-index:2000;transform:translateX(-100%);transition:transform .3s ease;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
 .menu-lateral.aberto{transform:translateX(0);}
 .menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
 .menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
-.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
 #menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
-.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px 12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--radius-sm);font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;}
-.menu-item:hover{background:rgba(255,255,255,.08);color:white;}
-.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
 .menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
 .menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
 .btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
-.btn-logout:hover{background:rgba(239,68,68,.25);}
-
-/* ─── MÓDULOS ─── */
-.modulo{flex:1;flex-direction:column;overflow:hidden;display:none;}
-
-/* ─── MAPA ─── */
-#mod-mapa{position:relative;}
-#map{flex:1;}
-.leaflet-control-zoom a{background:white!important;color:var(--verde)!important;}
-
-/* painel info talhão */
-.info-panel{position:absolute;top:14px;right:14px;width:290px;max-height:calc(100vh-80px);overflow-y:auto;background:white;border-radius:14px;z-index:1000;box-shadow:var(--sombra-forte);transform:translateX(320px);opacity:0;transition:transform .35s cubic-bezier(.34,1.4,.64,1),opacity .3s;}
-.info-panel.visible{transform:translateX(0);opacity:1;}
-.panel-header{padding:14px 14px 10px;border-bottom:1px solid var(--cinza-claro);position:relative;}
-.panel-id{display:inline-flex;align-items:center;gap:5px;background:var(--verde-bg);border:1px solid #a7d7a7;border-radius:5px;padding:2px 8px;font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--verde);margin-bottom:5px;font-weight:700;}
-.panel-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;color:var(--texto);}
-.panel-area{font-family:'DM Mono',monospace;font-size:.8rem;color:var(--verde);margin-top:2px;}
-.panel-close{position:absolute;top:12px;right:12px;background:var(--cinza-claro);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;color:var(--cinza);}
-.status-bar{padding:8px 14px;border-bottom:1px solid var(--cinza-claro);}
-.status-tag{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:3px 10px;font-size:.68rem;font-weight:700;text-transform:uppercase;}
-.status-tag.ativo{background:#d1fae5;color:#065f46;}
-.status-tag.reforma{background:#fef9c3;color:#854d0e;}
-.status-tag.colhido{background:#fee2e2;color:#991b1b;}
-.panel-body{padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
-.info-row{display:flex;align-items:flex-start;gap:9px;}
-.info-icon{width:26px;height:26px;background:var(--cinza-claro);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
-.info-content label{font-size:.56rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cinza);display:block;margin-bottom:1px;}
-.info-content value{font-size:.82rem;color:var(--texto);display:block;}
-.panel-actions{display:flex;gap:8px;padding:0 14px 12px;}
-.btn-edit{flex:1;background:var(--verde-bg);border:1px solid #a7d7a7;color:var(--verde);border-radius:7px;padding:8px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
-.btn-del{background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:7px;padding:8px 12px;font-size:.72rem;cursor:pointer;}
-
-/* sidebar mapa */
-.mapa-sidebar{position:absolute;top:14px;left:14px;width:220px;max-height:calc(100vh-100px);background:white;border-radius:12px;z-index:1000;box-shadow:var(--sombra-forte);display:flex;flex-direction:column;overflow:hidden;}
-.msb-header{padding:9px 11px;border-bottom:1px solid var(--cinza-claro);display:flex;align-items:center;justify-content:space-between;}
-.msb-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--verde);font-weight:700;}
-.msb-filter{display:flex;gap:4px;padding:6px 10px;border-bottom:1px solid var(--cinza-claro);flex-wrap:wrap;}
-.filter-btn{background:var(--cinza-claro);border:1px solid var(--cinza-borda);border-radius:20px;padding:3px 8px;font-size:.6rem;color:var(--cinza);cursor:pointer;font-family:'Barlow',sans-serif;white-space:nowrap;}
-.filter-btn.active{background:var(--verde-bg);border-color:#a7d7a7;color:var(--verde);font-weight:700;}
-.msb-list{overflow-y:auto;flex:1;}
-.msb-item{padding:8px 11px;border-bottom:1px solid var(--cinza-claro);cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .15s;}
-.msb-item:hover{background:var(--cinza-claro);}
-.msb-item.active{background:var(--verde-bg);border-left:3px solid var(--verde);}
-.msb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.msb-dot.ativo{background:#22c55e;}
-.msb-dot.reforma{background:#eab308;}
-.msb-dot.colhido{background:#ef4444;}
-.msb-info{flex:1;min-width:0;}
-.msb-id{font-size:.6rem;color:var(--verde);font-weight:700;font-family:'DM Mono',monospace;}
-.msb-nome{font-size:.75rem;color:var(--texto);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.msb-sub{font-size:.62rem;color:var(--cinza);}
-.no-map{font-size:.56rem;background:#fef9c3;border:1px solid #fde047;color:#854d0e;border-radius:4px;padding:1px 5px;}
-
-/* modal talhão */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
-.overlay.open{opacity:1;pointer-events:all;}
-.modal{background:white;border-radius:16px;width:500px;max-width:96vw;max-height:92vh;overflow-y:auto;box-shadow:0 30px 80px rgba(0,0,0,.4);transform:scale(.95) translateY(20px);transition:transform .3s cubic-bezier(.34,1.2,.64,1);}
-.overlay.open .modal{transform:scale(1) translateY(0);}
-.modal-header{padding:16px 18px 12px;border-bottom:1px solid var(--cinza-borda);display:flex;align-items:center;justify-content:space-between;}
-.modal-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;}
-.modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px;}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.form-group{display:flex;flex-direction:column;gap:4px;}
-.form-group.full{grid-column:1/-1;}
-.form-group label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--verde);font-weight:700;}
-.form-group input,.form-group select,.form-group textarea{border:1.5px solid var(--cinza-borda);border-radius:8px;padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;transition:border .2s;}
-.form-group input:focus,.form-group select:focus,.form-group textarea:focus{border-color:var(--verde);}
-.form-group textarea{resize:vertical;min-height:60px;}
-.historico-row{display:flex;gap:8px;margin-bottom:7px;}
-.historico-row input{flex:1;}
-.btn-del-row{background:#fee2e2;color:var(--danger);border:1px solid #fca5a5;border-radius:7px;cursor:pointer;padding:0 10px;}
-.btn-add-row{background:var(--cinza-claro);border:1px dashed var(--cinza-borda);color:var(--cinza);border-radius:7px;padding:7px;font-size:.75rem;cursor:pointer;width:100%;text-align:center;}
-.modal-footer{padding:10px 18px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--cinza-borda);position:sticky;bottom:0;background:white;z-index:10;}
-.btn-cancel{background:var(--cinza-claro);border:1px solid var(--cinza-borda);color:var(--texto);border-radius:8px;padding:9px 18px;font-size:.8rem;cursor:pointer;}
-.btn-save{background:var(--verde);border:none;color:white;border-radius:8px;padding:9px 22px;font-size:.8rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
-
-/* ─── ATIVIDADES ─── */
-#mod-atividades{display:flex;flex-direction:column;}
-.mod-header{background:var(--verde-escuro);color:white;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.mod-header-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
-.mod-tabs{display:flex;background:white;border-bottom:2px solid var(--cinza-borda);flex-shrink:0;}
-.mod-tab{flex:1;padding:10px 6px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:var(--cinza);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
-.mod-tab.ativo{color:var(--verde);border-bottom-color:var(--verde);}
-.mod-content{flex:1;overflow-y:auto;padding:14px 14px 80px;}
-
-/* Cards de atividade */
-.reg-card{background:white;border-radius:var(--radius);box-shadow:var(--sombra);overflow:hidden;margin-bottom:10px;}
-.reg-card-header{background:var(--verde);color:white;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
-.reg-card-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
-.reg-card-meta{font-size:.7rem;opacity:.8;}
-.reg-card-body{padding:12px 14px;}
-.reg-stat{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--cinza-claro);font-size:.82rem;}
-.reg-stat:last-child{border:none;}
-.reg-stat-label{color:var(--cinza);}
-.reg-stat-val{font-weight:700;color:var(--texto);}
-
-/* Talhão atividade */
-.talhao-atv-card{background:white;border-radius:var(--radius);box-shadow:var(--sombra);overflow:hidden;margin-bottom:10px;}
-.talhao-atv-header{background:var(--cinza-claro);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
-.talhao-atv-nome{font-weight:700;font-size:.95rem;}
-.talhao-atv-meta{font-size:.72rem;color:var(--cinza);}
-.talhao-atv-body{padding:12px 14px;border-top:1px solid var(--cinza-borda);}
-.quadra-atv-item{border:1.5px solid var(--cinza-borda);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px;}
-.quadra-atv-header{background:var(--cinza-claro);padding:9px 12px;display:flex;align-items:center;justify-content:space-between;}
-.pes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:7px;padding:10px 12px;background:white;border-top:1px solid var(--cinza-borda);}
-.pes-wrap{display:flex;flex-direction:column;gap:2px;}
-.pes-wrap label{font-size:.65rem;font-weight:700;color:var(--cinza);}
-.pes-wrap input{border:1.5px solid var(--cinza-borda);border-radius:6px;padding:6px 9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;width:100%;}
-.pes-wrap input:focus{border-color:var(--verde);}
-
-/* Form nova sessão */
-.form-sessao{background:white;border-radius:var(--radius);box-shadow:var(--sombra);padding:14px;margin-bottom:12px;}
-.form-sessao-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;color:var(--verde);margin-bottom:12px;}
-.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
-.campo label{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--cinza);font-weight:700;}
-.campo input,.campo select{border:1.5px solid var(--cinza-borda);border-radius:8px;padding:10px 12px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;transition:border .2s;-webkit-appearance:none;}
-.campo input:focus,.campo select:focus{border-color:var(--verde);}
-.func-check-list{display:flex;flex-direction:column;gap:4px;}
-.func-check-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--cinza-claro);border-radius:7px;cursor:pointer;}
-.func-check-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--verde);cursor:pointer;flex-shrink:0;}
-.func-check-row label{font-size:.88rem;font-weight:600;cursor:pointer;flex:1;}
-
-/* ─── CONFERÊNCIA ─── */
-#telaConferencia{position:fixed;inset:0;background:#f0f4f0;z-index:500;display:none;flex-direction:column;}
-#telaConferencia.aberta{display:flex;}
-.conf-header{background:var(--verde-escuro);color:white;padding:0 14px;height:54px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
-.conf-info{flex:1;}
-.conf-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
-.conf-meta{font-size:.65rem;opacity:.7;}
-.conf-prog-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.4rem;color:var(--amarelo);}
-.conf-prog-small{font-size:.6rem;opacity:.6;display:block;text-align:right;}
-.prog-bar-wrap{height:4px;background:rgba(255,255,255,.2);flex-shrink:0;}
-.prog-bar{height:4px;background:var(--amarelo);transition:width .4s;}
-.abas-scroll{display:flex;overflow-x:auto;background:white;border-bottom:2px solid var(--cinza-borda);flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.abas-scroll::-webkit-scrollbar{display:none;}
-.aba-btn{flex-shrink:0;padding:9px 14px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--cinza);border-bottom:3px solid transparent;margin-bottom:-2px;display:flex;flex-direction:column;align-items:center;gap:1px;white-space:nowrap;}
-.aba-btn.ativa{color:var(--verde);border-bottom-color:var(--verde);}
-.aba-prog{font-size:.62rem;font-weight:600;color:inherit;opacity:.8;}
-.conf-body{flex:1;overflow-y:auto;}
-.quadra-painel{display:none;}
-.quadra-painel.ativa{display:block;}
-.quadra-resumo{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#f8faf8;border-bottom:1px solid var(--cinza-borda);font-size:.82rem;color:var(--cinza);}
-.quadra-resumo strong{color:var(--texto);font-size:.9rem;}
-.q-pct{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:var(--verde);}
-.legenda-scroll{display:flex;gap:8px;overflow-x:auto;padding:7px 14px;background:#f8faf8;border-bottom:1px solid var(--cinza-borda);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.legenda-scroll::-webkit-scrollbar{display:none;}
-.legenda-item{display:flex;align-items:center;gap:5px;flex-shrink:0;font-size:.72rem;font-weight:600;white-space:nowrap;}
-.legenda-cor{width:13px;height:13px;border-radius:3px;flex-shrink:0;}
-.carreiras-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:6px;padding:10px 12px;}
-.carreira-btn{border:2px solid var(--cinza-borda);border-radius:var(--radius-sm);background:white;cursor:pointer;padding:4px 2px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:transform .1s;position:relative;overflow:hidden;}
-.carreira-btn:active{transform:scale(.90);}
-.carreira-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:15px;line-height:1;color:var(--texto);}
-.carreira-func{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:9px;line-height:1;text-align:center;padding:0 2px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.carreira-btn.completa{border-color:transparent;}
-.carreira-btn.completa .carreira-num{color:white;}
-.carreira-btn.completa .carreira-func{color:rgba(255,255,255,.9);}
-.dupla-badge{position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:white;border:1.5px solid rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800;color:var(--texto);font-family:'Barlow Condensed',sans-serif;}
-.conf-footer{padding:10px 14px;background:white;border-top:1.5px solid var(--cinza-borda);display:flex;gap:8px;flex-shrink:0;}
-
-/* ─── MODAL CONFERÊNCIA ─── */
-.conf-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;align-items:flex-end;}
-.conf-overlay.aberto{display:flex;}
-.conf-modal{background:white;border-radius:16px 16px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,16px);animation:slideUp .22s ease;}
-@keyframes slideUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
-.conf-modal-handle{width:40px;height:4px;background:var(--cinza-borda);border-radius:2px;margin:10px auto 0;}
-.conf-modal-titulo{padding:12px 20px 4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;}
-.conf-modal-sub{padding:0 20px 10px;font-size:.78rem;color:var(--cinza);border-bottom:1px solid var(--cinza-borda);}
-.func-opcao{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--cinza-claro);cursor:pointer;}
-.func-opcao:active{background:var(--cinza-claro);}
-.func-opcao.sel1{background:var(--verde-bg);}
-.func-opcao.sel2{background:var(--azul-bg);}
-.func-op-nome{flex:1;font-weight:600;font-size:.95rem;}
-.func-op-cont{font-size:.72rem;color:var(--cinza);}
-.func-sel-badge{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.75rem;padding:3px 8px;border-radius:999px;flex-shrink:0;}
-.badge-1{background:var(--verde);color:white;}
-.badge-2{background:var(--azul);color:white;}
-.modal-pes-section{margin:0 20px 12px;border:1.5px solid var(--cinza-borda);border-radius:var(--radius-sm);overflow:hidden;}
-.modal-pes-header{background:var(--cinza-claro);padding:9px 14px;font-weight:700;font-size:.85rem;}
-.modal-pes-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px;}
-.modal-acoes{padding:12px 20px;display:flex;flex-direction:column;gap:8px;}
-.modal-limpar{display:flex;align-items:center;gap:14px;padding:14px 20px;color:var(--danger);font-weight:600;font-size:.9rem;cursor:pointer;border-top:1px solid var(--cinza-borda);}
-
-/* ─── RELATÓRIO ─── */
-.alerta-la{background:#fff7ed;border:1.5px solid #fed7aa;border-radius:var(--radius);padding:10px 14px;font-size:.82rem;color:var(--laranja);}
-.alerta-la strong{display:block;font-size:.9rem;margin-bottom:3px;color:#c2410c;}
-.alerta-ve{background:#d1fae5;border:1.5px solid #6ee7b7;border-radius:var(--radius);padding:10px 14px;font-size:.85rem;color:#065f46;font-weight:600;}
-.rel-func-card{background:white;border-radius:var(--radius);box-shadow:var(--sombra);overflow:hidden;margin-bottom:10px;}
-.rel-func-h{padding:12px 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--cinza-claro);}
-.rel-func-nome{font-weight:700;font-size:.95rem;flex:1;}
-.rel-total-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--verde);}
-.rel-total-label{font-size:.65rem;color:var(--cinza);}
-.rel-detalhe{padding:9px 14px;font-size:.8rem;color:var(--texto-suave);line-height:1.8;}
-
-/* ─── CONFIG ─── */
-.usuario-card{background:white;border-radius:var(--radius);box-shadow:var(--sombra);padding:14px;margin-bottom:10px;}
-.usuario-nome{font-weight:700;font-size:.95rem;}
-.usuario-email{font-size:.72rem;color:var(--cinza);margin-bottom:10px;}
-.usuario-modulo-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--cinza-claro);}
-.usuario-modulo-row:last-child{border:none;}
-.usuario-modulo-label{font-size:.78rem;font-weight:600;color:var(--texto-suave);}
-.sel-perfil{border:1.5px solid var(--cinza-borda);border-radius:6px;padding:5px 8px;font-size:.78rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:var(--cinza-claro);}
-
-/* ─── FUNCIONÁRIOS ─── */
-.func-item-atv{display:flex;align-items:center;gap:10px;padding:10px 14px;background:white;border-bottom:1px solid var(--cinza-claro);}
-.func-ini{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.8rem;flex-shrink:0;}
-.func-nome-atv{flex:1;font-weight:600;font-size:.9rem;}
-
-/* ─── TOAST ─── */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--verde-escuro);color:white;padding:9px 18px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
+/* CONTEÚDO */
+.app-main{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch;}
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.kpi-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;display:flex;flex-direction:column;gap:4px;}
+.kpi-ico{font-size:22px;margin-bottom:4px;}
+.kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.8rem;color:var(--ve);line-height:1;}
+.kpi-label{font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.08em;}
+/* SEÇÕES */
+.sec-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+.sec-link{font-size:.72rem;color:var(--v);font-weight:600;text-decoration:none;}
+.sec-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:16px;}
+/* GRÁFICO */
+.chart-wrap{padding:16px;height:220px;display:flex;align-items:center;justify-content:center;}
+/* ATIVIDADES */
+.atv-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--cl);cursor:pointer;text-decoration:none;color:var(--t);}
+.atv-item:last-child{border:none;}
+.atv-item:active{background:var(--cl);}
+.atv-item-nome{font-size:.85rem;font-weight:600;margin-bottom:2px;}
+.atv-item-meta{font-size:.72rem;color:var(--c);}
+.atv-item-pct{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--v);flex-shrink:0;margin-left:10px;}
+/* PRÓXIMAS OPS */
+.op-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--cl);cursor:pointer;text-decoration:none;color:var(--t);}
+.op-item:last-child{border:none;}
+.op-item:active{background:var(--cl);}
+.op-ico{font-size:1.2rem;flex-shrink:0;}
+.op-info{flex:1;}
+.op-nome{font-size:.85rem;font-weight:600;}
+.op-sub{font-size:.72rem;color:var(--c);margin-top:1px;}
+.op-seta{font-size:1.4rem;color:var(--cb);}
+/* ATALHOS MÓDULOS */
+.atalhos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+.atalho-btn{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:var(--t);transition:.15s;}
+.atalho-btn:active{transform:scale(.97);}
+.atalho-ico{font-size:22px;}
+.atalho-label{font-size:.68rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.05em;}
+/* OFFLINE BADGE */
+.offline-badge{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;border-radius:20px;padding:5px 14px;font-size:.72rem;font-weight:700;z-index:500;display:none;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:9px 18px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-
-/* ─── BTN ─── */
-.btn{border:none;border-radius:var(--radius-sm);padding:10px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;letter-spacing:.5px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px;}
-.btn:active{transform:scale(.97);}
-.btn-verde{background:var(--verde);color:white;}
-.btn-verde:hover{background:var(--verde-escuro);}
-.btn-cinza{background:var(--cinza-claro);color:var(--texto);border:1.5px solid var(--cinza-borda);}
-.btn-danger{background:#fee2e2;color:var(--danger);border:1px solid #fca5a5;}
-.btn-bloco{width:100%;}
-.btn-sm{padding:7px 11px;font-size:.78rem;}
-
-/* Área impressão */
-@media print{body>*:not(#area-impressao){display:none!important;}#area-impressao{display:block!important;}}
-#area-impressao{display:none;}
-.print-titulo{font-size:18px;font-weight:bold;margin-bottom:4px;}
-.print-sub{font-size:12px;color:#555;margin-bottom:16px;}
-.print-table{width:100%;border-collapse:collapse;font-size:13px;}
-.print-table th{background:#2d6a2d;color:white;padding:8px 10px;text-align:left;}
-.print-table td{padding:7px 10px;border-bottom:1px solid #e5e7eb;}
-.print-table tr:nth-child(even) td{background:#f9fafb;}
-
-::-webkit-scrollbar{width:5px;}
-::-webkit-scrollbar-track{background:transparent;}
-::-webkit-scrollbar-thumb{background:var(--cinza-borda);border-radius:3px;}
-
-.hint{position:absolute;bottom:16px;left:240px;background:rgba(0,0,0,.5);border-radius:20px;padding:5px 13px;font-size:.68rem;color:rgba(255,255,255,.8);z-index:999;pointer-events:none;}
-.vazio{text-align:center;padding:36px 20px;color:var(--cinza);}
-.vazio .ico{font-size:42px;margin-bottom:10px;}
-.vazio p{font-size:.85rem;line-height:1.6;}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
 </style>
 </head>
 <body>
 
-<div id="area-impressao"></div>
-
-<!-- LOADING -->
 <div class="loading-screen" id="loadingScreen">
   <div class="spinner"></div>
-  <div style="font-size:.8rem;color:var(--cinza)">Carregando...</div>
+  <div style="font-size:.8rem;color:#6b7280">Carregando...</div>
 </div>
 
-<!-- LOGIN -->
-<div class="auth-screen" id="telaLogin" style="display:none;">
-  <div class="auth-card">
-    <div class="auth-logo">
-      <div class="auth-logo-icon">🌿</div>
-      <div>
-        <div class="auth-logo-name">Conilon Tech</div>
-        <div class="auth-logo-sub">Gestão Agrícola</div>
-      </div>
-    </div>
-    <div class="auth-title">Entrar</div>
-    <div class="auth-sub">Acesse com sua conta cadastrada.</div>
-    <div class="auth-error" id="erroLogin"></div>
-    <div class="auth-field"><label>E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email"></div>
-    <div class="auth-field"><label>Senha</label><input type="password" id="loginSenha" placeholder="••••••" autocomplete="current-password"></div>
-    <button class="btn-auth" id="btnLogin" onclick="fazerLogin()">Entrar</button>
-    <div class="auth-link">Não tem conta? <a onclick="abrirCadastro()">Criar conta</a></div>
-  </div>
-</div>
+<div id="offline-badge" class="offline-badge">📵 Modo offline</div>
 
-<!-- CADASTRO -->
-<div class="auth-screen" id="telaCadastro" style="display:none;">
-  <div class="auth-card">
-    <div class="auth-logo">
-      <div class="auth-logo-icon">🌿</div>
-      <div><div class="auth-logo-name">Conilon Tech</div><div class="auth-logo-sub">Criar Conta</div></div>
-    </div>
-    <div class="auth-info">O primeiro usuário vira <strong>Administrador</strong> automaticamente. Os demais precisam de código de acesso.</div>
-    <div class="auth-error" id="erroCad"></div>
-    <div class="auth-field"><label>Nome completo</label><input type="text" id="cadNome" placeholder="Seu nome"></div>
-    <div class="auth-field"><label>E-mail</label><input type="email" id="cadEmail" placeholder="seu@email.com"></div>
-    <div class="auth-field"><label>Senha</label><input type="password" id="cadSenha" placeholder="Mínimo 6 caracteres"></div>
-    <div class="auth-field"><label>Confirmar senha</label><input type="password" id="cadConf" placeholder="Repita a senha"></div>
-    <div class="auth-field"><label>Código de acesso</label><input type="text" id="cadCodigo" placeholder="Deixe vazio se não tiver"></div>
-    <button class="btn-auth" id="btnCadastro" onclick="fazerCadastro()">Criar Conta</button>
-    <div class="auth-link"><a onclick="voltarLogin()">← Voltar ao login</a></div>
-  </div>
-</div>
-
-<!-- APP -->
-<header id="appHeader" style="display:none;">
-  <div class="header-logo">
+<header class="app-header">
+  <div class="hdr-logo">
     <button class="btn-menu" onclick="toggleMenu()">☰</button>
     <div style="margin-left:4px;">
-      <div class="header-logo-name">Conilon Tech</div>
-      <div class="header-logo-sub">Gestão Agrícola</div>
+      <span>Conilon Tech</span>
+      <span class="hdr-sub">Dashboard</span>
     </div>
   </div>
-  <div class="header-user">
-    <div id="userNome" style="font-weight:700;font-size:.72rem;"></div>
-    <div id="userEmail" style="font-size:.6rem;opacity:.6;"></div>
-  </div>
+  <div class="hdr-user" id="userNome"></div>
 </header>
 
-<!-- MENU LATERAL -->
 <div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
 <div class="menu-lateral" id="menuLateral">
   <div class="menu-topo">
@@ -979,938 +299,77 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--texto);heigh
   </div>
 </div>
 
-<div id="appMain" style="display:none;">
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+  <main class="app-main">
 
-  <!-- ═══ MÓDULO: MAPA ═══ -->
-  <div class="modulo" id="mod-mapa" style="position:relative;">
-    <div id="map" style="flex:1;"></div>
-
-    <div class="mapa-sidebar" id="mapaSidebar">
-      <div class="msb-header">
-        <span class="msb-title">Talhões</span>
-        <span style="font-size:.6rem;color:var(--cinza)" id="sidebarCount"></span>
-      </div>
-      <div class="msb-filter">
-        <button class="filter-btn active" onclick="setFiltro('todos',this)">Todos</button>
-        <button class="filter-btn" onclick="setFiltro('ativo',this)">Ativos</button>
-        <button class="filter-btn" onclick="setFiltro('reforma',this)">Reforma</button>
-        <button class="filter-btn" onclick="setFiltro('colhido',this)">Colhido</button>
-      </div>
-      <div class="msb-list" id="sidebarList"></div>
+    <!-- Atalhos rápidos -->
+    <div class="atalhos-grid">
+      <a href="mapa.html" class="atalho-btn"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
+      <a href="atividades.html" class="atalho-btn"><span class="atalho-ico">🌾</span><span class="atalho-label">Atividades</span></a>
+      <a href="adubacoes.html" class="atalho-btn"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
+      <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulverizações</span></a>
+      <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
+      <a href="admin.html" class="atalho-btn"><span class="atalho-ico">⚙️</span><span class="atalho-label">Admin</span></a>
     </div>
 
-    <div class="info-panel" id="infoPanel">
-      <div class="panel-header">
-        <div class="panel-id"><span id="pId"></span></div>
-        <div class="panel-nome" id="pNome"></div>
-        <div class="panel-area" id="pArea"></div>
-        <button class="panel-close" onclick="fecharPainel()">✕</button>
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <span class="kpi-ico">🗺️</span>
+        <span class="kpi-val" id="kpiTalhoes">—</span>
+        <span class="kpi-label">Talhões</span>
       </div>
-      <div class="status-bar"><span class="status-tag" id="pStatus"></span></div>
-      <div class="panel-body" id="pBody"></div>
-      <div class="panel-actions" id="panelActions"></div>
-    </div>
-
-    <div class="hint" id="hintBar">Clique em um talhão para ver detalhes</div>
-
-    <div id="emptyState" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none;">
-      <div style="font-size:48px;opacity:.3;">🗺️</div>
-      <div style="font-size:1rem;color:var(--cinza);margin-top:8px;">Nenhum talhão cadastrado</div>
-    </div>
-  </div>
-
-  <!-- MODAL TALHÃO -->
-  <div class="overlay" id="overlay" onclick="overlayClick(event)">
-    <div class="modal">
-      <div class="modal-header">
-        <div class="modal-title" id="modalTitle">Novo Talhão</div>
-        <button class="panel-close" onclick="fecharModal()">✕</button>
+      <div class="kpi-card">
+        <span class="kpi-ico">✅</span>
+        <span class="kpi-val" id="kpiAtivos">—</span>
+        <span class="kpi-label">Ativos</span>
       </div>
-      <div class="modal-body">
-        <div class="form-row">
-          <div class="form-group"><label>Fazenda</label><select id="fFazenda" onchange="checkNovaFazenda(this)"></select><input type="text" id="fFazendaNova" placeholder="Nome da nova fazenda..." style="display:none;margin-top:6px;"></div>
-          <div class="form-group"><label>ID / Código</label><input type="text" id="fId" placeholder="Ex: T-07"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Nome</label><input type="text" id="fNome" placeholder="Ex: Setor Norte A"></div>
-          <div class="form-group"><label>Área (ha)</label><input type="number" id="fArea" step="0.1" placeholder="Ex: 18.5"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Status</label><select id="fStatus"><option value="ativo">Ativo</option><option value="reforma">Em Reforma</option><option value="colhido">Colhido</option></select></div>
-          <div class="form-group"><label>Clone / Variedade</label><input type="text" id="fClone" placeholder="Ex: LB1"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group full"><label>Data de Plantio</label><input type="date" id="fDataPlantio"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group"><label>Espaçamento</label><input type="text" id="fEspacamento" placeholder="Ex: 3x1m"></div>
-          <div class="form-group"><label>Irrigação</label><select id="fIrrigacao"><option value="">Sem irrigação</option><option value="Gotejamento">Gotejamento</option><option value="Aspersão">Aspersão</option><option value="Pivô Central">Pivô Central</option></select></div>
-        </div>
-        <div class="form-group full" style="background:var(--cinza-claro);padding:10px;border-radius:8px;">
-          <label style="margin-bottom:8px;">Histórico de Produtividade</label>
-          <div id="fHistoricoContainer"></div>
-          <button type="button" class="btn-add-row" onclick="addHistoricoRow('','')">＋ Adicionar Safra</button>
-        </div>
-        <div class="form-group full"><label>Observações</label><textarea id="fObs" placeholder="Notas, manejo..."></textarea></div>
-        <div style="background:var(--verde-bg);border:1px dashed #a7d7a7;border-radius:8px;padding:10px;font-size:.75rem;color:var(--verde-escuro);line-height:1.5;">
-          📍 Após salvar, clique em <strong>"Desenhar área"</strong> no painel do talhão para marcar no mapa.
-        </div>
+      <div class="kpi-card">
+        <span class="kpi-ico">🧪</span>
+        <span class="kpi-val" id="kpiAdubacoes">—</span>
+        <span class="kpi-label">Adubações</span>
       </div>
-      <div class="modal-footer">
-        <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
-        <button class="btn-save" onclick="salvarTalhao()">Salvar Talhão</button>
+      <div class="kpi-card">
+        <span class="kpi-ico">🌾</span>
+        <span class="kpi-val" id="kpiRegistros">—</span>
+        <span class="kpi-label">Atividades</span>
       </div>
     </div>
-  </div>
+    <div class="kpi-grid" style="grid-template-columns:1fr;margin-bottom:16px;">
+      <div class="kpi-card" style="flex-direction:row;align-items:center;gap:12px;">
+        <span class="kpi-ico">🌱</span>
+        <div><span class="kpi-val" id="kpiCarreiras">—</span><span class="kpi-label" style="display:block;">Carreiras conferidas</span></div>
+      </div>
+    </div>
 
-  <!-- ═══ MÓDULO: ATIVIDADES ═══ -->
-  <div class="modulo" id="mod-atividades">
-    <div class="mod-header">
-      <span style="font-size:20px;">🌾</span>
-      <div class="mod-header-title">Atividades de Campo</div>
+    <!-- Gráfico status talhões -->
+    <div class="sec-title">📊 Status dos Talhões<a href="mapa.html" class="sec-link">Ver mapa →</a></div>
+    <div class="sec-card" style="margin-bottom:16px;">
+      <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
     </div>
-    <div class="mod-tabs">
-      <button class="mod-tab ativo" onclick="abrirTabAtividade('registros',this)">Registros</button>
-      <button class="mod-tab" onclick="abrirTabAtividade('nova',this)">Nova Sessão</button>
-      <button class="mod-tab" id="tabTalhoesAtv" onclick="abrirTabAtividade('talhoes',this)" style="display:none;">Talhões</button>
-      <button class="mod-tab" id="tabFuncAtv" onclick="abrirTabAtividade('funcionarios',this)" style="display:none;">Equipe</button>
-    </div>
-    <div class="mod-content" id="atvContent">
-      <!-- conteúdo dinâmico -->
-    </div>
-  </div>
 
-  <!-- ═══ MÓDULO: ADUBAÇÕES ═══ -->
-  <div class="modulo" id="mod-adubacao">
-    <div class="mod-header">
-      <span style="font-size:20px;">🧪</span>
-      <div class="mod-header-title">Gestão de Adubações</div>
+    <!-- Próximas operações -->
+    <div class="sec-title">📅 Operações Pendentes<a href="adubacoes.html" class="sec-link">Ver todas →</a></div>
+    <div class="sec-card" style="margin-bottom:16px;">
+      <div id="listaProximasOps"></div>
     </div>
-    <div class="mod-content" style="padding:20px;overflow-y:auto;flex:1;">
-      <div class="vazio"><div class="ico">🚧</div><p>Módulo em desenvolvimento.<br>Em breve disponível!</p></div>
+
+    <!-- Atividades recentes -->
+    <div class="sec-title">🕐 Atividades Recentes<a href="atividades.html" class="sec-link">Ver todas →</a></div>
+    <div class="sec-card" style="margin-bottom:80px;">
+      <div id="listaAtivRecentes"></div>
     </div>
-  </div>
 
-  <!-- ═══ MÓDULO: CONFIG ═══ -->
-  <div class="modulo" id="mod-config">
-    <div class="mod-header">
-      <span style="font-size:20px;">⚙️</span>
-      <div class="mod-header-title">Configurações</div>
-    </div>
-    <div style="flex:1;overflow-y:auto;padding:14px;">
-
-      <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--verde);font-weight:700;margin-bottom:10px;">👥 Gerenciar Usuários</div>
-      <button class="btn btn-cinza btn-bloco btn-sm" onclick="carregarUsuarios()" style="margin-bottom:10px;">🔄 Carregar usuários</button>
-      <div id="listaUsuarios"></div>
-
-      <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--verde);font-weight:700;margin:20px 0 10px;">🔑 Código de Cadastro</div>
-      <p style="font-size:.75rem;color:var(--cinza);margin-bottom:8px;line-height:1.5;">Exigido para novos cadastros. Atual: <strong id="codigoAtualDisplay">...</strong></p>
-      <input type="text" id="inputCodigoCad" placeholder="Novo código..." style="border:1.5px solid var(--cinza-borda);border-radius:8px;padding:10px;font-size:.85rem;width:100%;margin-bottom:8px;font-family:'Barlow',sans-serif;outline:none;">
-      <button class="btn btn-verde btn-bloco btn-sm" onclick="salvarCodigoCadastro()">Salvar código</button>
-
-      <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:var(--verde);font-weight:700;margin:20px 0 10px;">🌾 Tipos de Atividade</div>
-      <div id="listaAtividadesConfig"></div>
-      <button class="btn btn-cinza btn-bloco btn-sm" onclick="addAtividadeConfig()" style="margin-top:6px;">＋ Adicionar atividade</button>
-      <button class="btn btn-verde btn-bloco btn-sm" onclick="salvarAtividadesConfig()" style="margin-top:6px;">💾 Salvar atividades</button>
-    </div>
-  </div>
-</div>
-
-<!-- TELA DE CONFERÊNCIA (fullscreen) -->
-<div id="telaConferencia">
-  <div class="conf-header">
-    <button onclick="fecharConferencia()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
-    <div class="conf-info">
-      <div class="conf-nome" id="confNome"></div>
-      <div class="conf-meta" id="confMeta"></div>
-    </div>
-    <div style="text-align:right;flex-shrink:0;">
-      <div class="conf-prog-num" id="confProg">0/0</div>
-      <span class="conf-prog-small">carreiras</span>
-    </div>
-  </div>
-  <div class="prog-bar-wrap"><div class="prog-bar" id="progBar" style="width:0%"></div></div>
-  <div class="abas-scroll" id="abasContainer"></div>
-  <div class="conf-body" id="paineisContainer"></div>
-  <div class="conf-footer">
-    <button class="btn btn-cinza" style="flex:1;" onclick="fecharConferencia()">← Voltar</button>
-    <button class="btn btn-verde" style="flex:1;" onclick="salvarESair()">💾 Salvar</button>
-    <button class="btn btn-cinza btn-sm" onclick="exportarRelatorio()">📄 PDF</button>
-  </div>
-</div>
-
-<!-- MODAL CONFERÊNCIA -->
-<div class="conf-overlay" id="confOverlay" onclick="fecharConfModal()">
-  <div class="conf-modal" onclick="event.stopPropagation()">
-    <div class="conf-modal-handle"></div>
-    <div class="conf-modal-titulo" id="cmTitulo"></div>
-    <div class="conf-modal-sub" id="cmSub"></div>
-    <div id="cmFuncLista"></div>
-    <div id="cmPesSection"></div>
-    <div class="modal-acoes" id="cmAcoes"></div>
-    <div class="modal-limpar" onclick="limparCarreira()">🗑 Limpar esta carreira</div>
-  </div>
+  </main>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <script>
-// ─── Helpers UI ───
-function mostrarApp() {
-  document.getElementById('loadingScreen').style.display = 'none';
-  document.getElementById('telaLogin').style.display = 'none';
-  document.getElementById('telaCadastro').style.display = 'none';
-  document.getElementById('appHeader').style.display = 'flex';
-  document.getElementById('appMain').style.display = 'flex';
-  document.getElementById('menuUserNome').textContent = document.getElementById('userNome').textContent;
-  document.getElementById('menuUserEmail').textContent = document.getElementById('userEmail').textContent;
-  // Mostrar abas admin em atividades
-  setTimeout(() => {
-    if (window._isAdmin && window._isAdmin('atividades')) {
-      document.getElementById('tabTalhoesAtv').style.display = '';
-      document.getElementById('tabFuncAtv').style.display = '';
-    }
-  }, 500);
-}
-function mostrarLogin() {
-  document.getElementById('loadingScreen').style.display = 'none';
-  document.getElementById('appHeader').style.display = 'none';
-  document.getElementById('appMain').style.display = 'none';
-  document.getElementById('telaLogin').style.display = 'flex';
-}
-function mostrarErroLogin(msg) { const el=document.getElementById('erroLogin'); el.textContent=msg; el.style.display='block'; }
-function mostrarErroCad(msg) { const el=document.getElementById('erroCad'); el.textContent=msg; el.style.display='block'; }
-
-function toast(msg, dur=3000) {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), dur);
-}
-function toggleMenu() {
-  document.getElementById('menuLateral').classList.toggle('aberto');
-  document.getElementById('menuOverlay').classList.toggle('aberto');
-}
-function fecharMenu() {
-  document.getElementById('menuLateral').classList.remove('aberto');
-  document.getElementById('menuOverlay').classList.remove('aberto');
-}
-
-// Login com Enter
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && document.getElementById('telaLogin').style.display !== 'none') fazerLogin(); });
-
-// ─── MAPA ───
-let map, drawnItems, drawControl, mapaIniciado = false;
-let poligonosMap = {}, talhaoAtualId = null, modoDesenho = false, talhaoDesenhandoId = null, filtroAtual = 'todos';
-let editandoId = null;
-const coresPorStatus = { ativo:{fill:'rgba(74,140,63,.35)',border:'rgba(123,198,126,.85)'}, reforma:{fill:'rgba(201,168,76,.35)',border:'rgba(220,190,90,.85)'}, colhido:{fill:'rgba(139,94,60,.35)',border:'rgba(196,133,90,.85)'} };
-const statusLabel = { ativo:'Ativo', reforma:'Em Reforma', colhido:'Colhido' };
-
-function iniciarMapa() {
-  if (mapaIniciado) { setTimeout(() => map.invalidateSize(), 200); return; }
-  mapaIniciado = true;
-  map = L.map('map', { center:[-18.7166,-40.4000], zoom:14 });
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
-  drawnItems = new L.FeatureGroup().addTo(map);
-  drawControl = new L.Control.Draw({ draw:{ polygon:{shapeOptions:{color:'#7bc67e',fillColor:'rgba(74,140,63,.4)',fillOpacity:1,weight:2}}, polyline:false,rectangle:false,circle:false,marker:false,circlemarker:false }, edit:{featureGroup:drawnItems} });
-  map.on(L.Draw.Event.CREATED, function(e) {
-    if (!talhaoDesenhandoId) return;
-    const coords = e.layer.getLatLngs()[0].map(p => ({ lat:p.lat, lng:p.lng }));
-    salvarCoordenadas(talhaoDesenhandoId, coords);
-    map.removeControl(drawControl); modoDesenho = false;
-    const tid = talhaoDesenhandoId; talhaoDesenhandoId = null;
-    setTimeout(() => { renderizarTodos(); selecionarTalhao(tid); }, 600);
-    toast('Área desenhada! ✅');
-  });
-  map.on('click', () => { if (!modoDesenho) fecharPainel(); });
-  setTimeout(() => map.invalidateSize(), 300);
-}
-
-function renderizarTodos() {
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  Object.values(poligonosMap).forEach(p => map && map.removeLayer(p));
-  poligonosMap = {};
-  talhoes.forEach(t => {
-    if (!t.coordenadas || t.coordenadas.length < 3) return;
-    const cor = coresPorStatus[t.status] || coresPorStatus.ativo;
-    const latlngs = t.coordenadas.map(c => Array.isArray(c) ? c : [c.lat, c.lng]);
-    const poly = L.polygon(latlngs, { color:cor.border, weight:2, fillColor:cor.fill, fillOpacity:1 }).addTo(map);
-    poly.bindTooltip(`<b>${t.id}</b> · ${t.area} ha`, { sticky:true, direction:'top' });
-    poly.on('click', (e) => { L.DomEvent.stopPropagation(e); selecionarTalhao(t.id); });
-    poly.on('mouseover', () => { if (talhaoAtualId !== t.id) poly.setStyle({ weight:3, fillOpacity:.55 }); });
-    poly.on('mouseout', () => { const cor2=coresPorStatus[t.status]||coresPorStatus.ativo; poly.setStyle({ weight:talhaoAtualId===t.id?3:2, fillOpacity:1, color:talhaoAtualId===t.id?'#fff':cor2.border }); });
-    poligonosMap[t.id] = poly;
-  });
-  atualizarStats();
-  document.getElementById('emptyState').style.display = talhoes.length ? 'none' : 'block';
-  renderizarSidebar();
-}
-
-function atualizarStats() {
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  document.getElementById('sidebarCount').textContent = talhoes.length + ' talhões';
-}
-
-function setFiltro(f, btn) {
-  filtroAtual = f;
-  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderizarSidebar();
-}
-
-function renderizarSidebar() {
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  const lista = document.getElementById('sidebarList');
-  const filtrados = filtroAtual === 'todos' ? talhoes : talhoes.filter(t => t.status === filtroAtual);
-  if (!filtrados.length) { lista.innerHTML = '<div style="padding:16px;font-size:.78rem;color:var(--cinza);text-align:center;">Nenhum talhão</div>'; return; }
-  lista.innerHTML = filtrados.map(t => {
-    const temMapa = t.coordenadas && t.coordenadas.length >= 3;
-    return `<div class="msb-item ${talhaoAtualId===t.id?'active':''}" onclick="selecionarTalhao('${t.id}');focarNoMapa('${t.id}')">
-      <div class="msb-dot ${t.status||'ativo'}"></div>
-      <div class="msb-info">
-        <div class="msb-id">${t.id}</div>
-        <div class="msb-nome">${t.nome||t.id}</div>
-        <div class="msb-sub">${t.fazenda||''} ${t.area?'· '+t.area+' ha':''}</div>
-      </div>
-      ${!temMapa?'<span class="no-map">sem mapa</span>':''}
-    </div>`;
-  }).join('');
-}
-
-function focarNoMapa(id) { if (poligonosMap[id]) map.fitBounds(poligonosMap[id].getBounds(), { padding:[60,60], maxZoom:16 }); }
-
-function selecionarTalhao(id) {
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  talhaoAtualId = id;
-  const t = talhoes.find(x => x.id === id); if (!t) return;
-  Object.entries(poligonosMap).forEach(([tid, poly]) => {
-    const cor = coresPorStatus[(talhoes.find(x=>x.id===tid)||{}).status]||coresPorStatus.ativo;
-    poly.setStyle({ weight:tid===id?3:2, color:tid===id?'#fff':cor.border });
-    if (tid===id) poly.bringToFront();
-  });
-  document.getElementById('pId').textContent = t.id;
-  document.getElementById('pNome').textContent = t.nome || t.id;
-  document.getElementById('pArea').textContent = (t.area||'—') + ' hectares';
-  const stEl = document.getElementById('pStatus');
-  stEl.className = 'status-tag ' + (t.status||'ativo');
-  stEl.innerHTML = statusLabel[t.status]||t.status;
-  let htmlHist = '';
-  if (t.historico && t.historico.length) {
-    const linhas = t.historico.map(h=>`<tr><td style="padding:4px 0;font-size:.72rem;">${h.safra}</td><td style="padding:4px 0;font-size:.72rem;">${h.valor}</td></tr>`).join('');
-    htmlHist = `<div class="info-row"><div class="info-icon">📊</div><div class="info-content"><label>Produtividade</label><table style="width:100%;margin-top:4px;"><tr><th style="font-size:.58rem;color:var(--cinza);text-align:left;padding:2px 0;">Safra</th><th style="font-size:.58rem;color:var(--cinza);text-align:left;padding:2px 0;">Resultado</th></tr>${linhas}</table></div></div>`;
-  }
-  const podeEd = window._podeEditar && window._podeEditar('mapa');
-  const temPoly = t.coordenadas && t.coordenadas.length >= 3;
-  document.getElementById('pBody').innerHTML = `
-    <div class="info-row"><div class="info-icon">📍</div><div class="info-content"><label>Fazenda</label><value>${t.fazenda||'—'}</value></div></div>
-    <div class="info-row"><div class="info-icon">🌱</div><div class="info-content"><label>Clone</label><value>${t.clone||'—'}</value></div></div>
-    <div class="info-row"><div class="info-icon">📅</div><div class="info-content"><label>Plantio</label><value>${t.dataPlantio?formatarData(t.dataPlantio):'—'}</value></div></div>
-    <div class="info-row"><div class="info-icon">⏳</div><div class="info-content"><label>Idade</label><value>${t.dataPlantio?calcularIdade(t.dataPlantio):'—'}</value></div></div>
-    ${t.espacamento?`<div class="info-row"><div class="info-icon">📐</div><div class="info-content"><label>Espaçamento</label><value>${t.espacamento}</value></div></div>`:''}
-    ${t.irrigacao?`<div class="info-row"><div class="info-icon">💧</div><div class="info-content"><label>Irrigação</label><value>${t.irrigacao}</value></div></div>`:''}
-    ${htmlHist}
-    ${t.observacoes?`<div style="background:var(--cinza-claro);border-radius:7px;padding:9px;font-size:.75rem;color:var(--texto-suave);line-height:1.5;font-style:italic;">${t.observacoes}</div>`:''}
-    ${podeEd?`<button onclick="iniciarDesenho('${t.id}')" style="width:100%;background:var(--verde-bg);border:1px solid #a7d7a7;color:var(--verde);border-radius:7px;padding:8px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;margin-top:4px;">${temPoly?'✏️ Redesenhar área':'📍 Desenhar área no mapa'}</button>`:''}`;
-  document.getElementById('panelActions').innerHTML = podeEd
-    ? `<button class="btn-edit" onclick="editarAtual()">✎ Editar</button><button class="btn-del" onclick="deletarAtual()">🗑</button>`
-    : '';
-  document.getElementById('infoPanel').classList.add('visible');
-  document.getElementById('hintBar').style.display = 'none';
-  renderizarSidebar();
-}
-
-function fecharPainel() {
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  document.getElementById('infoPanel').classList.remove('visible');
-  Object.entries(poligonosMap).forEach(([tid, poly]) => {
-    const cor = coresPorStatus[(talhoes.find(x=>x.id===tid)||{}).status]||coresPorStatus.ativo;
-    poly.setStyle({ weight:2, color:cor.border });
-  });
-  talhaoAtualId = null; renderizarSidebar();
-}
-
-function editarAtual() {
-  if (!talhaoAtualId) return;
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  abrirModal(talhoes.find(x => x.id === talhaoAtualId));
-}
-
-function iniciarDesenho(id) {
-  if (!window._podeEditar || !window._podeEditar('mapa')) { toast('⛔ Sem permissão.'); return; }
-  talhaoDesenhandoId = id; fecharPainel();
-  if (poligonosMap[id]) { map.removeLayer(poligonosMap[id]); delete poligonosMap[id]; }
-  map.addControl(drawControl);
-  new L.Draw.Polygon(map, drawControl.options.draw.polygon).enable();
-  modoDesenho = true;
-  toast('Clique nos cantos do talhão. Duplo-clique para fechar.', 5000);
-}
-
-function abrirModal(talhao) {
-  if (!window._podeEditar || !window._podeEditar('mapa')) { toast('⛔ Sem permissão.'); return; }
-  const fazendas = window._getFazendas ? window._getFazendas() : [];
-  editandoId = talhao ? talhao.id : null;
-  document.getElementById('modalTitle').textContent = talhao ? 'Editar Talhão' : 'Novo Talhão';
-  const sel = document.getElementById('fFazenda');
-  sel.innerHTML = fazendas.map(f=>`<option value="${f}"${f===talhao?.fazenda?' selected':''}>${f}</option>`).join('') + `<option value="__nova__">＋ Nova fazenda...</option>`;
-  if (talhao?.fazenda && !fazendas.includes(talhao.fazenda)) sel.innerHTML = `<option value="${talhao.fazenda}" selected>${talhao.fazenda}</option>` + sel.innerHTML;
-  document.getElementById('fFazendaNova').style.display = 'none';
-  document.getElementById('fId').value = talhao?.id||'';
-  document.getElementById('fNome').value = talhao?.nome||'';
-  document.getElementById('fArea').value = talhao?.area||'';
-  document.getElementById('fStatus').value = talhao?.status||'ativo';
-  document.getElementById('fClone').value = talhao?.clone||'';
-  document.getElementById('fDataPlantio').value = talhao?.dataPlantio||'';
-  document.getElementById('fEspacamento').value = talhao?.espacamento||'';
-  document.getElementById('fIrrigacao').value = talhao?.irrigacao||'';
-  document.getElementById('fObs').value = talhao?.observacoes||'';
-  const cont = document.getElementById('fHistoricoContainer');
-  cont.innerHTML = '';
-  const hist = talhao?.historico||[];
-  if (hist.length) hist.forEach(h=>addHistoricoRow(h.safra,h.valor)); else addHistoricoRow('','');
-  document.getElementById('fId').disabled = !!talhao;
-  document.getElementById('overlay').classList.add('open');
-}
-
-function addHistoricoRow(safra, valor) {
-  const div = document.createElement('div');
-  div.className = 'historico-row';
-  div.innerHTML = `<input type="text" class="h-safra" placeholder="Safra (ex: 24/25)" value="${safra}"><input type="text" class="h-valor" placeholder="Result." value="${valor}"><button type="button" class="btn-del-row" onclick="this.parentElement.remove()">✕</button>`;
-  document.getElementById('fHistoricoContainer').appendChild(div);
-}
-function fecharModal() { document.getElementById('overlay').classList.remove('open'); editandoId = null; }
-function overlayClick(e) { if (e.target===document.getElementById('overlay')) fecharModal(); }
-function checkNovaFazenda(sel) {
-  const nova = document.getElementById('fFazendaNova');
-  nova.style.display = sel.value==='__nova__' ? 'block' : 'none';
-  if (sel.value !== '__nova__') nova.value = '';
-}
-
-// Utils
-function calcularIdade(d) { const anos=Math.floor((new Date()-new Date(d))/(1000*60*60*24*365.25)); return anos+' ano'+(anos!==1?'s':''); }
-function formatarData(d) { if (!d) return '—'; const [a,m,dd]=d.split('-'); return `${dd}/${m}/${a}`; }
-function hoje() { return new Date().toISOString().slice(0,10); }
-const uid = () => Math.random().toString(36).slice(2,10);
-
-// Botão novo talhão no mapa
-function btnNovoTalhaoMapa() {
-  if (!window._podeEditar || !window._podeEditar('mapa')) { toast('⛔ Sem permissão.'); return; }
-  abrirModal(null);
-}
-
-// ─── ATIVIDADES ───
-let tabAtvAtual = 'registros';
-let modalCarreiraAberta = null; // { qid, idx, num }
-
-function abrirTabAtividade(tab, btn) {
-  tabAtvAtual = tab;
-  document.querySelectorAll('.mod-tab').forEach(b => b.classList.remove('ativo'));
-  if (btn) btn.classList.add('ativo');
-  const content = document.getElementById('atvContent');
-  if (tab === 'registros') renderizarRegistros();
-  else if (tab === 'nova') renderizarFormNovaSessao();
-  else if (tab === 'talhoes') renderizarTalhoesAtividades();
-  else if (tab === 'funcionarios') renderizarFuncionarios();
-}
-
-function renderizarRegistros() {
-  if (tabAtvAtual !== 'registros') return;
-  const registros = window._getRegistros ? window._getRegistros() : [];
-  const content = document.getElementById('atvContent');
-  if (!registros.length) {
-    content.innerHTML = `<div class="vazio"><div class="ico">📋</div><p>Nenhuma sessão registrada ainda.<br>Crie uma nova sessão na aba <strong>Nova Sessão</strong>.</p></div>`;
-    return;
-  }
-  content.innerHTML = registros.map(r => {
-    const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
-    const at = Object.keys(r.atribuicoes||{}).length;
-    const pct = tot ? Math.round((at/tot)*100) : 0;
-    const podeEd = window._podeEditar && window._podeEditar('atividades');
-    return `<div class="reg-card">
-      <div class="reg-card-header">
-        <div>
-          <div class="reg-card-title">🌾 ${r.atividade||'Atividade'} · ${r.talhaoNome||''}</div>
-          <div class="reg-card-meta">${r.fazenda||''} · ${formatarData(r.data)} · ${at}/${tot} carreiras (${pct}%)</div>
-        </div>
-      </div>
-      <div class="reg-card-body">
-        <div class="reg-stat"><span class="reg-stat-label">Funcionários</span><span class="reg-stat-val">${(r.funcDia||[]).map(f=>f.nome.split(' ')[0]).join(', ')}</span></div>
-        <div class="reg-stat"><span class="reg-stat-label">Progresso</span><span class="reg-stat-val">${at} de ${tot} carreiras</span></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          ${podeEd?`<button class="btn btn-verde btn-sm" style="flex:1" onclick="carregarRegistro('${r._docId}')">✏️ Continuar</button>`:''}
-          <button class="btn btn-cinza btn-sm" style="flex:1" onclick="verRelatorio('${r._docId}')">📊 Relatório</button>
-          ${window._isAdmin&&window._isAdmin('atividades')?`<button class="btn btn-danger btn-sm" onclick="deletarRegistro('${r._docId}')">🗑</button>`:''}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function renderizarFormNovaSessao() {
-  const talhoesAtv = window._getTalhoesAtividades ? window._getTalhoesAtividades() : [];
-  const atividades = window._getAtividades ? window._getAtividades() : [];
-  const emps = window._getEmpreiteiros ? window._getEmpreiteiros() : [];
-  const content = document.getElementById('atvContent');
-  content.innerHTML = `
-    <div class="form-sessao">
-      <div class="form-sessao-title">📋 Dados da Sessão</div>
-      <div class="campo"><label>Data</label><input type="date" id="inpSessaoData" value="${hoje()}"></div>
-      <div class="campo"><label>Atividade</label><select id="selSessaoAtividade">
-        ${atividades.map(a=>`<option value="${a}">${a}</option>`).join('')}
-      </select></div>
-      <div class="campo"><label>Talhão</label><select id="selSessaoTalhao">
-        <option value="">Selecione...</option>
-        ${talhoesAtv.map(t=>`<option value="${t._docId}">${t.fazenda?t.fazenda+' · ':''} ${t.nome} (${(t.quadras||[]).length} quadras)</option>`).join('')}
-      </select></div>
-    </div>
-    <div class="form-sessao">
-      <div class="form-sessao-title">👷 Empreiteiros do Dia</div>
-      ${!emps.length
-        ? `<p style="font-size:.78rem;color:var(--cinza);text-align:center;padding:12px;">Nenhum empreiteiro cadastrado. Adicione na aba <strong>Equipe</strong>.</p>`
-        : emps.map(e => `
-          <div style="background:var(--cinza-claro);border-radius:8px;margin-bottom:8px;overflow:hidden;">
-            <div class="func-check-row" style="background:white;border-bottom:1px solid var(--cinza-borda);">
-              <input type="checkbox" class="emp-check-item" id="ec-${e._docId}" value="${e._docId}" onchange="toggleEmpreiteiro('${e._docId}')">
-              <label for="ec-${e._docId}" style="font-weight:700;">🤝 ${e.nome}</label>
-              <span style="font-size:.7rem;color:var(--cinza)">${(e.funcionarios||[]).length} func.</span>
-            </div>
-            <div id="turma-${e._docId}" style="display:none;padding:6px 12px 8px;">
-              ${(e.funcionarios||[]).map(f=>`
-                <div class="func-check-row" style="padding:6px 0;background:none;">
-                  <input type="checkbox" class="func-check-item" id="fc-${f.id}" value="${f.id}" data-emp="${e._docId}" data-nome="${f.nome}" checked>
-                  <label for="fc-${f.id}">${f.nome}</label>
-                </div>`).join('')}
-            </div>
-          </div>`).join('')}
-    </div>
-    <button class="btn btn-verde btn-bloco" onclick="iniciarSessaoAtividade()">▶ Iniciar Sessão</button>`;
-}
-
-function toggleTalhaoBody(id) {
-  const el = document.getElementById('tbody-' + id);
-  const arr = document.getElementById('arr-' + id);
-  if (!el) return;
-  const aberto = el.style.display !== 'none';
-  el.style.display = aberto ? 'none' : 'block';
-  if (arr) arr.textContent = aberto ? '▶' : '▼';
-}
-
-function togglePesGrid(qid) {
-  const el = document.getElementById('pes-' + qid);
-  const arr = document.getElementById('qarr-' + qid);
-  if (!el) return;
-  const aberto = el.style.display !== 'none';
-  el.style.display = aberto ? 'none' : 'grid';
-  if (arr) arr.textContent = aberto ? '▶' : '▼';
-}
-
-function toggleEmpreiteiro(empId) {
-  const chk = document.getElementById('ec-' + empId);
-  const turma = document.getElementById('turma-' + empId);
-  if (turma) turma.style.display = chk.checked ? 'block' : 'none';
-}
-
-function renderizarTalhoesAtividades() {
-  if (tabAtvAtual !== 'talhoes') return;
-  const talhoesAtv = window._getTalhoesAtividades ? window._getTalhoesAtividades() : [];
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  const content = document.getElementById('atvContent');
-  const talhoesDisponiveis = talhoes.filter(t => !talhoesAtv.find(ta => ta.talhaoId === t.id));
-  let html = `<div class="form-sessao">
-    <div class="form-sessao-title">➕ Adicionar Talhão</div>
-    <div class="campo"><label>Talhão do mapa</label><select id="selTalhaoAtiv">
-      <option value="">Selecione...</option>
-      ${talhoesDisponiveis.map(t=>`<option value="${t.id}">${t.fazenda?t.fazenda+' · ':''} ${t.nome}</option>`).join('')}
-    </select></div>
-    <button class="btn btn-verde btn-bloco btn-sm" onclick="salvarTalhaoAtividade()">Adicionar</button>
-  </div>`;
-  if (!talhoesAtv.length) {
-    html += `<div class="vazio"><div class="ico">🗺️</div><p>Nenhum talhão configurado para atividades.</p></div>`;
-  } else {
-    html += talhoesAtv.map(t => {
-      const quadrasHtml = (t.quadras||[]).map(q => {
-        const pesHtml = Array.from({length:q.carreiras},(_,i)=>{
-          const n=i+1;
-          return `<div class="pes-wrap"><label>C${n}</label><input type="number" min="0" placeholder="—" value="${q.pesCarreira&&q.pesCarreira[n]?q.pesCarreira[n]:''}" onchange="atualizarPesCarreira('${t._docId}','${q.id}',${n},this.value)" onclick="event.stopPropagation()" onfocus="event.stopPropagation()"></div>`;
-        }).join('');
-        return `<div class="quadra-atv-item">
-          <div class="quadra-atv-header">
-            <button onclick="togglePesGrid('${q.id}')" style="background:none;border:none;cursor:pointer;flex:1;text-align:left;font-weight:700;font-size:.85rem;font-family:'Barlow',sans-serif;">
-              📋 ${q.nome} · ${q.carreiras} carreiras <span id="qarr-${q.id}">▶</span>
-            </button>
-            <button onclick="removerQuadra('${t._docId}','${q.id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;flex-shrink:0;">✕</button>
-          </div>
-          <div class="pes-grid" id="pes-${q.id}" style="display:none">${pesHtml}</div>
-        </div>`;
-      }).join('');
-      return `<div class="talhao-atv-card">
-        <div class="talhao-atv-header">
-          <button onclick="toggleTalhaoBody('${t._docId}')" style="background:none;border:none;cursor:pointer;flex:1;text-align:left;padding:0;">
-            <div class="talhao-atv-nome">🌿 ${t.nome} <span id="arr-${t._docId}">▶</span></div>
-            <div class="talhao-atv-meta">${t.fazenda||''} · ${(t.quadras||[]).length} quadra(s) · ${(t.quadras||[]).reduce((s,q)=>s+q.carreiras,0)} carreiras</div>
-          </button>
-          <button onclick="removerTalhaoAtividade('${t._docId}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;flex-shrink:0;">✕</button>
-        </div>
-        <div class="talhao-atv-body" id="tbody-${t._docId}" style="display:none">
-          ${quadrasHtml}
-          <div style="margin-top:10px;background:var(--cinza-claro);padding:10px;border-radius:8px;">
-            <div style="font-size:.65rem;text-transform:uppercase;color:var(--cinza);font-weight:700;margin-bottom:8px;">+ Nova Quadra</div>
-            <div style="display:flex;gap:8px;margin-bottom:8px;">
-              <div style="flex:2"><label style="font-size:.62rem;color:var(--cinza);display:block;margin-bottom:3px;">Nome</label><input type="text" id="inpQNome-${t._docId}" placeholder="Ex: Quadra 1" style="border:1.5px solid var(--cinza-borda);border-radius:6px;padding:8px;font-size:.85rem;width:100%;font-family:'Barlow',sans-serif;outline:none;"></div>
-              <div style="flex:1"><label style="font-size:.62rem;color:var(--cinza);display:block;margin-bottom:3px;">Carreiras</label><input type="number" id="inpQCarr-${t._docId}" placeholder="80" min="1" style="border:1.5px solid var(--cinza-borda);border-radius:6px;padding:8px;font-size:.85rem;width:100%;font-family:'Barlow',sans-serif;outline:none;"></div>
-            </div>
-            <button class="btn btn-verde btn-bloco btn-sm" onclick="salvarQuadra('${t._docId}')">+ Adicionar Quadra</button>
-          </div>
-        </div>
-      </div>`;
-    }).join('');
-  }
-  content.innerHTML = html;
-}
-
-function renderizarEmpreiteiros() {
-  if (tabAtvAtual !== 'funcionarios') return;
-  renderizarFuncionarios();
-}
-
-function renderizarFuncionarios() {
-  if (tabAtvAtual !== 'funcionarios') return;
-  const emps = window._getEmpreiteiros ? window._getEmpreiteiros() : [];
-  const CORES = ['#2d6a2d','#1d4ed8','#b45309','#7c3aed','#be123c','#0e7490','#65a30d','#c2410c'];
-  const inic = n => n.split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
-  const content = document.getElementById('atvContent');
-  const isAdm = window._isAdmin && window._isAdmin('atividades');
-  content.innerHTML = `
-    ${isAdm?`<div class="form-sessao">
-      <div class="form-sessao-title">➕ Novo Empreiteiro</div>
-      <div style="display:flex;gap:8px;">
-        <input type="text" id="inpNovoEmp" placeholder="Nome do empreiteiro..." style="flex:1;border:1.5px solid var(--cinza-borda);border-radius:8px;padding:10px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;">
-        <button class="btn btn-verde btn-sm" onclick="salvarEmpreiteiro()">+</button>
-      </div>
-    </div>`:''}
-    ${!emps.length
-      ? `<div class="vazio"><div class="ico">🤝</div><p>Nenhum empreiteiro cadastrado.</p></div>`
-      : emps.map((emp, ei) => `
-        <div style="background:white;border-radius:var(--radius);box-shadow:var(--sombra);margin-bottom:10px;overflow:hidden;">
-          <div style="background:${CORES[ei%CORES.length]};padding:11px 14px;display:flex;align-items:center;justify-content:space-between;">
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div style="width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:white;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;">${inic(emp.nome)}</div>
-              <div>
-                <div style="color:white;font-weight:700;font-size:.95rem;">🤝 ${emp.nome}</div>
-                <div style="color:rgba(255,255,255,.7);font-size:.7rem;">${(emp.funcionarios||[]).length} funcionário(s)</div>
-              </div>
-            </div>
-            ${isAdm?`<button onclick="deletarEmpreiteiro('${emp._docId}')" style="background:rgba(255,255,255,.15);border:none;color:white;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:.8rem;">✕</button>`:''}
-          </div>
-          <div style="padding:10px 14px;">
-            ${(emp.funcionarios||[]).map(f=>`
-              <div class="func-item-atv" style="border-bottom:1px solid var(--cinza-claro);padding:7px 0;">
-                <div class="func-ini" style="background:${CORES[ei%CORES.length]};width:28px;height:28px;font-size:.7rem;">${inic(f.nome)}</div>
-                <span class="func-nome-atv" style="font-size:.85rem;">${f.nome}</span>
-                ${isAdm?`<button onclick="removerFuncEmpreiteiro('${emp._docId}','${f.id}')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem;">✕</button>`:''}
-              </div>`).join('')}
-            ${isAdm?`<div style="display:flex;gap:8px;margin-top:8px;">
-              <input type="text" id="inpFuncEmp-${emp._docId}" placeholder="Nome do funcionário..." style="flex:1;border:1.5px solid var(--cinza-borda);border-radius:7px;padding:8px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;">
-              <button class="btn btn-verde btn-sm" onclick="salvarFuncEmpreiteiro('${emp._docId}')">+</button>
-            </div>`:''}
-          </div>
-        </div>`).join('')}
-  `;
-}
-
-function popularSelectTalhaoAtividade() {
-  const sel = document.getElementById('selTalhaoAtiv');
-  if (!sel) return;
-  const talhoesAtv = window._getTalhoesAtividades ? window._getTalhoesAtividades() : [];
-  const talhoes = window._getTalhoes ? window._getTalhoes() : [];
-  const disponiveis = talhoes.filter(t => !talhoesAtv.find(ta => ta.talhaoId === t.id));
-  sel.innerHTML = `<option value="">Selecione...</option>` + disponiveis.map(t=>`<option value="${t.id}">${t.fazenda?t.fazenda+' · ':''} ${t.nome}</option>`).join('');
-}
-
-// ─── CONFERÊNCIA ───
-const CORES = ['#2d6a2d','#1d4ed8','#b45309','#7c3aed','#be123c','#0e7490','#65a30d','#c2410c'];
-const inic = n => n.split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
-const corFunc = id => { const s=window._getSessao(); const idx=(s?.funcDia||[]).findIndex(f=>f.id===id); return CORES[idx>=0?idx%CORES.length:0]; };
-
-function mostrarTelaConferencia() {
-  document.getElementById('telaConferencia').classList.add('aberta');
-  renderizarConferencia();
-}
-
-function fecharConferencia() {
-  document.getElementById('telaConferencia').classList.remove('aberta');
-  window._setSessao(null);
-  renderizarRegistros();
-}
-
-async function salvarESair() {
-  await salvarSessao();
-  fecharConferencia();
-}
-
-function renderizarConferencia() {
-  const s = window._getSessao(); if (!s) return;
-  const label = s.fazenda ? `${s.fazenda} · ${s.talhaoNome}` : s.talhaoNome;
-  document.getElementById('confNome').textContent = label;
-  document.getElementById('confMeta').textContent = `${s.atividade} · ${formatarData(s.data)}`;
-  if (!window._getAbaAtual() && s.quadras.length) window._setAbaAtual(s.quadras[0].id);
-  renderizarAbas(); renderizarPaineis(); atualizarProgresso();
-}
-
-function renderizarAbas() {
-  const s = window._getSessao(); if (!s) return;
-  document.getElementById('abasContainer').innerHTML = s.quadras.map(q => {
-    const {at,tot} = contarQuadra(q.id);
-    const completa = at===tot && tot>0;
-    return `<button class="aba-btn ${window._getAbaAtual()===q.id?'ativa':''}" onclick="trocarAba('${q.id}')">
-      ${q.nome}<span class="aba-prog">${completa?'✅':at+'/'+tot}</span>
-    </button>`;
-  }).join('');
-}
-
-function trocarAba(qid) {
-  window._setAbaAtual(qid);
-  document.querySelectorAll('.aba-btn').forEach(b => b.classList.toggle('ativa', b.textContent.trim().startsWith(window._getSessao()?.quadras.find(q=>q.id===qid)?.nome||'_')));
-  renderizarAbas();
-  document.querySelectorAll('.quadra-painel').forEach(p => p.classList.toggle('ativa', p.dataset.qid===qid));
-  setTimeout(() => { const el=document.querySelector(`.aba-btn.ativa`); if(el) el.scrollIntoView({inline:'center',behavior:'smooth'}); }, 50);
-}
-
-function renderizarPaineis() {
-  const s = window._getSessao(); if (!s) return;
-  const legenda = s.funcDia.map((f,i)=>`<div class="legenda-item"><div class="legenda-cor" style="background:${CORES[i%CORES.length]}"></div>${f.nome.split(' ')[0]}</div>`).join('');
-  document.getElementById('paineisContainer').innerHTML = s.quadras.map(q => {
-    const {at,tot} = contarQuadra(q.id);
-    const pct = tot ? Math.round((at/tot)*100) : 0;
-    const btns = Array.from({length:q.carreiras},(_,i)=>renderBtnCarreira(q.id,i,i+1,s.atribuicoes[`${q.id}-${i}`])).join('');
-    return `<div class="quadra-painel ${window._getAbaAtual()===q.id?'ativa':''}" data-qid="${q.id}" id="painel-${q.id}">
-      <div class="quadra-resumo" id="resumo-${q.id}">
-        <strong>${q.nome}</strong>
-        <span>${at} de ${tot} conferidas</span>
-        <span class="q-pct">${pct}%</span>
-      </div>
-      <div class="legenda-scroll">${legenda}</div>
-      <div class="carreiras-grid" id="grid-${q.id}">${btns}</div>
-    </div>`;
-  }).join('');
-}
-
-function renderBtnCarreira(qid, idx, num, a) {
-  if (!a) return `<button class="carreira-btn" onclick="abrirConfModal('${qid}',${idx},${num})"><span class="carreira-num">${num}</span></button>`;
-  const s = window._getSessao();
-  const f1 = s.funcDia.find(f=>f.id===a.func1);
-  const f2 = a.func2 ? s.funcDia.find(f=>f.id===a.func2) : null;
-  const bgColor = f1 ? corFunc(a.func1) : '#888';
-  const nomeLine = f2 ? `${inic(f1?f1.nome:'')}+${inic(f2.nome)}` : (f1?inic(f1.nome):'?');
-  return `<button class="carreira-btn completa" style="background:${bgColor};" onclick="abrirConfModal('${qid}',${idx},${num})">
-    ${f2?`<div class="dupla-badge">2</div>`:''}
-    <span class="carreira-num">${num}</span>
-    <span class="carreira-func">${nomeLine}</span>
-  </button>`;
-}
-
-function contarQuadra(qid) {
-  const s = window._getSessao(); if (!s) return {at:0,tot:0};
-  const q = s.quadras.find(x=>x.id===qid); if (!q) return {at:0,tot:0};
-  let at=0;
-  for(let i=0;i<q.carreiras;i++) if(s.atribuicoes[`${qid}-${i}`]) at++;
-  return {at, tot:q.carreiras};
-}
-
-function atualizarProgresso() {
-  const s = window._getSessao(); if (!s) return;
-  const tot = s.quadras.reduce((sum,q)=>sum+q.carreiras,0);
-  const at = Object.keys(s.atribuicoes).length;
-  document.getElementById('confProg').textContent = `${at}/${tot}`;
-  document.getElementById('progBar').style.width = tot ? (at/tot*100)+'%' : '0%';
-}
-
-// Modal de conferência
-let confAtual = null;
-function abrirConfModal(qid, idx, num) {
-  const s = window._getSessao(); if (!s) return;
-  confAtual = { qid, idx, num };
-  const a = s.atribuicoes[`${qid}-${idx}`];
-  const q = s.quadras.find(x=>x.id===qid);
-  document.getElementById('cmTitulo').textContent = `Carreira ${num}`;
-  document.getElementById('cmSub').textContent = `${q?.nome||''} · ${s.talhaoNome}`;
-  document.getElementById('cmFuncLista').innerHTML = s.funcDia.map((f,i)=>{
-    const sel1 = a?.func1===f.id, sel2 = a?.func2===f.id;
-    return `<div class="func-opcao ${sel1?'sel1':''} ${sel2?'sel2':''}" onclick="selecionarFunc('${f.id}')">
-      <div class="func-ini" style="background:${CORES[i%CORES.length]}">${inic(f.nome)}</div>
-      <div class="func-op-nome">${f.nome}</div>
-      ${sel1?`<span class="func-sel-badge badge-1">1º</span>`:''}
-      ${sel2?`<span class="func-sel-badge badge-2">2º</span>`:''}
-    </div>`;
-  }).join('');
-  // Pés colhidos
-  const q2 = s.quadras.find(x=>x.id===qid);
-  const totalPes = q2?.pesCarreira?.[num] || 0;
-  document.getElementById('cmPesSection').innerHTML = `<div class="modal-pes-section">
-    <div class="modal-pes-header">🌱 Pés colhidos (total: ${totalPes})</div>
-    <div class="modal-pes-body">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <label style="font-size:.82rem;color:var(--cinza);flex:1;">Total da carreira</label>
-        <input type="number" id="inpTotalPes" value="${a?.total!=null?a.total:''}" placeholder="${totalPes||'—'}" style="width:90px;border:1.5px solid var(--cinza-borda);border-radius:7px;padding:8px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;text-align:right;">
-      </div>
-    </div>
-  </div>`;
-  document.getElementById('confOverlay').classList.add('aberto');
-}
-
-function fecharConfModal() {
-  document.getElementById('confOverlay').classList.remove('aberto');
-  confAtual = null;
-}
-
-function selecionarFunc(fid) {
-  const s = window._getSessao(); if (!s || !confAtual) return;
-  const key = `${confAtual.qid}-${confAtual.idx}`;
-  const a = s.atribuicoes[key] || {};
-  if (!a.func1) { s.atribuicoes[key] = { ...a, func1: fid }; }
-  else if (a.func1 === fid) { delete s.atribuicoes[key]; }
-  else if (!a.func2) { s.atribuicoes[key] = { ...a, func2: fid }; }
-  else if (a.func2 === fid) { const {func2, ...resto} = a; s.atribuicoes[key] = resto; }
-  else { s.atribuicoes[key] = { ...a, func1: fid, func2: undefined }; delete s.atribuicoes[key].func2; }
-  // Salvar total de pés
-  const totalPes = parseInt(document.getElementById('inpTotalPes')?.value) || null;
-  if (s.atribuicoes[key] && totalPes) s.atribuicoes[key].total = totalPes;
-  window._setSessao(s);
-  // Atualizar botão
-  const btn = document.getElementById(`grid-${confAtual.qid}`)?.children[confAtual.idx];
-  if (btn?.parentElement) {
-    const grid = document.getElementById('grid-'+confAtual.qid);
-    if (grid) grid.innerHTML = Array.from({length:s.quadras.find(q=>q.id===confAtual.qid)?.carreiras||0},(_,i)=>renderBtnCarreira(confAtual.qid,i,i+1,s.atribuicoes[`${confAtual.qid}-${i}`])).join('');
-  }
-  abrirConfModal(confAtual.qid, confAtual.idx, confAtual.num);
-  atualizarProgresso();
-  renderizarAbas();
-  // Auto-salvar
-  if (s._docId) atualizarAtribuicao();
-}
-
-function limparCarreira() {
-  const s = window._getSessao(); if (!s || !confAtual) return;
-  const key = `${confAtual.qid}-${confAtual.idx}`;
-  delete s.atribuicoes[key];
-  window._setSessao(s);
-  fecharConfModal();
-  const grid = document.getElementById('grid-'+confAtual?.qid);
-  if (grid) {
-    const q = s.quadras.find(q=>q.id===confAtual.qid);
-    if (q) grid.innerHTML = Array.from({length:q.carreiras},(_,i)=>renderBtnCarreira(q.id,i,i+1,s.atribuicoes[`${q.id}-${i}`])).join('');
-  }
-  atualizarProgresso(); renderizarAbas();
-  if (s._docId) atualizarAtribuicao();
-}
-
-// ─── RELATÓRIO ───
-function verRelatorio(docId) {
-  const registros = window._getRegistros ? window._getRegistros() : [];
-  const r = registros.find(x => x._docId === docId); if (!r) return;
-  // Calcular dados
-  const resultados = {};
-  (r.funcDia||[]).forEach(f => resultados[f.id] = { nome:f.nome, carreiras:0, pes:0, detalhes:[] });
-  (r.quadras||[]).forEach(q => {
-    for (let i=0;i<q.carreiras;i++) {
-      const a = (r.atribuicoes||{})[`${q.id}-${i}`]; if (!a) continue;
-      const dupla = !!a.func2;
-      const pesTotal = a.total || 0;
-      [a.func1, a.func2].filter(Boolean).forEach(fid => {
-        if (!resultados[fid]) return;
-        resultados[fid].carreiras += dupla ? 0.5 : 1;
-        resultados[fid].pes += dupla ? Math.round(pesTotal/2) : pesTotal;
-        resultados[fid].detalhes.push(`${q.nome}: C${i+1}${dupla?' (dupla)':''}`);
-      });
-    }
-  });
-  const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
-  const at = Object.keys(r.atribuicoes||{}).length;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#111;">
-      <div style="border-bottom:3px solid #2d6a2d;padding-bottom:12px;margin-bottom:18px;">
-        <div style="font-size:20px;font-weight:900;color:#2d6a2d;">Relatório · ${r.atividade||'Atividade'}</div>
-        <div style="font-size:12px;color:#666;margin-top:3px;">${r.fazenda?r.fazenda+' · ':''} ${r.talhaoNome} · ${formatarData(r.data)}</div>
-      </div>
-      ${at<tot?`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#c2410c;">⚠️ ${tot-at} carreira(s) sem conferência</div>`:`<div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#065f46;font-weight:600;">✅ Todas as ${tot} carreiras conferidas</div>`}
-      ${Object.entries(porEmp).map(([empNome, funcs]) => {
-        const totCarr = funcs.reduce((s,f)=>s+f.carreiras,0);
-        const totPes = funcs.reduce((s,f)=>s+f.pes,0);
-        return `<div style="margin-bottom:18px;">
-          <div style="background:#1a3d1a;color:white;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;align-items:center;">
-            <span style="font-weight:700;">🤝 ${empNome}</span>
-            <span style="font-size:12px;opacity:.8;">${totCarr} carreiras · ${totPes||0} pés</span>
-          </div>
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="background:#e8f5e8;"><th style="padding:6px 10px;text-align:left;color:#1a3d1a;font-size:11px;">#</th><th style="padding:6px 10px;text-align:left;color:#1a3d1a;font-size:11px;">Funcionário</th><th style="padding:6px 10px;text-align:center;color:#1a3d1a;font-size:11px;">Carreiras</th><th style="padding:6px 10px;text-align:center;color:#1a3d1a;font-size:11px;">Pés</th></tr></thead>
-            <tbody>
-              ${funcs.map((f,i)=>`<tr style="background:${i%2===0?'white':'#f9fafb'}"><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">${i+1}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-weight:600;">${f.nome}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">${f.carreiras}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">${f.pes||'—'}</td></tr>`).join('')}
-            </tbody>
-          </table>
-        </div>`;
-      }).join('')}
-      <div style="margin-top:20px;font-size:11px;color:#888;">Gerado em ${new Date().toLocaleString('pt-BR')}</div>
-    </div>`;
-  document.getElementById('area-impressao').innerHTML = html;
-  setTimeout(() => window.print(), 200);
-}
-
-function exportarRelatorio() {
-  const s = window._getSessao(); if (!s) return;
-  // Usar o mesmo gerador de relatório
-  const r = { ...s, _docId:'temp' };
-  const registros = window._getRegistros ? window._getRegistros() : [];
-  verRelatorio(r._docId);
-}
-
-// ─── CONFIG atividades ───
-function renderizarAtividadesConfig() {
-  const atividades = window._getAtividades ? window._getAtividades() : [];
-  const lista = document.getElementById('listaAtividadesConfig'); if (!lista) return;
-  lista.innerHTML = atividades.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px;background:white;border:1.5px solid var(--cinza-borda);border-radius:8px;padding:8px 10px;margin-bottom:6px;">
-    <input type="text" value="${a}" onchange="window._getAtividades()[${i}]=this.value" style="flex:1;border:none;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;">
-    <button onclick="removerAtividadeConfig(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem;">✕</button>
-  </div>`).join('');
-}
-
-function addAtividadeConfig() {
-  const atividades = window._getAtividades ? window._getAtividades() : [];
-  atividades.push('Nova Atividade');
-  renderizarAtividadesConfig();
-}
-function removerAtividadeConfig(i) {
-  const atividades = window._getAtividades ? window._getAtividades() : [];
-  atividades.splice(i,1);
-  renderizarAtividadesConfig();
-}
-
-// Botão novo talhão flutuante no mapa
-window.addEventListener('_moduloAtivo_changed', () => {
-  if (window._moduloAtivo === 'mapa') {
-    renderizarSidebar();
-  }
-});
-</script>
-
-<!-- Botão flutuante novo talhão -->
-<button id="btnNovoTalhao" onclick="btnNovoTalhaoMapa()" style="display:none;position:absolute;bottom:20px;right:16px;background:var(--verde);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sombra-forte);z-index:1000;transition:all .2s;">＋ Novo Talhão</button>
-
-<script>
-// Mostrar botão flutuante apenas no módulo mapa
-const _origAbrirModulo = window.abrirModulo;
-window.abrirModulo = function(modulo) {
-  _origAbrirModulo(modulo);
-  const btn = document.getElementById('btnNovoTalhao');
-  if (btn) btn.style.display = modulo === 'mapa' && window._podeEditar && window._podeEditar('mapa') ? 'block' : 'none';
-};
-
-// Verificar se app está em modo atividades para mostrar abas admin
-setTimeout(() => {
-  if (window._isAdmin && window._isAdmin('atividades')) {
-    const t1 = document.getElementById('tabTalhoesAtv');
-    const t2 = document.getElementById('tabFuncAtv');
-    if (t1) t1.style.display = '';
-    if (t2) t2.style.display = '';
-  }
-}, 1000);
+// Detectar offline
+window.addEventListener('online', () => { document.getElementById('offline-badge').style.display='none'; });
+window.addEventListener('offline', () => { document.getElementById('offline-badge').style.display='block'; });
+if (!navigator.onLine) document.getElementById('offline-badge').style.display='block';
 </script>
 </body>
 </html>

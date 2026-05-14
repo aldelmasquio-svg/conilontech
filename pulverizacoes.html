@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Pulverizações</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(() => {});
+
+let usuarioAtual = null, perfilAtual = {};
+let talhoes = [], pulverizacoes = [];
+let vizAtual = 'calendario'; // 'calendario' | 'lista'
+let mesAtual = new Date().getMonth(), anoAtual = new Date().getFullYear();
+
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const DIAS_SEMANA = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = 'login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db, 'usuarios', user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+  iniciarListeners();
+  if (isAdmin()) document.getElementById('btnNovaPulv').style.display = 'flex';
+});
+
+function nivelAcesso(mod) {
+  if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
+  if (perfilAtual.perfil === 'admin') return 'admin';
+  return 'nenhum';
+}
+function isAdmin() { return nivelAcesso('pulverizacao') === 'admin'; }
+function podeConfirmar() { return ['admin','encarregado','operador'].includes(nivelAcesso('pulverizacao')); }
+
+function gerarMenu() {
+  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='pulverizacoes.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+function iniciarListeners() {
+  onSnapshot(collection(db, 'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarSelectTalhoes();
+  });
+  onSnapshot(collection(db, 'pulverizacoes'), snap => {
+    pulverizacoes = snap.docs.map(d => ({_docId:d.id,...d.data()}))
+      .sort((a,b) => (a.data||'').localeCompare(b.data||''));
+    renderizar();
+  });
+}
+
+function atualizarSelectTalhoes() {
+  const sel = document.getElementById('fTalhao'); if (!sel) return;
+  const fazendas = {};
+  talhoes.forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
+  sel.innerHTML = '<option value="">Selecione...</option>' +
+    Object.entries(fazendas).sort().map(([faz,ts]) =>
+      `<optgroup label="${faz}">${ts.map(t=>`<option value="${t.id}">${t.id} · ${t.nome}</option>`).join('')}</optgroup>`
+    ).join('');
+}
+
+function renderizar() {
+  if (vizAtual === 'calendario') renderizarCalendario();
+  else renderizarLista();
+}
+
+// ══════════════════════════════
+// CALENDÁRIO
+// ══════════════════════════════
+function renderizarCalendario() {
+  document.getElementById('vizLabel').textContent = `${MESES[mesAtual]} ${anoAtual}`;
+  const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
+  const diasNoMes = new Date(anoAtual, mesAtual + 1, 0).getDate();
+  const hoje = new Date();
+  const pulsDoMes = pulverizacoes.filter(p => {
+    if (!p.data) return false;
+    const d = new Date(p.data);
+    return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+  });
+
+  // Agrupar por dia
+  const porDia = {};
+  pulsDoMes.forEach(p => {
+    const dia = parseInt(p.data.split('-')[2]);
+    if (!porDia[dia]) porDia[dia] = [];
+    porDia[dia].push(p);
+  });
+
+  const cal = document.getElementById('calendario');
+  // Cabeçalho dias da semana
+  let html = DIAS_SEMANA.map(d => `<div class="cal-dia-hdr">${d}</div>`).join('');
+  // Dias vazios antes do primeiro
+  for (let i = 0; i < primeiroDia; i++) html += `<div class="cal-dia vazio"></div>`;
+  // Dias do mês
+  for (let d = 1; d <= diasNoMes; d++) {
+    const isHoje = hoje.getDate()===d&&hoje.getMonth()===mesAtual&&hoje.getFullYear()===anoAtual;
+    const eventos = porDia[d] || [];
+    const temNaoRealizado = eventos.some(e => !e.realizada);
+    const todosFeitos = eventos.length > 0 && eventos.every(e => e.realizada);
+    html += `<div class="cal-dia ${isHoje?'hoje':''} ${todosFeitos?'feito':temNaoRealizado?'pendente':''}" onclick="verDia(${d})">
+      <span class="cal-num">${d}</span>
+      ${eventos.map(e=>`<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}">${e.talhaoNome||e.talhaoId||'—'}</div>`).join('')}
+    </div>`;
+  }
+  cal.innerHTML = html;
+}
+
+window.mesAnterior = function() { mesAtual--; if(mesAtual<0){mesAtual=11;anoAtual--;} renderizarCalendario(); };
+window.mesProximo = function() { mesAtual++; if(mesAtual>11){mesAtual=0;anoAtual++;} renderizarCalendario(); };
+
+window.verDia = function(dia) {
+  const dataStr = `${anoAtual}-${String(mesAtual+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  const eventos = pulverizacoes.filter(p => p.data === dataStr);
+  if (!eventos.length) {
+    if (isAdmin()) abrirModalNova(dataStr);
+    return;
+  }
+  // Mostrar eventos do dia
+  const lista = document.getElementById('listaDia');
+  document.getElementById('tituloDia').textContent = `${dia} de ${MESES[mesAtual]}`;
+  lista.innerHTML = eventos.map(p => renderCardPulv(p)).join('');
+  document.getElementById('overlayDia').classList.add('open');
+};
+
+window.fecharDia = function() { document.getElementById('overlayDia').classList.remove('open'); };
+
+// ══════════════════════════════
+// LISTA
+// ══════════════════════════════
+function renderizarLista() {
+  const content = document.getElementById('listaContent');
+  const filtros = getFiltrosLista();
+  let filtradas = pulverizacoes;
+  if (filtros.status === 'pendente') filtradas = filtradas.filter(p => !p.realizada);
+  if (filtros.status === 'realizada') filtradas = filtradas.filter(p => p.realizada);
+  if (filtros.data1) filtradas = filtradas.filter(p => p.data >= filtros.data1);
+  if (filtros.data2) filtradas = filtradas.filter(p => p.data <= filtros.data2);
+
+  if (!filtradas.length) {
+    content.innerHTML = `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização encontrada.</p></div>`;
+    return;
+  }
+  // Agrupar por mês
+  const porMes = {};
+  filtradas.forEach(p => {
+    if (!p.data) return;
+    const [a, m] = p.data.split('-');
+    const key = `${a}-${m}`;
+    if (!porMes[key]) porMes[key] = [];
+    porMes[key].push(p);
+  });
+  content.innerHTML = Object.entries(porMes).sort().map(([key, puls]) => {
+    const [a,m] = key.split('-');
+    return `<div class="mes-grupo">
+      <div class="mes-titulo">📅 ${MESES[parseInt(m)-1]} ${a}</div>
+      ${puls.map(p => renderCardPulv(p)).join('')}
+    </div>`;
+  }).join('');
+}
+
+function getFiltrosLista() {
+  return {
+    status: document.getElementById('filtroStatus')?.value || '',
+    data1: document.getElementById('filtroDataL1')?.value || '',
+    data2: document.getElementById('filtroDataL2')?.value || '',
+  };
+}
+
+function renderCardPulv(p) {
+  const adm = isAdmin(), podConf = podeConfirmar();
+  const realizada = p.realizada;
+  const fazTalhao = p.fazenda ? `${p.fazenda} · ` : '';
+  return `<div class="pulv-card ${realizada?'realizada':''}">
+    <div class="pulv-header">
+      <div>
+        <div class="pulv-titulo">💧 ${fazTalhao}${p.talhaoNome||p.talhaoId||'—'}</div>
+        <div class="pulv-meta">📅 ${p.data?formatarData(p.data):'—'} · ${p.modoAplicacao||'—'}</div>
+        ${p.drone?`<div class="pulv-drone">🚁 Drone: ${p.drone}</div>`:''}
+      </div>
+      <div class="pulv-status-wrap">
+        <div class="pulv-badge ${realizada?'badge-ok':'badge-pend'}">${realizada?'✅ Realizada':'⏳ Pendente'}</div>
+        ${adm?`<button class="btn-rm-pulv" data-doc="${p._docId}" onclick="excluirPulv(this)">🗑</button>`:''}
+      </div>
+    </div>
+    <div class="pulv-produtos">
+      ${(p.produtos||[]).map(pr=>`<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${pr.unidade||''}/ha</span>`:''}</div>`).join('')}
+    </div>
+    ${p.observacoes?`<div class="pulv-obs">💬 ${sanitizar(p.observacoes)}</div>`:''}
+    ${podConf?`<div class="pulv-acoes">
+      ${!realizada?`
+        <textarea id="obsConf-${p._docId}" class="obs-conf" placeholder="Observação (opcional)..."></textarea>
+        <button class="btn-confirmar" onclick="confirmarPulv('${p._docId}')">✅ Confirmar Realização</button>`
+      :`<div class="conf-info">✅ Realizada em ${p.dataRealizada?formatarData(p.dataRealizada):'—'} por ${p.realizadoPor||'—'}
+        ${p.obsRealizacao?`<div class="obs-realizacao">💬 ${sanitizar(p.obsRealizacao)}</div>`:''}
+      </div>
+      ${adm?`<button class="btn-desfazer" onclick="desfazerPulv('${p._docId}')">↩ Desfazer</button>`:''}`}
+    </div>`:''}
+  </div>`;
+}
+
+// ══════════════════════════════
+// AÇÕES
+// ══════════════════════════════
+window.confirmarPulv = async function(docId) {
+  const obs = document.getElementById('obsConf-'+docId)?.value.trim() || '';
+  await updateDoc(doc(db,'pulverizacoes',docId), {
+    realizada: true,
+    dataRealizada: new Date().toISOString().slice(0,10),
+    realizadoPor: usuarioAtual.email,
+    obsRealizacao: obs
+  });
+  await registrarLog('pulverizacao', `${usuarioAtual.email} confirmou pulverização`);
+  toast('✅ Pulverização confirmada!');
+  fecharDia();
+};
+
+window.desfazerPulv = async function(docId) {
+  if (!confirm('Desfazer confirmação?')) return;
+  await updateDoc(doc(db,'pulverizacoes',docId), {realizada:false, dataRealizada:null, realizadoPor:null, obsRealizacao:null});
+  toast('↩ Desfeito.');
+};
+
+window.excluirPulv = async function(btn) {
+  const docId = btn.dataset.doc;
+  if (!confirm('Excluir esta pulverização?')) return;
+  btn.disabled = true;
+  await deleteDoc(doc(db,'pulverizacoes',docId));
+  toast('🗑 Excluída.');
+  fecharDia();
+};
+
+// ══════════════════════════════
+// MODAL NOVA PULVERIZAÇÃO
+// ══════════════════════════════
+let produtosWIP = [];
+
+window.abrirModalNova = function(dataInicial) {
+  if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
+  produtosWIP = [];
+  document.getElementById('fData').value = dataInicial || hoje();
+  document.getElementById('fTalhao').value = '';
+  document.getElementById('fModo').value = '';
+  document.getElementById('fDrone').value = '';
+  document.getElementById('fDroneRow').style.display = 'none';
+  document.getElementById('fObs').value = '';
+  renderizarProdutosWIP();
+  atualizarSelectTalhoes();
+  document.getElementById('overlayNova').classList.add('open');
+};
+
+window.fecharNova = function() { document.getElementById('overlayNova').classList.remove('open'); };
+
+window.toggleDrone = function(sel) {
+  const row = document.getElementById('fDroneRow');
+  row.style.display = sel.value === 'Drone' ? 'block' : 'none';
+  if (sel.value !== 'Drone') document.getElementById('fDrone').value = '';
+};
+
+window.addProduto = function() {
+  produtosWIP.push({produto:'', dose:'', unidade:'L'});
+  renderizarProdutosWIP();
+};
+
+function renderizarProdutosWIP() {
+  document.getElementById('listaProdutos').innerHTML = produtosWIP.map((p,i) => `
+    <div class="prod-row">
+      <input type="text" class="prod-inp" placeholder="Produto / Insumo..." value="${p.produto}"
+        onchange="produtosWIP[${i}].produto=this.value">
+      <input type="text" class="prod-dose-inp" placeholder="Dose" value="${p.dose}"
+        onchange="produtosWIP[${i}].dose=this.value">
+      <select class="prod-und-sel" onchange="produtosWIP[${i}].unidade=this.value">
+        ${['L','mL','kg','g'].map(u=>`<option value="${u}" ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
+      </select>
+      <button onclick="produtosWIP.splice(${i},1);renderizarProdutosWIP()" class="btn-rm-prod">✕</button>
+    </div>`).join('') || `<div class="vazio-sm">Adicione os produtos acima.</div>`;
+}
+
+window.salvarPulverizacao = async function() {
+  const talhaoId = document.getElementById('fTalhao').value;
+  const data = document.getElementById('fData').value;
+  const modo = document.getElementById('fModo').value;
+  if (!talhaoId || !data || !modo) { toast('⚠️ Preencha talhão, data e modo.'); return; }
+  const prods = produtosWIP.filter(p => p.produto.trim());
+  if (!prods.length) { toast('⚠️ Adicione ao menos um produto.'); return; }
+  const talhao = talhoes.find(t => t.id === talhaoId);
+  const drone = document.getElementById('fModo').value === 'Drone' ? document.getElementById('fDrone').value : '';
+  const btn = document.getElementById('btnSalvarPulv');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    await addDoc(collection(db,'pulverizacoes'), {
+      talhaoId, talhaoNome: talhao?.nome || talhaoId, fazenda: talhao?.fazenda || '',
+      data, modoAplicacao: modo, drone, produtos: prods,
+      observacoes: document.getElementById('fObs').value.trim(),
+      realizada: false, criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
+    });
+    await registrarLog('pulverizacao', `${usuarioAtual.email} planejou pulverização em ${talhao?.nome||talhaoId} para ${formatarData(data)}`);
+    fecharNova();
+    toast('✅ Pulverização planejada!');
+  } catch(e) { toast('❌ Erro: ' + e.message); }
+  btn.disabled = false; btn.textContent = '💾 Salvar';
+};
+
+// ══════════════════════════════
+// VISUALIZAÇÃO
+// ══════════════════════════════
+window.alternarViz = function(viz, btn) {
+  vizAtual = viz;
+  document.querySelectorAll('.viz-btn').forEach(b => b.classList.remove('ativo'));
+  btn.classList.add('ativo');
+  document.getElementById('viewCalendario').style.display = viz === 'calendario' ? 'flex' : 'none';
+  document.getElementById('viewLista').style.display = viz === 'lista' ? 'flex' : 'none';
+  renderizar();
+};
+
+// ─── UTILS ───
+async function registrarLog(tipo, mensagem) {
+  try { await addDoc(collection(db,'logs'),{tipo,mensagem,criadoEm:new Date().toISOString(),uid:usuarioAtual?.uid}); } catch(e){}
+}
+function hoje() { return new Date().toISOString().slice(0,10); }
+function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return`${dd}/${m}/${a}`; }
+function sanitizar(str) { return (str||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
+window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
+window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
+window.renderizarLista=renderizarLista;
+window.renderizarProdutosWIP=renderizarProdutosWIP;
+</script>
+
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+/* LAYOUT */
+.app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;}
+.mod-header{background:var(--ve);color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.mod-header-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+/* TOOLBAR */
+.toolbar{background:white;border-bottom:1px solid var(--cb);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.viz-btns{display:flex;background:var(--cl);border-radius:8px;padding:3px;gap:2px;}
+.viz-btn{border:none;background:transparent;border-radius:6px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;color:var(--c);transition:.15s;}
+.viz-btn.ativo{background:white;color:var(--v);box-shadow:0 1px 4px rgba(0,0,0,.1);}
+.nav-mes{display:flex;align-items:center;gap:8px;margin-left:auto;}
+.viz-label{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);min-width:140px;text-align:center;}
+.btn-nav{background:var(--cl);border:1px solid var(--cb);border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;}
+/* CALENDÁRIO */
+#viewCalendario{flex:1;overflow-y:auto;padding:10px 14px 20px;display:flex;flex-direction:column;}
+.calendario{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+.cal-dia-hdr{text-align:center;font-size:.65rem;font-weight:700;color:var(--c);text-transform:uppercase;padding:6px 0;}
+.cal-dia{background:white;border-radius:8px;border:1.5px solid var(--cb);padding:4px;min-height:56px;cursor:pointer;transition:.15s;overflow:hidden;}
+.cal-dia:hover{border-color:var(--v);}
+.cal-dia.vazio{background:transparent;border-color:transparent;cursor:default;}
+.cal-dia.hoje{border-color:var(--v);border-width:2px;}
+.cal-dia.hoje .cal-num{color:var(--v);font-weight:800;}
+.cal-dia.pendente{background:#fef9c3;}
+.cal-dia.feito{background:#dcfce7;}
+.cal-num{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:700;display:block;margin-bottom:2px;}
+.cal-evento{font-size:.58rem;border-radius:4px;padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ev-pend{background:#fef08a;color:#854d0e;}
+.ev-feito{background:#bbf7d0;color:#166534;}
+/* LISTA */
+#viewLista{flex:1;overflow-y:auto;padding:12px 14px 20px;display:none;flex-direction:column;gap:10px;}
+.filtros-lista{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;}
+.filtro-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.filtro-campo{display:flex;flex-direction:column;gap:3px;}
+.filtro-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.filtro-sel{border:1.5px solid var(--cb);border-radius:var(--rs);padding:8px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;width:100%;}
+.mes-grupo{margin-bottom:8px;}
+.mes-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;}
+/* CARDS PULV */
+.pulv-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;border-left:4px solid var(--cb);}
+.pulv-card.realizada{border-left-color:#16a34a;background:#f0fdf4;}
+.pulv-header{padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.pulv-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
+.pulv-meta{font-size:.72rem;color:var(--c);margin-top:2px;}
+.pulv-drone{font-size:.72rem;color:#1d4ed8;margin-top:2px;font-weight:600;}
+.pulv-status-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
+.pulv-badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
+.badge-ok{background:#dcfce7;color:#16a34a;}
+.badge-pend{background:#fef9c3;color:#d97706;}
+.btn-rm-pulv{background:none;border:none;cursor:pointer;font-size:1rem;color:var(--danger);}
+.pulv-produtos{padding:0 14px 10px;display:flex;flex-direction:column;gap:4px;}
+.prod-linha{display:flex;align-items:center;gap:8px;}
+.prod-nome{font-size:.82rem;font-weight:600;flex:1;}
+.prod-dose{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--v);background:var(--vb);border-radius:12px;padding:2px 8px;}
+.pulv-obs{padding:0 14px 10px;font-size:.75rem;color:var(--c);font-style:italic;}
+.pulv-acoes{padding:10px 14px;border-top:1px solid var(--cl);}
+.obs-conf{width:100%;border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;resize:none;min-height:56px;outline:none;margin-bottom:8px;}
+.obs-conf:focus{border-color:var(--v);}
+.btn-confirmar{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.conf-info{font-size:.78rem;color:#16a34a;font-weight:600;line-height:1.5;}
+.obs-realizacao{font-size:.72rem;color:var(--c);font-style:italic;margin-top:3px;}
+.btn-desfazer{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 12px;font-size:.72rem;color:var(--c);cursor:pointer;margin-top:6px;font-family:'Barlow',sans-serif;}
+/* FAB */
+#btnNovaPulv{display:none;position:fixed;bottom:20px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:100;align-items:center;gap:8px;}
+/* OVERLAY DIA */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s;}
+.overlay.open{opacity:1;pointer-events:all;}
+.modal-sheet{background:white;border-radius:18px 18px 0 0;width:100%;max-height:88vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,20px);transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.1,.64,1);}
+.overlay.open .modal-sheet{transform:translateY(0);}
+.modal-handle{width:40px;height:4px;background:var(--cb);border-radius:2px;margin:12px auto 0;}
+.modal-tit{padding:12px 20px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;}
+.btn-fechar{background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--c);}
+.modal-body{padding:14px 20px;display:flex;flex-direction:column;gap:10px;}
+/* MODAL NOVA */
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.campo label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.campo input,.campo select,.campo textarea{border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;width:100%;}
+.campo input:focus,.campo select:focus,.campo textarea:focus{border-color:var(--v);}
+.campo textarea{resize:none;min-height:60px;}
+.campo-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.prod-row{display:flex;gap:6px;align-items:center;margin-bottom:7px;background:var(--cl);border-radius:var(--rs);padding:8px;}
+.prod-inp{flex:2;border:1.5px solid var(--cb);border-radius:6px;padding:8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;min-width:0;}
+.prod-dose-inp{width:70px;border:1.5px solid var(--cb);border-radius:6px;padding:8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex-shrink:0;}
+.prod-und-sel{width:55px;border:1.5px solid var(--cb);border-radius:6px;padding:8px 4px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;flex-shrink:0;}
+.btn-rm-prod{background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem;padding:4px;flex-shrink:0;}
+.btn-add-prod{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-bottom:12px;}
+.btn-salvar{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.btn-salvar:disabled{opacity:.5;}
+.vazio-sm{font-size:.78rem;color:var(--c);text-align:center;padding:10px;font-style:italic;}
+.vazio{text-align:center;padding:48px 24px;color:var(--c);}
+.vazio .ico{font-size:48px;margin-bottom:12px;opacity:.4;}
+.vazio p{font-size:.88rem;line-height:1.7;}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:9px 18px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Pulverizações</span></div>
+  </div>
+  <div class="hdr-user" id="userNome"></div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+  <div class="app-main">
+    <div class="mod-header">
+      <div class="mod-header-title"><span>💧</span> Pulverizações</div>
+    </div>
+
+    <div class="toolbar">
+      <div class="viz-btns">
+        <button class="viz-btn ativo" onclick="alternarViz('calendario',this)">📅 Calendário</button>
+        <button class="viz-btn" onclick="alternarViz('lista',this)">📋 Lista</button>
+      </div>
+      <div class="nav-mes" id="navMes">
+        <button class="btn-nav" onclick="mesAnterior()">‹</button>
+        <span class="viz-label" id="vizLabel"></span>
+        <button class="btn-nav" onclick="mesProximo()">›</button>
+      </div>
+    </div>
+
+    <!-- CALENDÁRIO -->
+    <div id="viewCalendario">
+      <div class="calendario" id="calendario"></div>
+    </div>
+
+    <!-- LISTA -->
+    <div id="viewLista">
+      <div class="filtros-lista">
+        <div class="filtro-row">
+          <div class="filtro-campo">
+            <span class="filtro-label">Status</span>
+            <select class="filtro-sel" id="filtroStatus" onchange="renderizarLista()">
+              <option value="">Todos</option>
+              <option value="pendente">Pendentes</option>
+              <option value="realizada">Realizadas</option>
+            </select>
+          </div>
+          <div class="filtro-campo">
+            <span class="filtro-label">De</span>
+            <input type="date" class="filtro-sel" id="filtroDataL1" onchange="renderizarLista()">
+          </div>
+          <div class="filtro-campo">
+            <span class="filtro-label">Até</span>
+            <input type="date" class="filtro-sel" id="filtroDataL2" onchange="renderizarLista()">
+          </div>
+        </div>
+      </div>
+      <div id="listaContent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- FAB -->
+<button id="btnNovaPulv" onclick="abrirModalNova()">＋ Planejar Pulverização</button>
+
+<!-- OVERLAY DIA -->
+<div class="overlay" id="overlayDia" onclick="if(event.target===this)fecharDia()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">
+      <span id="tituloDia"></span>
+      <button class="btn-fechar" onclick="fecharDia()">✕</button>
+    </div>
+    <div class="modal-body" id="listaDia"></div>
+    <div style="padding:0 20px 20px;">
+      <button onclick="abrirModalNova()" style="width:100%;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;" id="btnAddNoDia">＋ Adicionar neste dia</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVA PULVERIZAÇÃO -->
+<div class="overlay" id="overlayNova" onclick="if(event.target===this)fecharNova()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">
+      <span>💧 Nova Pulverização</span>
+      <button class="btn-fechar" onclick="fecharNova()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="campo-row">
+        <div class="campo"><label>Data</label><input type="date" id="fData"></div>
+        <div class="campo"><label>Talhão</label><select id="fTalhao"></select></div>
+      </div>
+      <div class="campo-row">
+        <div class="campo"><label>Modo de Aplicação</label>
+          <select id="fModo" onchange="toggleDrone(this)">
+            <option value="">Selecione...</option>
+            <option value="Terrestre">Terrestre</option>
+            <option value="Drone">Drone</option>
+            <option value="Costal">Costal</option>
+            <option value="Tratorizado">Tratorizado</option>
+          </select>
+        </div>
+        <div class="campo" id="fDroneRow" style="display:none;">
+          <label>Drone</label>
+          <select id="fDrone">
+            <option value="Próprio">Próprio</option>
+            <option value="Terceiro">Terceiro</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Produtos</div>
+      <div id="listaProdutos"></div>
+      <button class="btn-add-prod" onclick="addProduto()">＋ Adicionar produto</button>
+      <div class="campo"><label>Observações</label><textarea id="fObs" placeholder="Cuidados, dose, período..."></textarea></div>
+      <button class="btn-salvar" id="btnSalvarPulv" onclick="salvarPulverizacao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>

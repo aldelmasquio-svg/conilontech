@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+enableIndexedDbPersistence(db).catch(() => {});
+
+onAuthStateChanged(auth, user => {
+  if (user) window.location.href = 'index.html';
+  else {
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('telaLogin').style.display = 'flex';
+  }
+});
+
+window.fazerLogin = async function() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const senha = document.getElementById('loginSenha').value;
+  const btn = document.getElementById('btnLogin');
+  if (!email || !senha) { erroLogin('Preencha e-mail e senha.'); return; }
+  btn.disabled = true; btn.textContent = 'Entrando...';
+  try {
+    await signInWithEmailAndPassword(auth, email, senha);
+  } catch(e) {
+    erroLogin('E-mail ou senha incorretos.');
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+};
+
+window.abrirCadastro = () => { document.getElementById('telaLogin').style.display='none'; document.getElementById('telaCadastro').style.display='flex'; };
+window.voltarLogin = () => { document.getElementById('telaCadastro').style.display='none'; document.getElementById('telaLogin').style.display='flex'; };
+
+window.fazerCadastro = async function() {
+  const nome = document.getElementById('cadNome').value.trim();
+  const email = document.getElementById('cadEmail').value.trim();
+  const senha = document.getElementById('cadSenha').value;
+  const conf = document.getElementById('cadConf').value;
+  const codigo = document.getElementById('cadCodigo').value.trim();
+  if (!nome||!email||!senha) { erroCad('Preencha todos os campos.'); return; }
+  if (senha !== conf) { erroCad('As senhas não coincidem.'); return; }
+  if (senha.length < 6) { erroCad('Mínimo 6 caracteres.'); return; }
+  const snap = await getDocs(collection(db,'usuarios'));
+  const primeiro = snap.empty;
+  let modulos = {};
+  if (primeiro) {
+    modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  } else {
+    const cfg = await getDoc(doc(db,'config','geral'));
+    const cod = cfg.exists() ? (cfg.data().codigoCadastro||'') : '';
+    if (cod && codigo !== cod) { erroCad('Código de acesso incorreto.'); return; }
+    modulos = {mapa:'nenhum',atividades:'encarregado',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
+  }
+  const btn = document.getElementById('btnCadastro');
+  btn.disabled = true; btn.textContent = 'Criando...';
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, senha);
+    await setDoc(doc(db,'usuarios',cred.user.uid), {nome,email,modulos,criadoEm:new Date().toISOString(),ativo:true});
+    if (primeiro) await setDoc(doc(db,'config','geral'),{codigoCadastro:'',atividades:['Colheita','Desbrota','Poda','Roçada'],fazendas:[]});
+  } catch(e) {
+    erroCad(e.code==='auth/email-already-in-use'?'E-mail já em uso.':'Erro ao criar conta.');
+    btn.disabled=false; btn.textContent='Criar Conta';
+  }
+};
+
+function erroLogin(msg){const el=document.getElementById('erroLogin');el.textContent=msg;el.style.display='block';}
+function erroCad(msg){const el=document.getElementById('erroCad');el.textContent=msg;el.style.display='block';}
+
+document.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin();});
+</script>
+
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Barlow',sans-serif;background:linear-gradient(135deg,#0d1f0d,#1a3d1a);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.auth-screen{display:none;width:100%;max-width:400px;flex-direction:column;}
+.auth-card{background:white;border-radius:16px;padding:28px 24px;box-shadow:0 30px 80px rgba(0,0,0,.4);max-height:95vh;overflow-y:auto;}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:24px;}
+.logo-icon{width:44px;height:44px;background:var(--v);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.logo-name{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.4rem;color:var(--ve);}
+.logo-sub{font-size:.6rem;color:var(--c);letter-spacing:.15em;text-transform:uppercase;}
+.auth-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.7rem;color:#1a1a1a;margin-bottom:4px;}
+.auth-sub{font-size:.82rem;color:var(--c);margin-bottom:22px;}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:13px;}
+.field label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.field input{border:1.5px solid var(--cb);border-radius:8px;padding:12px 14px;font-size:.92rem;font-family:'Barlow',sans-serif;outline:none;transition:border .2s;}
+.field input:focus{border-color:var(--v);}
+.btn-auth{width:100%;background:var(--v);border:none;color:white;border-radius:8px;padding:13px;font-size:.98rem;font-family:'Barlow Condensed',sans-serif;font-weight:800;cursor:pointer;margin-top:6px;transition:.2s;letter-spacing:.5px;}
+.btn-auth:hover{background:var(--ve);}
+.btn-auth:disabled{opacity:.5;cursor:not-allowed;}
+.auth-link{text-align:center;margin-top:16px;font-size:.8rem;color:var(--c);}
+.auth-link a{color:var(--v);cursor:pointer;font-weight:600;}
+.auth-error{background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#dc2626;margin-bottom:13px;display:none;}
+.auth-info{background:var(--vb);border:1px solid #a7d7a7;border-radius:8px;padding:10px 14px;font-size:.75rem;color:var(--ve);margin-bottom:13px;line-height:1.6;}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<div class="auth-screen" id="telaLogin">
+  <div class="auth-card">
+    <div class="logo">
+      <div class="logo-icon">🌿</div>
+      <div><div class="logo-name">Conilon Tech</div><div class="logo-sub">Gestão Agrícola</div></div>
+    </div>
+    <div class="auth-title">Entrar</div>
+    <div class="auth-sub">Acesse com sua conta cadastrada.</div>
+    <div class="auth-error" id="erroLogin"></div>
+    <div class="field"><label>E-mail</label><input type="email" id="loginEmail" placeholder="seu@email.com" autocomplete="email"></div>
+    <div class="field"><label>Senha</label><input type="password" id="loginSenha" placeholder="••••••" autocomplete="current-password"></div>
+    <button class="btn-auth" id="btnLogin" onclick="fazerLogin()">Entrar</button>
+    <div class="auth-link">Não tem conta? <a onclick="abrirCadastro()">Criar conta</a></div>
+  </div>
+</div>
+
+<div class="auth-screen" id="telaCadastro">
+  <div class="auth-card">
+    <div class="logo">
+      <div class="logo-icon">🌿</div>
+      <div><div class="logo-name">Conilon Tech</div><div class="logo-sub">Criar Conta</div></div>
+    </div>
+    <div class="auth-info">O primeiro usuário vira <strong>Administrador</strong> automaticamente. Os demais precisam de código de acesso.</div>
+    <div class="auth-error" id="erroCad"></div>
+    <div class="field"><label>Nome completo</label><input type="text" id="cadNome" placeholder="Seu nome"></div>
+    <div class="field"><label>E-mail</label><input type="email" id="cadEmail" placeholder="seu@email.com"></div>
+    <div class="field"><label>Senha</label><input type="password" id="cadSenha" placeholder="Mínimo 6 caracteres"></div>
+    <div class="field"><label>Confirmar senha</label><input type="password" id="cadConf" placeholder="Repita a senha"></div>
+    <div class="field"><label>Código de acesso</label><input type="text" id="cadCodigo" placeholder="Deixe vazio se não tiver"></div>
+    <button class="btn-auth" id="btnCadastro" onclick="fazerCadastro()">Criar Conta</button>
+    <div class="auth-link"><a onclick="voltarLogin()">← Voltar ao login</a></div>
+  </div>
+</div>
+
+</body>
+</html>
