@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Atividades de Campo</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(() => {});
+
+// ─── ESTADO ───
+let usuarioAtual = null, perfilAtual = {};
+let empreiteiros = [], talhoesAtividades = [], registros = [], atividades = ['Colheita','Desbrota','Poda','Roçada'];
+let sessaoAtual = null, abaConf = null;
+let tabAtual = 'registros';
+let confModalAtual = null;
+
+const CORES = ['#2d6a2d','#1d4ed8','#b45309','#7c3aed','#be123c','#0e7490','#65a30d','#c2410c'];
+const inic = n => n.split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase();
+const corFunc = id => { const idx=(sessaoAtual?.funcDia||[]).findIndex(f=>f.id===id); return CORES[idx>=0?idx%CORES.length:0]; };
+
+// ─── AUTH ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  }
+  if (nivelAcesso('atividades')==='nenhum') { window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+  aplicarPermissoes();
+  iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
+  if (perfilAtual.perfil==='admin') return 'admin';
+  return 'nenhum';
+}
+function isAdmin() { return nivelAcesso('atividades')==='admin'; }
+function podeEditar() { return ['admin','operador','encarregado'].includes(nivelAcesso('atividades')); }
+
+function aplicarPermissoes() {
+  const adm = isAdmin();
+  document.querySelectorAll('.so-admin').forEach(el => el.style.display = adm ? '' : 'none');
+}
+
+function gerarMenu() {
+  const isAdm = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin';
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='atividades.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+  if (isAdm) {
+    document.getElementById('tabTalhoes').style.display='';
+    document.getElementById('tabEquipe').style.display='';
+  }
+}
+
+function iniciarListeners() {
+  onSnapshot(collection(db,'empreiteiros'), snap => {
+    empreiteiros = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (tabAtual==='funcionarios') renderizarEquipe();
+    if (tabAtual==='nova') renderizarFormNova();
+  });
+  onSnapshot(collection(db,'talhoesAtividades'), snap => {
+    talhoesAtividades = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (tabAtual==='talhoes') renderizarTalhoes();
+  });
+  onSnapshot(collection(db,'registrosAtividade'), snap => {
+    registros = snap.docs.map(d=>({_docId:d.id,...d.data()}))
+      .sort((a,b)=>(b.salvoEm||b.data||'').localeCompare(a.salvoEm||a.data||''));
+    if (tabAtual==='registros') renderizarRegistros();
+  });
+  onSnapshot(doc(db,'config','geral'), snap => {
+    if (snap.exists() && snap.data().atividades) atividades = snap.data().atividades;
+  });
+}
+
+// ─── NAVEGAÇÃO TABS ───
+window.abrirTab = function(tab, btn) {
+  tabAtual = tab;
+  document.querySelectorAll('.mod-tab').forEach(b=>b.classList.remove('ativo'));
+  if (btn) btn.classList.add('ativo');
+  document.getElementById('atvContent').style.display = 'flex';
+  if (tab==='registros') renderizarRegistros();
+  else if (tab==='nova') renderizarFormNova();
+  else if (tab==='talhoes') renderizarTalhoes();
+  else if (tab==='funcionarios') renderizarEquipe();
+};
+
+// ══════════════════════════════
+// ABA REGISTROS
+// ══════════════════════════════
+function renderizarRegistros() {
+  const content = document.getElementById('atvContent');
+  const filtroAtiv = document.getElementById('filtroAtividade')?.value || '';
+  const filtroData1 = document.getElementById('filtroData1')?.value || '';
+  const filtroData2 = document.getElementById('filtroData2')?.value || '';
+
+  let filtrados = registros;
+  if (filtroAtiv) filtrados = filtrados.filter(r=>r.atividade===filtroAtiv);
+  if (filtroData1) filtrados = filtrados.filter(r=>r.data>=filtroData1);
+  if (filtroData2) filtrados = filtrados.filter(r=>r.data<=filtroData2);
+
+  if (!filtrados.length) {
+    content.innerHTML = `
+      ${renderFiltros()}
+      <div class="vazio"><div class="ico">📋</div><p>Nenhuma sessão encontrada.<br>Crie uma nova sessão na aba <strong>Nova Sessão</strong>.</p></div>`;
+    return;
+  }
+
+  content.innerHTML = renderFiltros() + filtrados.map(r => {
+    const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
+    const at = Object.keys(r.atribuicoes||{}).length;
+    const pct = tot ? Math.round(at/tot*100) : 0;
+    const podEd = podeEditar();
+    const adm = isAdmin();
+    return `<div class="reg-card">
+      <div class="reg-header">
+        <div>
+          <div class="reg-titulo">🌾 ${r.atividade||'Atividade'} · ${r.talhaoNome||''}</div>
+          <div class="reg-meta">${r.fazenda||''} · ${r.data?formatarData(r.data):''}</div>
+          <div class="reg-meta">👤 ${r.criadoPor||'—'} · Salvo: ${r.salvoEm?formatarDataHora(r.salvoEm):'—'}</div>
+        </div>
+      </div>
+      <div class="reg-body">
+        <div class="reg-stat"><span class="reg-stat-label">Empreiteiros</span><span class="reg-stat-val">${(r.empsDia||[]).map(e=>e.nome).join(', ')||'—'}</span></div>
+        <div class="reg-stat"><span class="reg-stat-label">Progresso</span><span class="reg-stat-val">${at}/${tot} carreiras (${pct}%)</span></div>
+      </div>
+      <div class="reg-acoes">
+        ${podEd?`<button class="btn btn-v btn-sm" onclick="carregarRegistro('${r._docId}')">✏️ Continuar</button>`:''}
+        <button class="btn btn-c btn-sm" onclick="gerarRelatorio('${r._docId}')">📄 Relatório</button>
+        ${adm?`<button class="btn btn-d btn-sm" data-doc="${r._docId}" onclick="excluirRegistro(this)">🗑</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFiltros() {
+  return `<div class="filtros-bar">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:120px;">
+        <label class="filtro-label">Atividade</label>
+        <select class="filtro-sel" id="filtroAtividade" onchange="renderizarRegistros()">
+          <option value="">Todas</option>
+          ${atividades.map(a=>`<option value="${a}">${a}</option>`).join('')}
+        </select>
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label class="filtro-label">De</label>
+        <input type="date" class="filtro-sel" id="filtroData1" onchange="renderizarRegistros()">
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label class="filtro-label">Até</label>
+        <input type="date" class="filtro-sel" id="filtroData2" onchange="renderizarRegistros()">
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn btn-c btn-sm" onclick="filtrarSemana()">Esta semana</button>
+      <button class="btn btn-c btn-sm" onclick="filtrarMes()">Este mês</button>
+      <button class="btn btn-c btn-sm" onclick="limparFiltros()">Limpar</button>
+      <button class="btn btn-v btn-sm" onclick="gerarRelatorioGeral()">📄 Relatório geral</button>
+    </div>
+  </div>`;
+}
+
+window.filtrarSemana = function() {
+  const hoje = new Date();
+  const diaSemana = hoje.getDay();
+  const inicio = new Date(hoje); inicio.setDate(hoje.getDate() - diaSemana);
+  const fim = new Date(inicio); fim.setDate(inicio.getDate() + 6);
+  document.getElementById('filtroData1').value = inicio.toISOString().slice(0,10);
+  document.getElementById('filtroData2').value = fim.toISOString().slice(0,10);
+  renderizarRegistros();
+};
+
+window.filtrarMes = function() {
+  const hoje = new Date();
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fim = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
+  document.getElementById('filtroData1').value = inicio.toISOString().slice(0,10);
+  document.getElementById('filtroData2').value = fim.toISOString().slice(0,10);
+  renderizarRegistros();
+};
+
+window.limparFiltros = function() {
+  document.getElementById('filtroAtividade').value = '';
+  document.getElementById('filtroData1').value = '';
+  document.getElementById('filtroData2').value = '';
+  renderizarRegistros();
+};
+
+window.excluirRegistro = async function(btn) {
+  const docId = btn.dataset.doc;
+  if (!docId) return;
+  if (!confirm('Excluir este registro permanentemente?')) return;
+  await deleteDoc(doc(db,'registrosAtividade',docId));
+  toast('🗑 Registro excluído.');
+};
+
+// ══════════════════════════════
+// CONFERÊNCIA (REFORMULADA)
+// ══════════════════════════════
+function mostrarConferencia() {
+  document.getElementById('telaConferencia').classList.add('aberta');
+  renderizarConferencia();
+}
+
+window.fecharConferencia = function() {
+  document.getElementById('telaConferencia').classList.remove('aberta');
+  sessaoAtual = null; abaConf = null;
+  if (tabAtual==='registros') renderizarRegistros();
+};
+
+// Auto-save atômico para evitar perda de dados e conflitos
+async function autoSaveAtribuicao(chave, dados) {
+  if (!sessaoAtual || !sessaoAtual._docId) return;
+  const docRef = doc(db, 'registrosAtividade', sessaoAtual._docId);
+  try {
+    // Atualiza apenas a chave específica dentro do objeto atribuicoes
+    await updateDoc(docRef, {
+      [`atribuicoes.${chave}`]: dados,
+      salvoEm: new Date().toISOString()
+    });
+  } catch (e) {
+    console.error("Erro no auto-save:", e);
+    toast('⚠️ Erro ao salvar. Verifique a conexão.');
+  }
+}
+
+window.carregarRegistro = async function(docId) {
+  const snap = await getDoc(doc(db,'registrosAtividade',docId));
+  if(!snap.exists()) return;
+  sessaoAtual = {_docId:docId,...snap.data()};
+  abaConf = sessaoAtual.quadras[0]?.id||null;
+  mostrarConferencia();
+};
+
+function renderizarConferencia() {
+  const s = sessaoAtual; if(!s) return;
+  document.getElementById('confNome').textContent = s.fazenda?`${s.fazenda} · ${s.talhaoNome}`:s.talhaoNome;
+  document.getElementById('confMeta').textContent = `${s.atividade} · ${formatarData(s.data)}`;
+  if (!abaConf && s.quadras.length) abaConf = s.quadras[0].id;
+  renderizarAbas(); renderizarPaineis(); atualizarProgresso();
+}
+
+function renderizarAbas() {
+  const s=sessaoAtual;if(!s)return;
+  document.getElementById('abasContainer').innerHTML = s.quadras.map(q=>{
+    const{at,tot}=contarQuadra(q.id);
+    return `<button class="aba-btn ${abaConf===q.id?'ativa':''}" onclick="trocarAba('${q.id}')">
+      ${q.nome}<span class="aba-prog" id="prog-aba-${q.id}">${at===tot&&tot>0?'✅':at+'/'+tot}</span>
+    </button>`;
+  }).join('');
+}
+
+function trocarAba(qid) {
+  abaConf=qid;
+  document.querySelectorAll('.aba-btn').forEach(b=>b.classList.remove('ativa'));
+  document.querySelectorAll('.quadra-painel').forEach(p=>p.classList.toggle('ativa',p.dataset.qid===qid));
+  renderizarAbas();
+}
+
+function renderizarPaineis() {
+  const s=sessaoAtual;if(!s)return;
+  const legenda=s.funcDia.map((f,i)=>`<div class="legenda-item"><div class="legenda-cor" style="background:${CORES[i%CORES.length]}"></div>${f.nome.split(' ')[0]}</div>`).join('');
+  document.getElementById('paineisContainer').innerHTML = s.quadras.map(q=>{
+    const{at,tot}=contarQuadra(q.id);
+    const pct=tot?Math.round(at/tot*100):0;
+    const btns=Array.from({length:q.carreiras},(_,i)=>renderBtn(q.id,i,i+1,s.atribuicoes[`${q.id}-${i}`])).join('');
+    return `<div class="quadra-painel ${abaConf===q.id?'ativa':''}" data-qid="${q.id}">
+      <div class="quadra-resumo"><strong>${q.nome}</strong><span id="resumo-txt-${q.id}">${at} de ${tot} conferidas</span><span class="q-pct" id="resumo-pct-${q.id}">${pct}%</span></div>
+      <div class="legenda-scroll">${legenda}</div>
+      <div class="carreiras-grid" id="grid-${q.id}">${btns}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderBtn(qid,idx,num,a) {
+  const btnId = `btn-${qid}-${idx}`;
+  if(!a) return `<button id="${btnId}" class="carreira-btn" onclick="abrirConfModal('${qid}',${idx},${num})"><span class="carr-num">${num}</span></button>`;
+  const s=sessaoAtual;
+  const f1=s.funcDia.find(f=>f.id===a.func1);
+  const f2=a.func2?s.funcDia.find(f=>f.id===a.func2):null;
+  const bg=f1?corFunc(a.func1):'#888';
+  const nome=f2?`${inic(f1?f1.nome:'')}+${inic(f2.nome)}`:(f1?inic(f1.nome):'?');
+  return `<button id="${btnId}" class="carreira-btn completa" style="background:${bg};" onclick="abrirConfModal('${qid}',${idx},${num})">
+    ${f2?`<div class="dupla-badge">2</div>`:''}
+    <span class="carr-num">${num}</span>
+    <span class="carr-func">${nome}</span>
+  </button>`;
+}
+
+// Atualização cirúrgica do botão sem re-renderizar tudo
+function atualizarBtnDOM(qid, idx, num, a) {
+  const btnId = `btn-${qid}-${idx}`;
+  const btnEl = document.getElementById(btnId);
+  if (btnEl) {
+    btnEl.outerHTML = renderBtn(qid, idx, num, a);
+  }
+}
+
+function contarQuadra(qid) {
+  const s=sessaoAtual;if(!s)return{at:0,tot:0};
+  const q=s.quadras.find(x=>x.id===qid);if(!q)return{at:0,tot:0};
+  let at=0;for(let i=0;i<q.carreiras;i++)if(s.atribuicoes[`${qid}-${i}`])at++;
+  return{at,tot:q.carreiras};
+}
+
+function atualizarProgresso() {
+  const s=sessaoAtual;if(!s)return;
+  const tot=s.quadras.reduce((sum,q)=>sum+q.carreiras,0);
+  const at=Object.keys(s.atribuicoes).length;
+  document.getElementById('confProg').textContent=`${at}/${tot}`;
+  document.getElementById('progBar').style.width=tot?(at/tot*100)+'%':'0%';
+  
+  // Atualiza resumos da quadra ativa
+  if (abaConf) {
+    const {at: qAt, tot: qTot} = contarQuadra(abaConf);
+    const pct = qTot ? Math.round(qAt/qTot*100) : 0;
+    const txtEl = document.getElementById(`resumo-txt-${abaConf}`);
+    const pctEl = document.getElementById(`resumo-pct-${abaConf}`);
+    const abaProgEl = document.getElementById(`prog-aba-${abaConf}`);
+    if (txtEl) txtEl.textContent = `${qAt} de ${qTot} conferidas`;
+    if (pctEl) pctEl.textContent = `${pct}%`;
+    if (abaProgEl) abaProgEl.textContent = qAt===qTot&&qTot>0 ? '✅' : `${qAt}/${qTot}`;
+  }
+}
+
+window.abrirConfModal = function(qid,idx,num) {
+  const s=sessaoAtual;if(!s)return;
+  confModalAtual={qid,idx,num};
+  const a=s.atribuicoes[`${qid}-${idx}`];
+  const q=s.quadras.find(x=>x.id===qid);
+  document.getElementById('cmTitulo').textContent=`Carreira ${num}`;
+  document.getElementById('cmSub').textContent=`${q?.nome||''} · ${s.talhaoNome}`;
+  
+  // Nova lógica de seleção simplificada
+  document.getElementById('cmFuncLista').innerHTML=s.funcDia.map((f,i)=>{
+    const isF1 = a?.func1===f.id;
+    const isF2 = a?.func2===f.id;
+    return `<div class="func-opcao ${isF1?'sel1':''} ${isF2?'sel2':''}">
+      <div class="func-op-nome">${f.nome}</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn-sel-func ${isF1?'ativo-1':''}" onclick="definirFunc('${f.id}', 1)">1º</button>
+        <button class="btn-sel-func ${isF2?'ativo-2':''}" onclick="definirFunc('${f.id}', 2)">2º</button>
+      </div>
+    </div>`;
+  }).join('');
+  
+  document.getElementById('confModalOverlay').classList.add('aberto');
+};
+
+window.fecharConfModal = function() {
+  document.getElementById('confModalOverlay').classList.remove('aberto');
+  confModalAtual=null;
+};
+
+window.definirFunc = function(funcId, posicao) {
+  if(!confModalAtual||!sessaoAtual)return;
+  const {qid,idx,num}=confModalAtual;
+  const chave=`${qid}-${idx}`;
+  let a=sessaoAtual.atribuicoes[chave]||{};
+  
+  if (posicao === 1) {
+    if (a.func1 === funcId) {
+      a.func1 = null; // Desmarca se já estava marcado
+    } else {
+      a.func1 = funcId;
+      if (a.func2 === funcId) a.func2 = null; // Evita a mesma pessoa na dupla
+    }
+  } else if (posicao === 2) {
+    if (a.func2 === funcId) {
+      a.func2 = null;
+    } else {
+      a.func2 = funcId;
+      if (a.func1 === funcId) a.func1 = null;
+    }
+  }
+  
+  // Limpeza
+  if (!a.func1 && a.func2) { a.func1 = a.func2; a.func2 = null; } // Move o 2º para 1º se o 1º ficar vazio
+  if (!a.func1 && !a.func2) {
+    delete sessaoAtual.atribuicoes[chave];
+    autoSaveAtribuicao(chave, null); // Remove do Firebase
+  } else {
+    sessaoAtual.atribuicoes[chave] = a;
+    autoSaveAtribuicao(chave, a); // Salva no Firebase
+  }
+  
+  atualizarBtnDOM(qid, idx, num, sessaoAtual.atribuicoes[chave]);
+  atualizarProgresso();
+  abrirConfModal(qid, idx, num); // Re-renderiza o modal para refletir a seleção
+};
+
+window.limparCarreira = function() {
+  if(!confModalAtual||!sessaoAtual)return;
+  const {qid,idx,num}=confModalAtual;
+  const chave=`${qid}-${idx}`;
+  delete sessaoAtual.atribuicoes[chave];
+  autoSaveAtribuicao(chave, null);
+  atualizarBtnDOM(qid, idx, num, null);
+  atualizarProgresso();
+  fecharConfModal();
+};
+
+// ─── UTILS ───
+function formatarData(d){if(!d)return'—';const[a,m,dd]=d.split('-');return`${dd}/${m}/${a}`;}
+function formatarDataHora(iso){try{const d=new Date(iso);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}catch{return iso;}}
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+
+</script>
+
+<style>
+/* Estilos básicos mantidos para compatibilidade com o sistema original */
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+
+/* Adições para a nova lógica de botões de seleção */
+.btn-sel-func {
+  padding: 4px 12px;
+  border: 1px solid var(--cb);
+  border-radius: 6px;
+  background: white;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--c);
+}
+.btn-sel-func.ativo-1 { background: var(--v); color: white; border-color: var(--v); }
+.btn-sel-func.ativo-2 { background: #1d4ed8; color: white; border-color: #1d4ed8; }
+
+/* ... (Restante do CSS original do arquivo) ... */
+</style>
+</head>
+<body>
+  <!-- Estrutura HTML simplificada para demonstração da lógica -->
+  <div id="appContent" style="display:none; flex-direction:column; height:100%;">
+    <!-- ... (Header e Menu) ... -->
+    <div id="atvContent" style="flex:1; overflow-y:auto; padding:16px;"></div>
+  </div>
+  
+  <!-- Modal de Conferência -->
+  <div id="telaConferencia" class="conf-overlay" style="display:none; position:fixed; inset:0; background:white; z-index:500; flex-direction:column;">
+    <div class="conf-header" style="background:var(--ve); color:white; padding:16px;">
+      <div id="confNome" style="font-weight:bold; font-size:1.2rem;"></div>
+      <div id="confMeta" style="font-size:0.8rem; opacity:0.8;"></div>
+      <button onclick="fecharConferencia()" style="position:absolute; right:16px; top:16px; background:none; border:none; color:white; font-size:1.5rem;">✕</button>
+    </div>
+    <div id="abasContainer" style="display:flex; overflow-x:auto; background:#f8f9fa; border-bottom:1px solid #ddd;"></div>
+    <div id="paineisContainer" style="flex:1; overflow-y:auto; padding:16px;"></div>
+    <div style="padding:16px; background:white; border-top:1px solid #ddd;">
+      <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+        <span>Progresso Total</span>
+        <span id="confProg" style="font-weight:bold;"></span>
+      </div>
+      <div style="height:8px; background:#eee; border-radius:4px; overflow:hidden;">
+        <div id="progBar" style="height:100%; background:var(--v); width:0%; transition:width 0.3s;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Seleção de Funcionário -->
+  <div id="confModalOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:600; align-items:flex-end;">
+    <div style="background:white; width:100%; border-radius:16px 16px 0 0; padding:20px; max-height:80vh; overflow-y:auto;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div>
+          <div id="cmTitulo" style="font-weight:bold; font-size:1.2rem;"></div>
+          <div id="cmSub" style="font-size:0.8rem; color:var(--c);"></div>
+        </div>
+        <button onclick="fecharConfModal()" style="background:none; border:none; font-size:1.5rem; color:var(--c);">✕</button>
+      </div>
+      <div id="cmFuncLista" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
+      <button onclick="limparCarreira()" style="width:100%; padding:12px; background:#fee2e2; color:#dc2626; border:none; border-radius:8px; font-weight:bold;">Limpar Carreira</button>
+    </div>
+  </div>
+  
+  <div id="toast" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#333; color:white; padding:10px 20px; border-radius:8px; display:none; z-index:9999;"></div>
+</body>
+</html>
+
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:"Barlow",sans-serif;background:#f0f4f0;color:var(--t);height:100vh;overflow:hidden;display:flex;flex-direction:column;}
+
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* HEADER */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* MENU */
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:"Barlow",sans-serif;font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(255,255,255,.1);border:none;color:white;border-radius:var(--rs);padding:10px;font-size:.85rem;font-weight:600;cursor:pointer;}
+
+/* MAIN CONTENT */
+.app-content{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+.mod-header{background:var(--ve);color:white;padding:10px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.mod-header-title{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.1rem;}
+.mod-tabs{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;}
+.mod-tab{flex:1;padding:10px 6px;border:none;background:none;cursor:pointer;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+.mod-tab.ativo{color:var(--v);border-bottom-color:var(--v);}
+.mod-content{flex:1;overflow-y:auto;padding:14px 14px 80px;}
+
+/* REGISTROS */
+.filtros-bar{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;margin-bottom:12px;}
+.filtro-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;}
+.filtro-sel{border:1.5px solid var(--cb);border-radius:8px;padding:8px 10px;font-size:.85rem;font-family:"Barlow",sans-serif;outline:none;width:100%;}
+.btn{border:none;border-radius:8px;padding:9px 18px;font-size:.8rem;font-family:"Barlow Condensed",sans-serif;font-weight:700;cursor:pointer;transition:.2s;}
+.btn-v{background:var(--v);color:white;}
+.btn-c{background:var(--cl);color:var(--t);border:1px solid var(--cb);}
+.btn-d{background:#fee2e2;color:var(--danger);border:1px solid #fca5a5;}
+.btn-sm{padding:6px 12px;font-size:.75rem;}
+.reg-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:10px;}
+.reg-header{background:var(--v);color:white;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
+.reg-titulo{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:1rem;}
+.reg-meta{font-size:.7rem;opacity:.8;}
+.reg-body{padding:12px 14px;}
+.reg-stat{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--cl);font-size:.82rem;}
+.reg-stat:last-child{border:none;}
+.reg-stat-label{color:var(--c);}
+.reg-stat-val{font-weight:700;color:var(--t);}
+.reg-acoes{padding:10px 14px;background:var(--cl);border-top:1px solid var(--cb);display:flex;gap:8px;justify-content:flex-end;}
+.vazio{padding:20px;text-align:center;color:var(--c);font-size:.9rem;}
+.vazio .ico{font-size:3rem;margin-bottom:10px;}
+
+/* NOVA SESSÃO */
+.form-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;margin-bottom:12px;}
+.form-tit{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:.9rem;text-transform:uppercase;letter-spacing:.05em;color:var(--v);margin-bottom:12px;}
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.campo label{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;}
+.campo-inp,.campo-sel{border:1.5px solid var(--cb);border-radius:8px;padding:10px 12px;font-size:.9rem;font-family:"Barlow",sans-serif;outline:none;-webkit-appearance:none;}
+.func-check-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--cl);border-radius:7px;cursor:pointer;margin-bottom:4px;}
+.func-check-row input[type=checkbox]{width:18px;height:18px;accent-color:var(--v);cursor:pointer;flex-shrink:0;}
+.func-check-row label{font-size:.88rem;font-weight:600;cursor:pointer;flex:1;}
+.btn-bloco{width:100%;margin-top:10px;}
+
+/* TALHÕES ATIVIDADES */
+.talhao-atv-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:10px;}
+.talhao-atv-header{background:var(--cl);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;}
+.talhao-atv-nome{font-weight:700;font-size:.95rem;}
+.talhao-atv-meta{font-size:.72rem;color:var(--c);}
+.talhao-atv-body{padding:12px 14px;border-top:1px solid var(--cb);}
+.quadra-atv-item{border:1.5px solid var(--cb);border-radius:var(--rs);overflow:hidden;margin-bottom:8px;}
+.quadra-atv-header{background:var(--cl);padding:9px 12px;display:flex;align-items:center;justify-content:space-between;}
+.pes-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:7px;padding:10px 12px;background:white;border-top:1px solid var(--cb);}
+.pes-wrap{display:flex;flex-direction:column;gap:2px;}
+.pes-wrap label{font-size:.65rem;font-weight:700;color:var(--c);}
+.pes-wrap input{border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:.85rem;font-family:"Barlow",sans-serif;outline:none;width:100%;}
+
+/* EQUIPE */
+.card-emp{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:10px;}
+.card-emp-hdr{padding:14px;display:flex;align-items:center;gap:12px;}
+.emp-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1rem;flex-shrink:0;}
+.emp-info{flex:1;}
+.emp-nome{font-weight:700;font-size:1rem;}
+.emp-sub{font-size:.75rem;color:var(--c);}
+.btn-rm-small{background:none;border:none;color:var(--danger);font-size:1.2rem;cursor:pointer;}
+.func-lista{padding:10px 14px;border-top:1px solid var(--cb);}
+.func-item{display:flex;align-items:center;gap:10px;padding:8px 0;}
+.func-ini{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:white;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:.8rem;flex-shrink:0;}
+.func-nome{flex:1;font-weight:600;font-size:.9rem;}
+
+/* CONFERÊNCIA */
+.conf-overlay{display:none;position:fixed;inset:0;background:#f0f4f0;z-index:500;flex-direction:column;}
+.conf-overlay.aberta{display:flex;}
+.conf-header{background:var(--ve);color:white;padding:0 14px;height:54px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:relative;}
+.conf-info{flex:1;}
+.conf-nome{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.1rem;}
+.conf-meta{font-size:.65rem;opacity:.7;}
+.conf-prog-num{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.4rem;color:#f5c842;}
+.conf-prog-small{font-size:.6rem;opacity:.6;display:block;text-align:right;}
+.prog-bar-wrap{height:4px;background:rgba(255,255,255,.2);flex-shrink:0;}
+.prog-bar{height:4px;background:#f5c842;transition:width .4s;}
+.abas-scroll{display:flex;overflow-x:auto;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.abas-scroll::-webkit-scrollbar{display:none;}
+.aba-btn{flex-shrink:0;padding:9px 14px;border:none;background:none;cursor:pointer;font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:.85rem;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;display:flex;flex-direction:column;align-items:center;gap:1px;}
+.aba-btn.ativa{color:var(--v);border-bottom-color:var(--v);}
+.aba-prog{font-size:.62rem;font-weight:600;color:inherit;opacity:.8;}
+.conf-body{flex:1;overflow-y:auto;}
+.quadra-painel{display:none;}
+.quadra-painel.ativa{display:block;}
+.quadra-resumo{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:#f8faf8;border-bottom:1px solid var(--cb);font-size:.82rem;color:var(--c);}
+.quadra-resumo strong{color:var(--t);font-size:.9rem;}
+.q-pct{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.2rem;color:var(--v);}
+.legenda-scroll{display:flex;gap:8px;overflow-x:auto;padding:7px 14px;background:#f8faf8;border-bottom:1px solid var(--cb);-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.legenda-scroll::-webkit-scrollbar{display:none;}
+.legenda-item{display:flex;align-items:center;gap:5px;flex-shrink:0;font-size:.72rem;font-weight:600;}
+.legenda-cor{width:13px;height:13px;border-radius:3px;flex-shrink:0;}
+.carreiras-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(66px,1fr));gap:6px;padding:10px 12px;}
+.carreira-btn{border:2px solid var(--cb);border-radius:var(--rs);background:white;cursor:pointer;padding:4px 2px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:transform .1s;position:relative;overflow:hidden;}
+.carreira-btn:active{transform:scale(.90);}
+.carreira-num{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:15px;line-height:1;color:var(--t);}
+.carreira-func{font-family:"Barlow Condensed",sans-serif;font-weight:700;font-size:9px;line-height:1;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.carreira-btn.completa{border-color:transparent;}
+.carreira-btn.completa .carreira-num{color:white;}
+.carreira-btn.completa .carreira-func{color:rgba(255,255,255,.9);}
+.dupla-badge{position:absolute;top:2px;right:2px;width:12px;height:12px;border-radius:50%;background:white;border:1.5px solid rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:800;color:var(--t);font-family:"Barlow Condensed",sans-serif;}
+.conf-footer{padding:10px 14px;background:white;border-top:1.5px solid var(--cb);display:flex;gap:8px;flex-shrink:0;}
+
+/* MODAL CONFERÊNCIA */
+.conf-modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:600;align-items:flex-end;}
+.conf-modal-overlay.aberto{display:flex;}
+.conf-modal{background:white;border-radius:16px 16px 0 0;width:100%;max-height:92vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,16px);}
+.conf-modal-handle{width:40px;height:4px;background:var(--cb);border-radius:2px;margin:10px auto 0;}
+.conf-modal-titulo{padding:12px 20px 4px;font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:1.2rem;}
+.conf-modal-sub{padding:0 20px 10px;font-size:.78rem;color:var(--c);border-bottom:1px solid var(--cb);}
+.func-opcao{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--cl);cursor:pointer;}
+.func-opcao.sel1{background:var(--vb);}
+.func-opcao.sel2{background:#eff6ff;}
+.func-op-nome{flex:1;font-weight:600;font-size:.95rem;}
+.func-sel-badge{font-family:"Barlow Condensed",sans-serif;font-weight:800;font-size:.75rem;padding:3px 8px;border-radius:999px;}
+.badge-1{background:var(--v);color:white;}.badge-2{background:#1d4ed8;color:white;}
+.modal-pes-section{margin:0 20px 12px;border:1.5px solid var(--cb);border-radius:var(--rs);overflow:hidden;}
+.modal-pes-header{background:var(--cl);padding:9px 14px;font-weight:700;font-size:.85rem;}
+.modal-pes-body{padding:12px 14px;}
+.modal-limpar{display:flex;align-items:center;gap:14px;padding:14px 20px;color:var(--danger);font-weight:600;font-size:.9rem;cursor:pointer;border-top:1px solid var(--cb);}
+
+/* Adições para a nova lógica de botões de seleção */
+.btn-sel-func {
+  padding: 4px 12px;
+  border: 1px solid var(--cb);
+  border-radius: 6px;
+  background: white;
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--c);
+}
+.btn-sel-func.ativo-1 { background: var(--v); color: white; border-color: var(--v); }
+.btn-sel-func.ativo-2 { background: #1d4ed8; color: white; border-color: #1d4ed8; }
+
+/* Toast */
+#toast {
+  visibility: hidden;
+  min-width: 250px;
+  background-color: #333;
+  color: #fff;
+  text-align: center;
+  border-radius: 8px;
+  padding: 12px;
+  position: fixed;
+  z-index: 9999;
+  left: 50%;
+  bottom: 30px;
+  transform: translateX(-50%);
+  font-size: 0.9rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+}
+#toast.show {
+  visibility: visible;
+  -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+  animation: fadein 0.5s, fadeout 0.5s 2.5s;
+}
+@-webkit-keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+@keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+@-webkit-keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+@keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<div class="app-content" id="appContent" style="display:none;">
+  <header class="app-header">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="hdr-logo">Conilon Tech<span class="hdr-sub">Atividades</span></div>
+    <div class="hdr-user" id="userNome"></div>
+  </header>
+
+  <div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+  <aside class="menu-lateral" id="menuLateral">
+    <div class="menu-topo">
+      <div class="menu-app-nome">Conilon Tech</div>
+      <div class="menu-user-nome" id="menuUserNome"></div>
+      <div class="menu-user-email" id="menuUserEmail"></div>
+    </div>
+    <nav id="menuModulos"></nav>
+    <div class="menu-rodape">
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </aside>
+
+  <main class="mod-content">
+    <div class="mod-tabs">
+      <button class="mod-tab ativo" id="tabRegistros" onclick="abrirTab(\'registros\', this)">Registros</button>
+      <button class="mod-tab" id="tabNova" onclick="abrirTab(\'nova\', this)">Nova Sessão</button>
+      <button class="mod-tab so-admin" id="tabTalhoes" style="display:none;" onclick="abrirTab(\'talhoes\', this)">Talhões</button>
+      <button class="mod-tab so-admin" id="tabEquipe" style="display:none;" onclick="abrirTab(\'funcionarios\', this)">Equipe</button>
+    </div>
+    <div id="atvContent" class="mod-content"></div>
+  </main>
+
+  <!-- Tela de Conferência -->
+  <div id="telaConferencia" class="conf-overlay">
+    <div class="conf-header">
+      <div class="conf-info">
+        <div class="conf-nome" id="confNome"></div>
+        <div class="conf-meta" id="confMeta"></div>
+      </div>
+      <button onclick="fecharConferencia()" class="btn-menu" style="background:none; box-shadow:none;">✕</button>
+    </div>
+    <div class="abas-scroll" id="abasContainer"></div>
+    <div class="conf-body" id="paineisContainer"></div>
+    <div class="conf-footer">
+      <div style="flex:1;">
+        <div class="conf-prog-num" id="confProg">0/0</div>
+        <div class="conf-prog-small">Carreiras Conferidas</div>
+      </div>
+      <button class="btn btn-v" onclick="fecharConferencia()">Salvar e Sair</button>
+    </div>
+  </div>
+
+  <!-- Modal de Seleção de Funcionário -->
+  <div id="confModalOverlay" class="conf-modal-overlay">
+    <div class="conf-modal">
+      <div class="conf-modal-handle"></div>
+      <div class="conf-modal-titulo" id="cmTitulo"></div>
+      <div class="conf-modal-sub" id="cmSub"></div>
+      <div id="cmFuncLista" style="padding:10px 0;"></div>
+      <div style="padding:0 20px 20px;">
+        <button onclick="limparCarreira()" class="btn btn-d btn-bloco">Limpar Carreira</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+</body>
+</html>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(() => {});
+
+// ─── ESTADO ───
+let usuarioAtual = null, perfilAtual = {};
+let empreiteiros = [], talhoesAtividades = [], registros = [], atividades = ["Colheita","Desbrota","Poda","Roçada"];
+let sessaoAtual = null, abaConf = null;
+let tabAtual = "registros";
+let confModalAtual = null;
+
+const CORES = ["#2d6a2d","#1d4ed8","#b45309","#7c3aed","#be123c","#0e7490","#65a30d","#c2410c"];
+const inic = n => n.split(" ").filter(Boolean).slice(0,2).map(p=>p[0]).join("").toUpperCase();
+const corFunc = id => { const idx=(sessaoAtual?.funcDia||[]).findIndex(f=>f.id===id); return CORES[idx>=0?idx%CORES.length:0]; };
+
+// ─── AUTH ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href="login.html"; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,"usuarios",user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==="admin") {
+    perfilAtual.modulos = {mapa:"admin",atividades:"admin",adubacao:"admin",config:"admin",pulverizacao:"admin",pedidos:"admin",admin:"admin"};
+  }
+  if (nivelAcesso("atividades")==="nenhum") { window.location.href="index.html"; return; }
+  document.getElementById("userNome").textContent = perfilAtual.nome || user.email;
+  document.getElementById("menuUserNome").textContent = perfilAtual.nome || user.email;
+  document.getElementById("menuUserEmail").textContent = user.email;
+  document.getElementById("loadingScreen").style.display = "none";
+  document.getElementById("appContent").style.display = "flex";
+  gerarMenu();
+  aplicarPermissoes();
+  iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
+  if (perfilAtual.perfil==="admin") return "admin";
+  return "nenhum";
+}
+function isAdmin() { return nivelAcesso("atividades")==="admin"; }
+function podeEditar() { return ["admin","operador","encarregado"].includes(nivelAcesso("atividades")); }
+
+function aplicarPermissoes() {
+  const adm = isAdmin();
+  document.querySelectorAll(".so-admin").forEach(el => el.style.display = adm ? "" : "none");
+}
+
+function gerarMenu() {
+  const isAdm = Object.values(perfilAtual.modulos||{}).includes("admin") || perfilAtual.perfil==="admin";
+  const items = [
+    {href:"index.html",ico:"📊",label:"Dashboard"},
+    {href:"mapa.html",ico:"🗺️",label:"Mapa de Talhões"},
+    {href:"atividades.html",ico:"🌾",label:"Atividades de Campo"},
+    {href:"adubacoes.html",ico:"🧪",label:"Adubações"},
+    {href:"pulverizacoes.html",ico:"💧",label:"Pulverizações"},
+    {href:"pedidos.html",ico:"📦",label:"Pedidos de Insumos"},
+  ];
+  if (isAdm) items.push({href:"admin.html",ico:"⚙️",label:"Administração"});
+  document.getElementById("menuModulos").innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==="atividades.html"?"ativo":""}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join("");
+  if (isAdm) {
+    document.getElementById("tabTalhoes").style.display="";
+    document.getElementById("tabEquipe").style.display="";
+  }
+}
+
+function iniciarListeners() {
+  onSnapshot(collection(db,"empreiteiros"), snap => {
+    empreiteiros = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (tabAtual==="funcionarios") renderizarEquipe();
+    if (tabAtual==="nova") renderizarFormNova();
+  });
+  onSnapshot(collection(db,"talhoesAtividades"), snap => {
+    talhoesAtividades = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (tabAtual==="talhoes") renderizarTalhoes();
+  });
+  onSnapshot(collection(db,"registrosAtividade"), snap => {
+    registros = snap.docs.map(d=>({_docId:d.id,...d.data()}))
+      .sort((a,b)=>(b.salvoEm||b.data||"").localeCompare(a.salvoEm||a.data||""));
+    if (tabAtual==="registros") renderizarRegistros();
+  });
+  onSnapshot(doc(db,"config","geral"), snap => {
+    if (snap.exists() && snap.data().atividades) atividades = snap.data().atividades;
+  });
+}
+
+// ─── NAVEGAÇÃO TABS ───
+window.abrirTab = function(tab, btn) {
+  tabAtual = tab;
+  document.querySelectorAll(".mod-tab").forEach(b=>b.classList.remove("ativo"));
+  if (btn) btn.classList.add("ativo");
+  document.getElementById("atvContent").style.display = "flex";
+  if (tab==="registros") renderizarRegistros();
+  else if (tab==="nova") renderizarFormNova();
+  else if (tab==="talhoes") renderizarTalhoes();
+  else if (tab==="funcionarios") renderizarEquipe();
+};
+
+// ══════════════════════════════
+// ABA REGISTROS
+// ══════════════════════════════
+function renderizarRegistros() {
+  const content = document.getElementById("atvContent");
+  const filtroAtiv = document.getElementById("filtroAtividade")?.value || "";
+  const filtroData1 = document.getElementById("filtroData1")?.value || "";
+  const filtroData2 = document.getElementById("filtroData2")?.value || "";
+
+  let filtrados = registros;
+  if (filtroAtiv) filtrados = filtrados.filter(r=>r.atividade===filtroAtiv);
+  if (filtroData1) filtrados = filtrados.filter(r=>r.data>=filtroData1);
+  if (filtroData2) filtrados = filtrados.filter(r=>r.data<=filtroData2);
+
+  if (!filtrados.length) {
+    content.innerHTML = `
+      ${renderFiltros()}
+      <div class="vazio"><div class="ico">📋</div><p>Nenhuma sessão encontrada.<br>Crie uma nova sessão na aba <strong>Nova Sessão</strong>.</p></div>`;
+    return;
+  }
+
+  content.innerHTML = renderFiltros() + filtrados.map(r => {
+    const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
+    const at = Object.keys(r.atribuicoes||{}).length;
+    const pct = tot ? Math.round(at/tot*100) : 0;
+    const podEd = podeEditar();
+    const adm = isAdmin();
+    return `<div class="reg-card">
+      <div class="reg-header">
+        <div>
+          <div class="reg-titulo">🌾 ${r.atividade||"Atividade"} · ${r.talhaoNome||""}</div>
+          <div class="reg-meta">${r.fazenda||""} · ${r.data?formatarData(r.data):""}</div>
+          <div class="reg-meta">👤 ${r.criadoPor||"—"} · Salvo: ${r.salvoEm?formatarDataHora(r.salvoEm):"—"}</div>
+        </div>
+      </div>
+      <div class="reg-body">
+        <div class="reg-stat"><span class="reg-stat-label">Empreiteiros</span><span class="reg-stat-val">${(r.empsDia||[]).map(e=>e.nome).join(", ")||"—"}</span></div>
+        <div class="reg-stat"><span class="reg-stat-label">Progresso</span><span class="reg-stat-val">${at}/${tot} carreiras (${pct}%)</span></div>
+      </div>
+      <div class="reg-acoes">
+        ${podEd?`<button class="btn btn-v btn-sm" onclick="carregarRegistro(\'${r._docId}\')">✏️ Continuar</button>`:""}
+        <button class="btn btn-c btn-sm" onclick="gerarRelatorio(\'${r._docId}\')">📄 Relatório</button>
+        ${adm?`<button class="btn btn-d btn-sm" data-doc="${r._docId}" onclick="excluirRegistro(this)">🗑</button>`:""}
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderFiltros() {
+  return `<div class="filtros-bar">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;">
+      <div style="flex:1;min-width:120px;">
+        <label class="filtro-label">Atividade</label>
+        <select class="filtro-sel" id="filtroAtividade" onchange="renderizarRegistros()">
+          <option value="">Todas</option>
+          ${atividades.map(a=>`<option value="${a}">${a}</option>`).join("")}
+        </select>
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label class="filtro-label">De</label>
+        <input type="date" class="filtro-sel" id="filtroData1" onchange="renderizarRegistros()">
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <label class="filtro-label">Até</label>
+        <input type="date" class="filtro-sel" id="filtroData2" onchange="renderizarRegistros()">
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn btn-c btn-sm" onclick="filtrarSemana()">Esta semana</button>
+      <button class="btn btn-c btn-sm" onclick="filtrarMes()">Este mês</button>
+      <button class="btn btn-c btn-sm" onclick="limparFiltros()">Limpar</button>
+      <button class="btn btn-v btn-sm" onclick="gerarRelatorioGeral()">📄 Relatório geral</button>
+    </div>
+  </div>`;
+}
+
+window.filtrarSemana = function() {
+  const hoje = new Date();
+  const diaSemana = hoje.getDay();
+  const inicio = new Date(hoje); inicio.setDate(hoje.getDate() - diaSemana);
+  const fim = new Date(inicio); fim.setDate(inicio.getDate() + 6);
+  document.getElementById("filtroData1").value = inicio.toISOString().slice(0,10);
+  document.getElementById("filtroData2").value = fim.toISOString().slice(0,10);
+  renderizarRegistros();
+};
+
+window.filtrarMes = function() {
+  const hoje = new Date();
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const fim = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0);
+  document.getElementById("filtroData1").value = inicio.toISOString().slice(0,10);
+  document.getElementById("filtroData2").value = fim.toISOString().slice(0,10);
+  renderizarRegistros();
+};
+
+window.limparFiltros = function() {
+  document.getElementById("filtroAtividade").value = "";
+  document.getElementById("filtroData1").value = "";
+  document.getElementById("filtroData2").value = "";
+  renderizarRegistros();
+};
+
+window.excluirRegistro = async function(btn) {
+  const docId = btn.dataset.doc;
+  if (!docId) return;
+  if (!confirm("Excluir este registro permanentemente?")) return;
+  await deleteDoc(doc(db,"registrosAtividade",docId));
+  toast("🗑 Registro excluído.");
+};
+
+window.gerarRelatorio = function(docId) {
+  const r = registros.find(x=>x._docId===docId); if(!r) return;
+  const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
+  const at = Object.keys(r.atribuicoes||{}).length;
+
+  const resultados = {};
+  Object.entries(r.atribuicoes||{}).forEach(([chave, a]) => {
+    const [qid, idx] = chave.split("-");
+    const q = r.quadras.find(x=>x.id===qid);
+    if (!q) return;
+    const pesTotal = q.pesCarreira?.[parseInt(idx)+1] || 0;
+    const dupla = !!a.func2;
+
+    [a.func1, a.func2].filter(Boolean).forEach(fid => {
+      if (!resultados[fid]) {
+        const f = r.funcDia.find(x=>x.id===fid);
+        resultados[fid] = { nome: f?.nome || fid, empNome: f?.empNome || "", carreiras: 0, pes: 0 };
+      }
+      resultados[fid].carreiras += dupla ? 0.5 : 1;
+      resultados[fid].pes += dupla ? Math.round(pesTotal/2) : pesTotal;
+    });
+  });
+
+  const porEmp = {};
+  Object.values(resultados).forEach(f => {
+    const emp = f.empNome || "Equipe";
+    if (!porEmp[emp]) porEmp[emp] = [];
+    porEmp[emp].push(f);
+  });
+  if (!Object.keys(porEmp).length) { porEmp["Equipe"] = Object.values(resultados); }
+
+  const htmlContent = `
+    <div style="font-family:Arial,sans-serif;max-width:700px;margin:0 auto;padding:24px;color:#111;">
+      <div style="border-bottom:3px solid #2d6a2d;padding-bottom:12px;margin-bottom:18px;">
+        <div style="font-size:20px;font-weight:900;color:#2d6a2d;">Relatório · ${r.atividade||"Atividade"}</div>
+        <div style="font-size:12px;color:#666;margin-top:3px;">${r.fazenda?r.fazenda+" · ":""} ${r.talhaoNome} · ${formatarData(r.data)}</div>
+      </div>
+      ${at<tot?`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#c2410c;">⚠️ ${tot-at} carreira(s) sem conferência</div>`:`<div style="background:#d1fae5;border:1px solid #6ee7b7;border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:12px;color:#065f46;font-weight:600;">✅ Todas as ${tot} carreiras conferidas</div>`}
+      ${Object.entries(porEmp).map(([empNome,funcs])=>{
+        const totCarr=funcs.reduce((s,f)=>s+f.carreiras,0);
+        const totPes=funcs.reduce((s,f)=>s+f.pes,0);
+        return `<div style="margin-bottom:18px;">
+          <div style="background:#1a3d1a;color:white;padding:8px 12px;border-radius:6px 6px 0 0;display:flex;justify-content:space-between;">
+            <span style="font-weight:700;">🤝 ${empNome}</span>
+            <span style="font-size:12px;opacity:.8;">${totCarr} carreiras · ${totPes||0} pés</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:#e8f5e8;"><th style="padding:6px 10px;text-align:left;color:#1a3d1a;">#</th><th style="padding:6px 10px;text-align:left;color:#1a3d1a;">Funcionário</th><th style="padding:6px 10px;text-align:center;color:#1a3d1a;">Carreiras</th><th style="padding:6px 10px;text-align:center;color:#1a3d1a;">Pés</th></tr></thead>
+            <tbody>${funcs.map((f,i)=>`<tr style="background:${i%2===0?"white":"#f9fafb"}"><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;">${i+1}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;font-weight:600;">${f.nome}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">${f.carreiras}</td><td style="padding:6px 10px;border-bottom:1px solid #e5e7eb;text-align:center;">${f.pes||"—"}</td></tr>`).join("")}</tbody>
+          </table>
+        </div>`;
+      }).join("")}
+      <div style="margin-top:20px;font-size:11px;color:#888;">Gerado em ${new Date().toLocaleString("pt-BR")}</div>
+    </div>`;
+
+  const printWindow = window.open("", "_blank");
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Relatório de Atividade</title>
+      <style>
+        @media print {
+          body { margin: 0; }
+          .no-print { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      ${htmlContent}
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.print();
+};
+
+window.gerarRelatorioGeral = function() {
+  toast("Funcionalidade de relatório geral ainda não implementada.");
+};
+
+// ══════════════════════════════
+// ABA NOVA SESSÃO
+// ══════════════════════════════
+function hoje() { return new Date().toISOString().slice(0,10); }
+
+function renderizarFormNova() {
+  const content = document.getElementById("atvContent");
+  content.innerHTML = `
+    <div class="form-card">
+      <div class="form-tit">📋 Dados da Sessão</div>
+      <div class="campo"><label>Data</label><input type="date" id="inpSessaoData" value="${hoje()}" class="campo-inp"></div>
+      <div class="campo"><label>Atividade</label><select id="selSessaoAtividade" class="campo-sel">${atividades.map(a=>`<option value="${a}">${a}</option>`).join("")}</select></div>
+      <div class="campo"><label>Talhão</label><select id="selSessaoTalhao" class="campo-sel"><option value="">Selecione...</option>${talhoesAtividades.map(t=>`<option value="${t._docId}">${t.fazenda?t.fazenda+" · ":""} ${t.nome} (${(t.quadras||[]).length} quadras)</option>`).join("")}</select></div>
+    </div>
+    <div class="form-card">
+      <div class="form-tit">👷 Empreiteiros do Dia</div>
+      ${!empreiteiros.length?`<p class="vazio">Nenhum empreiteiro cadastrado.</p>`:
+      empreiteiros.map(e=>`
+        <div style="background:var(--cl);border-radius:8px;margin-bottom:8px;overflow:hidden;">
+          <div class="func-check-row" style="background:white;border-bottom:1px solid var(--cb);">
+            <input type="checkbox" class="emp-check-item" id="ec-${e._docId}" value="${e._docId}" onchange="toggleEmpSessao(\'${e._docId}\')">
+            <label for="ec-${e._docId}" style="font-weight:700;">🤝 ${e.nome}</label>
+            <span style="font-size:.7rem;color:var(--c)">${(e.funcionarios||[]).length} func.</span>
+          </div>
+          <div id="turma-${e._docId}" style="display:none;padding:6px 12px 8px;">
+            ${(e.funcionarios||[]).map(f=>`
+              <div class="func-check-row" style="padding:6px 0;background:none;">
+                <input type="checkbox" class="func-check-item" id="fc-${f.id}" value="${f.id}" data-emp="${e._docId}" data-empnome="${e.nome}" data-nome="${f.nome}" checked>
+                <label for="fc-${f.id}">${f.nome}</label>
+              </div>`).join("")}
+          </div>
+        </div>`).join("")}
+    </div>
+    <button class="btn btn-v btn-bloco" onclick="iniciarSessaoAtividade()">▶ Iniciar Sessão</button>`;
+}
+
+window.toggleEmpSessao=function(empId){
+  const chk=document.getElementById("ec-"+empId);
+  const turma=document.getElementById("turma-"+empId);
+  if(turma) turma.style.display=chk.checked?"block":"none";
+};
+
+window.iniciarSessaoAtividade=async function(){
+  const talhaoDocId=document.getElementById("selSessaoTalhao").value;
+  const atividade=document.getElementById("selSessaoAtividade").value;
+  const data=document.getElementById("inpSessaoData").value;
+  if(!talhaoDocId||!atividade||!data){toast("Preencha todos os campos.");return;}
+  const t=talhoesAtividades.find(x=>x._docId===talhaoDocId);
+  if(!t||!t.quadras.length){toast("Este talhão não tem quadras cadastradas.");return;}
+  const empsSel=[...document.querySelectorAll(".emp-check-item:checked")].map(el=>el.value);
+  if(!empsSel.length){toast("Selecione pelo menos um empreiteiro.");return;}
+  const funcDia=[], empsDia=[];
+  empsSel.forEach(empId=>{
+    const emp=empreiteiros.find(e=>e._docId===empId); if(!emp) return;
+    empsDia.push({id:empId,nome:emp.nome});
+    [...document.querySelectorAll(`.func-check-item[data-emp="${empId}"]:checked`)].forEach(el=>{
+      funcDia.push({id:el.value,nome:el.dataset.nome,empId,empNome:emp.nome});
+    });
+  });
+  if(!funcDia.length){toast("Nenhum funcionário selecionado.");return;}
+  
+  // Cria a sessão no Firestore e carrega
+  const newSession = {talhaoDocId,talhaoNome:t.nome,fazenda:t.fazenda||"",atividade,data,quadras:t.quadras.map(q=>({...q})),funcDia,empsDia,atribuicoes:{},criadoPor:usuarioAtual.email,salvoEm:new Date().toISOString()};
+  const ref = await addDoc(collection(db,"registrosAtividade"), newSession);
+  sessaoAtual = {_docId: ref.id, ...newSession};
+  abaConf = sessaoAtual.quadras[0]?.id||null;
+  mostrarConferencia();
+  toast("✅ Sessão iniciada!");
+};
+
+// ══════════════════════════════
+// ABA TALHÕES
+// ══════════════════════════════
+function renderizarTalhoes() {
+  if (tabAtual!=="talhoes") return;
+  const adm = isAdmin();
+  const content = document.getElementById("atvContent");
+  content.innerHTML = `
+    ${adm?`<div class="form-card">
+      <div class="form-tit">➕ Adicionar Talhão para Atividades</div>
+      <div class="campo"><label>Talhão</label><select id="selTalhaoAtiv" class="campo-sel"><option value="">Selecione...</option>${talhoesAtividades.map(t=>`<option value="${t._docId}">${t.fazenda?t.fazenda+" · ":""} ${t.nome}</option>`).join("")}</select></div>
+      <button class="btn btn-v btn-bloco" onclick="salvarTalhaoAtividade()">Adicionar</button>
+    </div>`:
+    `<div class="vazio"><div class="ico">⛔</div><p>Você não tem permissão para gerenciar talhões.</p></div>`}
+    ${!talhoesAtividades.length?`<div class="vazio"><div class="ico">🌿</div><p>Nenhum talhão configurado para atividades.</p></div>`:
+    talhoesAtividades.map(t=>`
+      <div class="talhao-atv-card">
+        <div class="talhao-atv-header" onclick="toggleTalhaoBody(\'${t._docId}\')">
+          <div class="talhao-atv-nome">${t.fazenda?t.fazenda+" · ":""} ${t.nome}</div>
+          <div class="talhao-atv-meta">${(t.quadras||[]).length} quadras <span id="arr-${t._docId}">▶</span></div>
+        </div>
+        <div class="talhao-atv-body" id="tbody-${t._docId}" style="display:none;">
+          ${(t.quadras||[]).map(q=>`
+            <div class="quadra-atv-item">
+              <div class="quadra-atv-header" onclick="togglePesGrid(\'${q.id}\')">
+                <div class="talhao-atv-nome">${q.nome}</div>
+                <div class="talhao-atv-meta">${q.carreiras} carreiras <span id="qarr-${q.id}">▶</span></div>
+                ${adm?`<button class="btn-rm-small" onclick="event.stopPropagation();removerQuadra(\'${t._docId}\',\'${q.id}\')">✕</button>`:""}
+              </div>
+              <div class="pes-grid" id="pes-${q.id}" style="display:none;">
+                ${Array.from({length:q.carreiras},(_,i)=>i+1).map(c=>`
+                  <div class="pes-wrap">
+                    <label>Carr. ${c}</label>
+                    <input type="number" value="${q.pesCarreira?.[c]||0}" onchange="atualizarPes(\'${t._docId}\',\'${q.id}\',${c},this.value)">
+                  </div>`).join("")}
+              </div>
+            </div>`).join("")}
+          ${adm?`<div style="display:flex;gap:8px;margin-top:10px;">
+            <input type="text" id="inpQNome-${t._docId}" placeholder="Nome da quadra..." class="campo-inp" style="flex:1;">
+            <input type="number" id="inpQCarr-${t._docId}" placeholder="Carreiras" class="campo-inp" style="width:80px;">
+            <button class="btn btn-v btn-sm" onclick="adicionarQuadra(\'${t._docId}\')">+</button>
+          </div>`:
+          `<div class="vazio" style="padding:10px;"><div class="ico" style="font-size:2rem;">🔒</div><p>Você não pode adicionar quadras.</p></div>`}
+        </div>
+      </div>`).join("")}
+    `;
+}
+
+window.salvarTalhaoAtividade=async function(){
+  const talhaoId=document.getElementById("selTalhaoAtiv").value;
+  const talhao=talhoesAtividades.find(t=>t._docId===talhaoId); if(!talhao){toast("Selecione um talhão.");return;}
+  if(talhoesAtividades.find(t=>t.talhaoId===talhao.talhaoId)){toast("Talhão já está na lista.");return;}
+  await addDoc(collection(db,"talhoesAtividades"),{talhaoId:talhao.talhaoId,nome:talhao.nome,fazenda:talhao.fazenda||"",quadras:[],criadoEm:new Date().toISOString()});
+  toast("✅ Talhão adicionado!");
+};
+window.removerTalhaoAtividade=async function(docId){if(!confirm("Remover este talhão?"))return;await deleteDoc(doc(db,"talhoesAtividades",docId));};
+
+window.adicionarQuadra = async function(talhaoDocId) {
+  const nome = document.getElementById("inpQNome-"+talhaoDocId).value.trim();
+  const carreiras = parseInt(document.getElementById("inpQCarr-"+talhaoDocId).value);
+  if (!nome||!carreiras) { toast("⚠️ Preencha nome e nº de carreiras."); return; }
+  const t = talhoesAtividades.find(x=>x._docId===talhaoDocId); if (!t) return;
+  const pesCarreira = {};
+  for(let i=1;i<=carreiras;i++) pesCarreira[i]=0;
+  await updateDoc(doc(db,"talhoesAtividades",talhaoDocId),{quadras:[...(t.quadras||[]),{id:"q"+Date.now(),nome,carreiras,pesCarreira}]});
+  document.getElementById("inpQNome-"+talhaoDocId).value="";
+  document.getElementById("inpQCarr-"+talhaoDocId).value="";
+  toast("✅ Quadra adicionada!");
+};
+
+window.removerQuadra = async function(talhaoDocId, quadraId) {
+  if (!confirm("Remover esta quadra?")) return;
+  const t = talhoesAtividades.find(x=>x._docId===talhaoDocId); if (!t) return;
+  await updateDoc(doc(db,"talhoesAtividades",talhaoDocId),{quadras:t.quadras.filter(q=>q.id!==quadraId)});
+};
+
+window.atualizarPes = async function(talhaoDocId, quadraId, carreira, valor) {
+  const t = talhoesAtividades.find(x=>x._docId===talhaoDocId); if (!t) return;
+  const quadras = t.quadras.map(q=>{
+    if (q.id!==quadraId) return q;
+    const pc={...q.pesCarreira};
+    const v=parseInt(valor); if(v>0) pc[carreira]=v; else delete pc[carreira];
+    return{...q,pesCarreira:pc};
+  });
+  await updateDoc(doc(db,"talhoesAtividades",talhaoDocId),{quadras});
+  toast("Pés por carreira atualizados!");
+};
+
+window.toggleTalhaoBody = function(id) {
+  const el=document.getElementById("tbody-"+id), arr=document.getElementById("arr-"+id);
+  if(!el) return; const ab=el.style.display!=="none";
+  el.style.display=ab?"none":"block"; if(arr) arr.textContent=ab?"▶":"▼";
+};
+window.togglePesGrid = function(qid) {
+  const el=document.getElementById("pes-"+qid), arr=document.getElementById("qarr-"+qid);
+  if(!el) return; const ab=el.style.display!=="none";
+  el.style.display=ab?"none":"grid"; if(arr) arr.textContent=ab?"▶":"▼";
+};
+
+// ══════════════════════════════
+// ABA EQUIPE
+// ══════════════════════════════
+function renderizarEquipe() {
+  if (tabAtual!=="funcionarios") return;
+  const adm = isAdmin();
+  const content = document.getElementById("atvContent");
+  content.innerHTML = `
+    ${adm?`<div class="form-card">
+      <div class="form-tit">➕ Novo Empreiteiro</div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="inpNovoEmp" placeholder="Nome do empreiteiro..." class="campo-inp" style="flex:1;">
+        <button class="btn btn-v btn-sm" onclick="salvarEmpreiteiro()">+</button>
+      </div>
+    </div>`:
+    `<div class="vazio"><div class="ico">⛔</div><p>Você não tem permissão para gerenciar empreiteiros.</p></div>`}
+    ${!empreiteiros.length?`<div class="vazio"><div class="ico">🤝</div><p>Nenhum empreiteiro cadastrado.</p></div>`:
+    empreiteiros.map((emp,ei)=>`
+      <div class="card-emp" style="border-top:4px solid ${CORES[ei%CORES.length]};">
+        <div class="card-emp-hdr">
+          <div class="emp-avatar" style="background:${CORES[ei%CORES.length]}">${inic(emp.nome)}</div>
+          <div class="emp-info"><div class="emp-nome">🤝 ${emp.nome}</div><div class="emp-sub">${(emp.funcionarios||[]).length} funcionário(s)</div></div>
+          ${adm?`<button onclick="deletarEmpreiteiro(\'${emp._docId}\')" class="btn-rm-small">✕</button>`:""}
+        </div>
+        <div class="func-lista">
+          ${(emp.funcionarios||[]).map(f=>`
+            <div class="func-item">
+              <div class="func-ini" style="background:${CORES[ei%CORES.length]}">${inic(f.nome)}</div>
+              <span class="func-nome">${f.nome}</span>
+              ${adm?`<button onclick="removerFuncEmp(\'${emp._docId}\',\'${f.id}\')" class="btn-rm-small">✕</button>`:""}
+            </div>`).join("")}
+          ${adm?`<div style="display:flex;gap:8px;margin-top:8px;">
+            <input type="text" id="inpFuncEmp-${emp._docId}" placeholder="Nome do funcionário..." class="campo-inp" style="flex:1;">
+            <button class="btn btn-v btn-sm" onclick="salvarFuncEmp(\'${emp._docId}\')">+</button>
+          </div>`:
+          `<div class="vazio" style="padding:10px;"><div class="ico" style="font-size:2rem;">🔒</div><p>Você não pode adicionar funcionários.</p></div>`}
+        </div>
+      </div>`).join("")}
+    `;
+}
+
+window.salvarEmpreiteiro = async function() {
+  const nome=document.getElementById("inpNovoEmp").value.trim();
+  if(!nome){toast("⚠️ Informe o nome.");return;}
+  await addDoc(collection(db,"empreiteiros"),{nome,funcionarios:[],criadoEm:new Date().toISOString()});
+  document.getElementById("inpNovoEmp").value=""; toast("✅ "+nome+" adicionado!");
+};
+window.deletarEmpreiteiro = async function(docId) {
+  if(!confirm("Remover este empreiteiro e sua turma?"))return;
+  await deleteDoc(doc(db,"empreiteiros",docId));
+  toast("🗑 Empreiteiro removido.");
+};
+window.salvarFuncEmp = async function(empDocId) {
+  const nome=document.getElementById("inpFuncEmp-"+empDocId).value.trim();
+  if(!nome){toast("⚠️ Informe o nome.");return;}
+  const emp=empreiteiros.find(e=>e._docId===empDocId);if(!emp)return;
+  await updateDoc(doc(db,"empreiteiros",empDocId),{funcionarios:[...(emp.funcionarios||[]),{id:"f"+Date.now(),nome}]});
+  document.getElementById("inpFuncEmp-"+empDocId).value=""; toast("✅ "+nome+" adicionado!");
+};
+window.removerFuncEmp = async function(empDocId,funcId) {
+  const emp=empreiteiros.find(e=>e._docId===empDocId);if(!emp)return;
+  await updateDoc(doc(db,"empreiteiros",empDocId),{funcionarios:(emp.funcionarios||[]).filter(f=>f.id!==funcId)});
+  toast("🗑 Funcionário removido.");
+};
+
+// ─── UTILS ───
+function formatarData(d){if(!d)return"—";const[a,m,dd]=d.split("-");return`${dd}/${m}/${a}`;}
+function formatarDataHora(iso){try{const d=new Date(iso);return d.toLocaleDateString("pt-BR")+" "+d.toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"});}catch{return iso;}}
+function toast(msg,dur=3000){const el=document.getElementById("toast");el.textContent=msg;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),dur);}
+
+window.toggleMenu=()=>{document.getElementById("menuLateral").classList.toggle("aberto");document.getElementById("menuOverlay").classList.toggle("aberto");};
+window.fecharMenu=()=>{document.getElementById("menuLateral").classList.remove("aberto");document.getElementById("menuOverlay").classList.remove("aberto");};
+window.fazerLogout=async()=>{await signOut(auth);window.location.href="login.html";};
+
+</script>
+
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="spinner"></div>
+</div>
+
+<div class="app-content" id="appContent" style="display:none;">
+  <header class="app-header">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="hdr-logo">Conilon Tech<span class="hdr-sub">Atividades</span></div>
+    <div class="hdr-user" id="userNome"></div>
+  </header>
+
+  <div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+  <aside class="menu-lateral" id="menuLateral">
+    <div class="menu-topo">
+      <div class="menu-app-nome">Conilon Tech</div>
+      <div class="menu-user-nome" id="menuUserNome"></div>
+      <div class="menu-user-email" id="menuUserEmail"></div>
+    </div>
+    <nav id="menuModulos"></nav>
+    <div class="menu-rodape">
+      <button class="btn-logout" onclick="fazerLogout()">Sair</button>
+    </div>
+  </aside>
+
+  <main class="mod-content">
+    <div class="mod-tabs">
+      <button class="mod-tab ativo" id="tabRegistros" onclick="abrirTab('registros', this)">Registros</button>
+      <button class="mod-tab" id="tabNova" onclick="abrirTab('nova', this)">Nova Sessão</button>
+      <button class="mod-tab so-admin" id="tabTalhoes" style="display:none;" onclick="abrirTab('talhoes', this)">Talhões</button>
+      <button class="mod-tab so-admin" id="tabEquipe" style="display:none;" onclick="abrirTab('funcionarios', this)">Equipe</button>
+    </div>
+    <div id="atvContent" class="mod-content"></div>
+  </main>
+
+  <!-- Tela de Conferência -->
+  <div id="telaConferencia" class="conf-overlay">
+    <div class="conf-header">
+      <div class="conf-info">
+        <div class="conf-nome" id="confNome"></div>
+        <div class="conf-meta" id="confMeta"></div>
+      </div>
+      <button onclick="fecharConferencia()" class="btn-menu" style="background:none; box-shadow:none;">✕</button>
+    </div>
+    <div class="abas-scroll" id="abasContainer"></div>
+    <div class="conf-body" id="paineisContainer"></div>
+    <div class="conf-footer">
+      <div style="flex:1;">
+        <div class="conf-prog-num" id="confProg">0/0</div>
+        <div class="conf-prog-small">Carreiras Conferidas</div>
+      </div>
+      <button class="btn btn-v" onclick="fecharConferencia()">Salvar e Sair</button>
+    </div>
+  </div>
+
+  <!-- Modal de Seleção de Funcionário -->
+  <div id="confModalOverlay" class="conf-modal-overlay">
+    <div class="conf-modal">
+      <div class="conf-modal-handle"></div>
+      <div class="conf-modal-titulo" id="cmTitulo"></div>
+      <div class="conf-modal-sub" id="cmSub"></div>
+      <div id="cmFuncLista" style="padding:10px 0;"></div>
+      <div style="padding:0 20px 20px;">
+        <button onclick="limparCarreira()" class="btn btn-d btn-bloco">Limpar Carreira</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="toast"></div>
+
+</body>
+</html>
