@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Adubações</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(() => {});
+
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const SEMANAS = ['1ª Semana','2ª Semana','3ª Semana','4ª Semana'];
+
+let usuarioAtual = null, perfilAtual = {};
+let talhoes = [], planosAdubacao = [], configAdubacao = {};
+let telaAtual = 'lista', talhaoSel = null, mesSel = null;
+let planoWIP = null, etapa = 1, semanaAtiva = 0;
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = 'login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db, 'usuarios', user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+  iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
+  if (perfilAtual.perfil === 'admin') return 'admin';
+  return 'nenhum';
+}
+function isAdmin() { return nivelAcesso('adubacao') === 'admin'; }
+function podeMarcar() { return ['admin','gerente','operador','encarregado'].includes(nivelAcesso('adubacao')); }
+
+function gerarMenu() {
+  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='adubacoes.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+function iniciarListeners() {
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    if (telaAtual==='lista') renderizarTela();
+  });
+  onSnapshot(collection(db,'planosAdubacao'), snap => {
+    planosAdubacao = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    renderizarTela();
+  });
+  onSnapshot(doc(db,'configAdubacao','geral'), snap => {
+    if (snap.exists()) configAdubacao = snap.data();
+    if (telaAtual==='lista'||telaAtual==='talhao') renderizarTela();
+  });
+}
+
+// ─── NAVEGAÇÃO ───
+function renderizarTela() {
+  ['lista','talhao','mes','wizard','safra','replicar'].forEach(t => {
+    const el = document.getElementById('tela-'+t);
+    if (el) el.style.display = 'none';
+  });
+  const el = document.getElementById('tela-'+telaAtual);
+  if (el) el.style.display = 'flex';
+  if (telaAtual==='lista') renderizarLista();
+  if (telaAtual==='talhao') renderizarTelaTalhao();
+  if (telaAtual==='mes') renderizarTelaMes();
+  if (telaAtual==='wizard') renderizarWizard();
+  if (telaAtual==='safra') renderizarTelaSafra();
+  if (telaAtual==='replicar') renderizarTelaReplicar();
+}
+
+window.irLista = () => { telaAtual='lista'; talhaoSel=null; mesSel=null; renderizarTela(); };
+window.irTalhao = (id) => { talhaoSel = talhoes.find(t=>t.id===id); telaAtual='talhao'; renderizarTela(); };
+window.irMes = (mesAno) => {
+  const [nomeMes, ano] = mesAno.split('/');
+  mesSel = {mesAno, nomeMes, ano:parseInt(ano), mes:MESES.indexOf(nomeMes)};
+  telaAtual='mes'; renderizarTela();
+};
+window.irWizard = () => {
+  planoWIP = {produtos:[], semanas:[], numSemanas:2};
+  etapa=1; semanaAtiva=0;
+  telaAtual='wizard'; renderizarTela();
+};
+window.voltarWizard = () => { telaAtual='mes'; renderizarTela(); };
+
+// ─── LISTA ───
+function renderizarLista() {
+  const fazendas = {};
+  talhoes.forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
+  const lista = document.getElementById('listaTalhoes');
+  const adm = isAdmin();
+
+  let headerHtml = `<div class="lista-header">
+    <div class="lista-title">Plano de Adubação</div>
+    ${adm?`<button onclick="telaAtual='safra';renderizarTela();" class="btn-safra">⚙️ Safra</button>`:''}
+  </div>`;
+
+  if (!Object.keys(fazendas).length) {
+    lista.innerHTML = headerHtml + `<div class="vazio"><div class="ico">🌿</div><p>Nenhum talhão cadastrado.</p></div>`;
+    return;
+  }
+  lista.innerHTML = headerHtml + Object.entries(fazendas).sort().map(([faz, ts]) => {
+    const cards = ts.map(t => {
+      const planos = planosAdubacao.filter(p=>p.talhaoId===t.id);
+      const total = planos.reduce((s,p)=>s+(p.aplicacoes||[]).length,0);
+      const feitas = planos.reduce((s,p)=>s+(p.aplicacoes||[]).filter(a=>a.feito).length,0);
+      const pct = total ? Math.round(feitas/total*100) : null;
+      return `<div class="talhao-card" onclick="irTalhao('${t.id}')">
+        <div class="tc-left">
+          <div class="tc-id">${t.id}</div>
+          <div class="tc-nome">${t.nome}</div>
+          <div class="tc-meta">${t.fazenda||''} · ${t.area||'—'} ha</div>
+        </div>
+        <div class="tc-right">
+          ${pct!==null?`
+            <div class="prog-ring" style="--p:${pct}"><span class="prog-val">${pct}%</span></div>
+            <div class="prog-lbl">${feitas}/${total}</div>
+          `:`<div class="sem-plano">Sem<br>plano</div>`}
+          <span class="seta">›</span>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="fazenda-grupo">
+      <div class="fazenda-tit">🏡 ${faz}</div>
+      ${cards}
+    </div>`;
+  }).join('');
+}
+
+// ─── TALHÃO ───
+function gerarMesesSafra() {
+  const cfg = configAdubacao;
+  if (!cfg.anoInicio) return [];
+  const meses = [];
+  let anoAtual = cfg.anoInicio, mesAtual = cfg.mesInicio;
+  const anoFim = cfg.anoFim, mesFim = cfg.mesFim;
+  let cont = 0;
+  while (cont < 24) {
+    meses.push({mes:mesAtual, ano:anoAtual});
+    if (mesAtual===mesFim && anoAtual===anoFim) break;
+    mesAtual++; if (mesAtual>11){mesAtual=0;anoAtual++;}
+    cont++;
+  }
+  return meses;
+}
+
+function renderizarTelaTalhao() {
+  if (!talhaoSel) return;
+  document.getElementById('talhaoNome').textContent = talhaoSel.nome;
+  document.getElementById('talhaoMeta').textContent = `${talhaoSel.fazenda||''} · ${talhaoSel.area||'—'} ha`;
+  const mesesSafra = gerarMesesSafra();
+  let html = '';
+  if (!mesesSafra.length) {
+    html = `<div class="vazio"><div class="ico">📅</div><p>Configure o período da safra.<br>Volte à lista e clique em <strong>⚙️ Safra</strong>.</p></div>`;
+  } else {
+    const porAno = {};
+    mesesSafra.forEach(m => { if(!porAno[m.ano])porAno[m.ano]=[]; porAno[m.ano].push(m.mes); });
+    Object.entries(porAno).forEach(([ano, mesesDoAno]) => {
+      html += `<div class="ano-grupo"><div class="ano-tit">${ano}</div><div class="meses-grid">`;
+      mesesDoAno.forEach(mi => {
+        const m = MESES[mi], mesAno = `${m}/${ano}`;
+        const plano = planosAdubacao.find(p=>p.talhaoId===talhaoSel.id&&p.mesAno===mesAno);
+        const aps = plano?.aplicacoes||[];
+        const total=aps.length, feitas=aps.filter(a=>a.feito).length;
+        const agora=new Date(), isMesAtual=agora.getMonth()===mi&&agora.getFullYear()===parseInt(ano);
+        let cor='#e5e7eb',txtCor='#6b7280';
+        if(total>0&&feitas===total){cor='#dcfce7';txtCor='#16a34a';}
+        else if(total>0&&estaAtrasado(mi,parseInt(ano))&&feitas<total){cor='#fee2e2';txtCor='#dc2626';}
+        else if(total>0){cor='#fef9c3';txtCor='#d97706';}
+        html += `<div class="mes-btn ${isMesAtual?'mes-atual':''}" style="background:${cor};color:${txtCor};" onclick="irMes('${mesAno}')">
+          <div class="mes-nome">${m.slice(0,3)}</div>
+          <div class="mes-prog">${total>0?feitas+'/'+total:'—'}</div>
+        </div>`;
+      });
+      html += `</div></div>`;
+    });
+  }
+  document.getElementById('mesesLista').innerHTML = html;
+}
+
+// ─── MÊS ───
+function renderizarTelaMes() {
+  if (!talhaoSel||!mesSel) return;
+  document.getElementById('mesNome').textContent = mesSel.mesAno;
+  document.getElementById('mesTalhao').textContent = talhaoSel.nome;
+  const adm = isAdmin();
+  document.getElementById('btnNovoPlano').style.display = adm ? 'flex' : 'none';
+  document.getElementById('btnReplicar').style.display = adm ? 'flex' : 'none';
+  const plano = planosAdubacao.find(p=>p.talhaoId===talhaoSel.id&&p.mesAno===mesSel.mesAno);
+  const aps = plano?.aplicacoes||[];
+  const total=aps.length, feitas=aps.filter(a=>a.feito).length;
+  document.getElementById('mesStats').innerHTML = total
+    ? `<div class="mes-stat-bar"><span>✅ ${feitas} realizadas</span><span>⏳ ${total-feitas} pendentes</span><span style="font-weight:700;">${Math.round(feitas/total*100)}%</span></div>`
+    : '';
+  const content = document.getElementById('mesContent');
+  if (!total) {
+    content.innerHTML = `<div class="vazio"><div class="ico">📅</div><p>Nenhuma adubação planejada para ${mesSel.mesAno}.<br>${adm?'Clique em <strong>+ Planejar</strong>.':'Aguarde o administrador.'}</p></div>`;
+    return;
+  }
+  const porSemana = {};
+  aps.forEach(ap => { const s=ap.semana||'Sem semana'; if(!porSemana[s])porSemana[s]=[]; porSemana[s].push(ap); });
+  const ordemSem = s => { const i=SEMANAS.findIndex(x=>s.startsWith(x)); return i>=0?i:99; };
+  content.innerHTML = Object.entries(porSemana).sort((a,b)=>ordemSem(a[0])-ordemSem(b[0])).map(([sem,saps]) => {
+    const sf = saps.filter(a=>a.feito).length;
+    return `<div class="semana-bloco">
+      <div class="semana-hdr">
+        <div><div class="semana-tit">📅 ${sem}</div><div class="semana-sub">${sf}/${saps.length} realizadas</div></div>
+        <div class="semana-pct">${saps.length?Math.round(sf/saps.length*100):0}%</div>
+      </div>
+      <div class="semana-cards">${saps.map(ap=>renderCardAp(ap,plano._docId)).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderCardAp(ap, planoDocId) {
+  const feito=ap.feito, adm=isAdmin(), podeMark=podeMarcar();
+  const prods=(ap.produtos||[]).map(p=>`
+    <div class="prod-linha">
+      <span class="prod-linha-icone">🧪</span>
+      <span class="prod-nome">${p.produto}</span>
+      <span class="prod-dose">${p.dose} ${p.unidade}/ha</span>
+    </div>`).join('');
+  return `<div class="aplic-card ${feito?'feita':''}">
+    <div class="aplic-top">
+      <div style="flex:1;">
+        ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}</div>`:''}
+        <div class="prods-lista">${prods}</div>
+        ${ap.obs?`<div class="aplic-obs">💬 ${ap.obs}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
+        <div class="badge ${feito?'badge-ok':'badge-pend'}">${feito?'✅ Feita':'⏳ Pendente'}</div>
+        ${adm?`<button onclick="abrirEdicaoAp('${planoDocId}','${ap.id}')" class="btn-ico-sm">✎</button>
+               <button data-pid="${planoDocId}" data-aid="${ap.id}" onclick="deletarAp(this)" class="btn-ico-sm">🗑</button>`:''}
+      </div>
+    </div>
+    ${podeMark?`<div class="check-area">
+      ${feito?`
+        <div class="check-feito">✅ Realizada em ${ap.dataFeito?formatarData(ap.dataFeito):'—'} por ${ap.feitoPor||'—'}
+          ${ap.obsFeito?`<div class="check-obs">💬 ${ap.obsFeito}</div>`:''}
+        </div>
+        <button onclick="desmarcarAp('${planoDocId}','${ap.id}')" class="btn-desfazer">Desfazer</button>
+      `:`
+        <textarea id="obs-${ap.id}" class="obs-inp" placeholder="Observação (opcional)..."></textarea>
+        <button onclick="marcarFeito('${planoDocId}','${ap.id}')" class="btn-feito">✅ Marcar como Realizada</button>
+      `}
+    </div>`:''}
+  </div>`;
+}
+
+// ─── AÇÕES ───
+window.marcarFeito = async function(pid, aid) {
+  const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
+  const obs=document.getElementById('obs-'+aid)?.value.trim()||'';
+  await updateDoc(doc(db,'planosAdubacao',pid),{aplicacoes:pl.aplicacoes.map(a=>a.id!==aid?a:{...a,feito:true,dataFeito:new Date().toISOString().slice(0,10),obsFeito:obs,feitoPor:usuarioAtual.email})});
+  toast('✅ Registrada!');
+};
+
+window.desmarcarAp = async function(pid, aid) {
+  if(!confirm('Desfazer este registro?')) return;
+  const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
+  await updateDoc(doc(db,'planosAdubacao',pid),{aplicacoes:pl.aplicacoes.map(a=>{if(a.id!==aid)return a;const{feito,dataFeito,obsFeito,feitoPor,...r}=a;return r;})});
+  toast('↩️ Desfeito.');
+};
+
+window.deletarAp = async function(btn) {
+  const pid=btn.dataset.pid, aid=btn.dataset.aid;
+  if(!confirm('Excluir esta aplicação?')) return;
+  const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
+  const aps=pl.aplicacoes.filter(a=>a.id!==aid);
+  if(!aps.length) await deleteDoc(doc(db,'planosAdubacao',pid));
+  else await updateDoc(doc(db,'planosAdubacao',pid),{aplicacoes:aps});
+  toast('🗑 Removida.');
+};
+
+// ─── WIZARD ─── (3 etapas)
+function renderizarWizard() {
+  document.getElementById('wizardTalhao').textContent = talhaoSel?.nome||'';
+  document.getElementById('wizardMes').textContent = mesSel?.mesAno||'';
+  [1,2,3].forEach(e => {
+    const el=document.getElementById('etapa'+e); if(el) el.style.display=etapa===e?'flex':'none';
+    const d=document.getElementById('dot'+e); if(d) d.className='etapa-dot '+(etapa===e?'ativa':etapa>e?'feita':'');
+  });
+  if(etapa===1) renderizarE1();
+  if(etapa===2) renderizarE2();
+  if(etapa===3) renderizarE3();
+}
+
+// E1 — Produtos
+function renderizarE1() {
+  document.getElementById('produtosMes').innerHTML = (planoWIP.produtos||[]).map((p,i)=>`
+    <div class="prod-wip">
+      <div class="prod-wip-info">
+        <div class="prod-wip-nome">${p.produto}</div>
+        <div class="prod-wip-dose">${p.dose} ${p.unidade}/ha · ${p.modo||'—'}</div>
+      </div>
+      <button onclick="remProdWIP(${i})" class="btn-rm">✕</button>
+    </div>`).join('') || `<div class="vazio-sm">Adicione os produtos do mês acima.</div>`;
+}
+
+window.addProdWIP = function() {
+  const produto=document.getElementById('wpProduto').value.trim();
+  const dose=document.getElementById('wpDose').value.trim();
+  const unidade=document.getElementById('wpUnidade').value;
+  const modo=document.getElementById('wpModo').value;
+  const fase=document.getElementById('wpFase').value;
+  if(!produto||!dose){toast('⚠️ Preencha produto e dose.');return;}
+  planoWIP.produtos.push({produto,dose,unidade,modo,fase});
+  document.getElementById('wpProduto').value='';
+  document.getElementById('wpDose').value='';
+  renderizarE1(); toast('✅ '+produto+' adicionado!');
+};
+window.remProdWIP = function(i){planoWIP.produtos.splice(i,1);renderizarE1();};
+window.avancarE2 = function(){if(!planoWIP.produtos.length){toast('⚠️ Adicione ao menos um produto.');return;}etapa=2;renderizarWizard();};
+window.voltarE1 = function(){etapa=1;renderizarWizard();};
+
+// E2 — Semanas
+function renderizarE2() {
+  const num=planoWIP.numSemanas||2;
+  document.querySelectorAll('.num-btn').forEach(b=>b.classList.toggle('ativo',parseInt(b.dataset.n)===num));
+  while(planoWIP.semanas.length<num) planoWIP.semanas.push({label:SEMANAS[planoWIP.semanas.length%4]+' de '+mesSel.mesAno,modo:'',obs:'',produtos:planoWIP.produtos.map(p=>({...p,sel:true}))});
+  while(planoWIP.semanas.length>num) planoWIP.semanas.pop();
+  document.getElementById('slotsC').innerHTML = planoWIP.semanas.map((s,i)=>`
+    <div class="slot-item">
+      <div class="slot-num">${i+1}ª</div>
+      <select class="slot-sel" onchange="planoWIP.semanas[${i}].label=this.value">
+        ${SEMANAS.map(sl=>`<option value="${sl} de ${mesSel.mesAno}" ${s.label===sl+' de '+mesSel.mesAno?'selected':''}>${sl} de ${mesSel.mesAno}</option>`).join('')}
+        <option value="Aplicação Única de ${mesSel.mesAno}" ${s.label==='Aplicação Única de '+mesSel.mesAno?'selected':''}>Aplicação Única</option>
+      </select>
+    </div>`).join('');
+}
+
+window.setNumAps = function(n){planoWIP.numSemanas=n;planoWIP.semanas=[];renderizarE2();};
+window.avancarE3 = function(){
+  planoWIP.semanas.forEach(s=>{
+    if(!s.produtos||s.produtos.length!==planoWIP.produtos.length)
+      s.produtos=planoWIP.produtos.map(p=>({...p,sel:true}));
+  });
+  etapa=3; semanaAtiva=0; renderizarWizard();
+};
+window.voltarE2 = function(){etapa=2;renderizarWizard();};
+
+// E3 — Montar
+function calcularDosesSemana() {
+  planoWIP.produtos.forEach((p,pi) => {
+    const nSemanas = planoWIP.semanas.filter(s=>s.produtos[pi]?.sel).length;
+    planoWIP.semanas.forEach(s => {
+      if(!s.produtos[pi]) s.produtos[pi]={...p,sel:true};
+      s.produtos[pi].doseCalculada = nSemanas>0 ? (parseFloat(p.dose)/nSemanas).toFixed(2) : '0.00';
+    });
+  });
+}
+
+function renderizarE3() {
+  calcularDosesSemana();
+  document.getElementById('slotsTabs').innerHTML = planoWIP.semanas.map((s,i)=>{
+    const temProduto = (s.produtos||[]).some(p=>p.sel);
+    const temModo = !!s.modo;
+    const completa = temProduto && temModo;
+    const cls = `slot-tab ${semanaAtiva===i?'ativa':''} ${completa?'completa':(temProduto?'pendente':'pendente')}`;
+    return `<button class="${cls}" onclick="abrirSemana(${i})">${i+1}ª</button>`;
+  }).join('');
+  atualizarBotaoConfirmar();
+  renderizarSemanaAtiva();
+}
+
+function atualizarBotaoConfirmar() {
+  const btn = document.getElementById('btnSalvarPlano');
+  if (!btn) return;
+  const todasOk = planoWIP.semanas.every(s => (s.produtos||[]).some(p=>p.sel) && s.modo);
+  const algumProduto = planoWIP.semanas.some(s => (s.produtos||[]).some(p=>p.sel));
+  if (!algumProduto) {
+    btn.textContent = '⚠️ Selecione produtos em alguma semana';
+    btn.disabled = true;
+  } else if (!todasOk) {
+    const pendentes = planoWIP.semanas.filter(s => !((s.produtos||[]).some(p=>p.sel)) || !s.modo).length;
+    btn.textContent = `💾 Confirmar (${pendentes} pendente${pendentes===1?'':'s'})`;
+    btn.disabled = false; // permite salvar parcial, mas avisa
+  } else {
+    btn.textContent = '💾 Confirmar Plano';
+    btn.disabled = false;
+  }
+}
+
+// Atualização leve: só rabos e botão, sem rerender do painel
+window.atualizarTabsEBotao = function() {
+  const tabsEl = document.getElementById('slotsTabs');
+  if (tabsEl) {
+    tabsEl.innerHTML = planoWIP.semanas.map((s,i)=>{
+      const temProduto = (s.produtos||[]).some(p=>p.sel);
+      const temModo = !!s.modo;
+      const completa = temProduto && temModo;
+      const cls = `slot-tab ${semanaAtiva===i?'ativa':''} ${completa?'completa':'pendente'}`;
+      return `<button class="${cls}" onclick="abrirSemana(${i})">${i+1}ª</button>`;
+    }).join('');
+  }
+  atualizarBotaoConfirmar();
+};
+
+window.abrirSemana = function(i){semanaAtiva=i;calcularDosesSemana();renderizarE3();};
+
+function renderizarSemanaAtiva() {
+  const s=planoWIP.semanas[semanaAtiva]; if(!s) return;
+  document.getElementById('slotDetalhe').innerHTML = `
+    <div style="padding:14px;">
+      <div class="slot-hdr"><div class="slot-sem">📅 ${s.label}</div><div class="slot-sub">Marque os produtos desta aplicação</div></div>
+      <div class="slot-modo-row">
+        <div class="ci"><label>Modo de Aplicação</label>
+          <select onchange="planoWIP.semanas[${semanaAtiva}].modo=this.value; atualizarTabsEBotao();">
+            <option value="">Selecione...</option>
+            ${['Lanço','Fertirrigação','Incorporado','Foliar','Drench'].map(m=>`<option value="${m}" ${s.modo===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+        </div>
+        <div class="ci"><label>Observação</label>
+          <input type="text" placeholder="Opcional..." value="${s.obs||''}" onchange="planoWIP.semanas[${semanaAtiva}].obs=this.value">
+        </div>
+      </div>
+      <div class="slot-prods-label">Selecione os produtos:</div>
+      <div class="prods-slot">
+        ${planoWIP.produtos.map((p,pi) => {
+          const sp=s.produtos[pi]||{...p,sel:true};
+          const nSem=planoWIP.semanas.filter(x=>x.produtos[pi]?.sel).length;
+          const doseCalc=nSem>0?(parseFloat(p.dose)/nSem).toFixed(2):'—';
+          return `<div class="prod-slot ${sp.sel?'sel':''}" onclick="toggleSlotProd(${semanaAtiva},${pi})">
+            <div class="prod-slot-top">
+              <div class="chk ${sp.sel?'on':''}"></div>
+              <div class="prod-slot-nome">${p.produto}</div>
+            </div>
+            ${sp.sel?`<div class="prod-slot-dose-info">
+              <span class="dose-total-label">Total: ${p.dose} ${p.unidade}/ha</span>
+              <span class="dose-calc-label">Esta aplicação: <strong>${doseCalc} ${p.unidade}/ha</strong></span>
+              <span class="dose-sem-label">(÷ ${nSem} aplicação(ões) com este produto)</span>
+            </div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+window.toggleSlotProd = function(si,pi){
+  const s=planoWIP.semanas[si];
+  if(!s.produtos[pi]) s.produtos[pi]={...planoWIP.produtos[pi],sel:true};
+  s.produtos[pi].sel=!s.produtos[pi].sel;
+  calcularDosesSemana(); renderizarE3();
+};
+
+// BOTÃO CONFIRMAR PLANO — corrigido
+window.salvarPlano = async function() {
+  if(!talhaoSel||!mesSel) return;
+  calcularDosesSemana();
+  const aplicacoes = planoWIP.semanas.map(s => {
+    const produtos = s.produtos.filter(p=>p.sel).map(p=>({
+      produto:p.produto, dose:p.doseCalculada, unidade:p.unidade
+    }));
+    if(!produtos.length) return null;
+    return {
+      id:'ap'+Date.now()+Math.random().toString(36).slice(2,5),
+      semana:s.label, modo:s.modo||'', obs:s.obs||'',
+      fase:planoWIP.produtos[0]?.fase||'', produtos, feito:false
+    };
+  }).filter(Boolean);
+  if(!aplicacoes.length){toast('⚠️ Nenhuma aplicação com produtos selecionados.');return;}
+  const btn=document.getElementById('btnSalvarPlano');
+  btn.disabled=true; btn.textContent='Salvando...';
+  try {
+    const existente=planosAdubacao.find(p=>p.talhaoId===talhaoSel.id&&p.mesAno===mesSel.mesAno);
+    if(existente) await updateDoc(doc(db,'planosAdubacao',existente._docId),{aplicacoes:[...existente.aplicacoes,...aplicacoes]});
+    else await addDoc(collection(db,'planosAdubacao'),{talhaoId:talhaoSel.id,talhaoNome:talhaoSel.nome,fazenda:talhaoSel.fazenda||'',mesAno:mesSel.mesAno,mesIdx:mesSel.mes,ano:mesSel.ano,aplicacoes});
+    toast('✅ Plano salvo!');
+    telaAtual='mes'; renderizarTela();
+  } catch(e) { toast('❌ Erro: '+e.message); }
+  btn.disabled=false; btn.textContent='💾 Confirmar Plano';
+};
+
+// ─── SAFRA ───
+function renderizarTelaSafra() {
+  const cfg=configAdubacao;
+  ['safMesInicio','safMesFim'].forEach(id => {
+    const sel=document.getElementById(id); if(!sel) return;
+    sel.innerHTML = MESES.map((m,i)=>`<option value="${i}">${m}</option>`).join('');
+  });
+  const anoBase=cfg.anoInicio||new Date().getFullYear();
+  ['safAnoInicio','safAnoFim'].forEach(id => {
+    const sel=document.getElementById(id); if(!sel) return;
+    sel.innerHTML=[anoBase-1,anoBase,anoBase+1,anoBase+2].map(a=>`<option value="${a}">${a}</option>`).join('');
+  });
+  if(document.getElementById('safMesInicio'))document.getElementById('safMesInicio').value=cfg.mesInicio!==undefined?cfg.mesInicio:3;
+  if(document.getElementById('safAnoInicio'))document.getElementById('safAnoInicio').value=cfg.anoInicio||new Date().getFullYear();
+  if(document.getElementById('safMesFim'))document.getElementById('safMesFim').value=cfg.mesFim!==undefined?cfg.mesFim:2;
+  if(document.getElementById('safAnoFim'))document.getElementById('safAnoFim').value=cfg.anoFim||new Date().getFullYear()+1;
+}
+
+window.salvarSafra = async function() {
+  const nova={
+    mesInicio:parseInt(document.getElementById('safMesInicio').value),
+    anoInicio:parseInt(document.getElementById('safAnoInicio').value),
+    mesFim:parseInt(document.getElementById('safMesFim').value),
+    anoFim:parseInt(document.getElementById('safAnoFim').value)
+  };
+  await setDoc(doc(db,'configAdubacao','geral'),nova);
+  configAdubacao={...configAdubacao,...nova};
+  toast('✅ Período da safra salvo!');
+  telaAtual='lista'; renderizarTela();
+};
+
+// ─── REPLICAR ───
+let replicarProds=[], replicarDestinos=[];
+window.irReplicar = function() {
+  const plano=planosAdubacao.find(p=>p.talhaoId===talhaoSel.id&&p.mesAno===mesSel.mesAno);
+  if(!plano||!plano.aplicacoes?.length){toast('⚠️ Nenhuma aplicação para replicar.');return;}
+  const prodsUnicos={};
+  plano.aplicacoes.forEach(ap=>(ap.produtos||[]).forEach(p=>{if(!prodsUnicos[p.produto])prodsUnicos[p.produto]={...p,novaDose:p.dose};}));
+  replicarProds=Object.values(prodsUnicos); replicarDestinos=[];
+  telaAtual='replicar'; renderizarTela();
+};
+
+function renderizarTelaReplicar() {
+  document.getElementById('repOrigem').textContent=`${mesSel.mesAno} · ${talhaoSel.nome}`;
+  document.getElementById('repProds').innerHTML=replicarProds.map((p,i)=>`
+    <div class="prod-wip" style="flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="rp-${i}" checked style="width:18px;height:18px;accent-color:var(--v);">
+        <label for="rp-${i}" style="font-weight:700;font-size:.92rem;flex:1;">${p.produto}</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;padding-left:26px;">
+        <input type="number" class="dose-inp" value="${p.novaDose}" step="0.01" onchange="replicarProds[${i}].novaDose=this.value" placeholder="Dose total/mês">
+        <span style="font-size:.75rem;color:var(--c);white-space:nowrap;">${p.unidade}/ha</span>
+      </div>
+    </div>`).join('');
+
+  const mesesSafra=gerarMesesSafra();
+  document.getElementById('repDestinos').innerHTML=talhoes.map(t=>`
+    <div class="fazenda-grupo" style="margin-bottom:12px;">
+      <div class="fazenda-tit">${t.id} · ${t.nome}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${mesesSafra.map(ms=>{
+          const m=MESES[ms.mes],mesAno=`${m}/${ms.ano}`,key=`${t.id}__${mesAno}`;
+          if(t.id===talhaoSel.id&&mesAno===mesSel.mesAno) return '';
+          return `<div class="mes-dest ${replicarDestinos.includes(key)?'sel':''}" onclick="toggleDestino('${key}',this)">${m.slice(0,3)} ${ms.ano}</div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+window.toggleDestino=function(key,el){const idx=replicarDestinos.indexOf(key);if(idx>=0){replicarDestinos.splice(idx,1);el.classList.remove('sel');}else{replicarDestinos.push(key);el.classList.add('sel');}};
+
+window.confirmarReplicar=async function(){
+  if(!replicarDestinos.length){toast('⚠️ Selecione ao menos um destino.');return;}
+  const prodsSel=replicarProds.filter((_,i)=>document.getElementById('rp-'+i)?.checked);
+  if(!prodsSel.length){toast('⚠️ Selecione ao menos um produto.');return;}
+  const planoOrigem=planosAdubacao.find(p=>p.talhaoId===talhaoSel.id&&p.mesAno===mesSel.mesAno);
+  let count=0;
+  for(const key of replicarDestinos){
+    const[talhaoId,mesAno]=key.split('__');
+    const[nomeMes,anoStr]=mesAno.split('/');
+    const t=talhoes.find(x=>x.id===talhaoId); if(!t) continue;
+    const aplicacoes=(planoOrigem?.aplicacoes||[]).map(ap=>({
+      ...ap,id:'ap'+Date.now()+Math.random().toString(36).slice(2,5),feito:false,
+      semana:ap.semana.replace(mesSel.mesAno,mesAno),
+      produtos:(ap.produtos||[]).map(p=>{const novo=prodsSel.find(x=>x.produto===p.produto);return novo?{...p,dose:novo.novaDose}:p;}).filter(p=>prodsSel.find(x=>x.produto===p.produto))
+    })).filter(ap=>ap.produtos.length);
+    if(!aplicacoes.length) continue;
+    const existente=planosAdubacao.find(p=>p.talhaoId===talhaoId&&p.mesAno===mesAno);
+    if(existente) await updateDoc(doc(db,'planosAdubacao',existente._docId),{aplicacoes:[...existente.aplicacoes,...aplicacoes]});
+    else await addDoc(collection(db,'planosAdubacao'),{talhaoId,talhaoNome:t.nome,fazenda:t.fazenda||'',mesAno,mesIdx:MESES.indexOf(nomeMes),ano:parseInt(anoStr),aplicacoes});
+    count++;
+  }
+  toast(`✅ Replicado para ${count} destino(s)!`);
+  telaAtual='mes'; renderizarTela();
+};
+
+// ─── EDIÇÃO ───
+let _ePid=null,_eAid=null,_eProds=[];
+window.abrirEdicaoAp=function(pid,aid){
+  _ePid=pid;_eAid=aid;
+  const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
+  const ap=pl.aplicacoes.find(a=>a.id===aid); if(!ap) return;
+  document.getElementById('eSemana').value=ap.semana||'';
+  document.getElementById('eModo').value=ap.modo||'';
+  document.getElementById('eObs').value=ap.obs||'';
+  _eProds=JSON.parse(JSON.stringify(ap.produtos||[]));
+  renderizarEProds();
+  document.getElementById('overlayEdit').classList.add('open');
+};
+function renderizarEProds(){
+  document.getElementById('eProds').innerHTML=_eProds.map((p,i)=>`
+    <div class="ep-row">
+      <input class="ep-nome" value="${p.produto}" onchange="_eProds[${i}].produto=this.value" placeholder="Produto">
+      <input class="ep-dose" type="number" value="${p.dose}" step="0.01" onchange="_eProds[${i}].dose=this.value">
+      <select class="ep-und" onchange="_eProds[${i}].unidade=this.value">
+        ${['kg','g','L','mL','t','sc'].map(u=>`<option ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
+      </select>
+      <button onclick="remEProd(${i})" class="btn-rm">✕</button>
+    </div>`).join('');
+}
+window.addEProd=function(){_eProds.push({produto:'',dose:'',unidade:'kg'});renderizarEProds();};
+window.remEProd=function(i){_eProds.splice(i,1);renderizarEProds();};
+window.fecharEdicao=function(){document.getElementById('overlayEdit').classList.remove('open');};
+window.salvarEdicao=async function(){
+  const pl=planosAdubacao.find(p=>p._docId===_ePid); if(!pl) return;
+  await updateDoc(doc(db,'planosAdubacao',_ePid),{aplicacoes:pl.aplicacoes.map(a=>a.id!==_eAid?a:{...a,semana:document.getElementById('eSemana').value,modo:document.getElementById('eModo').value,obs:document.getElementById('eObs').value,produtos:_eProds.filter(p=>p.produto&&p.dose)})});
+  fecharEdicao(); toast('✅ Atualizado!');
+};
+
+// ─── UTILS ───
+function estaAtrasado(mesIdx,ano){const agora=new Date();return ano<agora.getFullYear()||(ano===agora.getFullYear()&&mesIdx<agora.getMonth());}
+function formatarData(d){if(!d)return'—';const[a,m,dd]=d.split('-');return`${dd}/${m}/${a}`;}
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
+window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
+window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
+window.irReplicar=irReplicar;
+</script>
+
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+/* TELAS */
+.tela{display:flex;flex:1;flex-direction:column;overflow:hidden;min-height:0;}
+.ts{flex:1;overflow-y:auto;padding:12px 14px 20px;-webkit-overflow-scrolling:touch;}
+/* LISTA */
+.lista-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;}
+.lista-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
+.btn-safra{background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;}
+.fazenda-grupo{margin-bottom:18px;}
+.fazenda-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;color:var(--c);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;padding-left:4px;}
+.talhao-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px 12px 14px 16px;display:flex;align-items:center;margin-bottom:8px;cursor:pointer;transition:.15s;}
+.talhao-card:active{transform:scale(.98);}
+.tc-left{flex:1;}
+.tc-id{font-family:'DM Mono',monospace;font-size:.68rem;color:var(--v);font-weight:700;margin-bottom:2px;}
+.tc-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
+.tc-meta{font-size:.7rem;color:var(--c);margin-top:1px;}
+.tc-right{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;margin-left:12px;}
+.prog-ring{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--v) calc(var(--p)*1%),#e5e7eb 0);position:relative;}
+.prog-ring::before{content:'';position:absolute;width:36px;height:36px;border-radius:50%;background:white;}
+.prog-val{position:relative;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;}
+.prog-lbl{font-size:.65rem;color:var(--c);font-weight:700;}
+.sem-plano{font-size:.68rem;color:#9ca3af;text-align:center;line-height:1.4;}
+.seta{font-size:1.4rem;color:var(--cb);margin-left:4px;}
+/* TALHÃO */
+.hdr-v{background:var(--ve);color:white;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.hdr-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;}
+.hdr-meta{font-size:.65rem;opacity:.75;margin-top:1px;}
+.ano-grupo{margin-bottom:20px;}
+.ano-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--c);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;}
+.meses-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.mes-btn{border-radius:var(--rs);padding:10px 4px;text-align:center;cursor:pointer;transition:.15s;border:2px solid transparent;}
+.mes-btn:active{transform:scale(.95);}
+.mes-btn.mes-atual{border-color:var(--v)!important;}
+.mes-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;}
+.mes-prog{font-size:.65rem;font-weight:700;margin-top:2px;}
+/* MÊS */
+.mes-stat-bar{display:flex;justify-content:space-between;background:var(--vb);border-bottom:1px solid #a7d7a7;padding:9px 16px;font-size:.78rem;color:var(--ve);font-weight:600;flex-shrink:0;}
+.mes-acoes{display:flex;gap:8px;padding:10px 14px;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;}
+.btn-acao{display:flex;align-items:center;gap:6px;border:none;border-radius:var(--rs);padding:9px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;flex:1;justify-content:center;}
+.btn-acao.verde{background:var(--v);color:white;}
+.btn-acao.branco{background:white;border:1.5px solid var(--cb);color:var(--t);}
+/* SEMANA */
+.semana-bloco{margin-bottom:14px;}
+.semana-hdr{padding:10px 14px;border-radius:var(--rs) var(--rs) 0 0;background:var(--vb);border-left:5px solid var(--v);display:flex;align-items:center;justify-content:space-between;}
+.semana-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--v);}
+.semana-sub{font-size:.7rem;color:var(--ts);margin-top:1px;}
+.semana-pct{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.6rem;color:var(--v);}
+.semana-cards{display:flex;flex-direction:column;gap:8px;padding-top:6px;}
+/* CARD APLICAÇÃO */
+.aplic-card{background:white;border-radius:var(--rs);box-shadow:var(--s);padding:14px;border-left:4px solid var(--cb);}
+.aplic-card.feita{border-left-color:#16a34a;background:#f0fdf4;}
+.aplic-top{display:flex;gap:10px;margin-bottom:10px;}
+.aplic-modo{font-size:.72rem;font-weight:700;color:var(--v);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;}
+.prods-lista{display:flex;flex-direction:column;gap:6px;}
+.prod-linha{display:inline-flex;align-items:center;gap:10px;background:var(--vb);border:1px solid #c8e0c8;border-radius:10px;padding:8px 12px;align-self:flex-start;max-width:100%;}
+.prod-linha-icone{flex-shrink:0;font-size:.95rem;}
+.prod-nome{font-weight:700;font-size:.95rem;color:var(--t);}
+.prod-dose{font-family:'DM Mono',monospace;font-size:.92rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.02em;}
+.aplic-obs{font-size:.72rem;color:var(--c);font-style:italic;margin-top:6px;}
+.badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
+.badge-ok{background:#dcfce7;color:#16a34a;}
+.badge-pend{background:var(--cl);color:var(--c);}
+.btn-ico-sm{background:none;border:none;cursor:pointer;font-size:1rem;padding:4px 6px;border-radius:6px;}
+.check-area{border-top:1px solid var(--cb);padding-top:10px;display:flex;flex-direction:column;gap:8px;}
+.check-feito{font-size:.78rem;color:#16a34a;font-weight:600;}
+.check-obs{font-size:.72rem;color:var(--ts);font-style:italic;margin-top:3px;}
+.btn-desfazer{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 12px;font-size:.72rem;color:var(--c);cursor:pointer;font-family:'Barlow',sans-serif;align-self:flex-start;}
+.obs-inp{border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.88rem;font-family:'Barlow',sans-serif;resize:none;min-height:60px;outline:none;width:100%;}
+.obs-inp:focus{border-color:var(--v);}
+.btn-feito{background:var(--v);border:none;color:white;border-radius:var(--rs);padding:14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;width:100%;}
+/* WIZARD */
+.wizard-hdr{background:var(--ve);color:white;padding:11px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.wizard-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
+.wizard-sub{font-size:.65rem;opacity:.7;margin-top:1px;}
+.etapas-bar{display:flex;align-items:center;justify-content:center;gap:6px;background:white;border-bottom:1px solid var(--cb);padding:10px 16px;flex-shrink:0;}
+.etapa-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.etapa-dot{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;border:2px solid var(--cb);color:var(--c);background:white;transition:.2s;}
+.etapa-dot.ativa{background:var(--v);color:white;border-color:var(--v);}
+.etapa-dot.feita{background:var(--vb);color:var(--v);border-color:var(--v);}
+.etapa-linha{flex:1;height:2px;background:var(--cb);max-width:40px;}
+.etapa-label{font-size:.6rem;color:var(--c);}
+.etapa-outer{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;min-height:0;}
+.wiz-btns{display:flex;gap:10px;margin-top:18px;padding-bottom:4px;}
+.btn-back-wiz{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;}
+.btn-next-wiz{flex:2;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.btn-confirmar-plano{width:100%;background:var(--ve);border:none;color:white;border-radius:var(--rs);padding:15px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;margin-top:10px;letter-spacing:.5px;}
+.btn-confirmar-plano:disabled{opacity:.5;cursor:not-allowed;}
+.e3-footer{display:flex;gap:10px;padding:10px 14px max(14px,env(safe-area-inset-bottom));border-top:2px solid var(--cb);background:white;flex-shrink:0;align-items:stretch;}
+.e3-footer button{height:auto;}
+.e3-instrucoes{padding:10px 14px;background:#fffbeb;border-bottom:1px solid #fde68a;color:#78350f;font-size:.78rem;font-weight:500;flex-shrink:0;line-height:1.4;}
+/* E1 */
+.add-form{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;margin-bottom:12px;}
+.add-form-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--v);margin-bottom:10px;}
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:10px;}
+.campo label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.campo input,.campo select{border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;}
+.campo input:focus,.campo select:focus{border-color:var(--v);}
+.campo-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.btn-add{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.lista-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;color:var(--c);letter-spacing:.08em;margin-bottom:8px;}
+.prod-wip{background:white;border-radius:var(--rs);border:1.5px solid var(--cb);padding:10px 12px;display:flex;align-items:center;gap:10px;margin-bottom:7px;box-shadow:var(--s);}
+.prod-wip-info{flex:1;}
+.prod-wip-nome{font-weight:700;font-size:.92rem;}
+.prod-wip-dose{font-size:.72rem;color:var(--c);margin-top:2px;}
+.btn-rm{background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:4px;}
+.vazio-sm{text-align:center;padding:16px;font-size:.8rem;color:var(--c);font-style:italic;}
+/* E2 */
+.num-btns{display:flex;gap:8px;margin-bottom:16px;}
+.num-btn{flex:1;background:var(--cl);border:2px solid var(--cb);border-radius:var(--rs);padding:14px 4px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;cursor:pointer;transition:.15s;color:var(--c);}
+.num-btn.ativo{background:var(--vb);border-color:var(--v);color:var(--v);}
+.slot-item{display:flex;align-items:center;gap:10px;background:white;border-radius:var(--rs);border:1.5px solid var(--cb);padding:10px 12px;margin-bottom:8px;}
+.slot-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--v);width:24px;text-align:center;flex-shrink:0;}
+.slot-sel{flex:1;border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:var(--cl);}
+.dica{font-size:.75rem;color:var(--c);margin-top:10px;line-height:1.5;background:var(--vb);border-radius:var(--rs);padding:10px;}
+/* E3 */
+.slots-tabs{display:flex;gap:6px;overflow-x:auto;padding:8px 14px;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.slots-tabs::-webkit-scrollbar{display:none;}
+.slot-tab{flex-shrink:0;background:var(--cl);border:2px solid var(--cb);border-radius:22px;padding:8px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.92rem;cursor:pointer;color:var(--c);transition:.15s;display:inline-flex;align-items:center;gap:6px;}
+.slot-tab.ativa{background:var(--vb);border-color:var(--v);color:var(--v);box-shadow:0 0 0 2px rgba(45,106,45,.15);}
+.slot-tab.completa::before{content:'✓';color:#22c55e;font-weight:900;}
+.slot-tab.pendente::before{content:'⚠';color:#f59e0b;font-weight:900;}
+.slot-hdr{margin-bottom:12px;}
+.slot-sem{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--ve);}
+.slot-sub{font-size:.72rem;color:var(--c);margin-top:2px;}
+.slot-modo-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.ci{display:flex;flex-direction:column;gap:4px;}
+.ci label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.ci select,.ci input{border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;}
+.slot-prods-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;}
+.prods-slot{display:flex;flex-direction:column;gap:8px;}
+.prod-slot{background:white;border:2px solid var(--cb);border-radius:var(--rs);padding:12px 14px;transition:.15s;cursor:pointer;}
+.prod-slot.sel{border-color:var(--v);background:var(--vb);}
+.prod-slot-top{display:flex;align-items:center;gap:10px;margin-bottom:0;}
+.prod-slot.sel .prod-slot-top{margin-bottom:8px;}
+.chk{width:24px;height:24px;border-radius:6px;border:2px solid var(--cb);flex-shrink:0;transition:.15s;background:white;}
+.chk.on{background:var(--v);border-color:var(--v);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white'%3E%3Cpath d='M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z'/%3E%3C/svg%3E");background-size:16px;background-repeat:no-repeat;background-position:center;}
+.prod-slot-nome{font-weight:700;font-size:.95rem;flex:1;}
+.prod-slot-dose-info{background:white;border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:3px;}
+.dose-total-label{font-size:.7rem;color:var(--c);}
+.dose-calc-label{font-size:.82rem;color:var(--v);}
+.dose-calc-label strong{font-family:'DM Mono',monospace;}
+.dose-sem-label{font-size:.68rem;color:var(--c);font-style:italic;}
+/* SAFRA */
+.safra-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:14px;}
+.safra-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;color:var(--v);letter-spacing:.05em;margin-bottom:12px;}
+.safra-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.safra-campo{display:flex;flex-direction:column;gap:4px;}
+.safra-campo label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;}
+.safra-campo select{border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;}
+.btn-salvar-safra{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;margin-top:4px;}
+/* REPLICAR */
+.mes-dest{background:var(--cl);border:2px solid var(--cb);border-radius:20px;padding:5px 10px;font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;color:var(--c);transition:.15s;}
+.mes-dest.sel{background:var(--vb);border-color:var(--v);color:var(--v);}
+.dose-inp{border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 10px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;flex:1;min-width:0;width:100%;}
+/* MODAL EDIÇÃO */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s;}
+.overlay.open{opacity:1;pointer-events:all;}
+.modal-sheet{background:white;border-radius:18px 18px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,20px);transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.1,.64,1);}
+.overlay.open .modal-sheet{transform:translateY(0);}
+.modal-handle{width:40px;height:4px;background:var(--cb);border-radius:2px;margin:12px auto 0;}
+.modal-tit{padding:12px 20px;border-bottom:1px solid var(--cb);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;}
+.modal-body{padding:14px 20px;}
+.ep-row{display:flex;gap:6px;align-items:center;margin-bottom:7px;background:var(--cl);border-radius:var(--rs);padding:8px;}
+.ep-nome{flex:2;border:1.5px solid var(--cb);border-radius:6px;padding:7px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;min-width:0;}
+.ep-dose{width:65px;border:1.5px solid var(--cb);border-radius:6px;padding:7px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;}
+.ep-und{width:58px;border:1.5px solid var(--cb);border-radius:6px;padding:7px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;}
+.btn-add-sm{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:9px;font-size:.8rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-top:4px;}
+.modal-footer{padding:10px 20px 16px;display:flex;gap:10px;border-top:1px solid var(--cb);position:sticky;bottom:0;background:white;}
+.btn-cancel{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;}
+.btn-save{flex:2;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.vazio{text-align:center;padding:48px 24px;color:var(--c);}
+.vazio .ico{font-size:48px;margin-bottom:12px;opacity:.4;}
+.vazio p{font-size:.88rem;line-height:1.7;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(40px);background:var(--ve);color:white;padding:10px 20px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:2px;}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Adubações</span></div>
+  </div>
+  <div class="hdr-user" id="userNome"></div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+
+  <!-- LISTA -->
+  <div class="tela" id="tela-lista" style="display:flex;">
+    <div class="ts" id="listaTalhoes"></div>
+  </div>
+
+  <!-- TALHÃO -->
+  <div class="tela" id="tela-talhao" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="irLista()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="hdr-nome" id="talhaoNome"></div><div class="hdr-meta" id="talhaoMeta"></div></div>
+    </div>
+    <div class="ts" id="mesesLista"></div>
+  </div>
+
+  <!-- MÊS -->
+  <div class="tela" id="tela-mes" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="irTalhao(talhaoSel?.id)" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="hdr-nome" id="mesNome"></div><div class="hdr-meta" id="mesTalhao"></div></div>
+    </div>
+    <div id="mesStats"></div>
+    <div class="mes-acoes">
+      <button class="btn-acao verde" id="btnNovoPlano" onclick="irWizard()" style="display:none;">＋ Planejar</button>
+      <button class="btn-acao branco" id="btnReplicar" onclick="irReplicar()" style="display:none;">⎘ Replicar</button>
+    </div>
+    <div class="ts" id="mesContent"></div>
+  </div>
+
+  <!-- WIZARD -->
+  <div class="tela" id="tela-wizard" style="display:none;">
+    <div class="wizard-hdr">
+      <button onclick="voltarWizard()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="wizard-tit">Planejar Adubações</div><div class="wizard-sub"><span id="wizardTalhao"></span> · <span id="wizardMes"></span></div></div>
+    </div>
+    <div class="etapas-bar">
+      <div class="etapa-wrap"><div class="etapa-dot" id="dot1">1</div><div class="etapa-label">Produtos</div></div>
+      <div class="etapa-linha"></div>
+      <div class="etapa-wrap"><div class="etapa-dot" id="dot2">2</div><div class="etapa-label">Semanas</div></div>
+      <div class="etapa-linha"></div>
+      <div class="etapa-wrap"><div class="etapa-dot" id="dot3">3</div><div class="etapa-label">Montar</div></div>
+    </div>
+
+    <!-- ETAPA 1 -->
+    <div id="etapa1" style="display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;min-height:0;">
+      <div class="add-form">
+        <div class="add-form-tit">➕ Produtos do Mês</div>
+        <div class="campo"><label>Produto / Insumo</label>
+          <input type="text" id="wpProduto" placeholder="Ex: Ureia, MAP, KCl..." list="prodSug">
+          <datalist id="prodSug"><option value="Ureia"><option value="MAP"><option value="KCl"><option value="Superfosfato Simples"><option value="Sulfato de Amônio"><option value="Nitrato de Cálcio"><option value="Boro"><option value="Zinco"><option value="Cobre"></datalist>
+        </div>
+        <div class="campo-row">
+          <div class="campo"><label>Dose Total/Mês</label><input type="number" id="wpDose" placeholder="Ex: 200" step="0.1" min="0"></div>
+          <div class="campo"><label>Unidade/ha</label>
+            <select id="wpUnidade"><option value="kg">kg/ha</option><option value="g">g/ha</option><option value="L">L/ha</option><option value="mL">mL/ha</option><option value="t">t/ha</option></select>
+          </div>
+        </div>
+        <div class="campo-row">
+          <div class="campo"><label>Modo padrão</label>
+            <select id="wpModo"><option value="">Selecione...</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
+          </div>
+          <div class="campo"><label>Fase</label>
+            <select id="wpFase"><option value="Produção">Produção</option><option value="Formação">Formação</option><option value="Implantação">Implantação</option><option value="Reforma">Reforma</option></select>
+          </div>
+        </div>
+        <button class="btn-add" onclick="addProdWIP()">＋ Adicionar à lista</button>
+      </div>
+      <div class="lista-tit">Produtos adicionados</div>
+      <div id="produtosMes"></div>
+      <div class="wiz-btns">
+        <button class="btn-back-wiz" onclick="voltarWizard()">Cancelar</button>
+        <button class="btn-next-wiz" onclick="avancarE2()">Próximo →</button>
+      </div>
+    </div>
+
+    <!-- ETAPA 2 -->
+    <div id="etapa2" style="display:none;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px;min-height:0;">
+      <div class="lista-tit" style="margin-bottom:10px;">Em quantas aplicações dividir este mês?</div>
+      <div class="num-btns">
+        <button class="num-btn" data-n="1" onclick="setNumAps(1)">1x</button>
+        <button class="num-btn" data-n="2" onclick="setNumAps(2)">2x</button>
+        <button class="num-btn" data-n="3" onclick="setNumAps(3)">3x</button>
+        <button class="num-btn" data-n="4" onclick="setNumAps(4)">4x</button>
+      </div>
+      <div class="lista-tit" style="margin-bottom:10px;">Quando vai ser cada aplicação?</div>
+      <div id="slotsC"></div>
+      <div class="dica">💡 Na próxima etapa você escolhe quais produtos entram em cada aplicação. A dose será calculada automaticamente.</div>
+      <div class="wiz-btns">
+        <button class="btn-back-wiz" onclick="voltarE1()">← Voltar</button>
+        <button class="btn-next-wiz" onclick="avancarE3()">Próximo →</button>
+      </div>
+    </div>
+
+    <!-- ETAPA 3 -->
+    <div id="etapa3" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+      <div class="e3-instrucoes">👇 Configure cada semana abaixo. Quando todas tiverem ✓, clique em Confirmar.</div>
+      <div class="slots-tabs" id="slotsTabs"></div>
+      <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;" id="slotDetalhe"></div>
+      <div class="e3-footer">
+        <button class="btn-back-wiz" onclick="voltarE2()" style="flex:1;">← Voltar</button>
+        <button class="btn-confirmar-plano" id="btnSalvarPlano" onclick="salvarPlano()" style="flex:2;margin-top:0;">💾 Confirmar Plano</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SAFRA -->
+  <div class="tela" id="tela-safra" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="irLista()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="hdr-nome">⚙️ Período da Safra</div><div class="hdr-meta">Define quais meses são visíveis</div></div>
+    </div>
+    <div class="ts">
+      <div class="safra-card">
+        <div class="safra-tit">📅 Início da Safra</div>
+        <div class="safra-row">
+          <div class="safra-campo"><label>Mês</label><select id="safMesInicio"></select></div>
+          <div class="safra-campo"><label>Ano</label><select id="safAnoInicio"></select></div>
+        </div>
+        <div class="safra-tit" style="margin-top:12px;">📅 Fim da Safra</div>
+        <div class="safra-row">
+          <div class="safra-campo"><label>Mês</label><select id="safMesFim"></select></div>
+          <div class="safra-campo"><label>Ano</label><select id="safAnoFim"></select></div>
+        </div>
+      </div>
+      <div style="background:var(--vb);border-radius:var(--rs);padding:12px;margin-bottom:14px;font-size:.8rem;color:var(--ve);line-height:1.6;">
+        💡 Somente os meses dentro deste período serão visíveis no planejamento.
+      </div>
+      <button onclick="salvarSafra()" class="btn-salvar-safra">💾 Salvar Período</button>
+    </div>
+  </div>
+
+  <!-- REPLICAR -->
+  <div class="tela" id="tela-replicar" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="telaAtual='mes';renderizarTela()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="hdr-nome">⎘ Replicar Plano</div><div class="hdr-meta" id="repOrigem"></div></div>
+    </div>
+    <div class="ts">
+      <div style="background:var(--vb);border-radius:var(--rs);padding:12px;margin-bottom:14px;font-size:.8rem;color:var(--ve);line-height:1.6;">Ajuste as doses e selecione os destinos.</div>
+      <div class="lista-tit" style="margin-bottom:8px;">Produtos e Doses</div>
+      <div id="repProds" style="margin-bottom:16px;display:flex;flex-direction:column;gap:8px;"></div>
+      <div class="lista-tit" style="margin-bottom:8px;">Destinos</div>
+      <div id="repDestinos"></div>
+      <button onclick="confirmarReplicar()" style="width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;margin-top:8px;">✅ Confirmar Replicação</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL EDIÇÃO -->
+<div class="overlay" id="overlayEdit" onclick="if(event.target===this)fecharEdicao()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">✎ Editar Aplicação</div>
+    <div class="modal-body">
+      <div class="campo" style="margin-bottom:10px;"><label>Semana</label><input type="text" id="eSemana"></div>
+      <div class="campo-row" style="margin-bottom:10px;">
+        <div class="campo"><label>Modo</label>
+          <select id="eModo"><option value="">—</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
+        </div>
+        <div class="campo"><label>Obs.</label><input type="text" id="eObs" placeholder="Opcional..."></div>
+      </div>
+      <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Produtos</div>
+      <div id="eProds"></div>
+      <button class="btn-add-sm" onclick="addEProd()">＋ Adicionar produto</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharEdicao()">Cancelar</button>
+      <button class="btn-save" onclick="salvarEdicao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
