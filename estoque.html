@@ -1,0 +1,1718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Conilon Tech · Estoque</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+
+/* LOADING */
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+
+/* HEADER & MENU */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-titles{line-height:1;}
+.header-title-main{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
+.menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
+.menu-body{flex:1;padding:10px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:1.1rem;}
+.menu-footer{padding:14px;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+
+/* APP STRUCTURE */
+.app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+
+/* SELETOR DE FAZENDA */
+.faz-bar{background:white;border-bottom:2px solid var(--cb);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.faz-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;text-transform:uppercase;color:var(--c);letter-spacing:.05em;}
+.faz-select{flex:1;border:1.5px solid var(--cb);border-radius:8px;padding:9px 11px;font-size:.95rem;font-family:'Barlow',sans-serif;outline:none;background:white;font-weight:700;color:var(--ve);}
+.faz-select:focus{border-color:var(--v);}
+
+/* TABS */
+.tabs-bar{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;}
+.tab{flex:1;padding:12px 6px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+.tab.ativa{color:var(--v);border-bottom-color:var(--v);}
+
+/* CONTEÚDO */
+.tab-content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;padding:12px 14px 80px;display:flex;flex-direction:column;gap:10px;}
+
+/* BUSCA / FILTROS */
+.busca-bar{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:10px 12px;display:flex;gap:8px;align-items:center;flex-shrink:0;}
+.busca-inp{flex:1;border:1.5px solid var(--cb);border-radius:8px;padding:9px 11px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;}
+.busca-inp:focus{border-color:var(--v);}
+
+/* CARDS DE PRODUTO */
+.prod-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;cursor:pointer;transition:transform .12s;display:flex;flex-direction:column;}
+.prod-card:active{transform:scale(.985);}
+.prod-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:13px 15px;}
+.prod-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--ve);flex:1;line-height:1.1;}
+.prod-saldo-wrap{text-align:right;flex-shrink:0;}
+.prod-saldo-val{font-family:'DM Mono',monospace;font-weight:700;font-size:1.3rem;color:var(--v);line-height:1;}
+.prod-saldo-val.negativo{color:var(--danger);}
+.prod-saldo-val.zerado{color:var(--c);}
+.prod-saldo-und{font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:2px;}
+.prod-card-meta{padding:0 15px 12px;font-size:.75rem;color:var(--c);display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap;}
+.prod-tap-hint{font-size:.65rem;color:var(--c);text-align:center;padding:7px 15px 10px;border-top:1px dashed var(--cb);opacity:.7;}
+
+/* HISTÓRICO */
+.mov-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px 14px;display:flex;flex-direction:column;gap:6px;}
+.mov-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.mov-tipo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:99px;color:white;}
+.mov-tipo.entrada{background:var(--ok);}
+.mov-tipo.saida{background:#dc2626;}
+.mov-tipo.transferencia_saida{background:#a855f7;}
+.mov-tipo.transferencia_entrada{background:#3b82f6;}
+.mov-tipo.aplicacao{background:#0891b2;}
+.mov-qtd{font-family:'DM Mono',monospace;font-weight:700;font-size:1.02rem;color:var(--ve);}
+.mov-qtd.neg{color:var(--danger);}
+.mov-prod{font-weight:700;font-size:.95rem;color:var(--t);}
+.mov-meta{font-size:.74rem;color:var(--c);display:flex;flex-wrap:wrap;gap:6px 10px;}
+.mov-obs{font-size:.78rem;color:var(--c);font-style:italic;margin-top:2px;}
+
+/* CATÁLOGO */
+.cat-row{background:white;border-radius:var(--rs);padding:11px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--s);}
+.prod-cat-tag{display:inline-block;font-size:.68rem;background:var(--vb);color:var(--ve);padding:2px 8px;border-radius:99px;font-weight:600;}
+.prod-cat-tag.prod-cat-vazia{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+.preco-box{background:#fef3c7;border:1.5px solid #fbbf24;border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;}
+.cat-nome{flex:1;font-weight:700;color:var(--t);}
+.cat-und{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);background:var(--cl);padding:3px 8px;border-radius:5px;}
+.cat-saldo{font-family:'DM Mono',monospace;font-weight:700;font-size:.85rem;color:var(--v);}
+
+/* FAB */
+.fab{position:fixed;right:18px;bottom:18px;width:56px;height:56px;border-radius:50%;background:var(--v);color:white;border:none;font-size:1.4rem;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(45,106,45,.5);z-index:50;display:flex;align-items:center;justify-content:center;}
+.fab:active{transform:scale(.9);}
+
+/* VAZIO */
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:var(--c);}
+.vazio .ico{font-size:3rem;margin-bottom:10px;opacity:.5;}
+.vazio p{font-size:.92rem;line-height:1.5;}
+
+/* MODAL BASE */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2500;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.modal-overlay.aberto{opacity:1;pointer-events:auto;}
+.modal-box{background:white;border-radius:18px 18px 0 0;width:100%;max-width:600px;padding:8px 16px 18px;transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.2,.64,1);max-height:92vh;max-height:92dvh;overflow-y:auto;display:flex;flex-direction:column;}
+.modal-overlay.aberto .modal-box{transform:translateY(0);}
+.modal-handle{width:42px;height:4px;background:var(--cb);border-radius:99px;margin:6px auto 12px;flex-shrink:0;}
+.modal-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:var(--t);line-height:1.2;margin-bottom:4px;}
+.modal-sub{font-size:.8rem;color:var(--c);margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--cl);}
+
+/* FORM */
+.campo{margin-bottom:12px;}
+.campo-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.72rem;text-transform:uppercase;color:var(--c);letter-spacing:.05em;margin-bottom:6px;display:block;}
+.campo-inp,.campo-sel,.campo-area{width:100%;border:1.5px solid var(--cb);border-radius:8px;padding:11px 12px;font-size:.95rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
+.campo-inp:focus,.campo-sel:focus,.campo-area:focus{border-color:var(--v);}
+.campo-area{resize:vertical;min-height:54px;}
+.campo-row{display:flex;gap:8px;}
+.campo-row > *{flex:1;}
+
+/* AUTOCOMPLETE */
+.ac-wrap{position:relative;}
+.ac-dropdown{position:absolute;top:100%;left:0;right:0;background:white;border:1.5px solid var(--cb);border-top:none;border-radius:0 0 8px 8px;max-height:220px;overflow-y:auto;z-index:10;box-shadow:0 8px 18px rgba(0,0,0,.12);}
+.ac-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid var(--cl);font-size:.9rem;}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:active,.ac-item.hover{background:var(--vb);}
+.ac-item-saldo{font-size:.72rem;color:var(--c);font-family:'DM Mono',monospace;}
+.ac-item.criar{color:var(--v);font-weight:700;background:#fafffa;}
+
+/* TIPO BUTTONS */
+.tipo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px;}
+.tipo-btn{padding:14px 10px;border:2px solid var(--cb);background:white;border-radius:10px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.92rem;color:var(--t);display:flex;flex-direction:column;align-items:center;gap:6px;transition:.15s;}
+.tipo-btn .ico{font-size:1.5rem;}
+.tipo-btn:active{transform:scale(.97);}
+.tipo-btn.ativo{border-color:var(--v);background:var(--vb);color:var(--v);box-shadow:0 0 0 2px rgba(45,106,45,.18);}
+
+/* BOTÕES AÇÃO */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 14px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;border:1.5px solid transparent;transition:.15s;}
+.btn:active{transform:scale(.97);}
+.btn-v{background:var(--v);color:white;border-color:var(--v);}
+.btn-c{background:white;color:var(--c);border-color:var(--cb);}
+.btn-d{background:white;color:var(--danger);border-color:#fca5a5;}
+.btn-full{width:100%;}
+.modal-acoes{display:flex;flex-direction:column;gap:8px;margin-top:8px;flex-shrink:0;}
+
+/* BS ACOES (bottom sheet de acoes do card) */
+.bs-acao{display:flex;align-items:center;gap:12px;padding:13px 14px;border:1.5px solid var(--cb);background:white;border-radius:11px;cursor:pointer;font-family:'Barlow',sans-serif;font-size:.95rem;color:var(--t);text-align:left;transition:.12s;}
+.bs-acao:active{transform:scale(.98);}
+.bs-acao .ico{font-size:1.2rem;flex-shrink:0;width:30px;text-align:center;}
+.bs-acao .lab{flex:1;font-weight:600;}
+.bs-acao.v{border-color:#a7d7a7;background:var(--vb);color:var(--v);}
+.bs-acao.d{border-color:#fca5a5;background:#fef2f2;color:var(--danger);}
+
+/* AVISO SALDO NEGATIVO */
+.aviso-saldo{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 12px;font-size:.82rem;color:#92400e;margin-bottom:10px;display:flex;gap:8px;align-items:center;}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ve);color:white;padding:11px 18px;border-radius:8px;font-size:.85rem;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3);}
+.toast.show{opacity:1;}
+
+/* CALC AUX */
+.calc-box{background:var(--vb);border:1.5px dashed var(--v);border-radius:8px;padding:10px 12px;font-size:.85rem;color:var(--ve);margin-top:6px;line-height:1.4;}
+.calc-box strong{font-family:'DM Mono',monospace;font-size:1.05rem;}
+
+/* Histórico filtros */
+.hist-filtros{background:white;border-radius:var(--rad);padding:10px 12px;box-shadow:var(--s);display:flex;flex-direction:column;gap:7px;flex-shrink:0;}
+.hist-filtros-row{display:flex;gap:7px;flex-wrap:wrap;}
+.hist-filtros-row > *{flex:1;min-width:110px;}
+.hist-acoes-row{display:flex;gap:6px;flex-wrap:wrap;}
+
+/* Badge na tab Pendentes */
+.tab-badge{display:inline-block;background:var(--warn);color:white;font-size:.65rem;font-weight:800;padding:2px 7px;border-radius:99px;margin-left:5px;min-width:18px;text-align:center;}
+
+/* Item de recebimento */
+.rec-item{background:var(--cl);border:1.5px solid var(--cb);border-radius:10px;padding:10px 12px;margin-bottom:9px;transition:.15s;}
+.rec-item.desativado{opacity:.5;}
+.rec-item-hdr{margin-bottom:6px;}
+.rec-item-info{font-size:.8rem;color:var(--c);display:flex;flex-direction:column;gap:2px;margin-bottom:8px;padding-left:26px;}
+.rec-item-info strong{color:var(--ve);font-family:'DM Mono',monospace;}
+.rec-item-qtd{padding-left:26px;}
+
+/* IMPRESSAO */
+#area-impressao{display:none;}
+@media print{body>*:not(#area-impressao){display:none!important;}#area-impressao{display:block!important;}}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Carregando estoque...</div>
+</div>
+
+<!-- HEADER -->
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="header-left">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="header-titles">
+      <div class="header-title-main">Conilon Tech</div>
+      <div class="header-title-sub">Estoque</div>
+    </div>
+  </div>
+  <div class="header-user" id="userNome">—</div>
+</header>
+
+<!-- MENU LATERAL -->
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<aside class="menu-lateral" id="menuLateral">
+  <div class="menu-header">
+    <div class="menu-user-nome" id="menuUserNome">—</div>
+    <div class="menu-user-email" id="menuUserEmail">—</div>
+  </div>
+  <div class="menu-body" id="menuModulos"></div>
+  <div class="menu-footer"><button class="btn-logout" onclick="fazerLogout()">↩ Sair</button></div>
+</aside>
+
+<!-- APP -->
+<div class="app-main" id="appContent" style="display:none;">
+
+  <!-- SELETOR DE FAZENDA -->
+  <div class="faz-bar">
+    <span class="faz-label">🏡 Fazenda</span>
+    <select class="faz-select" id="selFazenda" onchange="trocarFazenda()"></select>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-bar">
+    <button class="tab ativa" id="tabSaldos" onclick="abrirTab('saldos')">📦 Saldos</button>
+    <button class="tab" id="tabPendentes" onclick="abrirTab('pendentes')">📥 Pendentes</button>
+    <button class="tab" id="tabHistorico" onclick="abrirTab('historico')">📜 Histórico</button>
+    <button class="tab" id="tabCatalogo" onclick="abrirTab('catalogo')" style="display:none;">📋 Catálogo</button>
+  </div>
+
+  <!-- CONTEÚDO -->
+  <div class="tab-content" id="tabContent"></div>
+
+</div>
+
+<!-- MODAL: NOVA MOVIMENTAÇÃO -->
+<div class="modal-overlay" id="modalMov" onclick="fecharModalMov()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo" id="modalMovTitulo">Nova Movimentação</div>
+    <div class="modal-sub" id="modalMovSub"></div>
+    <div id="modalMovCorpo"></div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" onclick="salvarMovimentacao()" id="btnSalvarMov">💾 Salvar Movimentação</button>
+      <button class="btn btn-c btn-full" onclick="fecharModalMov()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM SHEET: AÇÕES DO PRODUTO -->
+<div class="modal-overlay" id="bsProduto" onclick="fecharBsProduto()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo" id="bsProdTitulo"></div>
+    <div class="modal-sub" id="bsProdSub"></div>
+    <div id="bsProdAcoes" style="display:flex;flex-direction:column;gap:7px;"></div>
+    <div class="modal-acoes">
+      <button class="btn btn-c btn-full" onclick="fecharBsProduto()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: RENOMEAR PRODUTO -->
+<div class="modal-overlay" id="modalRenomear" onclick="fecharRenomear()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo">Renomear produto</div>
+    <div class="modal-sub" id="renomearSub"></div>
+    <div class="campo">
+      <label class="campo-label">Novo nome</label>
+      <input type="text" class="campo-inp" id="inpNovoNome">
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" onclick="confirmarRenomear()">💾 Salvar</button>
+      <button class="btn btn-c btn-full" onclick="fecharRenomear()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CLASSIFICAR PRODUTO (categoria + subcategoria) -->
+<div class="modal-overlay" id="modalClassificar" onclick="fecharClassificar()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo">Classificar produto</div>
+    <div class="modal-sub" id="classifSub"></div>
+    <div class="campo">
+      <label class="campo-label">Categoria</label>
+      <select class="campo-sel" id="selCategoria" onchange="atualizarSubcategorias()"></select>
+    </div>
+    <div class="campo" id="campoSubcategoria">
+      <label class="campo-label">Subcategoria</label>
+      <select class="campo-sel" id="selSubcategoria"></select>
+    </div>
+    <div class="campo" id="campoSubcatLivre" style="display:none;">
+      <label class="campo-label">Especifique (opcional)</label>
+      <input type="text" class="campo-inp" id="inpSubcatLivre" placeholder="Ex: Acaricida especial, formulado próprio...">
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" onclick="confirmarClassificar()">💾 Salvar</button>
+      <button class="btn btn-c btn-full" onclick="fecharClassificar()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: RECEBIMENTO DE PEDIDO -->
+<div class="modal-overlay" id="modalRecebimento" onclick="fecharRecebimento()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo" id="recTitulo">Receber Pedido</div>
+    <div class="modal-sub" id="recSub"></div>
+    <div id="modalRecCorpo"></div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" onclick="confirmarRecebimento()" id="btnConfirmarRec">✅ Confirmar Recebimento</button>
+      <button class="btn btn-c btn-full" onclick="fecharRecebimento()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="area-impressao"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+enableIndexedDbPersistence(db).catch(()=>{});
+
+// ─── ESTADO ───
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], produtos=[], movimentacoes=[], pedidos=[];
+let fazendas=[];        // lista de fazendas detectadas
+let fazendaSel=null;    // fazenda selecionada no seletor
+let tabAtual='saldos';
+let prodAlvo=null;      // produto sobre o qual o bottom-sheet de ações está aberto
+
+// window.movWIP e window.recWIP precisam estar em window porque atributos oninput/onchange
+// inline do HTML (ex: oninput="window.movWIP.quantidade=this.value") são avaliados
+// no escopo global do navegador, não no escopo do módulo ES.
+window.movWIP = null;
+window.recWIP = null;
+
+const UNIDADES = ['kg','g','t','L','mL','sc','un'];
+const MOTIVOS_ENTRADA = ['Compra','Pedido recebido','Devolução','Ajuste inicial','Transferência recebida','Outro'];
+const MOTIVOS_SAIDA   = ['Aplicação no campo','Perda / Vencimento','Venda','Ajuste','Devolução fornecedor','Outro'];
+
+// Categorias e subcategorias dos produtos (mapeamento)
+const CATEGORIAS = [
+  {id:'defensivo', label:'🧪 Defensivo', subs:['Inseticida','Fungicida','Acaricida','Herbicida','Nematicida','Adjuvante/Espalhante','Bioestimulante','Outro']},
+  {id:'adubo_mineral', label:'🌱 Adubo / Fertilizante', subs:['Nitrogenado (Ureia, Sulfato)','Fosfatado (MAP, SSP)','Potássico (KCl)','Formulado NPK','Micronutriente','Outro']},
+  {id:'fertilizante_foliar', label:'🍃 Fertilizante foliar', subs:['Aminoácido','NPK foliar','Micronutriente foliar','Outro']},
+  {id:'calcario_gesso', label:'🪨 Calcário / Gesso', subs:['Calcário dolomítico','Calcário calcítico','Gesso agrícola','Outro']},
+  {id:'adubo_organico', label:'💩 Adubo orgânico', subs:['Esterco avícola','Esterco bovino','Esterco suíno','Composto','Outro']},
+  {id:'outros', label:'📦 Outros', subs:[]}
+];
+function subcategoriasDe(catId) {
+  const c = CATEGORIAS.find(x => x.id === catId);
+  return c ? c.subs : [];
+}
+function labelCategoria(catId) {
+  const c = CATEGORIAS.find(x => x.id === catId);
+  return c ? c.label : '—';
+}
+
+// ─── BOOTSTRAP ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  // perfil admin auto-fill se faltar
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',estoque:'admin'};
+  }
+  // verificar permissão de estoque
+  if (!temAcessoEstoque()) {
+    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:3rem;">⛔</div><div style="font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:1.1rem;color:var(--c);margin-top:10px;">Sem permissão para acessar Estoque</div><a href="index.html" style="display:inline-block;margin-top:14px;color:var(--v);">← Voltar ao dashboard</a></div>';
+    return;
+  }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+  if (isAdminOuEncarregado()) document.getElementById('tabCatalogo').style.display = 'block';
+
+  // Talhões → derivar fazendas
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    const setFaz = new Set();
+    talhoes.forEach(t => { if(t.fazenda) setFaz.add(t.fazenda); });
+    fazendas = [...setFaz].sort();
+    renderizarSeletorFazenda();
+  });
+  // Produtos do estoque
+  onSnapshot(collection(db,'estoque_produtos'), snap => {
+    produtos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    if (tabAtual==='saldos') renderizarSaldos();
+    if (tabAtual==='catalogo') renderizarCatalogo();
+  });
+  // Movimentações (limitamos via filtro depois — por enquanto carrega tudo)
+  onSnapshot(collection(db,'estoque_movimentacoes'), snap => {
+    movimentacoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}))
+      .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+    if (tabAtual==='historico') renderizarHistorico();
+    if (tabAtual==='saldos') renderizarSaldos();
+  });
+  // Pedidos (para aba Pendentes)
+  onSnapshot(collection(db,'pedidos'), snap => {
+    pedidos = snap.docs.map(d => ({_docId:d.id, ...d.data()}))
+      .sort((a,b) => (b.criadoEm||'').localeCompare(a.criadoEm||''));
+    if (tabAtual==='pendentes') renderizarPendentes();
+    // atualizar badge na aba Pendentes
+    atualizarBadgePendentes();
+  });
+});
+
+function temAcessoEstoque() {
+  if (perfilAtual.perfil==='admin') return true;
+  const m = perfilAtual.modulos || {};
+  return ['admin','encarregado','operador','gerente'].includes(m.estoque);
+}
+function isAdmin() {
+  return perfilAtual.perfil==='admin' || (perfilAtual.modulos?.estoque==='admin');
+}
+function isAdminOuEncarregado() {
+  return isAdmin() || perfilAtual.modulos?.estoque==='encarregado';
+}
+function podeMovimentar() {
+  if (isAdmin()) return true;
+  const nv = perfilAtual.modulos?.estoque;
+  return nv === 'encarregado' || nv === 'operador';
+}
+
+function gerarMenu() {
+  const isAdm = isAdmin() || perfilAtual.perfil==='admin';
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
+    {href:'estoque.html',ico:'🏬',label:'Estoque'},{href:'gestao.html',ico:'📊',label:'Gestão'}
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='estoque.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+// ─── SELETOR DE FAZENDA ───
+function fazendasPermitidas(modulo) {
+  // Admin global vê tudo
+  if (perfilAtual.perfil === 'admin') return fazendas;
+  const map = perfilAtual.fazendasModulo;
+  if (!map) return fazendas;               // sem configuração = todas (retrocompat)
+  const lista = map[modulo];
+  if (lista === undefined) return fazendas; // entrada não existe = todas
+  // lista pode ser [] (nenhuma) ou ['Fazenda X', ...] (específicas)
+  return fazendas.filter(f => lista.includes(f));
+}
+
+function renderizarSeletorFazenda() {
+  const sel = document.getElementById('selFazenda');
+  const fazsOk = fazendasPermitidas('estoque');
+  if (!fazendas.length) {
+    sel.innerHTML = '<option value="">Nenhuma fazenda cadastrada</option>';
+    fazendaSel = null; return;
+  }
+  if (!fazsOk.length) {
+    sel.innerHTML = '<option value="">Sem fazendas permitidas</option>';
+    fazendaSel = null;
+    document.getElementById('tabContent').innerHTML = '<div class="vazio"><div class="ico">🔒</div><p>Você não tem permissão para acessar nenhuma fazenda no módulo Estoque.<br>Solicite ao administrador.</p></div>';
+    return;
+  }
+  sel.innerHTML = fazsOk.map(f => `<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
+  if (!fazendaSel || !fazsOk.includes(fazendaSel)) {
+    fazendaSel = fazsOk[0];
+  }
+  sel.value = fazendaSel;
+  if (tabAtual==='saldos') renderizarSaldos();
+  if (tabAtual==='historico') renderizarHistorico();
+  if (tabAtual==='catalogo') renderizarCatalogo();
+  if (tabAtual==='pendentes') renderizarPendentes();
+}
+
+window.trocarFazenda = function() {
+  fazendaSel = document.getElementById('selFazenda').value;
+  if (tabAtual==='saldos') renderizarSaldos();
+  if (tabAtual==='historico') renderizarHistorico();
+  if (tabAtual==='catalogo') renderizarCatalogo();
+  if (tabAtual==='pendentes') renderizarPendentes();
+};
+
+// ─── TABS ───
+window.abrirTab = function(t) {
+  tabAtual = t;
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('ativa'));
+  document.getElementById('tab'+t.charAt(0).toUpperCase()+t.slice(1)).classList.add('ativa');
+  if (t==='saldos') renderizarSaldos();
+  else if (t==='historico') renderizarHistorico();
+  else if (t==='catalogo') renderizarCatalogo();
+  else if (t==='pendentes') renderizarPendentes();
+};
+
+// ─── UTILS ───
+function normalizar(s) {
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// Converte string com vírgula brasileira em número (ex: "13,5" → 13.5)
+function parseDose(s) {
+  if (s == null || s === '') return 0;
+  const limpo = String(s).replace(/\s/g,'').replace(',','.');
+  const n = parseFloat(limpo);
+  return isNaN(n) ? 0 : n;
+}
+function fmt(n) {
+  return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:2});
+}
+function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return `${dd}/${m}/${a}`; }
+function formatarDataHora(iso) { if(!iso)return'—'; const d=new Date(iso); return d.toLocaleString('pt-BR'); }
+function sanitizar(s) { return String(s||'').replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
+function toast(msg, dur=3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(()=>el.classList.remove('show'), dur);
+}
+function hoje() { const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+// Acha produtos potencialmente iguais (mesma fazenda + nome normalizado similar)
+function buscarProdutosSimilares(nome, fazenda) {
+  const n = normalizar(nome);
+  if (!n) return [];
+  return produtos.filter(p =>
+    p.fazenda === fazenda && (
+      normalizar(p.nome) === n ||
+      normalizar(p.nome).includes(n) ||
+      n.includes(normalizar(p.nome))
+    )
+  );
+}
+
+window.toggleMenu = () => {
+  document.getElementById('menuLateral').classList.toggle('aberto');
+  document.getElementById('menuOverlay').classList.toggle('aberto');
+};
+window.fecharMenu = () => {
+  document.getElementById('menuLateral').classList.remove('aberto');
+  document.getElementById('menuOverlay').classList.remove('aberto');
+};
+window.fazerLogout = async () => { await signOut(auth); window.location.href='login.html'; };
+
+// ─── RENDERIZAR: SALDOS ───
+function renderizarSaldos() {
+  const cont = document.getElementById('tabContent');
+  const prodsFaz = produtos.filter(p => p.fazenda===fazendaSel).sort((a,b)=>a.nome.localeCompare(b.nome));
+  let html = `<div class="busca-bar">
+    <input type="search" class="busca-inp" id="buscaSaldos" placeholder="🔍 Buscar produto..." oninput="filtrarSaldos()">
+  </div>`;
+  if (!prodsFaz.length) {
+    html += `<div class="vazio"><div class="ico">📦</div><p>Nenhum produto no estoque desta fazenda.<br>${podeMovimentar()?'Toque no <strong>+</strong> abaixo para registrar a primeira entrada.':'Aguarde alguém cadastrar.'}</p></div>`;
+  } else {
+    html += '<div id="listaSaldos" style="display:flex;flex-direction:column;gap:10px;">';
+    prodsFaz.forEach(p => {
+      const saldo = Number(p.saldo)||0;
+      const cls = saldo<0?'negativo':(saldo===0?'zerado':'');
+      // última movimentação
+      const ultMov = movimentacoes.find(m => m.produtoId === p._docId);
+      const ultMovTxt = ultMov ? `Última: ${ultMov.tipo==='entrada'?'+':''}${fmt(ultMov.quantidade)} ${p.unidade} · ${formatarData((ultMov.criadoEm||'').slice(0,10))}` : 'Sem movimentações';
+      const catTxt = p.categoria
+        ? `<span class="prod-cat-tag">${labelCategoria(p.categoria)}${p.subcategoria?' · '+sanitizar(p.subcategoria):''}</span>`
+        : `<span class="prod-cat-tag prod-cat-vazia">⚠️ Sem classificação</span>`;
+      html += `<div class="prod-card" data-nome="${normalizar(p.nome)}" onclick="abrirAcoesProduto('${p._docId}')">
+        <div class="prod-card-top">
+          <div style="flex:1;min-width:0;">
+            <div class="prod-nome">${sanitizar(p.nome)}</div>
+            <div style="margin-top:4px;">${catTxt}</div>
+          </div>
+          <div class="prod-saldo-wrap">
+            <div class="prod-saldo-val ${cls}">${fmt(saldo)}</div>
+            <div class="prod-saldo-und">${sanitizar(p.unidade)}</div>
+          </div>
+        </div>
+        <div class="prod-card-meta">
+          <span>${ultMovTxt}</span>
+        </div>
+        <div class="prod-tap-hint">👆 Toque para ações</div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+  cont.innerHTML = html;
+  // FAB para nova movimentação
+  let fab = document.getElementById('fabEstoque');
+  if (!fab && podeMovimentar()) {
+    fab = document.createElement('button');
+    fab.id = 'fabEstoque'; fab.className = 'fab';
+    fab.innerHTML = '＋'; fab.title = 'Nova movimentação';
+    fab.onclick = () => abrirModalMov();
+    document.body.appendChild(fab);
+  }
+}
+
+window.filtrarSaldos = function() {
+  const q = normalizar(document.getElementById('buscaSaldos').value);
+  document.querySelectorAll('#listaSaldos .prod-card').forEach(c => {
+    c.style.display = !q || c.dataset.nome.includes(q) ? '' : 'none';
+  });
+};
+
+// ─── BOTTOM SHEET: AÇÕES DO PRODUTO ───
+window.abrirAcoesProduto = function(prodId) {
+  const p = produtos.find(x => x._docId===prodId); if(!p) return;
+  prodAlvo = p;
+  document.getElementById('bsProdTitulo').textContent = p.nome;
+  document.getElementById('bsProdSub').textContent = `${fmt(p.saldo||0)} ${p.unidade} · ${p.fazenda}`;
+  const acs = [];
+  if (podeMovimentar()) {
+    acs.push({ico:'➕',lab:'Registrar Entrada',cls:'v',fn:`abrirModalMov('entrada','${prodId}')`});
+    acs.push({ico:'➖',lab:'Registrar Saída',cls:'',fn:`abrirModalMov('saida','${prodId}')`});
+    acs.push({ico:'🌾',lab:'Aplicação no campo',cls:'',fn:`abrirModalMov('aplicacao','${prodId}')`});
+    acs.push({ico:'↔️',lab:'Transferir para outra fazenda',cls:'',fn:`abrirModalMov('transferencia','${prodId}')`});
+  }
+  acs.push({ico:'📜',lab:'Ver histórico deste produto',cls:'',fn:`verHistoricoProduto('${prodId}')`});
+  if (isAdminOuEncarregado()) {
+    const semClasse = !p.categoria;
+    acs.push({ico:semClasse?'⚠️':'🏷️',lab:semClasse?'Classificar (sem categoria)':'Editar categoria',cls:semClasse?'':'',fn:`abrirClassificar('${prodId}')`});
+    acs.push({ico:'✏️',lab:'Renomear produto',cls:'',fn:`abrirRenomear('${prodId}')`});
+  }
+  if (isAdmin() && (Number(p.saldo)||0)===0) {
+    acs.push({ico:'🗑',lab:'Excluir produto (saldo zero)',cls:'d',fn:`excluirProduto('${prodId}')`});
+  }
+  document.getElementById('bsProdAcoes').innerHTML = acs.map(a =>
+    `<button class="bs-acao ${a.cls}" onclick="${a.fn};fecharBsProduto();"><span class="ico">${a.ico}</span><span class="lab">${a.lab}</span></button>`
+  ).join('');
+  document.getElementById('bsProduto').classList.add('aberto');
+};
+window.fecharBsProduto = () => document.getElementById('bsProduto').classList.remove('aberto');
+
+window.verHistoricoProduto = function(prodId) {
+  tabAtual='historico';
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('ativa'));
+  document.getElementById('tabHistorico').classList.add('ativa');
+  renderizarHistorico(prodId);
+};
+
+// ─── MODAL: NOVA MOVIMENTAÇÃO ───
+window.abrirModalMov = function(tipoInicial, prodIdInicial) {
+  if (!fazendaSel) { toast('⚠️ Selecione uma fazenda primeiro.'); return; }
+  const prodInicial = prodIdInicial ? produtos.find(p=>p._docId===prodIdInicial) : null;
+  window.movWIP = {
+    tipo: tipoInicial || null,         // entrada | saida | aplicacao | transferencia
+    fazenda: fazendaSel,
+    produtoId: prodInicial?._docId || null,
+    produtoNome: prodInicial?.nome || '',
+    unidade: prodInicial?.unidade || 'kg',
+    quantidade: '',
+    motivo: '',
+    observacao: '',
+    data: hoje(),
+    // específicos:
+    talhaoId: null, talhaoNome:'', area:0, dosePorHa:'',
+    fazendaDestino: '',
+    precoUnit: '',
+    precoTotal: ''
+  };
+  document.getElementById('modalMovTitulo').textContent = 'Nova Movimentação';
+  document.getElementById('modalMovSub').textContent = `Fazenda: ${fazendaSel}`;
+  renderizarCorpoMov();
+  document.getElementById('modalMov').classList.add('aberto');
+};
+window.fecharModalMov = () => document.getElementById('modalMov').classList.remove('aberto');
+
+function renderizarCorpoMov() {
+  const c = document.getElementById('modalMovCorpo');
+  if (!window.movWIP) return;
+  const tipos = [
+    {id:'entrada', ico:'➕', lab:'Entrada'},
+    {id:'saida', ico:'➖', lab:'Saída'},
+    {id:'aplicacao', ico:'🌾', lab:'Aplicação'},
+    {id:'transferencia', ico:'↔️', lab:'Transferência'}
+  ];
+  let html = `<div class="tipo-grid">${tipos.map(t =>
+    `<button class="tipo-btn ${window.movWIP.tipo===t.id?'ativo':''}" onclick="setTipoMov('${t.id}')"><span class="ico">${t.ico}</span><span>${t.lab}</span></button>`
+  ).join('')}</div>`;
+  if (!window.movWIP.tipo) {
+    c.innerHTML = html + '<div style="text-align:center;color:var(--c);font-size:.85rem;padding:10px 0;">👆 Selecione o tipo de movimentação acima</div>';
+    return;
+  }
+
+  // PRODUTO (autocomplete)
+  const prodsFaz = produtos.filter(p => p.fazenda===window.movWIP.fazenda).sort((a,b)=>a.nome.localeCompare(b.nome));
+  const podeCriarProduto = window.movWIP.tipo === 'entrada'; // só entrada cria produto novo
+  const prodSelecionado = window.movWIP.produtoId ? produtos.find(p=>p._docId===window.movWIP.produtoId) : null;
+  html += `<div class="campo">
+    <label class="campo-label">Produto / Insumo</label>
+    <div class="ac-wrap">
+      <input type="text" class="campo-inp" id="acProduto" value="${sanitizar(window.movWIP.produtoNome)}"
+        oninput="acBuscarProduto()" autocomplete="off"
+        placeholder="${podeCriarProduto?'Digite o nome do produto':'Selecione um produto existente'}">
+      <div class="ac-dropdown" id="acDropdown" style="display:none;"></div>
+    </div>
+  </div>`;
+
+  // QUANTIDADE
+  if (window.movWIP.tipo !== 'aplicacao' || !prodSelecionado) {
+    html += `<div class="campo">
+      <label class="campo-label">Quantidade${prodSelecionado?` (${prodSelecionado.unidade})`:''}</label>
+      <div class="campo-row">
+        <input type="number" inputmode="decimal" step="0.01" min="0" class="campo-inp" id="inpQtd" value="${window.movWIP.quantidade}" oninput="window.movWIP.quantidade=this.value;avisoSaldoMov()" placeholder="0">
+        ${!prodSelecionado ? `<select class="campo-sel" id="selUnd" onchange="window.movWIP.unidade=this.value" style="max-width:110px;">
+          ${UNIDADES.map(u=>`<option value="${u}" ${window.movWIP.unidade===u?'selected':''}>${u}</option>`).join('')}
+        </select>` : ''}
+      </div>
+      <div id="avisoSaldo"></div>
+    </div>`;
+  }
+
+  // APLICAÇÃO: talhão + dose/ha × área
+  if (window.movWIP.tipo==='aplicacao') {
+    const talhoesFaz = talhoes.filter(t => t.fazenda===window.movWIP.fazenda).sort((a,b)=>(a.id||'').localeCompare(b.id||''));
+    html += `<div class="campo">
+      <label class="campo-label">Talhão onde foi aplicado</label>
+      <select class="campo-sel" id="selTalhao" onchange="movSelTalhao()">
+        <option value="">Selecione...</option>
+        ${talhoesFaz.map(t=>`<option value="${t._docId}" ${window.movWIP.talhaoId===t._docId?'selected':''}>${sanitizar(t.id||'')} · ${sanitizar(t.nome||'')} ${t.area?'· '+t.area+'ha':''}</option>`).join('')}
+      </select>
+    </div>`;
+    if (window.movWIP.talhaoId && window.movWIP.area > 0) {
+      html += `<div class="campo">
+        <label class="campo-label">Dose por hectare (${prodSelecionado?prodSelecionado.unidade:window.movWIP.unidade}/ha)</label>
+        <input type="number" inputmode="decimal" step="0.01" min="0" class="campo-inp" id="inpDose" value="${window.movWIP.dosePorHa}" oninput="window.movWIP.dosePorHa=this.value;calcAplicacao()" placeholder="0">
+        <div class="calc-box" id="calcAplicacao">
+          ${calcAplicTexto()}
+        </div>
+      </div>`;
+    }
+  }
+
+  // TRANSFERÊNCIA: fazenda destino
+  if (window.movWIP.tipo==='transferencia') {
+    const outras = fazendas.filter(f => f !== window.movWIP.fazenda);
+    html += `<div class="campo">
+      <label class="campo-label">Fazenda destino</label>
+      <select class="campo-sel" id="selFazDestino" onchange="window.movWIP.fazendaDestino=this.value">
+        <option value="">Selecione...</option>
+        ${outras.map(f=>`<option value="${sanitizar(f)}" ${window.movWIP.fazendaDestino===f?'selected':''}>${sanitizar(f)}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+
+  // MOTIVO
+  if (window.movWIP.tipo !== 'transferencia') {
+    const motivos = window.movWIP.tipo==='aplicacao' ? ['Aplicação no campo'] : (window.movWIP.tipo==='entrada' ? MOTIVOS_ENTRADA : MOTIVOS_SAIDA);
+    html += `<div class="campo">
+      <label class="campo-label">Motivo</label>
+      <select class="campo-sel" id="selMotivo" onchange="window.movWIP.motivo=this.value">
+        <option value="">Selecione...</option>
+        ${motivos.map(m=>`<option value="${sanitizar(m)}" ${window.movWIP.motivo===m?'selected':''}>${sanitizar(m)}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+
+  // PREÇO — só para entradas (registra custo do lote)
+  if (window.movWIP.tipo === 'entrada') {
+    const undExib = prodSelecionado ? prodSelecionado.unidade : window.movWIP.unidade;
+    html += `<div class="preco-box">
+      <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);font-weight:700;margin-bottom:7px;">💰 Preço da compra (opcional)</div>
+      <div class="campo-row">
+        <div class="campo">
+          <label class="campo-label">Preço unitário (R$/${undExib||''})</label>
+          <input type="number" inputmode="decimal" step="0.0001" min="0" class="campo-inp" id="inpPrecoUnit"
+            value="${window.movWIP.precoUnit||''}"
+            oninput="window.movWIP.precoUnit=this.value;recalcPreco('unit')" placeholder="0,00">
+        </div>
+        <div class="campo">
+          <label class="campo-label">Preço total (R$)</label>
+          <input type="number" inputmode="decimal" step="0.01" min="0" class="campo-inp" id="inpPrecoTotal"
+            value="${window.movWIP.precoTotal||''}"
+            oninput="window.movWIP.precoTotal=this.value;recalcPreco('total')" placeholder="0,00">
+        </div>
+      </div>
+      <div style="font-size:.72rem;color:var(--c);margin-top:3px;line-height:1.35;">
+        Digite um dos dois — o outro é calculado automaticamente pela quantidade.
+      </div>
+    </div>`;
+  }
+
+  // DATA
+  html += `<div class="campo">
+    <label class="campo-label">Data</label>
+    <input type="date" class="campo-inp" id="inpData" value="${window.movWIP.data}" onchange="window.movWIP.data=this.value">
+  </div>`;
+
+  // OBSERVAÇÃO
+  html += `<div class="campo">
+    <label class="campo-label">Observação (opcional)</label>
+    <textarea class="campo-area" id="txtObs" oninput="window.movWIP.observacao=this.value" placeholder="Ex: Nota fiscal 12345, talhão Mata-Burro, etc.">${sanitizar(window.movWIP.observacao)}</textarea>
+  </div>`;
+
+  c.innerHTML = html;
+  avisoSaldoMov();
+}
+
+// Recalcula o campo de preço complementar ao que o usuário acabou de digitar
+window.recalcPreco = function(qual) {
+  if (!window.movWIP) return;
+  const qtd = parseDose(window.movWIP.quantidade);
+  if (!qtd) return; // sem quantidade não dá pra calcular
+  if (qual === 'unit') {
+    const pu = parseDose(window.movWIP.precoUnit);
+    if (pu > 0) {
+      const total = pu * qtd;
+      window.movWIP.precoTotal = String(Math.round(total*100)/100);
+      const el = document.getElementById('inpPrecoTotal');
+      if (el && document.activeElement !== el) el.value = window.movWIP.precoTotal;
+    }
+  } else if (qual === 'total') {
+    const pt = parseDose(window.movWIP.precoTotal);
+    if (pt > 0) {
+      const unit = pt / qtd;
+      window.movWIP.precoUnit = String(Math.round(unit*10000)/10000);
+      const el = document.getElementById('inpPrecoUnit');
+      if (el && document.activeElement !== el) el.value = window.movWIP.precoUnit;
+    }
+  }
+};
+
+window.setTipoMov = function(t) { window.movWIP.tipo = t; renderizarCorpoMov(); };
+
+window.movSelTalhao = function() {
+  const id = document.getElementById('selTalhao').value;
+  const t = talhoes.find(x => x._docId === id);
+  if (t) { window.movWIP.talhaoId = t._docId; window.movWIP.talhaoNome = t.nome || t.id; window.movWIP.area = parseDose(t.area)||0; }
+  else { window.movWIP.talhaoId = null; window.movWIP.talhaoNome=''; window.movWIP.area=0; }
+  renderizarCorpoMov();
+};
+
+function calcAplicTexto() {
+  const dose = parseFloat(window.movWIP.dosePorHa)||0;
+  const total = dose * (window.movWIP.area||0);
+  if (!dose) return '<span style="color:var(--c);">Informe a dose/ha para calcular o total a sair do estoque.</span>';
+  const und = window.movWIP.unidade || (produtos.find(p=>p._docId===window.movWIP.produtoId)?.unidade) || '';
+  window.movWIP.quantidade = total.toFixed(2);
+  return `Total a sair do estoque: <strong>${fmt(total)} ${und}</strong> (${dose} ${und}/ha × ${window.movWIP.area} ha)`;
+}
+window.calcAplicacao = function() {
+  document.getElementById('calcAplicacao').innerHTML = calcAplicTexto();
+  avisoSaldoMov();
+};
+
+function avisoSaldoMov() {
+  const el = document.getElementById('avisoSaldo'); if (!el) return;
+  if (!window.movWIP || !window.movWIP.produtoId) { el.innerHTML=''; return; }
+  const p = produtos.find(x=>x._docId===window.movWIP.produtoId); if (!p) { el.innerHTML=''; return; }
+  const qtd = parseFloat(window.movWIP.quantidade)||0;
+  if (qtd <= 0) { el.innerHTML=''; return; }
+  const eSaida = ['saida','aplicacao','transferencia'].includes(window.movWIP.tipo);
+  if (eSaida) {
+    const saldoFinal = (p.saldo||0) - qtd;
+    if (saldoFinal < 0) {
+      el.innerHTML = `<div class="aviso-saldo">⚠️ Saldo ficará negativo (atual: ${fmt(p.saldo||0)} ${p.unidade}, saída: ${fmt(qtd)} ${p.unidade} → ${fmt(saldoFinal)} ${p.unidade})</div>`;
+    } else {
+      el.innerHTML = `<div style="font-size:.78rem;color:var(--c);margin-top:6px;">Saldo após: <strong style="color:var(--v);font-family:'DM Mono',monospace;">${fmt(saldoFinal)} ${p.unidade}</strong></div>`;
+    }
+  }
+}
+
+// ─── AUTOCOMPLETE PRODUTO ───
+window.acBuscarProduto = function() {
+  const inp = document.getElementById('acProduto');
+  const dd = document.getElementById('acDropdown');
+  const valor = inp.value;
+  window.movWIP.produtoNome = valor;
+  window.movWIP.produtoId = null;        // resetar até o usuário escolher
+  window.movWIP.unidade = window.movWIP.unidade || 'kg';
+  if (!valor.trim()) { dd.style.display='none'; renderizarCorpoMov(); return; }
+  const n = normalizar(valor);
+  const prodsFaz = produtos.filter(p => p.fazenda===window.movWIP.fazenda);
+  const matches = prodsFaz.filter(p => normalizar(p.nome).includes(n)).slice(0, 8);
+  let items = matches.map(p =>
+    `<div class="ac-item" onclick="acSelecionar('${p._docId}')">
+      <div>${sanitizar(p.nome)}</div>
+      <div class="ac-item-saldo">Saldo: ${fmt(p.saldo||0)} ${p.unidade}</div>
+    </div>`
+  ).join('');
+  const podeCriar = window.movWIP.tipo==='entrada';
+  if (podeCriar && !matches.some(p => normalizar(p.nome)===n)) {
+    items += `<div class="ac-item criar" onclick="acCriarNovo()">➕ Criar novo: "${sanitizar(valor)}"</div>`;
+  }
+  if (items) { dd.innerHTML = items; dd.style.display = 'block'; }
+  else { dd.innerHTML = `<div class="ac-item" style="color:var(--c);">${podeCriar?'Digite e use "Criar novo"':'Nenhum produto encontrado nesta fazenda'}</div>`; dd.style.display='block'; }
+};
+
+window.acSelecionar = function(prodId) {
+  const p = produtos.find(x => x._docId===prodId); if (!p) return;
+  window.movWIP.produtoId = p._docId;
+  window.movWIP.produtoNome = p.nome;
+  window.movWIP.unidade = p.unidade;
+  document.getElementById('acDropdown').style.display = 'none';
+  renderizarCorpoMov();
+};
+
+window.acCriarNovo = function() {
+  // Só marca como "produto novo" - vai ser criado ao salvar
+  window.movWIP.produtoId = null;
+  // window.movWIP.produtoNome já está atualizado
+  document.getElementById('acDropdown').style.display = 'none';
+  // Verificar similares pra mostrar aviso quando salvar
+  renderizarCorpoMov();
+};
+
+// ─── SALVAR MOVIMENTAÇÃO ───
+window.salvarMovimentacao = async function() {
+  if (!window.movWIP || !window.movWIP.tipo) { toast('⚠️ Escolha o tipo de movimentação.'); return; }
+  if (!window.movWIP.produtoNome.trim()) { toast('⚠️ Informe o produto.'); return; }
+  const qtd = parseFloat(window.movWIP.quantidade)||0;
+  if (qtd <= 0) { toast('⚠️ Informe uma quantidade válida.'); return; }
+  if (window.movWIP.tipo==='aplicacao' && !window.movWIP.talhaoId) { toast('⚠️ Selecione o talhão.'); return; }
+  if (window.movWIP.tipo==='transferencia' && !window.movWIP.fazendaDestino) { toast('⚠️ Selecione a fazenda destino.'); return; }
+  if (window.movWIP.tipo !== 'transferencia' && !window.movWIP.motivo) { toast('⚠️ Selecione o motivo.'); return; }
+
+  const btn = document.getElementById('btnSalvarMov');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  try {
+    // Resolver produto (existente ou novo)
+    let produto = window.movWIP.produtoId ? produtos.find(p=>p._docId===window.movWIP.produtoId) : null;
+
+    if (!produto) {
+      // Verificar duplicações antes de criar (item B do plano)
+      const similares = buscarProdutosSimilares(window.movWIP.produtoNome, window.movWIP.fazenda);
+      if (similares.length) {
+        const lista = similares.map(s=>`"${s.nome}" (${fmt(s.saldo||0)} ${s.unidade})`).join(', ');
+        const usar = confirm(`Já existe produto parecido nesta fazenda: ${lista}\n\nOK = usar o produto existente\nCancelar = criar separado como "${window.movWIP.produtoNome}"`);
+        if (usar) {
+          produto = similares[0];
+        }
+      }
+    }
+
+    if (!produto) {
+      // Criar novo (só permitido em entrada)
+      if (window.movWIP.tipo !== 'entrada') {
+        toast('❌ Produto não existe. Só é possível criar produto novo em uma Entrada.');
+        btn.disabled=false; btn.textContent='💾 Salvar Movimentação';
+        return;
+      }
+      const novoProd = {
+        fazenda: window.movWIP.fazenda,
+        nome: window.movWIP.produtoNome.trim(),
+        nomeNormalizado: normalizar(window.movWIP.produtoNome),
+        unidade: window.movWIP.unidade,
+        saldo: 0,
+        criadoPor: usuarioAtual.email,
+        criadoEm: new Date().toISOString()
+      };
+      const ref = await addDoc(collection(db,'estoque_produtos'), novoProd);
+      produto = { _docId: ref.id, ...novoProd };
+    }
+
+    // Calcular delta no saldo
+    let delta = 0;
+    if (window.movWIP.tipo==='entrada') delta = qtd;
+    else if (['saida','aplicacao','transferencia'].includes(window.movWIP.tipo)) delta = -qtd;
+
+    // Criar movimentação principal
+    const tipoFs = window.movWIP.tipo==='transferencia' ? 'transferencia_saida' : window.movWIP.tipo;
+    const mov = {
+      fazenda: window.movWIP.fazenda,
+      produtoId: produto._docId,
+      produtoNome: produto.nome,
+      unidade: produto.unidade,
+      tipo: tipoFs,
+      quantidade: qtd,
+      motivo: window.movWIP.tipo==='transferencia' ? `Transferência para ${window.movWIP.fazendaDestino}` : window.movWIP.motivo,
+      observacao: window.movWIP.observacao || '',
+      data: window.movWIP.data,
+      criadoPor: usuarioAtual.email,
+      criadoEm: new Date().toISOString()
+    };
+    if (window.movWIP.tipo==='aplicacao') {
+      mov.talhaoId = window.movWIP.talhaoId;
+      mov.talhaoNome = window.movWIP.talhaoNome;
+      mov.area = window.movWIP.area;
+      if (parseFloat(window.movWIP.dosePorHa)) mov.dosePorHa = parseFloat(window.movWIP.dosePorHa);
+    }
+    if (window.movWIP.tipo==='transferencia') {
+      mov.fazendaDestino = window.movWIP.fazendaDestino;
+    }
+    // Preço (só em entradas)
+    if (window.movWIP.tipo === 'entrada') {
+      const pu = parseDose(window.movWIP.precoUnit);
+      const pt = parseDose(window.movWIP.precoTotal);
+      if (pu > 0) mov.precoUnitario = Math.round(pu*10000)/10000;
+      if (pt > 0) mov.precoTotal = Math.round(pt*100)/100;
+      // Se só um dos dois foi informado, calcular o outro com a quantidade
+      if (mov.precoUnitario && !mov.precoTotal) mov.precoTotal = Math.round(mov.precoUnitario * qtd * 100)/100;
+      if (mov.precoTotal && !mov.precoUnitario && qtd > 0) mov.precoUnitario = Math.round((mov.precoTotal / qtd)*10000)/10000;
+    }
+
+    const movRef = await addDoc(collection(db,'estoque_movimentacoes'), mov);
+
+    // Se transferência: criar par entrada no destino
+    if (window.movWIP.tipo==='transferencia') {
+      // Verificar se já existe produto com mesmo nome na fazenda destino
+      const destinoProds = produtos.filter(p => p.fazenda===window.movWIP.fazendaDestino && normalizar(p.nome)===normalizar(produto.nome));
+      let prodDestino;
+      if (destinoProds.length) {
+        prodDestino = destinoProds[0];
+      } else {
+        // criar no destino
+        const novoDest = {
+          fazenda: window.movWIP.fazendaDestino,
+          nome: produto.nome,
+          nomeNormalizado: normalizar(produto.nome),
+          unidade: produto.unidade,
+          saldo: 0,
+          criadoPor: usuarioAtual.email,
+          criadoEm: new Date().toISOString()
+        };
+        const refDest = await addDoc(collection(db,'estoque_produtos'), novoDest);
+        prodDestino = { _docId: refDest.id, ...novoDest };
+      }
+      const movPar = {
+        ...mov,
+        fazenda: window.movWIP.fazendaDestino,
+        produtoId: prodDestino._docId,
+        tipo: 'transferencia_entrada',
+        motivo: `Transferência recebida de ${window.movWIP.fazenda}`,
+        movimentacaoPar: movRef.id,
+        fazendaOrigem: window.movWIP.fazenda
+      };
+      delete movPar.fazendaDestino;
+      const parRef = await addDoc(collection(db,'estoque_movimentacoes'), movPar);
+      // atualizar movimentação principal com referência ao par
+      await updateDoc(doc(db,'estoque_movimentacoes',movRef.id), {movimentacaoPar: parRef.id});
+      // atualizar saldo destino
+      await updateDoc(doc(db,'estoque_produtos',prodDestino._docId), {
+        saldo: (prodDestino.saldo||0) + qtd
+      });
+    }
+
+    // Atualizar saldo do produto origem
+    await updateDoc(doc(db,'estoque_produtos',produto._docId), {
+      saldo: (produto.saldo||0) + delta
+    });
+
+    toast('✅ Movimentação registrada.');
+    fecharModalMov();
+
+  } catch (e) {
+    console.error(e);
+    toast('❌ Erro: ' + e.message);
+    btn.disabled=false; btn.textContent='💾 Salvar Movimentação';
+    return;
+  }
+  btn.disabled=false; btn.textContent='💾 Salvar Movimentação';
+};
+
+// ─── RENOMEAR PRODUTO ───
+let _renomearAlvo = null;
+window.abrirRenomear = function(prodId) {
+  const p = produtos.find(x => x._docId===prodId); if (!p) return;
+  _renomearAlvo = p;
+  document.getElementById('renomearSub').textContent = `Atual: "${p.nome}" · ${p.fazenda}`;
+  document.getElementById('inpNovoNome').value = p.nome;
+  document.getElementById('modalRenomear').classList.add('aberto');
+};
+window.fecharRenomear = () => document.getElementById('modalRenomear').classList.remove('aberto');
+
+// ─── CLASSIFICAR PRODUTO ───
+let _classifAlvo = null;
+window.abrirClassificar = function(prodId) {
+  const p = produtos.find(x => x._docId===prodId); if (!p) return;
+  _classifAlvo = p;
+  document.getElementById('classifSub').textContent = `🧪 ${p.nome} · ${p.fazenda}`;
+  // Popular select de categoria
+  const selCat = document.getElementById('selCategoria');
+  selCat.innerHTML = '<option value="">Selecione...</option>' +
+    CATEGORIAS.map(c => `<option value="${c.id}" ${p.categoria===c.id?'selected':''}>${c.label}</option>`).join('');
+  // Subcategoria + livre
+  atualizarSubcategorias();
+  // Pré-selecionar subcategoria se já existe
+  if (p.subcategoria) {
+    const subSel = document.getElementById('selSubcategoria');
+    const subsDisp = subcategoriasDe(p.categoria);
+    if (subsDisp.includes(p.subcategoria)) {
+      subSel.value = p.subcategoria;
+    } else if (p.subcategoria) {
+      // subcategoria personalizada
+      subSel.value = '__livre__';
+      document.getElementById('campoSubcatLivre').style.display = 'block';
+      document.getElementById('inpSubcatLivre').value = p.subcategoria;
+    }
+  }
+  document.getElementById('modalClassificar').classList.add('aberto');
+};
+window.fecharClassificar = () => document.getElementById('modalClassificar').classList.remove('aberto');
+
+window.atualizarSubcategorias = function() {
+  const catId = document.getElementById('selCategoria').value;
+  const subs = subcategoriasDe(catId);
+  const sel = document.getElementById('selSubcategoria');
+  const campoSub = document.getElementById('campoSubcategoria');
+  const livre = document.getElementById('campoSubcatLivre');
+  if (!subs.length) {
+    // Categoria "Outros" — não tem subcategoria predefinida, mostra campo livre direto
+    campoSub.style.display = 'none';
+    livre.style.display = catId ? 'block' : 'none';
+  } else {
+    campoSub.style.display = 'block';
+    sel.innerHTML = '<option value="">Selecione...</option>' +
+      subs.map(s => `<option value="${sanitizar(s)}">${sanitizar(s)}</option>`).join('') +
+      '<option value="__livre__">+ Especificar outra</option>';
+    sel.onchange = () => {
+      livre.style.display = sel.value === '__livre__' ? 'block' : 'none';
+    };
+    livre.style.display = 'none';
+  }
+};
+
+window.confirmarClassificar = async function() {
+  if (!_classifAlvo) return;
+  const catId = document.getElementById('selCategoria').value;
+  if (!catId) { toast('⚠️ Selecione uma categoria.'); return; }
+  let subcat = document.getElementById('selSubcategoria').value;
+  const livre = document.getElementById('inpSubcatLivre').value.trim();
+  if (subcat === '__livre__' || !subcat) {
+    subcat = livre || '';  // pode ficar vazia
+  }
+  try {
+    await updateDoc(doc(db,'estoque_produtos',_classifAlvo._docId), {
+      categoria: catId,
+      subcategoria: subcat
+    });
+    toast('✅ Classificação salva.');
+    fecharClassificar();
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+window.confirmarRenomear = async function() {
+  if (!_renomearAlvo) return;
+  const novoNome = document.getElementById('inpNovoNome').value.trim();
+  if (!novoNome) { toast('⚠️ Nome inválido.'); return; }
+  if (novoNome === _renomearAlvo.nome) { fecharRenomear(); return; }
+  try {
+    // Atualizar produto
+    await updateDoc(doc(db,'estoque_produtos',_renomearAlvo._docId), {
+      nome: novoNome,
+      nomeNormalizado: normalizar(novoNome)
+    });
+    // Atualizar movimentações relacionadas (em lote)
+    const movsRel = movimentacoes.filter(m => m.produtoId === _renomearAlvo._docId);
+    if (movsRel.length) {
+      const batch = writeBatch(db);
+      movsRel.forEach(m => {
+        batch.update(doc(db,'estoque_movimentacoes',m._docId), {produtoNome: novoNome});
+      });
+      await batch.commit();
+    }
+    toast('✅ Renomeado.');
+    fecharRenomear();
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+// ─── EXCLUIR PRODUTO ───
+window.excluirProduto = async function(prodId) {
+  const p = produtos.find(x => x._docId===prodId); if (!p) return;
+  if ((Number(p.saldo)||0) !== 0) { toast('❌ Só é possível excluir produto com saldo zero.'); return; }
+  const temMov = movimentacoes.some(m => m.produtoId === prodId);
+  if (temMov) {
+    if (!confirm(`"${p.nome}" tem movimentações registradas. Excluir o produto vai DEIXAR o histórico, mas o produto não aparecerá mais nos saldos. Continuar?`)) return;
+  } else {
+    if (!confirm(`Excluir "${p.nome}" permanentemente?`)) return;
+  }
+  try {
+    await deleteDoc(doc(db,'estoque_produtos',prodId));
+    toast('🗑 Produto excluído.');
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+// ─── HISTÓRICO ───
+let _filtroHistProdId = null;
+function renderizarHistorico(filtroProdId) {
+  if (filtroProdId !== undefined) _filtroHistProdId = filtroProdId;
+  const cont = document.getElementById('tabContent');
+  let html = `<div class="hist-filtros">
+    <div class="hist-filtros-row">
+      <select class="campo-sel" id="hfTipo" onchange="renderizarHistorico()">
+        <option value="">Todos os tipos</option>
+        <option value="entrada">➕ Entradas</option>
+        <option value="saida">➖ Saídas</option>
+        <option value="aplicacao">🌾 Aplicações</option>
+        <option value="transferencia_saida">↔️ Transferências (saída)</option>
+        <option value="transferencia_entrada">↔️ Transferências (entrada)</option>
+      </select>
+      <select class="campo-sel" id="hfProduto" onchange="renderizarHistorico()">
+        <option value="">Todos os produtos</option>
+        ${produtos.filter(p=>p.fazenda===fazendaSel).sort((a,b)=>a.nome.localeCompare(b.nome)).map(p=>`<option value="${p._docId}" ${_filtroHistProdId===p._docId?'selected':''}>${sanitizar(p.nome)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="hist-filtros-row">
+      <input type="date" class="campo-inp" id="hfData1" onchange="renderizarHistorico()" placeholder="De">
+      <input type="date" class="campo-inp" id="hfData2" onchange="renderizarHistorico()" placeholder="Até">
+    </div>
+    <div class="hist-acoes-row">
+      <button class="btn btn-c" onclick="hfHoje()" style="padding:7px 11px;font-size:.82rem;">📅 Hoje</button>
+      <button class="btn btn-c" onclick="hfMes()" style="padding:7px 11px;font-size:.82rem;">Este mês</button>
+      <button class="btn btn-c" onclick="hfLimpar()" style="padding:7px 11px;font-size:.82rem;">Limpar</button>
+      <button class="btn btn-v" onclick="imprimirHistorico()" style="padding:7px 11px;font-size:.82rem;">🖨 Exportar PDF</button>
+    </div>
+  </div>`;
+
+  // Aplicar filtros
+  const hfTipo = document.getElementById('hfTipo')?.value || '';
+  const hfProd = document.getElementById('hfProduto')?.value || _filtroHistProdId || '';
+  const hfD1 = document.getElementById('hfData1')?.value || '';
+  const hfD2 = document.getElementById('hfData2')?.value || '';
+  let lista = movimentacoes.filter(m => m.fazenda === fazendaSel);
+  if (hfTipo) lista = lista.filter(m => m.tipo === hfTipo);
+  if (hfProd) lista = lista.filter(m => m.produtoId === hfProd);
+  if (hfD1) lista = lista.filter(m => (m.data||'') >= hfD1);
+  if (hfD2) lista = lista.filter(m => (m.data||'') <= hfD2);
+
+  if (!lista.length) {
+    html += `<div class="vazio"><div class="ico">📜</div><p>Nenhuma movimentação para os filtros atuais.</p></div>`;
+  } else {
+    html += '<div style="display:flex;flex-direction:column;gap:8px;">';
+    lista.forEach(m => {
+      const sinal = ['entrada','transferencia_entrada'].includes(m.tipo) ? '+' : '−';
+      const tipoLab = {
+        entrada:'➕ Entrada', saida:'➖ Saída', aplicacao:'🌾 Aplicação',
+        transferencia_saida:'↔️ Transf. saída', transferencia_entrada:'↔️ Transf. entrada'
+      }[m.tipo] || m.tipo;
+      html += `<div class="mov-card">
+        <div class="mov-card-top">
+          <span class="mov-tipo ${m.tipo}">${tipoLab}</span>
+          <span class="mov-qtd ${sinal==='−'?'neg':''}">${sinal}${fmt(m.quantidade)} ${sanitizar(m.unidade||'')}</span>
+        </div>
+        <div class="mov-prod">🧪 ${sanitizar(m.produtoNome||'')}</div>
+        <div class="mov-meta">
+          <span>📅 ${formatarData(m.data)}</span>
+          ${m.motivo ? `<span>· ${sanitizar(m.motivo)}</span>` : ''}
+          ${m.talhaoNome ? `<span>· 🌾 ${sanitizar(m.talhaoNome)}${m.area?' ('+m.area+'ha)':''}</span>` : ''}
+          ${m.dosePorHa ? `<span>· ${m.dosePorHa} ${m.unidade}/ha</span>` : ''}
+          ${m.fazendaDestino ? `<span>· → ${sanitizar(m.fazendaDestino)}</span>` : ''}
+          ${m.fazendaOrigem ? `<span>· de ${sanitizar(m.fazendaOrigem)}</span>` : ''}
+          <span>· 👤 ${sanitizar(m.criadoPor||'—')}</span>
+        </div>
+        ${m.observacao ? `<div class="mov-obs">💬 ${sanitizar(m.observacao)}</div>` : ''}
+      </div>`;
+    });
+    html += '</div>';
+  }
+  cont.innerHTML = html;
+
+  // restaurar valores nos filtros
+  if (hfTipo && document.getElementById('hfTipo')) document.getElementById('hfTipo').value = hfTipo;
+  if (hfProd && document.getElementById('hfProduto')) document.getElementById('hfProduto').value = hfProd;
+  if (hfD1 && document.getElementById('hfData1')) document.getElementById('hfData1').value = hfD1;
+  if (hfD2 && document.getElementById('hfData2')) document.getElementById('hfData2').value = hfD2;
+}
+window.renderizarHistorico = renderizarHistorico;
+
+window.hfHoje = function() {
+  document.getElementById('hfData1').value = hoje();
+  document.getElementById('hfData2').value = hoje();
+  renderizarHistorico();
+};
+window.hfMes = function() {
+  const d = new Date();
+  document.getElementById('hfData1').value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+  document.getElementById('hfData2').value = hoje();
+  renderizarHistorico();
+};
+window.hfLimpar = function() {
+  ['hfTipo','hfProduto','hfData1','hfData2'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  _filtroHistProdId = null;
+  renderizarHistorico();
+};
+
+// ─── IMPRIMIR HISTÓRICO ───
+window.imprimirHistorico = function() {
+  const hfTipo = document.getElementById('hfTipo')?.value || '';
+  const hfProd = document.getElementById('hfProduto')?.value || '';
+  const hfD1 = document.getElementById('hfData1')?.value || '';
+  const hfD2 = document.getElementById('hfData2')?.value || '';
+  let lista = movimentacoes.filter(m => m.fazenda === fazendaSel);
+  if (hfTipo) lista = lista.filter(m => m.tipo === hfTipo);
+  if (hfProd) lista = lista.filter(m => m.produtoId === hfProd);
+  if (hfD1) lista = lista.filter(m => (m.data||'') >= hfD1);
+  if (hfD2) lista = lista.filter(m => (m.data||'') <= hfD2);
+  if (!lista.length) { toast('⚠️ Nada para exportar.'); return; }
+
+  // Agregar totais por produto
+  const totais = {};
+  lista.forEach(m => {
+    const k = m.produtoId;
+    if (!totais[k]) totais[k] = {nome:m.produtoNome, unidade:m.unidade, entradas:0, saidas:0};
+    if (['entrada','transferencia_entrada'].includes(m.tipo)) totais[k].entradas += Number(m.quantidade)||0;
+    else totais[k].saidas += Number(m.quantidade)||0;
+  });
+
+  const titulo = `EXTRATO DE ESTOQUE · ${sanitizar(fazendaSel)}`;
+  const periodo = (hfD1 || hfD2) ? `${hfD1?formatarData(hfD1):'início'} a ${hfD2?formatarData(hfD2):'hoje'}` : 'Todo o período';
+
+  const html = `<div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:28px;color:#111;">
+    <div style="border-bottom:3px solid #2d6a2d;padding-bottom:14px;margin-bottom:20px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#9ca3af;margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div>
+      <div style="font-size:22px;font-weight:900;color:#1a3d1a;">${titulo}</div>
+      <div style="font-size:12px;color:#374151;margin-top:5px;">📅 ${periodo} · ${lista.length} movimentação(ões)</div>
+    </div>
+
+    <!-- TOTAIS POR PRODUTO -->
+    <div style="margin-bottom:22px;">
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">📊 Totais por Produto no Período</div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead><tr style="background:#1a3d1a;color:white;">
+          <th style="padding:9px 13px;text-align:left;">Produto</th>
+          <th style="padding:9px 13px;text-align:center;">Entradas</th>
+          <th style="padding:9px 13px;text-align:center;">Saídas</th>
+          <th style="padding:9px 13px;text-align:center;">Diferença</th>
+        </tr></thead>
+        <tbody>
+          ${Object.values(totais).map((t,i)=>{
+            const dif = t.entradas - t.saidas;
+            return `<tr style="background:${i%2===0?'white':'#f9fafb'}">
+              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;font-weight:600;">${sanitizar(t.nome)}</td>
+              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#16a34a;font-weight:700;">+${fmt(t.entradas)} ${sanitizar(t.unidade||'')}</td>
+              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#dc2626;font-weight:700;">−${fmt(t.saidas)} ${sanitizar(t.unidade||'')}</td>
+              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:${dif>=0?'#16a34a':'#dc2626'};font-weight:700;">${dif>=0?'+':''}${fmt(dif)} ${sanitizar(t.unidade||'')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- MOVIMENTAÇÕES -->
+    <div>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">📜 Movimentações Detalhadas</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
+        <thead><tr style="background:#1a3d1a;color:white;">
+          <th style="padding:8px 10px;text-align:left;">Data</th>
+          <th style="padding:8px 10px;text-align:left;">Tipo</th>
+          <th style="padding:8px 10px;text-align:left;">Produto</th>
+          <th style="padding:8px 10px;text-align:center;">Qtd</th>
+          <th style="padding:8px 10px;text-align:left;">Motivo / Detalhes</th>
+          <th style="padding:8px 10px;text-align:left;">Responsável</th>
+        </tr></thead>
+        <tbody>
+          ${lista.map((m,i)=>{
+            const sinal = ['entrada','transferencia_entrada'].includes(m.tipo) ? '+' : '−';
+            const tipoLab = {entrada:'Entrada',saida:'Saída',aplicacao:'Aplicação',transferencia_saida:'Transf. saída',transferencia_entrada:'Transf. entrada'}[m.tipo]||m.tipo;
+            const detalhe = [
+              m.motivo || '',
+              m.talhaoNome ? `Talhão: ${sanitizar(m.talhaoNome)}${m.area?' ('+m.area+'ha)':''}` : '',
+              m.dosePorHa ? `Dose: ${m.dosePorHa} ${m.unidade}/ha` : '',
+              m.fazendaDestino ? `Destino: ${sanitizar(m.fazendaDestino)}` : '',
+              m.fazendaOrigem ? `Origem: ${sanitizar(m.fazendaOrigem)}` : '',
+              m.observacao ? `Obs: ${sanitizar(m.observacao)}` : ''
+            ].filter(Boolean).join(' · ');
+            return `<tr style="background:${i%2===0?'white':'#f9fafb'};">
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;">${formatarData(m.data)}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;">${tipoLab}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-weight:600;">${sanitizar(m.produtoNome||'')}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;font-weight:700;color:${sinal==='+'?'#16a34a':'#dc2626'};">${sinal}${fmt(m.quantidade)} ${sanitizar(m.unidade||'')}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-size:10.5px;">${detalhe || '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-size:10.5px;color:#6b7280;">${sanitizar(m.criadoPor||'—')}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:20px;font-size:10px;color:#9ca3af;text-align:right;border-top:1px solid #e5e7eb;padding-top:10px;">
+      Gerado em ${new Date().toLocaleString('pt-BR')} por ${sanitizar(usuarioAtual.email)} · ConilonTech
+    </div>
+  </div>`;
+
+  document.getElementById('area-impressao').innerHTML = html;
+  setTimeout(() => window.print(), 120);
+};
+
+// ─── PENDENTES (recebimento de pedidos) ───
+
+// Pedidos que têm pelo menos 1 talhão na fazenda atual E não foram totalmente recebidos
+function pedidosPendentesDaFazenda() {
+  if (!fazendaSel) return [];
+  return pedidos.filter(p => {
+    if (['recebido','cancelado'].includes(p.status)) return false;
+    // Tem talhão da fazenda selecionada?
+    return (p.itens||[]).some(it => (it.talhoes||[]).some(t => (t.fazenda||'') === fazendaSel));
+  });
+}
+
+function atualizarBadgePendentes() {
+  const el = document.getElementById('tabPendentes'); if (!el) return;
+  const n = pedidosPendentesDaFazenda().length;
+  // Remove badge anterior se houver
+  el.querySelector('.tab-badge')?.remove();
+  if (n > 0) {
+    const b = document.createElement('span');
+    b.className = 'tab-badge';
+    b.textContent = n;
+    el.appendChild(b);
+  }
+}
+
+function renderizarPendentes() {
+  const cont = document.getElementById('tabContent');
+  if (!fazendaSel) { cont.innerHTML=''; return; }
+  const pend = pedidosPendentesDaFazenda();
+  if (!pend.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">📥</div><p>Nenhum pedido pendente para esta fazenda.<br><span style="font-size:.82rem;">Pedidos aparecem aqui enquanto o status estiver "Solicitado" ou "Em andamento".</span></p></div>`;
+    return;
+  }
+  let html = `<div style="font-size:.82rem;color:var(--c);padding:4px 4px 8px;">Pedidos aguardando recebimento em <strong>${sanitizar(fazendaSel)}</strong>:</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">`;
+  pend.forEach(p => {
+    const dataF = p.criadoEm ? formatarData(p.criadoEm.slice(0,10)) : '—';
+    const stLab = p.status === 'recebido_parcial' ? '🔶 Recebimento parcial' :
+                  p.status === 'em_andamento' ? '🚚 Em andamento' : '⏳ Solicitado';
+    // Itens que tocam esta fazenda
+    const itensFaz = (p.itens||[]).filter(it => (it.talhoes||[]).some(t => (t.fazenda||'') === fazendaSel));
+    const resumo = itensFaz.map(it => {
+      const qtdParaEstaFaz = calcQtdParaFazenda(it, fazendaSel);
+      const jaRecebido = (it.recebidoPorFazenda||{})[fazendaSel] || 0;
+      const pendente = qtdParaEstaFaz - jaRecebido;
+      return `<div style="font-size:.85rem;">🧪 <strong>${sanitizar(it.produto)}</strong> · <span style="font-family:'DM Mono',monospace;">${fmt(pendente)} ${sanitizar(it.unidade||'')}</span> pendente</div>`;
+    }).join('');
+    html += `<div class="prod-card" style="cursor:pointer;" onclick="abrirRecebimento('${p._docId}')">
+      <div class="prod-card-top">
+        <div style="flex:1;min-width:0;">
+          <div class="prod-nome">📦 Pedido · ${dataF}</div>
+          <div style="font-size:.74rem;color:var(--c);margin-top:3px;">${stLab} · 👤 ${sanitizar(p.criadoPor||'')}</div>
+        </div>
+        <div style="background:var(--v);color:white;font-size:.7rem;font-weight:800;padding:5px 10px;border-radius:99px;flex-shrink:0;text-transform:uppercase;letter-spacing:.04em;">${itensFaz.length} item${itensFaz.length>1?'ns':''}</div>
+      </div>
+      <div style="padding:0 15px 11px;display:flex;flex-direction:column;gap:4px;">${resumo}</div>
+      <div class="prod-tap-hint">👆 Toque para confirmar recebimento</div>
+    </div>`;
+  });
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+// Calcula quanto de um item de pedido vai pra uma fazenda específica
+// (rateio proporcional à área dos talhões dessa fazenda no item)
+function calcQtdParaFazenda(item, fazenda) {
+  const talhs = item.talhoes || [];
+  const totalArea = talhs.reduce((s,t) => s + (parseDose(t.area)||0), 0);
+  if (totalArea === 0) {
+    // Sem área cadastrada → divide igualmente entre as fazendas únicas
+    const fazsUnicas = [...new Set(talhs.map(t => t.fazenda||''))].filter(Boolean);
+    if (!fazsUnicas.length) return 0;
+    return (Number(item.total)||0) / fazsUnicas.length * (fazsUnicas.includes(fazenda) ? 1 : 0);
+  }
+  const areaFaz = talhs.filter(t => (t.fazenda||'') === fazenda).reduce((s,t)=>s+(parseDose(t.area)||0), 0);
+  const fracao = areaFaz / totalArea;
+  return (Number(item.total)||0) * fracao;
+}
+
+// ─── MODAL DE RECEBIMENTO ───
+window.abrirRecebimento = function(pedidoId) {
+  const p = pedidos.find(x => x._docId === pedidoId); if (!p) return;
+  if (!podeMovimentar()) { toast('⚠️ Sem permissão para registrar entrada.'); return; }
+  // Construir WIP com itens que tocam a fazenda atual
+  const itensFaz = (p.itens||[]).filter(it => (it.talhoes||[]).some(t => (t.fazenda||'') === fazendaSel));
+  window.recWIP = {
+    pedidoId: p._docId,
+    pedido: p,
+    data: hoje(),
+    nfDoc: '',
+    observacao: '',
+    itens: itensFaz.map(it => {
+      const qtdPrevista = calcQtdParaFazenda(it, fazendaSel);
+      const jaRecebido = (it.recebidoPorFazenda||{})[fazendaSel] || 0;
+      const pendente = Math.max(0, qtdPrevista - jaRecebido);
+      return {
+        produto: it.produto,
+        unidade: it.unidade || 'kg',
+        qtdPrevista: Math.round(qtdPrevista*100)/100,
+        jaRecebido: Math.round(jaRecebido*100)/100,
+        qtdReceber: Math.round(pendente*100)/100,
+        confirmar: pendente > 0,
+        itemOriginalRef: it,  // referência ao item original do pedido
+      };
+    })
+  };
+  document.getElementById('recTitulo').textContent = 'Receber Pedido';
+  document.getElementById('recSub').innerHTML = `📦 Pedido de <strong>${p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—'}</strong> · Fazenda: <strong>${sanitizar(fazendaSel)}</strong>`;
+  renderizarCorpoRecebimento();
+  document.getElementById('modalRecebimento').classList.add('aberto');
+};
+
+window.fecharRecebimento = () => document.getElementById('modalRecebimento').classList.remove('aberto');
+
+function renderizarCorpoRecebimento() {
+  const c = document.getElementById('modalRecCorpo');
+  if (!window.recWIP) return;
+  let html = '';
+  window.recWIP.itens.forEach((it,i) => {
+    const totalTalhoes = (it.itemOriginalRef.talhoes||[]).filter(t => (t.fazenda||'') === fazendaSel);
+    const talhTxt = totalTalhoes.map(t => `${sanitizar(t.id)}${t.area?'('+t.area+'ha)':''}`).join(', ');
+    html += `<div class="rec-item ${!it.confirmar?'desativado':''}">
+      <div class="rec-item-hdr">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;">
+          <input type="checkbox" ${it.confirmar?'checked':''} onchange="recToggleItem(${i},this.checked)" style="width:18px;height:18px;">
+          <span style="font-weight:700;color:var(--ve);">🧪 ${sanitizar(it.produto)}</span>
+        </label>
+      </div>
+      <div class="rec-item-info">
+        <div>Pedido: <strong>${fmt(it.qtdPrevista)} ${sanitizar(it.unidade)}</strong></div>
+        ${it.jaRecebido > 0 ? `<div style="color:#22c55e;">✓ Já recebido: ${fmt(it.jaRecebido)} ${sanitizar(it.unidade)}</div>` : ''}
+        <div style="color:var(--c);font-size:.74rem;">Talhões: ${talhTxt}</div>
+      </div>
+      <div class="rec-item-qtd" ${!it.confirmar?'style="display:none;"':''}>
+        <label class="campo-label">Quantidade a receber agora (${sanitizar(it.unidade)})</label>
+        <input type="number" inputmode="decimal" step="0.01" min="0" class="campo-inp" value="${it.qtdReceber}" oninput="window.recWIP.itens[${i}].qtdReceber=parseFloat(this.value)||0;recAtualizarResumo()" id="recQtd-${i}">
+      </div>
+    </div>`;
+  });
+  html += `<div class="campo" style="margin-top:14px;">
+    <label class="campo-label">Data do recebimento</label>
+    <input type="date" class="campo-inp" value="${window.recWIP.data}" onchange="window.recWIP.data=this.value">
+  </div>
+  <div class="campo">
+    <label class="campo-label">NF / Documento (opcional)</label>
+    <input type="text" class="campo-inp" placeholder="Ex: NF 12345" value="${sanitizar(window.recWIP.nfDoc)}" oninput="window.recWIP.nfDoc=this.value">
+  </div>
+  <div class="campo">
+    <label class="campo-label">Observação (opcional)</label>
+    <textarea class="campo-area" placeholder="Ex: chegou com 1 saco rasgado" oninput="window.recWIP.observacao=this.value">${sanitizar(window.recWIP.observacao)}</textarea>
+  </div>
+  <div id="recResumo" class="calc-box" style="margin-top:6px;"></div>`;
+  c.innerHTML = html;
+  recAtualizarResumo();
+}
+
+window.recToggleItem = function(i, marcado) {
+  window.recWIP.itens[i].confirmar = marcado;
+  renderizarCorpoRecebimento();
+};
+
+window.recAtualizarResumo = function() {
+  const el = document.getElementById('recResumo'); if (!el) return;
+  const ativos = window.recWIP.itens.filter(it => it.confirmar);
+  if (!ativos.length) { el.innerHTML = '<span style="color:var(--c);">Marque pelo menos um item para receber.</span>'; return; }
+  // Verificar se será parcial
+  let temParcial = false;
+  ativos.forEach(it => {
+    if (it.qtdReceber < (it.qtdPrevista - it.jaRecebido) - 0.001) temParcial = true;
+  });
+  el.innerHTML = `<strong>${ativos.length} item${ativos.length>1?'ns':''}</strong> a confirmar` +
+    (temParcial ? ' · <strong style="color:#a855f7;">Recebimento parcial</strong> (saldo continuará pendente)' : '');
+};
+
+window.confirmarRecebimento = async function() {
+  if (!window.recWIP) return;
+  const ativos = window.recWIP.itens.filter(it => it.confirmar && it.qtdReceber > 0);
+  if (!ativos.length) { toast('⚠️ Marque pelo menos um item com quantidade > 0.'); return; }
+
+  const btn = document.getElementById('btnConfirmarRec');
+  btn.disabled = true; btn.textContent = 'Processando...';
+
+  try {
+    const p = window.recWIP.pedido;
+    // Para cada item a receber, gerar entrada no estoque
+    for (const it of ativos) {
+      // Achar ou criar produto no estoque da fazendaSel
+      let produto = produtos.find(pp =>
+        pp.fazenda === fazendaSel && normalizar(pp.nome) === normalizar(it.produto)
+      );
+      if (!produto) {
+        // Criar novo
+        const novo = {
+          fazenda: fazendaSel,
+          nome: it.produto,
+          nomeNormalizado: normalizar(it.produto),
+          unidade: it.unidade,
+          saldo: 0,
+          criadoPor: usuarioAtual.email,
+          criadoEm: new Date().toISOString()
+        };
+        const ref = await addDoc(collection(db,'estoque_produtos'), novo);
+        produto = { _docId: ref.id, ...novo };
+      }
+      // Criar movimentação de entrada
+      const mov = {
+        fazenda: fazendaSel,
+        produtoId: produto._docId,
+        produtoNome: produto.nome,
+        unidade: produto.unidade,
+        tipo: 'entrada',
+        quantidade: it.qtdReceber,
+        motivo: 'Pedido recebido',
+        observacao: [
+          `Pedido de ${p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—'}`,
+          window.recWIP.nfDoc ? `NF: ${window.recWIP.nfDoc}` : '',
+          window.recWIP.observacao || ''
+        ].filter(Boolean).join(' · '),
+        data: window.recWIP.data,
+        criadoPor: usuarioAtual.email,
+        criadoEm: new Date().toISOString(),
+        pedidoOrigemId: p._docId
+      };
+      await addDoc(collection(db,'estoque_movimentacoes'), mov);
+      // Atualizar saldo
+      await updateDoc(doc(db,'estoque_produtos',produto._docId), {
+        saldo: (produto.saldo||0) + it.qtdReceber
+      });
+    }
+
+    // Atualizar pedido: marcar item.recebidoPorFazenda e calcular status final
+    const itensAtualizados = (p.itens||[]).map(itemOrig => {
+      const recItem = ativos.find(a => a.itemOriginalRef === itemOrig);
+      if (!recItem) return itemOrig;
+      const rec = {...(itemOrig.recebidoPorFazenda||{})};
+      rec[fazendaSel] = (rec[fazendaSel] || 0) + recItem.qtdReceber;
+      // totalRecebido = soma de todas as fazendas
+      const totalRecebido = Object.values(rec).reduce((s,v)=>s+v, 0);
+      return {...itemOrig, recebidoPorFazenda: rec, totalRecebido};
+    });
+    // Determinar novo status do pedido
+    let novoStatus = p.status || 'solicitado';
+    const totalPedido = (p.itens||[]).reduce((s,it)=>s+(Number(it.total)||0), 0);
+    const totalRecebido = itensAtualizados.reduce((s,it)=>s+(Number(it.totalRecebido)||0), 0);
+    if (totalRecebido >= totalPedido - 0.01) novoStatus = 'recebido';
+    else if (totalRecebido > 0) novoStatus = 'recebido_parcial';
+
+    await updateDoc(doc(db,'pedidos',p._docId), {
+      itens: itensAtualizados,
+      status: novoStatus,
+      statusAtualizadoEm: new Date().toISOString(),
+      statusAtualizadoPor: usuarioAtual.email
+    });
+
+    toast(`✅ Recebimento confirmado${novoStatus==='recebido_parcial'?' (parcial)':''}.`);
+    fecharRecebimento();
+
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erro: '+e.message);
+  }
+  btn.disabled = false; btn.textContent = '✅ Confirmar Recebimento';
+};
+
+// ─── CATÁLOGO ───
+function renderizarCatalogo() {
+  const cont = document.getElementById('tabContent');
+  const prodsFaz = produtos.filter(p => p.fazenda===fazendaSel).sort((a,b)=>a.nome.localeCompare(b.nome));
+  if (!prodsFaz.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">📋</div><p>Nenhum produto cadastrado nesta fazenda ainda.<br>Os produtos são criados automaticamente ao registrar a primeira Entrada.</p></div>`;
+    return;
+  }
+  const semClasse = prodsFaz.filter(p => !p.categoria);
+  const comClasse = prodsFaz.filter(p => p.categoria);
+  let html = '';
+  // Seção destacada para produtos sem classificação
+  if (semClasse.length) {
+    html += `<div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:var(--rad);padding:11px 13px;margin-bottom:12px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:#92400e;margin-bottom:4px;">
+        ⚠️ ${semClasse.length} produto(s) sem classificação
+      </div>
+      <div style="font-size:.78rem;color:#92400e;line-height:1.4;margin-bottom:8px;">
+        Classifique seus produtos pra liberar os relatórios da Gestão (por classe de defensivo, por adubo, etc.).
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${semClasse.map(p => `<div class="cat-row" style="background:white;border:1px solid #fde68a;">
+          <div class="cat-nome">⚠️ ${sanitizar(p.nome)}</div>
+          <div class="cat-und">${sanitizar(p.unidade)}</div>
+          <button class="btn btn-v" onclick="abrirClassificar('${p._docId}')" style="padding:6px 12px;font-size:.78rem;">🏷️ Classificar</button>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  html += `<div style="font-size:.82rem;color:var(--c);margin-bottom:6px;padding:6px 4px;">Produtos em <strong>${sanitizar(fazendaSel)}</strong>${comClasse.length?' ('+comClasse.length+' classificado'+(comClasse.length>1?'s':'')+')':''}:</div>
+    <div style="display:flex;flex-direction:column;gap:7px;">`;
+  comClasse.forEach(p => {
+    html += `<div class="cat-row">
+      <div style="flex:1;min-width:0;">
+        <div class="cat-nome" style="margin-bottom:3px;">🧪 ${sanitizar(p.nome)}</div>
+        <div style="font-size:.72rem;color:var(--c);">${labelCategoria(p.categoria)}${p.subcategoria?' · '+sanitizar(p.subcategoria):''}</div>
+      </div>
+      <div class="cat-und">${sanitizar(p.unidade)}</div>
+      <div class="cat-saldo">${fmt(p.saldo||0)} ${sanitizar(p.unidade)}</div>
+      ${isAdminOuEncarregado()?`<button class="btn btn-c" onclick="abrirClassificar('${p._docId}')" style="padding:6px 10px;font-size:.8rem;" title="Editar categoria">🏷️</button>`:''}
+      ${isAdminOuEncarregado()?`<button class="btn btn-c" onclick="abrirRenomear('${p._docId}')" style="padding:6px 10px;font-size:.8rem;" title="Renomear">✏️</button>`:''}
+      ${isAdmin()&&(Number(p.saldo)||0)===0?`<button class="btn btn-d" onclick="excluirProduto('${p._docId}')" style="padding:6px 10px;font-size:.8rem;">🗑</button>`:''}
+    </div>`;
+  });
+  html += '</div>';
+  cont.innerHTML = html;
+}
+
+</script>
+</body>
+</html>
