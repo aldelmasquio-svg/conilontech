@@ -39,7 +39,7 @@ function isAdmin(){return Object.values(perfilAtual.modulos||{}).includes('admin
 function parseDose(s){if(s==null||s==='')return 0;const limpo=String(s).replace(/\s/g,'').replace(',','.');const n=parseFloat(limpo);return isNaN(n)?0:n;}
 function gerarMenu(){
   const isAdm=isAdmin();
-  const items=[{href:'index.html',ico:'📊',label:'Dashboard'},{href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},{href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},{href:'adubacoes.html',ico:'🧪',label:'Adubações'},{href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},{href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},{href:'estoque.html',ico:'🏬',label:'Estoque'}];
+  const items=[{href:'index.html',ico:'📊',label:'Dashboard'},{href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},{href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},{href:'adubacoes.html',ico:'🧪',label:'Adubações'},{href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},{href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},{href:'estoque.html',ico:'🏬',label:'Estoque'},{href:'gestao.html',ico:'📊',label:'Gestão'}];
   if(isAdm)items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
   document.getElementById('menuModulos').innerHTML=items.map(m=>`<a class="menu-item ${m.href==='pedidos.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`).join('');
 }

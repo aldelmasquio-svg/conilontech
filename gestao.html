@@ -1,0 +1,1255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Conilon Tech · Gestão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--purple:#a855f7;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+
+/* LOADING */
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+
+/* HEADER & MENU */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-titles{line-height:1;}
+.header-title-main{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
+.menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
+.menu-body{flex:1;padding:10px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:1.1rem;}
+.menu-footer{padding:14px;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+
+/* APP STRUCTURE */
+.app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+
+/* FILTROS GLOBAIS */
+.filtros-bar{background:white;border-bottom:2px solid var(--cb);padding:9px 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;flex-shrink:0;}
+.filtro-grupo{display:flex;align-items:center;gap:6px;}
+.filtro-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;text-transform:uppercase;color:var(--c);letter-spacing:.05em;}
+.filtro-sel{border:1.5px solid var(--cb);border-radius:7px;padding:7px 9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;background:white;font-weight:600;color:var(--ve);min-width:110px;}
+.filtro-sel:focus{border-color:var(--v);}
+.btn-pdf-aba{margin-left:auto;background:var(--v);color:white;border:none;border-radius:6px;padding:7px 11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.75rem;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
+.btn-pdf-aba:active{transform:scale(.97);}
+
+/* TABS */
+.tabs-bar{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.tab{flex:1;min-width:90px;padding:12px 8px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;white-space:nowrap;}
+.tab.ativa{color:var(--v);border-bottom-color:var(--v);}
+
+/* CONTEÚDO */
+.tab-content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;padding:12px 14px 60px;display:flex;flex-direction:column;gap:12px;}
+
+/* BANNER AVISO */
+.banner-aviso{background:#fffbeb;border:1.5px solid #fde68a;border-left:4px solid var(--warn);border-radius:var(--rs);padding:10px 12px;font-size:.78rem;color:#92400e;line-height:1.45;}
+.banner-aviso strong{display:block;margin-bottom:3px;font-family:'Barlow Condensed',sans-serif;font-size:.88rem;letter-spacing:.02em;}
+
+/* KPI CARDS */
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
+@media(min-width:700px){.kpi-grid{grid-template-columns:repeat(4,1fr);}}
+.kpi-card{background:white;border-radius:var(--rad);padding:12px 14px;box-shadow:var(--s);display:flex;flex-direction:column;gap:3px;}
+.kpi-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);}
+.kpi-value{font-family:'DM Mono',monospace;font-weight:700;font-size:1.45rem;color:var(--ve);line-height:1.1;}
+.kpi-aux{font-size:.7rem;color:var(--c);margin-top:2px;}
+.kpi-card.alerta .kpi-value{color:var(--warn);}
+.kpi-card.danger .kpi-value{color:var(--danger);}
+.kpi-card.ok .kpi-value{color:var(--ok);}
+.kpi-card.info .kpi-value{color:var(--blue);}
+
+/* SEÇÃO */
+.secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
+.secao-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);margin-bottom:10px;display:flex;align-items:center;gap:7px;padding-bottom:8px;border-bottom:1px solid var(--cl);}
+.secao-sub{font-size:.74rem;color:var(--c);margin-bottom:9px;line-height:1.4;}
+
+/* LISTAS RANKING */
+.rank-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--cl);}
+.rank-item:last-child{border-bottom:none;}
+.rank-num{width:24px;height:24px;border-radius:50%;background:var(--vb);color:var(--v);font-weight:800;font-size:.78rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-family:'DM Mono',monospace;}
+.rank-num.top{background:var(--v);color:white;}
+.rank-info{flex:1;min-width:0;}
+.rank-nome{font-weight:700;font-size:.88rem;color:var(--t);}
+.rank-meta{font-size:.7rem;color:var(--c);margin-top:1px;}
+.rank-valor{font-family:'DM Mono',monospace;font-weight:700;font-size:.95rem;color:var(--ve);text-align:right;flex-shrink:0;}
+.rank-valor .rank-und{font-size:.65rem;color:var(--c);font-weight:500;}
+
+/* BARRAS HORIZONTAIS (gráfico simples) */
+.bar-row{display:flex;align-items:center;gap:8px;padding:6px 0;}
+.bar-label{font-size:.78rem;color:var(--t);min-width:80px;font-weight:600;}
+.bar-track{flex:1;background:var(--cl);border-radius:4px;height:18px;position:relative;overflow:hidden;}
+.bar-fill{height:100%;background:linear-gradient(to right,var(--v),#5a9c5a);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;color:white;font-family:'DM Mono',monospace;font-size:.7rem;font-weight:700;min-width:30px;}
+.bar-value{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--c);min-width:60px;text-align:right;}
+
+/* GRÁFICO DE BARRAS VERTICAIS (12 meses) */
+.chart-mensal{display:flex;align-items:flex-end;gap:4px;height:140px;padding:5px 2px 28px;border-bottom:1.5px solid var(--cb);position:relative;}
+.chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative;}
+.chart-bar{width:100%;max-width:36px;background:linear-gradient(to top,var(--v),#5a9c5a);border-radius:3px 3px 0 0;min-height:2px;position:relative;transition:opacity .2s;}
+.chart-bar:hover{opacity:.85;}
+.chart-bar-val{position:absolute;top:-15px;left:50%;transform:translateX(-50%);font-family:'DM Mono',monospace;font-size:.62rem;color:var(--ve);font-weight:700;white-space:nowrap;}
+.chart-bar-lab{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:600;white-space:nowrap;}
+
+/* PIZZA (distribuição) */
+.pizza-wrap{display:flex;gap:12px;align-items:center;flex-wrap:wrap;}
+.pizza-svg{width:120px;height:120px;flex-shrink:0;}
+.pizza-leg{flex:1;display:flex;flex-direction:column;gap:5px;min-width:140px;}
+.pizza-leg-item{display:flex;align-items:center;gap:7px;font-size:.78rem;}
+.pizza-leg-cor{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+.pizza-leg-lab{flex:1;color:var(--t);font-weight:600;}
+.pizza-leg-val{font-family:'DM Mono',monospace;color:var(--c);font-weight:700;font-size:.75rem;}
+
+/* COMPARATIVO 2 COLUNAS */
+.comp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.comp-box{background:var(--cl);border-radius:var(--rs);padding:10px 12px;display:flex;flex-direction:column;gap:3px;}
+.comp-box.alt{background:var(--vb);}
+.comp-lab{font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:700;}
+.comp-val{font-family:'DM Mono',monospace;font-weight:700;font-size:1.1rem;color:var(--ve);}
+
+/* VAZIO */
+.vazio-sm{text-align:center;color:var(--c);padding:18px 12px;font-size:.82rem;font-style:italic;}
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:var(--c);}
+.vazio .ico{font-size:3rem;margin-bottom:10px;opacity:.5;}
+.vazio p{font-size:.9rem;line-height:1.5;}
+
+/* TOAST */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ve);color:white;padding:11px 18px;border-radius:8px;font-size:.85rem;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3);}
+.toast.show{opacity:1;}
+
+/* IMPRESSAO */
+#area-impressao{display:none;}
+@media print{body>*:not(#area-impressao){display:none!important;}#area-impressao{display:block!important;}}
+
+/* TABELA simples */
+.tbl{width:100%;border-collapse:collapse;font-size:.8rem;}
+.tbl th{background:var(--cl);text-align:left;padding:7px 9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:1px solid var(--cb);}
+.tbl td{padding:7px 9px;border-bottom:1px solid var(--cl);}
+.tbl td.num{font-family:'DM Mono',monospace;text-align:right;font-weight:600;}
+.tbl tr:last-child td{border-bottom:none;}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Carregando gestão...</div>
+</div>
+
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="header-left">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="header-titles">
+      <div class="header-title-main">Conilon Tech</div>
+      <div class="header-title-sub">Gestão</div>
+    </div>
+  </div>
+  <div class="header-user" id="userNome">—</div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<aside class="menu-lateral" id="menuLateral">
+  <div class="menu-header">
+    <div class="menu-user-nome" id="menuUserNome">—</div>
+    <div class="menu-user-email" id="menuUserEmail">—</div>
+  </div>
+  <div class="menu-body" id="menuModulos"></div>
+  <div class="menu-footer"><button class="btn-logout" onclick="fazerLogout()">↩ Sair</button></div>
+</aside>
+
+<div class="app-main" id="appContent" style="display:none;">
+
+  <!-- FILTROS GLOBAIS -->
+  <div class="filtros-bar">
+    <div class="filtro-grupo">
+      <span class="filtro-label">📅</span>
+      <select class="filtro-sel" id="selPeriodo" onchange="aplicarFiltros()">
+        <option value="mes_atual">Este mês</option>
+        <option value="mes_passado">Mês passado</option>
+        <option value="3meses" selected>Últimos 3 meses</option>
+        <option value="6meses">Últimos 6 meses</option>
+        <option value="12meses">Últimos 12 meses</option>
+        <option value="ano_atual">Este ano</option>
+        <option value="tudo">Todo o período</option>
+      </select>
+    </div>
+    <div class="filtro-grupo">
+      <span class="filtro-label">🏡</span>
+      <select class="filtro-sel" id="selFazenda" onchange="aplicarFiltros()">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <button class="btn-pdf-aba" onclick="exportarPDF()">📄 PDF</button>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs-bar">
+    <button class="tab ativa" id="tabGeral" onclick="abrirTab('geral')">📊 Geral</button>
+    <button class="tab" id="tabProdutividade" onclick="abrirTab('produtividade')">🌾 Produtividade</button>
+    <button class="tab" id="tabPulverizacoes" onclick="abrirTab('pulverizacoes')">💧 Pulverizações</button>
+    <button class="tab" id="tabEstoque" onclick="abrirTab('estoque')">🏬 Estoque</button>
+    <button class="tab" id="tabAdubacao" onclick="abrirTab('adubacao')">🧪 Adubação</button>
+  </div>
+
+  <div class="tab-content" id="tabContent"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+<div id="area-impressao"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+enableIndexedDbPersistence(db).catch(()=>{});
+
+// ─── ESTADO ───
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[];
+let fazendas=[]; // derivado dos talhões
+let tabAtual='geral';
+let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false};
+
+// CATEGORIAS dos produtos (cópia local do estoque, pra montar relatórios)
+const CAT_LABELS = {
+  defensivo:'🧪 Defensivo',
+  adubo_mineral:'🌱 Adubo / Fertilizante',
+  fertilizante_foliar:'🍃 Fertilizante foliar',
+  calcario_gesso:'🪨 Calcário / Gesso',
+  adubo_organico:'💩 Adubo orgânico',
+  outros:'📦 Outros'
+};
+
+// ─── BOOTSTRAP ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  // perfil admin auto-fill
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',estoque:'admin',gestao:'admin'};
+  }
+  // Verificar acesso: só admin e gerente
+  if (!temAcessoGestao()) {
+    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:3rem;">⛔</div><div style="font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:1.1rem;color:var(--c);margin-top:10px;">Acesso restrito a admin e gerente</div><a href="index.html" style="display:inline-block;margin-top:14px;color:var(--v);">← Voltar ao dashboard</a></div>';
+    return;
+  }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+
+  // Carregar dados em paralelo
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    const setFaz = new Set();
+    talhoes.forEach(t => { if (t.fazenda) setFaz.add(t.fazenda); });
+    fazendas = [...setFaz].sort();
+    popularFazendas();
+    _carregados.talhoes = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'pulverizacoes'), snap => {
+    pulverizacoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.pulverizacoes = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'estoque_movimentacoes'), snap => {
+    movimentacoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.movimentacoes = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'estoque_produtos'), snap => {
+    produtosEstoque = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.produtosEstoque = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'pedidos'), snap => {
+    pedidos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.pedidos = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'planosAdubacao'), snap => {
+    planosAdubacao = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.planosAdubacao = true;
+    renderTab();
+  });
+});
+
+function temAcessoGestao() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  // Admin de qualquer módulo OU gerente (que vê dados)
+  if (m.gestao === 'admin' || m.gestao === 'gerente') return true;
+  if (m.admin === 'admin') return true;
+  // Fallback: se for admin global em qualquer módulo, libera
+  return Object.values(m).includes('admin');
+}
+
+function gerarMenu() {
+  const isAdm = perfilAtual.perfil==='admin' || Object.values(perfilAtual.modulos||{}).includes('admin');
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
+    {href:'estoque.html',ico:'🏬',label:'Estoque'},
+    {href:'gestao.html',ico:'📊',label:'Gestão'}
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='gestao.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+function popularFazendas() {
+  const sel = document.getElementById('selFazenda');
+  const valAtual = sel.value;
+  sel.innerHTML = '<option value="">Todas</option>' +
+    fazendas.map(f => `<option value="${escAttr(f)}">${escHtml(f)}</option>`).join('');
+  if (valAtual && fazendas.includes(valAtual)) sel.value = valAtual;
+}
+
+// ─── UTILS ───
+function escHtml(s){return String(s||'').replace(/[<>&"']/g,ch=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch]));}
+function escAttr(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(n,d){const v=Number(n)||0;return v.toLocaleString('pt-BR',{minimumFractionDigits:d!==undefined?d:0,maximumFractionDigits:d!==undefined?d:2});}
+function fmtRS(n){return 'R$ '+fmt(n,2);}
+function formatarData(d){if(!d)return'—';const[a,m,dd]=d.split('-');return `${dd}/${m}/${a}`;}
+function parseDose(s){if(s==null||s==='')return 0;const limpo=String(s).replace(/\s/g,'').replace(',','.');const n=parseFloat(limpo);return isNaN(n)?0:n;}
+function parseValorProducao(v){
+  // O valor da produção é texto livre ("200", "200 sc", "200 sacas"...). Extrai o primeiro número.
+  if(!v)return 0;
+  const s=String(v).replace(',','.');
+  const m=s.match(/([\d.]+)/);
+  return m?parseFloat(m[1]):0;
+}
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+function hoje(){return new Date().toISOString().slice(0,10);}
+
+// Calcula intervalo do filtro de período
+function periodoFiltro() {
+  const sel = document.getElementById('selPeriodo')?.value || '3meses';
+  const hoje = new Date();
+  const fim = hoje.toISOString().slice(0,10);
+  let inicio;
+  if (sel === 'mes_atual') {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0,10);
+  } else if (sel === 'mes_passado') {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1).toISOString().slice(0,10);
+    const fimMes = new Date(hoje.getFullYear(), hoje.getMonth(), 0).toISOString().slice(0,10);
+    return {inicio, fim: fimMes, label: 'Mês passado'};
+  } else if (sel === '3meses') {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth()-3, hoje.getDate()).toISOString().slice(0,10);
+  } else if (sel === '6meses') {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth()-6, hoje.getDate()).toISOString().slice(0,10);
+  } else if (sel === '12meses') {
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth()-12, hoje.getDate()).toISOString().slice(0,10);
+  } else if (sel === 'ano_atual') {
+    inicio = `${hoje.getFullYear()}-01-01`;
+  } else { // tudo
+    inicio = '2000-01-01';
+  }
+  const labels = {mes_atual:'Este mês', '3meses':'Últimos 3 meses', '6meses':'Últimos 6 meses', '12meses':'Últimos 12 meses', ano_atual:'Este ano', tudo:'Todo o período'};
+  return {inicio, fim, label: labels[sel] || sel};
+}
+
+function fazendaFiltro() {
+  return document.getElementById('selFazenda')?.value || '';
+}
+
+// Aplica filtros: retorna talhões/pulverizações/etc dentro dos filtros atuais
+function talhoesFiltrados() {
+  const faz = fazendaFiltro();
+  return faz ? talhoes.filter(t => t.fazenda === faz) : talhoes;
+}
+function pulverizacoesFiltradas() {
+  const faz = fazendaFiltro();
+  const {inicio, fim} = periodoFiltro();
+  return pulverizacoes.filter(p => {
+    if (faz && p.fazenda !== faz) return false;
+    const dt = p.dataRealizada || p.data;
+    if (!dt) return false;
+    return dt >= inicio && dt <= fim;
+  });
+}
+function movimentacoesFiltradas() {
+  const faz = fazendaFiltro();
+  const {inicio, fim} = periodoFiltro();
+  return movimentacoes.filter(m => {
+    if (faz && m.fazenda !== faz) return false;
+    const dt = m.data || m.criadoEm?.slice(0,10);
+    if (!dt) return false;
+    return dt >= inicio && dt <= fim;
+  });
+}
+function pedidosFiltrados() {
+  const faz = fazendaFiltro();
+  const {inicio, fim} = periodoFiltro();
+  return pedidos.filter(p => {
+    const dt = (p.criadoEm||'').slice(0,10);
+    if (dt && (dt < inicio || dt > fim)) return false;
+    if (faz) {
+      const ehDaFaz = (p.itens||[]).some(it => (it.talhoes||[]).some(t => t.fazenda === faz));
+      if (!ehDaFaz) return false;
+    }
+    return true;
+  });
+}
+
+// Mapa de produto → categoria (pra cruzar com movimentações)
+function getCategoriaProduto(produtoId) {
+  const p = produtosEstoque.find(x => x._docId === produtoId);
+  return {categoria: p?.categoria || null, subcategoria: p?.subcategoria || null, nome: p?.nome || ''};
+}
+
+// Preço médio ponderado de um produto, calculado a partir das entradas no histórico
+// Considera apenas entradas até a data limite (default: hoje).
+// Retorna 0 se não há preço cadastrado em nenhuma entrada.
+function precoMedioProduto(produtoId, dataLimite) {
+  const limite = dataLimite || hoje();
+  const entradas = movimentacoes.filter(m =>
+    m.produtoId === produtoId &&
+    m.tipo === 'entrada' &&
+    (m.precoUnitario || 0) > 0 &&
+    (m.data || m.criadoEm?.slice(0,10) || '') <= limite
+  );
+  if (!entradas.length) return 0;
+  let totalQtd = 0, totalValor = 0;
+  entradas.forEach(e => {
+    const qtd = Number(e.quantidade)||0;
+    const pu = Number(e.precoUnitario)||0;
+    totalQtd += qtd;
+    totalValor += qtd * pu;
+  });
+  return totalQtd > 0 ? totalValor / totalQtd : 0;
+}
+
+// ─── MENU ───
+window.toggleMenu = () => {
+  document.getElementById('menuLateral').classList.toggle('aberto');
+  document.getElementById('menuOverlay').classList.toggle('aberto');
+};
+window.fecharMenu = () => {
+  document.getElementById('menuLateral').classList.remove('aberto');
+  document.getElementById('menuOverlay').classList.remove('aberto');
+};
+window.fazerLogout = async () => { await signOut(auth); window.location.href='login.html'; };
+
+// ─── TABS ───
+window.abrirTab = function(t) {
+  tabAtual = t;
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('ativa'));
+  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao'};
+  document.getElementById(map[t])?.classList.add('ativa');
+  renderTab();
+};
+window.aplicarFiltros = () => renderTab();
+
+function renderTab() {
+  // Só renderiza quando os dados base já carregaram
+  if (!_carregados.talhoes) return;
+  const cont = document.getElementById('tabContent');
+  if (!cont) return;
+  try {
+    if (tabAtual === 'geral') renderGeral();
+    else if (tabAtual === 'produtividade') renderProdutividade();
+    else if (tabAtual === 'pulverizacoes') renderPulverizacoes();
+    else if (tabAtual === 'estoque') renderEstoque();
+    else if (tabAtual === 'adubacao') renderAdubacao();
+  } catch(e) {
+    console.error(e);
+    cont.innerHTML = `<div class="vazio"><div class="ico">⚠️</div><p>Erro ao renderizar relatório: ${escHtml(e.message)}</p></div>`;
+  }
+}
+
+// === ABAS — definidas em chunks abaixo ===
+
+// ════════════════════════════════════════════════════
+// ABA 1 — GERAL (visão executiva)
+// ════════════════════════════════════════════════════
+function renderGeral() {
+  const cont = document.getElementById('tabContent');
+  const {label: lblPeriodo} = periodoFiltro();
+  const faz = fazendaFiltro();
+  const talhFil = talhoesFiltrados();
+  const pulvFil = pulverizacoesFiltradas();
+  const movFil = movimentacoesFiltradas();
+  // KPIs
+  const areaTotal = talhFil.reduce((s,t)=>s+parseDose(t.area), 0);
+  const haPulv = pulvFil.filter(p=>p.realizada).reduce((s,p)=>{
+    const t = talhoes.find(x=>x.id===p.talhaoId);
+    return s + parseDose(t?.area);
+  }, 0);
+  // Adubações realizadas no período (de planosAdubacao)
+  const planosFil = filtrarPlanos();
+  const haAdubado = calcHaAdubado(planosFil);
+  // Pulverizações pendentes
+  const pulvPend = pulverizacoes.filter(p => !p.realizada && (!faz || p.fazenda === faz)).length;
+  // Adubações atrasadas
+  const adubAtrasadas = calcAdubacoesAtrasadas();
+  // Produção total da safra atual (soma do histórico mais recente de cada talhão)
+  const prodSafraAtual = calcProducaoTotalSafraAtual(talhFil);
+  // Gastos (período)
+  const gastoDefensivos = calcGastoPorCategoria(movFil, 'defensivo');
+  const gastoAdubos = calcGastoPorCategoria(movFil, 'adubo_mineral') + calcGastoPorCategoria(movFil, 'fertilizante_foliar');
+  // Avisos
+  const semClassif = produtosEstoque.filter(p => !p.categoria && (!faz || p.fazenda === faz)).length;
+  const movSemPreco = movimentacoes.filter(m => m.tipo === 'entrada' && !m.precoUnitario && (!faz || m.fazenda === faz)).length;
+  let html = '';
+  if (semClassif > 0 || movSemPreco > 0) {
+    html += `<div class="banner-aviso">
+      <strong>📊 Para liberar todos os indicadores:</strong>
+      ${semClassif > 0 ? `• ${semClassif} produto(s) do estoque ainda sem categoria.<br>` : ''}
+      ${movSemPreco > 0 ? `• ${movSemPreco} entrada(s) sem preço cadastrado.<br>` : ''}
+      Quanto mais dado cadastrado, mais completos os relatórios.
+    </div>`;
+  }
+  html += `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Área gerenciada</div><div class="kpi-value">${fmt(areaTotal,1)}</div><div class="kpi-aux">hectares ${faz?'· '+escHtml(faz):'· '+talhFil.length+' talhões'}</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Produção safra atual</div><div class="kpi-value">${fmt(prodSafraAtual,0)}</div><div class="kpi-aux">sacas (somatório)</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Gasto c/ adubos</div><div class="kpi-value">${gastoAdubos>0?fmtRS(gastoAdubos):'—'}</div><div class="kpi-aux">${gastoAdubos>0?'no período':'sem preços cadastrados'}</div></div>
+    <div class="kpi-card ${pulvPend>0?'alerta':''}"><div class="kpi-label">Pulverizações pendentes</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">aguardando aplicação</div></div>
+    <div class="kpi-card ${adubAtrasadas>0?'danger':''}"><div class="kpi-label">Adubações atrasadas</div><div class="kpi-value">${adubAtrasadas}</div><div class="kpi-aux">passou da data prevista</div></div>
+  </div>`;
+  // Resumo por fazenda (só se filtro = todas)
+  if (!faz && fazendas.length > 1) {
+    html += `<div class="secao">
+      <div class="secao-tit">🏡 Resumo por fazenda</div>
+      <table class="tbl"><thead><tr>
+        <th>Fazenda</th><th>Talhões</th><th>Área (ha)</th><th>ha pulverizados</th><th>Produção (sc)</th>
+      </tr></thead><tbody>
+      ${fazendas.map(f => {
+        const tFaz = talhoes.filter(t => t.fazenda === f);
+        const area = tFaz.reduce((s,t)=>s+parseDose(t.area), 0);
+        const haP = pulvFil.filter(p => p.fazenda === f && p.realizada).reduce((s,p)=>{
+          const t = talhoes.find(x=>x.id===p.talhaoId);
+          return s + parseDose(t?.area);
+        }, 0);
+        const prod = calcProducaoTotalSafraAtual(tFaz);
+        return `<tr><td><strong>${escHtml(f)}</strong></td><td class="num">${tFaz.length}</td><td class="num">${fmt(area,1)}</td><td class="num">${fmt(haP,1)}</td><td class="num">${prod>0?fmt(prod,0):'—'}</td></tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
+    Filtros: ${escHtml(lblPeriodo)}${faz?' · '+escHtml(faz):' · todas as fazendas'}
+  </div>`;
+  cont.innerHTML = html;
+}
+
+// Helpers do Geral
+function filtrarPlanos() {
+  const faz = fazendaFiltro();
+  const {inicio, fim} = periodoFiltro();
+  return planosAdubacao.filter(plano => {
+    // plano tem talhaoId e mesAno (YYYY-MM)
+    if (faz) {
+      const t = talhoes.find(x => x.id === plano.talhaoId);
+      if (!t || t.fazenda !== faz) return false;
+    }
+    if (!plano.mesAno) return false;
+    const mesAno = plano.mesAno + '-15'; // meio do mês pra comparar
+    return mesAno >= inicio && mesAno <= fim;
+  });
+}
+
+// Conta ha adubado: cada plano que tem alguma aplicação confirmada do mês
+function calcHaAdubado(planos) {
+  let ha = 0;
+  planos.forEach(plano => {
+    // Verifica se há aplicação confirmada (estrutura: aplicacoes = {sem1:true, sem2:true, ...} ou similar)
+    const temAplic = plano.aplicacoes && Object.values(plano.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
+    if (temAplic) {
+      const t = talhoes.find(x => x.id === plano.talhaoId);
+      ha += parseDose(t?.area);
+    }
+  });
+  return ha;
+}
+
+function calcAdubacoesAtrasadas() {
+  const faz = fazendaFiltro();
+  const hojeStr = hoje().slice(0,7); // YYYY-MM
+  let count = 0;
+  planosAdubacao.forEach(plano => {
+    if (!plano.mesAno || plano.mesAno >= hojeStr) return; // não atrasado
+    if (faz) {
+      const t = talhoes.find(x => x.id === plano.talhaoId);
+      if (!t || t.fazenda !== faz) return;
+    }
+    // Sem aplicação confirmada = atrasado
+    const temAplic = plano.aplicacoes && Object.values(plano.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
+    if (!temAplic) count++;
+  });
+  return count;
+}
+
+function calcProducaoTotalSafraAtual(talhList) {
+  // Soma o "valor" da safra mais recente do histórico de cada talhão
+  let total = 0;
+  talhList.forEach(t => {
+    if (!t.historico || !t.historico.length) return;
+    // pegar entrada com maior "safra" (ordenação alfabética serve pra "2024/2025", "2025/2026")
+    const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
+    total += parseValorProducao(ord[0].valor);
+  });
+  return total;
+}
+
+function calcGastoPorCategoria(movs, cat) {
+  // Soma o precoTotal das entradas cujo produto pertence à categoria
+  let total = 0;
+  movs.forEach(m => {
+    if (m.tipo !== 'entrada' || !m.precoTotal) return;
+    const cp = getCategoriaProduto(m.produtoId);
+    if (cp.categoria === cat) total += Number(m.precoTotal)||0;
+  });
+  return total;
+}
+
+// ════════════════════════════════════════════════════
+// ABA 2 — PRODUTIVIDADE
+// ════════════════════════════════════════════════════
+function renderProdutividade() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  const talhFil = talhoesFiltrados();
+  let html = '';
+  // Verificar quantos talhões têm produção
+  const comProducao = talhFil.filter(t => t.historico && t.historico.length && parseValorProducao(t.historico[t.historico.length-1]?.valor) > 0);
+  if (!comProducao.length) {
+    html += `<div class="banner-aviso">
+      <strong>📊 Sem dados de produção</strong>
+      Cadastre o histórico de produtividade dos talhões (Mapa → editar talhão → adicionar safra com resultado).
+    </div>`;
+  }
+  // Calcular dados de produtividade
+  const dadosProd = talhFil.map(t => {
+    const area = parseDose(t.area);
+    let producao = 0, safra = '';
+    if (t.historico && t.historico.length) {
+      const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
+      producao = parseValorProducao(ord[0].valor);
+      safra = ord[0].safra || '—';
+    }
+    const prodHa = area > 0 ? producao / area : 0;
+    return {
+      _docId: t._docId,
+      id: t.id,
+      nome: t.nome,
+      fazenda: t.fazenda,
+      area, producao, prodHa, safra,
+      status: t.status,
+      historico: t.historico || []
+    };
+  }).filter(d => d.producao > 0);
+  // KPIs de produtividade
+  const producaoTotal = dadosProd.reduce((s,d)=>s+d.producao, 0);
+  const areaProdutiva = dadosProd.reduce((s,d)=>s+d.area, 0);
+  const mediaSchPorHa = areaProdutiva > 0 ? producaoTotal / areaProdutiva : 0;
+  // Talhões em reforma vs ativos
+  const ativos = talhFil.filter(t => t.status === 'ativo');
+  const reforma = talhFil.filter(t => t.status === 'reforma');
+  const colhido = talhFil.filter(t => t.status === 'colhido');
+  const areaAtiva = ativos.reduce((s,t)=>s+parseDose(t.area), 0);
+  const areaReforma = reforma.reduce((s,t)=>s+parseDose(t.area), 0);
+  const areaColhido = colhido.reduce((s,t)=>s+parseDose(t.area), 0);
+  const areaTot = areaAtiva + areaReforma + areaColhido;
+  html += `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Produção total</div><div class="kpi-value">${fmt(producaoTotal,0)}</div><div class="kpi-aux">sacas (safra mais recente)</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Produtividade média</div><div class="kpi-value">${fmt(mediaSchPorHa,1)}</div><div class="kpi-aux">sc/ha · base ${fmt(areaProdutiva,1)} ha</div></div>
+    <div class="kpi-card"><div class="kpi-label">Talhões produtivos</div><div class="kpi-value">${dadosProd.length}</div><div class="kpi-aux">de ${talhFil.length} cadastrados</div></div>
+    <div class="kpi-card ${reforma.length>0?'alerta':''}"><div class="kpi-label">Em reforma</div><div class="kpi-value">${reforma.length}</div><div class="kpi-aux">${fmt(areaReforma,1)} ha</div></div>
+  </div>`;
+  // Status da lavoura (área)
+  if (areaTot > 0) {
+    html += `<div class="secao">
+      <div class="secao-tit">📐 Status da lavoura por área</div>
+      <div class="comp-grid" style="grid-template-columns:repeat(3,1fr);">
+        <div class="comp-box alt"><div class="comp-lab">Ativos</div><div class="comp-val">${fmt(areaAtiva,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaAtiva/areaTot*100,1)}%</div></div>
+        <div class="comp-box"><div class="comp-lab">Em reforma</div><div class="comp-val">${fmt(areaReforma,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaTot>0?areaReforma/areaTot*100:0,1)}%</div></div>
+        <div class="comp-box"><div class="comp-lab">Colhido</div><div class="comp-val">${fmt(areaColhido,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaTot>0?areaColhido/areaTot*100:0,1)}%</div></div>
+      </div>
+    </div>`;
+  }
+  // Ranking de talhões mais produtivos
+  if (dadosProd.length > 0) {
+    const ranked = [...dadosProd].sort((a,b)=>b.prodHa-a.prodHa);
+    html += `<div class="secao">
+      <div class="secao-tit">🏆 Ranking de produtividade (sc/ha)</div>
+      <div class="secao-sub">Ordenado pela produtividade da safra mais recente</div>
+      ${ranked.slice(0,15).map((d,i) => `<div class="rank-item">
+        <div class="rank-num ${i<3?'top':''}">${i+1}</div>
+        <div class="rank-info">
+          <div class="rank-nome">${escHtml(d.id||'')} · ${escHtml(d.nome||'')}</div>
+          <div class="rank-meta">${escHtml(d.fazenda||'—')} · ${fmt(d.area,1)} ha · ${escHtml(d.safra)}</div>
+        </div>
+        <div class="rank-valor">${fmt(d.prodHa,1)}<div class="rank-und">sc/ha</div></div>
+      </div>`).join('')}
+    </div>`;
+    // Comparativo entre fazendas
+    if (!faz && fazendas.length > 1) {
+      const porFaz = {};
+      dadosProd.forEach(d => {
+        const k = d.fazenda || 'Sem fazenda';
+        if (!porFaz[k]) porFaz[k] = {area:0, prod:0};
+        porFaz[k].area += d.area;
+        porFaz[k].prod += d.producao;
+      });
+      const fazRank = Object.entries(porFaz).map(([f,v]) => ({
+        fazenda:f, area:v.area, producao:v.prod, prodHa: v.area>0?v.prod/v.area:0
+      })).sort((a,b)=>b.prodHa-a.prodHa);
+      const maxProdHa = Math.max(...fazRank.map(f=>f.prodHa), 1);
+      html += `<div class="secao">
+        <div class="secao-tit">🏡 Produtividade por fazenda</div>
+        ${fazRank.map(f => `<div class="bar-row">
+          <div class="bar-label">${escHtml(f.fazenda)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8, f.prodHa/maxProdHa*100)}%;">${fmt(f.prodHa,1)}</div></div>
+          <div class="bar-value">${fmt(f.producao,0)} sc</div>
+        </div>`).join('')}
+      </div>`;
+    }
+    // Evolução por safra (se há talhão com mais de uma safra)
+    const safrasUnique = [...new Set(talhFil.flatMap(t => (t.historico||[]).map(h => h.safra).filter(Boolean)))].sort();
+    if (safrasUnique.length > 1) {
+      // Pra cada safra, soma produção total e área dos talhões que tinham aquela safra
+      const evolu = safrasUnique.map(s => {
+        let prodTot = 0, areaTot = 0;
+        talhFil.forEach(t => {
+          const h = (t.historico||[]).find(x => x.safra === s);
+          if (h) {
+            const v = parseValorProducao(h.valor);
+            if (v > 0) {
+              prodTot += v;
+              areaTot += parseDose(t.area);
+            }
+          }
+        });
+        return {safra:s, prodTot, areaTot, prodHa: areaTot>0?prodTot/areaTot:0};
+      }).filter(s => s.prodTot > 0);
+      if (evolu.length > 1) {
+        const maxProdHa = Math.max(...evolu.map(e=>e.prodHa), 1);
+        html += `<div class="secao">
+          <div class="secao-tit">📈 Evolução por safra (sc/ha médio)</div>
+          <div class="chart-mensal">
+            ${evolu.map(e => `<div class="chart-bar-wrap">
+              <div class="chart-bar-val">${fmt(e.prodHa,1)}</div>
+              <div class="chart-bar" style="height:${Math.max(2, e.prodHa/maxProdHa*100)}%;"></div>
+              <div class="chart-bar-lab">${escHtml(e.safra)}</div>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+    }
+  }
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
+// ABA 3 — PULVERIZAÇÕES
+// ════════════════════════════════════════════════════
+function renderPulverizacoes() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  const pulvFil = pulverizacoesFiltradas().filter(p => p.realizada);
+  const talhFil = talhoesFiltrados();
+  if (!pulvFil.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização realizada no período selecionado.<br><span style="font-size:.78rem;">Ajuste o filtro de período ou aguarde aplicações serem confirmadas.</span></p></div>`;
+    return;
+  }
+  // KPIs
+  const totalPulv = pulvFil.length;
+  const haPulv = pulvFil.reduce((s,p)=>{
+    const t = talhoes.find(x=>x.id===p.talhaoId);
+    return s + parseDose(t?.area);
+  }, 0);
+  // % de cobertura: talhões que receberam pelo menos 1 pulv / total de talhões
+  const talhComPulv = new Set(pulvFil.map(p => p.talhaoId));
+  const cobertura = talhFil.length > 0 ? talhComPulv.size / talhFil.length * 100 : 0;
+  // Total de custo (soma das movimentações ligadas)
+  let custoTotal = 0;
+  pulvFil.forEach(p => {
+    (p.produtosUsados || []).forEach(pu => {
+      if (pu.movimentacaoEstoqueId) {
+        // achar a movimentação e calcular pelo preço médio do produto na data
+        const mov = movimentacoes.find(m => m._docId === pu.movimentacaoEstoqueId);
+        if (mov && mov.produtoId) {
+          const pm = precoMedioProduto(mov.produtoId, mov.data || hoje());
+          custoTotal += (Number(mov.quantidade)||0) * pm;
+        }
+      }
+    });
+  });
+  let html = `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Pulverizações</div><div class="kpi-value">${totalPulv}</div><div class="kpi-aux">realizadas no período</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">soma das áreas</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Cobertura</div><div class="kpi-value">${fmt(cobertura,0)}%</div><div class="kpi-aux">${talhComPulv.size} de ${talhFil.length} talhões</div></div>
+    <div class="kpi-card"><div class="kpi-label">Custo estimado</div><div class="kpi-value">${custoTotal>0?fmtRS(custoTotal):'—'}</div><div class="kpi-aux">${custoTotal>0?'preço médio × qtd':'sem preços cadastrados'}</div></div>
+  </div>`;
+  // Área pulverizada por mês (12 meses recentes)
+  const porMes = {};
+  pulvFil.forEach(p => {
+    const dt = p.dataRealizada || p.data;
+    if (!dt) return;
+    const mesAno = dt.slice(0,7); // YYYY-MM
+    if (!porMes[mesAno]) porMes[mesAno] = 0;
+    const t = talhoes.find(x => x.id === p.talhaoId);
+    porMes[mesAno] += parseDose(t?.area);
+  });
+  const mesesOrd = Object.keys(porMes).sort();
+  if (mesesOrd.length > 0) {
+    const maxV = Math.max(...Object.values(porMes), 1);
+    html += `<div class="secao">
+      <div class="secao-tit">📅 Hectares pulverizados por mês</div>
+      <div class="chart-mensal">
+        ${mesesOrd.map(m => {
+          const v = porMes[m];
+          const [a,mm] = m.split('-');
+          const lab = ['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][parseInt(mm)] + '/' + a.slice(2);
+          return `<div class="chart-bar-wrap">
+            <div class="chart-bar-val">${fmt(v,0)}</div>
+            <div class="chart-bar" style="height:${Math.max(2, v/maxV*100)}%;"></div>
+            <div class="chart-bar-lab">${lab}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  // Top 5 talhões mais pulverizados
+  const porTal = {};
+  pulvFil.forEach(p => {
+    const k = p.talhaoId;
+    if (!porTal[k]) porTal[k] = {qtd:0, ha:0, talhaoNome:p.talhaoNome, fazenda:p.fazenda};
+    porTal[k].qtd++;
+    const t = talhoes.find(x => x.id === p.talhaoId);
+    porTal[k].ha += parseDose(t?.area);
+  });
+  const topTal = Object.entries(porTal).map(([id,v])=>({id,...v})).sort((a,b)=>b.qtd-a.qtd).slice(0,10);
+  if (topTal.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">🎯 Talhões com mais pulverizações</div>
+      <div class="secao-sub">Maior número de aplicações no período pode indicar pressão de pragas/doenças</div>
+      ${topTal.map((t,i) => `<div class="rank-item">
+        <div class="rank-num ${i<3?'top':''}">${i+1}</div>
+        <div class="rank-info">
+          <div class="rank-nome">${escHtml(t.id||'')} · ${escHtml(t.talhaoNome||'')}</div>
+          <div class="rank-meta">${escHtml(t.fazenda||'—')} · ${fmt(t.ha,1)} ha total</div>
+        </div>
+        <div class="rank-valor">${t.qtd}<div class="rank-und">aplic.</div></div>
+      </div>`).join('')}
+    </div>`;
+  }
+  // Distribuição por classe
+  const porClasse = {};
+  pulvFil.forEach(p => {
+    (p.produtosUsados || []).forEach(pu => {
+      const cp = getCategoriaProduto(pu.produtoEstoqueId);
+      const sub = cp.subcategoria || '— sem classe —';
+      if (!porClasse[sub]) porClasse[sub] = 0;
+      porClasse[sub]++;
+    });
+  });
+  const classeArr = Object.entries(porClasse).map(([k,v])=>({k,v})).sort((a,b)=>b.v-a.v);
+  if (classeArr.length > 0 && Object.keys(porClasse).some(k => k !== '— sem classe —')) {
+    const totC = classeArr.reduce((s,c)=>s+c.v, 0);
+    const cores = ['#2d6a2d','#3b82f6','#f59e0b','#a855f7','#ef4444','#0891b2','#16a34a','#dc2626'];
+    // SVG donut
+    let acc = 0;
+    const segments = classeArr.map((c,i) => {
+      const pct = c.v / totC;
+      const start = acc;
+      acc += pct;
+      const startAng = start * 2 * Math.PI - Math.PI/2;
+      const endAng = acc * 2 * Math.PI - Math.PI/2;
+      const x1 = 60 + 50*Math.cos(startAng), y1 = 60 + 50*Math.sin(startAng);
+      const x2 = 60 + 50*Math.cos(endAng), y2 = 60 + 50*Math.sin(endAng);
+      const large = pct > 0.5 ? 1 : 0;
+      const cor = cores[i % cores.length];
+      return `<path d="M 60 60 L ${x1} ${y1} A 50 50 0 ${large} 1 ${x2} ${y2} Z" fill="${cor}" />`;
+    }).join('');
+    html += `<div class="secao">
+      <div class="secao-tit">🧪 Distribuição por classe de defensivo</div>
+      <div class="pizza-wrap">
+        <svg class="pizza-svg" viewBox="0 0 120 120">
+          ${segments}
+          <circle cx="60" cy="60" r="22" fill="white"/>
+        </svg>
+        <div class="pizza-leg">
+          ${classeArr.map((c,i) => `<div class="pizza-leg-item">
+            <div class="pizza-leg-cor" style="background:${cores[i%cores.length]}"></div>
+            <div class="pizza-leg-lab">${escHtml(c.k)}</div>
+            <div class="pizza-leg-val">${c.v} (${fmt(c.v/totC*100,0)}%)</div>
+          </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+  // Defensivos mais usados
+  const porProd = {};
+  pulvFil.forEach(p => {
+    (p.produtosUsados || []).forEach(pu => {
+      const k = pu.produto;
+      if (!porProd[k]) porProd[k] = {qtd:0, vezes:0, unidade:pu.unidade, custoTotal:0};
+      porProd[k].qtd += Number(pu.totalUsado)||0;
+      porProd[k].vezes++;
+      // custo: se temos mov ligada, calcula
+      if (pu.movimentacaoEstoqueId) {
+        const mov = movimentacoes.find(m => m._docId === pu.movimentacaoEstoqueId);
+        if (mov && mov.produtoId) {
+          const pm = precoMedioProduto(mov.produtoId, mov.data || hoje());
+          porProd[k].custoTotal += (Number(mov.quantidade)||0) * pm;
+        }
+      }
+    });
+  });
+  const prodArr = Object.entries(porProd).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.qtd-a.qtd).slice(0,15);
+  if (prodArr.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">🧪 Defensivos / Insumos mais usados</div>
+      <table class="tbl"><thead><tr>
+        <th>Produto</th><th>Aplic.</th><th>Qtd total</th><th>Custo est.</th>
+      </tr></thead><tbody>
+      ${prodArr.map(p => `<tr>
+        <td><strong>${escHtml(p.nome)}</strong></td>
+        <td class="num">${p.vezes}</td>
+        <td class="num">${fmt(p.qtd,2)} ${escHtml(p.unidade||'')}</td>
+        <td class="num">${p.custoTotal>0?fmtRS(p.custoTotal):'—'}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  // Custo por talhão
+  if (custoTotal > 0) {
+    const porTalCusto = {};
+    pulvFil.forEach(p => {
+      (p.produtosUsados || []).forEach(pu => {
+        if (pu.movimentacaoEstoqueId) {
+          const mov = movimentacoes.find(m => m._docId === pu.movimentacaoEstoqueId);
+          if (mov && mov.produtoId) {
+            const pm = precoMedioProduto(mov.produtoId, mov.data || hoje());
+            const c = (Number(mov.quantidade)||0) * pm;
+            const k = p.talhaoId;
+            if (!porTalCusto[k]) porTalCusto[k] = {custo:0, talhaoNome:p.talhaoNome, fazenda:p.fazenda};
+            porTalCusto[k].custo += c;
+          }
+        }
+      });
+    });
+    const talCustoArr = Object.entries(porTalCusto).map(([id,v])=>({id,...v})).sort((a,b)=>b.custo-a.custo).slice(0,10);
+    if (talCustoArr.length) {
+      html += `<div class="secao">
+        <div class="secao-tit">💰 Custo de pulverização por talhão</div>
+        <div class="secao-sub">Estimativa com base no preço médio ponderado dos insumos usados</div>
+        ${talCustoArr.map((t,i) => {
+          const tDoc = talhoes.find(x => x.id === t.id);
+          const ha = parseDose(tDoc?.area);
+          return `<div class="rank-item">
+            <div class="rank-num ${i<3?'top':''}">${i+1}</div>
+            <div class="rank-info">
+              <div class="rank-nome">${escHtml(t.id||'')} · ${escHtml(t.talhaoNome||'')}</div>
+              <div class="rank-meta">${escHtml(t.fazenda||'—')} · ${fmt(ha,1)} ha · ${ha>0?fmtRS(t.custo/ha)+'/ha':'—'}</div>
+            </div>
+            <div class="rank-valor">${fmtRS(t.custo)}</div>
+          </div>`;
+        }).join('')}
+      </div>`;
+    }
+  }
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
+// ABA 4 — ESTOQUE
+// ════════════════════════════════════════════════════
+function renderEstoque() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  const movFil = movimentacoesFiltradas();
+  const prodsFaz = faz ? produtosEstoque.filter(p => p.fazenda === faz) : produtosEstoque;
+  let html = '';
+  // Saldo total por categoria (valor)
+  const porCat = {};
+  prodsFaz.forEach(p => {
+    const cat = p.categoria || 'sem_categoria';
+    const saldo = Number(p.saldo)||0;
+    if (saldo <= 0) return;
+    if (!porCat[cat]) porCat[cat] = {qtdProds:0, valorTotal:0};
+    porCat[cat].qtdProds++;
+    const pm = precoMedioProduto(p._docId);
+    porCat[cat].valorTotal += saldo * pm;
+  });
+  const valorTotalEstoque = Object.values(porCat).reduce((s,c)=>s+c.valorTotal, 0);
+  // KPIs
+  const totalProds = prodsFaz.length;
+  const prodsAtivos = prodsFaz.filter(p => (Number(p.saldo)||0) > 0).length;
+  const prodsZerados = prodsFaz.filter(p => (Number(p.saldo)||0) === 0).length;
+  const prodsNeg = prodsFaz.filter(p => (Number(p.saldo)||0) < 0).length;
+  html += `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Produtos cadastrados</div><div class="kpi-value">${totalProds}</div><div class="kpi-aux">${prodsAtivos} com saldo</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Valor parado</div><div class="kpi-value">${valorTotalEstoque>0?fmtRS(valorTotalEstoque):'—'}</div><div class="kpi-aux">saldo × preço médio</div></div>
+    <div class="kpi-card ${prodsZerados>0?'alerta':''}"><div class="kpi-label">Produtos zerados</div><div class="kpi-value">${prodsZerados}</div><div class="kpi-aux">precisam reposição</div></div>
+    <div class="kpi-card ${prodsNeg>0?'danger':''}"><div class="kpi-label">Saldo negativo</div><div class="kpi-value">${prodsNeg}</div><div class="kpi-aux">${prodsNeg>0?'erro no lançamento':'tudo certo'}</div></div>
+  </div>`;
+  // Valor por categoria
+  if (valorTotalEstoque > 0) {
+    const arrCat = Object.entries(porCat).map(([k,v]) => ({
+      cat:k, label:CAT_LABELS[k]||'📦 '+k, ...v
+    })).sort((a,b)=>b.valorTotal-a.valorTotal);
+    const maxV = Math.max(...arrCat.map(c=>c.valorTotal), 1);
+    html += `<div class="secao">
+      <div class="secao-tit">💼 Valor parado por categoria</div>
+      ${arrCat.map(c => `<div class="bar-row">
+        <div class="bar-label">${escHtml(c.label)}</div>
+        <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8, c.valorTotal/maxV*100)}%;">${fmtRS(c.valorTotal)}</div></div>
+        <div class="bar-value">${c.qtdProds} prods</div>
+      </div>`).join('')}
+    </div>`;
+  }
+  // Consumo do período: top produtos com mais saída
+  const consumo = {};
+  movFil.filter(m => ['saida','aplicacao'].includes(m.tipo)).forEach(m => {
+    const k = m.produtoId;
+    if (!k) return;
+    if (!consumo[k]) consumo[k] = {nome:m.produtoNome, unidade:m.unidade, qtd:0, custo:0};
+    consumo[k].qtd += Number(m.quantidade)||0;
+    const pm = precoMedioProduto(m.produtoId, m.data || hoje());
+    consumo[k].custo += (Number(m.quantidade)||0) * pm;
+  });
+  const consArr = Object.values(consumo).sort((a,b)=>b.qtd-a.qtd).slice(0,15);
+  if (consArr.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">📤 Consumo do período</div>
+      <table class="tbl"><thead><tr>
+        <th>Produto</th><th>Qtd saída</th><th>Custo est.</th>
+      </tr></thead><tbody>
+      ${consArr.map(c => `<tr>
+        <td><strong>${escHtml(c.nome)}</strong></td>
+        <td class="num">${fmt(c.qtd,2)} ${escHtml(c.unidade||'')}</td>
+        <td class="num">${c.custo>0?fmtRS(c.custo):'—'}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  // Top compras (entradas)
+  const entradas = movFil.filter(m => m.tipo === 'entrada' && m.precoTotal > 0)
+    .sort((a,b)=>(Number(b.precoTotal)||0)-(Number(a.precoTotal)||0)).slice(0,10);
+  if (entradas.length) {
+    const totalCompras = entradas.reduce((s,e)=>s+(Number(e.precoTotal)||0), 0);
+    html += `<div class="secao">
+      <div class="secao-tit">🛒 Maiores compras do período</div>
+      <div class="secao-sub">Total: <strong>${fmtRS(totalCompras)}</strong> em ${entradas.length} compras</div>
+      <table class="tbl"><thead><tr>
+        <th>Data</th><th>Produto</th><th>Qtd</th><th>Total</th>
+      </tr></thead><tbody>
+      ${entradas.map(e => `<tr>
+        <td>${formatarData(e.data)}</td>
+        <td><strong>${escHtml(e.produtoNome||'')}</strong><br><span style="font-size:.7rem;color:var(--c);">${escHtml(e.fazenda||'')}</span></td>
+        <td class="num">${fmt(e.quantidade,2)} ${escHtml(e.unidade||'')}</td>
+        <td class="num">${fmtRS(e.precoTotal)}</td>
+      </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  // Projeção: quanto dura o saldo (saldo / consumo médio mensal)
+  if (consArr.length && valorTotalEstoque > 0) {
+    const {inicio, fim} = periodoFiltro();
+    const meses = Math.max(1, (new Date(fim) - new Date(inicio)) / (30*86400000));
+    const projecoes = prodsFaz.filter(p => {
+      const saldo = Number(p.saldo)||0;
+      return saldo > 0;
+    }).map(p => {
+      const c = consumo[p._docId];
+      if (!c || c.qtd === 0) return null;
+      const consumoMes = c.qtd / meses;
+      const meseRestante = consumoMes > 0 ? (Number(p.saldo)||0) / consumoMes : Infinity;
+      return {
+        nome: p.nome,
+        unidade: p.unidade,
+        saldo: Number(p.saldo)||0,
+        consumoMes,
+        mesesRestante: meseRestante
+      };
+    }).filter(Boolean).sort((a,b)=>a.mesesRestante-b.mesesRestante).slice(0,10);
+    if (projecoes.length) {
+      html += `<div class="secao">
+        <div class="secao-tit">📈 Projeção de duração do saldo</div>
+        <div class="secao-sub">Com base no consumo médio do período (${fmt(meses,1)} mês(es))</div>
+        <table class="tbl"><thead><tr>
+          <th>Produto</th><th>Saldo</th><th>Consumo/mês</th><th>Duração</th>
+        </tr></thead><tbody>
+        ${projecoes.map(p => {
+          let dur, cor;
+          if (p.mesesRestante === Infinity) { dur = '∞'; cor = 'var(--c)'; }
+          else if (p.mesesRestante < 1) { dur = fmt(p.mesesRestante*30,0)+' dias'; cor = 'var(--danger)'; }
+          else if (p.mesesRestante < 3) { dur = fmt(p.mesesRestante,1)+' meses'; cor = 'var(--warn)'; }
+          else { dur = fmt(p.mesesRestante,1)+' meses'; cor = 'var(--ok)'; }
+          return `<tr>
+            <td><strong>${escHtml(p.nome)}</strong></td>
+            <td class="num">${fmt(p.saldo,2)} ${escHtml(p.unidade)}</td>
+            <td class="num">${fmt(p.consumoMes,2)} ${escHtml(p.unidade)}</td>
+            <td class="num" style="color:${cor};font-weight:700;">${dur}</td>
+          </tr>`;
+        }).join('')}
+        </tbody></table>
+      </div>`;
+    }
+  }
+  if (!html) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">🏬</div><p>Sem dados de estoque no período.</p></div>`;
+    return;
+  }
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
+// ABA 5 — ADUBAÇÃO
+// ════════════════════════════════════════════════════
+function renderAdubacao() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  const planosFil = filtrarPlanos();
+  // Verifica se há planos
+  if (!planosFil.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">🧪</div><p>Nenhum plano de adubação no período selecionado.<br><span style="font-size:.78rem;">Verifique o filtro ou cadastre planos no módulo de Adubações.</span></p></div>`;
+    return;
+  }
+  // KPIs
+  const totalPlanos = planosFil.length;
+  const totalExecutados = planosFil.filter(p =>
+    p.aplicacoes && Object.values(p.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito))
+  ).length;
+  const pctExec = totalPlanos > 0 ? (totalExecutados / totalPlanos * 100) : 0;
+  const atrasados = calcAdubacoesAtrasadas();
+  const haAdubado = calcHaAdubado(planosFil);
+  let html = `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Planos no período</div><div class="kpi-value">${totalPlanos}</div><div class="kpi-aux">planos cadastrados</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Executados</div><div class="kpi-value">${totalExecutados}</div><div class="kpi-aux">${fmt(pctExec,0)}% do previsto</div></div>
+    <div class="kpi-card ${atrasados>0?'danger':''}"><div class="kpi-label">Atrasados</div><div class="kpi-value">${atrasados}</div><div class="kpi-aux">passou data prevista</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">com alguma aplicação</div></div>
+  </div>`;
+  // Previsto vs Realizado por mês
+  const porMes = {};
+  planosFil.forEach(p => {
+    if (!p.mesAno) return;
+    if (!porMes[p.mesAno]) porMes[p.mesAno] = {previsto:0, realizado:0};
+    porMes[p.mesAno].previsto++;
+    const tem = p.aplicacoes && Object.values(p.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
+    if (tem) porMes[p.mesAno].realizado++;
+  });
+  const mesesOrd = Object.keys(porMes).sort();
+  if (mesesOrd.length > 0) {
+    html += `<div class="secao">
+      <div class="secao-tit">📅 Planos por mês — previsto vs realizado</div>
+      <table class="tbl"><thead><tr>
+        <th>Mês</th><th>Previstos</th><th>Realizados</th><th>%</th>
+      </tr></thead><tbody>
+      ${mesesOrd.map(m => {
+        const [a,mm] = m.split('-');
+        const lab = ['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][parseInt(mm)] + '/' + a;
+        const v = porMes[m];
+        const pct = v.previsto > 0 ? v.realizado/v.previsto*100 : 0;
+        const cor = pct >= 80 ? 'var(--ok)' : (pct >= 50 ? 'var(--warn)' : 'var(--danger)');
+        return `<tr>
+          <td><strong>${lab}</strong></td>
+          <td class="num">${v.previsto}</td>
+          <td class="num">${v.realizado}</td>
+          <td class="num" style="color:${cor};font-weight:700;">${fmt(pct,0)}%</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>
+    </div>`;
+  }
+  // Atrasados (lista detalhada)
+  if (atrasados > 0) {
+    const hojeStr = hoje().slice(0,7);
+    const listaAtras = planosAdubacao.filter(plano => {
+      if (!plano.mesAno || plano.mesAno >= hojeStr) return false;
+      if (faz) {
+        const t = talhoes.find(x => x.id === plano.talhaoId);
+        if (!t || t.fazenda !== faz) return false;
+      }
+      const tem = plano.aplicacoes && Object.values(plano.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
+      return !tem;
+    }).sort((a,b)=>(a.mesAno||'').localeCompare(b.mesAno||''));
+    if (listaAtras.length) {
+      html += `<div class="secao">
+        <div class="secao-tit">⚠️ Adubações atrasadas (sem aplicação)</div>
+        <div class="secao-sub">Planos com data já passada e sem aplicação confirmada</div>
+        <table class="tbl"><thead><tr>
+          <th>Mês previsto</th><th>Talhão</th><th>Fazenda</th>
+        </tr></thead><tbody>
+        ${listaAtras.slice(0,20).map(p => {
+          const t = talhoes.find(x => x.id === p.talhaoId);
+          const [a,mm] = (p.mesAno||'').split('-');
+          const lab = ['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][parseInt(mm)] + '/' + a;
+          return `<tr>
+            <td><strong>${lab}</strong></td>
+            <td>${escHtml(p.talhaoId||'')}${t?.nome?' · '+escHtml(t.nome):''}</td>
+            <td>${escHtml(t?.fazenda||'—')}</td>
+          </tr>`;
+        }).join('')}
+        ${listaAtras.length > 20 ? `<tr><td colspan="3" style="text-align:center;color:var(--c);font-style:italic;">+ ${listaAtras.length-20} outros não listados</td></tr>` : ''}
+        </tbody></table>
+      </div>`;
+    }
+  }
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
+// EXPORTAR PDF (impressão da aba atual)
+// ════════════════════════════════════════════════════
+window.exportarPDF = function() {
+  const cont = document.getElementById('tabContent');
+  if (!cont.innerHTML) { toast('⚠️ Aguarde os dados carregarem.'); return; }
+  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação'}[tabAtual] || tabAtual;
+  const {label: lblPeriodo} = periodoFiltro();
+  const faz = fazendaFiltro() || 'Todas as fazendas';
+  const html = `<div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:24px;color:#111;">
+    <div style="border-bottom:3px solid #2d6a2d;padding-bottom:14px;margin-bottom:20px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#9ca3af;margin-bottom:4px;">Conilon Tech · Relatório de Gestão</div>
+      <div style="font-size:22px;font-weight:900;color:#1a3d1a;">${escHtml(labelTab)}</div>
+      <div style="font-size:12px;color:#374151;margin-top:5px;">📅 ${escHtml(lblPeriodo)} · 🏡 ${escHtml(faz)}</div>
+    </div>
+    ${cont.innerHTML}
+    <div style="margin-top:20px;font-size:10px;color:#9ca3af;text-align:right;border-top:1px solid #e5e7eb;padding-top:10px;">
+      Gerado em ${new Date().toLocaleString('pt-BR')} por ${escHtml(usuarioAtual.email)} · ConilonTech
+    </div>
+  </div>`;
+  document.getElementById('area-impressao').innerHTML = html;
+  setTimeout(() => window.print(), 120);
+};
+</script>
+</body>
+</html>
