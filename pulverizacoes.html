@@ -388,7 +388,7 @@ window.abrirRelatorioPulv = async function(docId) {
   // Preencher hectares aplicados (default = haRestante se parcial, senão areaTotal)
   const inpHa = document.getElementById('relHaAplicados');
   if (inpHa) {
-    inpHa.value = String(r.haAplicarAgora || '').replace('.', ',');
+    inpHa.value = String(window.relWIP.haAplicarAgora || '').replace('.', ',');
   }
   relAtualizarTodasLinhas();  // mostra aviso de progressão
   document.getElementById('overlayRelatorio').classList.add('open');
