@@ -205,28 +205,101 @@ function getFiltrosLista() {
   };
 }
 
+// ═══════════════════════════════════════════════
+// HELPERS DE STATUS DE PULVERIZAÇÃO
+// ═══════════════════════════════════════════════
+// Retorna informações consolidadas sobre o status de aplicação:
+// { status: 'pendente' | 'parcial' | 'realizada' | 'encerrada_parcial',
+//   haAplicado, haTotal, haRestante, aplicacoes: [...] }
+function calcStatusAplicacao(p) {
+  const t = talhoes.find(x => x.id === p.talhaoId);
+  const haTotal = parseDose(t?.area);
+  // Status manual de "encerrada parcial"
+  if (p.aplicacaoStatus === 'encerrada_parcial') {
+    const aplicacoes = p.aplicacoes || [];
+    const haAplicado = aplicacoes.reduce((s,a)=>s+parseDose(a.haAplicado), 0);
+    return {status:'encerrada_parcial', haAplicado, haTotal, haRestante:0, aplicacoes};
+  }
+  // Estrutura nova (com aplicações parciais)
+  if (Array.isArray(p.aplicacoes) && p.aplicacoes.length) {
+    const haAplicado = p.aplicacoes.reduce((s,a)=>s+parseDose(a.haAplicado), 0);
+    const haRestante = Math.max(0, haTotal - haAplicado);
+    // Se cobriu >= 99% da área, considera completo (margem de arredondamento)
+    const completo = haTotal > 0 && haAplicado >= haTotal - 0.01;
+    return {
+      status: completo ? 'realizada' : 'parcial',
+      haAplicado, haTotal, haRestante,
+      aplicacoes: p.aplicacoes
+    };
+  }
+  // Estrutura antiga (realizada = true, sem aplicacoes[]) → trata como uma aplicação única
+  if (p.realizada) {
+    return {
+      status: 'realizada',
+      haAplicado: haTotal,
+      haTotal,
+      haRestante: 0,
+      aplicacoes: [{
+        data: p.dataRealizada,
+        operador: p.realizadoPor,
+        haAplicado: haTotal,
+        produtos: p.produtosUsados || [],
+        observacao: p.obsRealizacao,
+        movimentacoes: p.movimentacoesEstoque || [],
+        _legado: true
+      }]
+    };
+  }
+  // Pendente
+  return {status:'pendente', haAplicado:0, haTotal, haRestante:haTotal, aplicacoes:[]};
+}
+
+function badgeStatus(status) {
+  const map = {
+    pendente: {cls:'badge-pend', txt:'⏳ Pendente'},
+    parcial: {cls:'badge-parcial', txt:'🟡 Parcial'},
+    realizada: {cls:'badge-ok', txt:'✅ Realizada'},
+    encerrada_parcial: {cls:'badge-encerrada', txt:'🟠 Encerrada (parcial)'}
+  };
+  return map[status] || map.pendente;
+}
+
 function renderCardPulv(p) {
   const adm = isAdmin(), podConf = podeConfirmar();
-  const realizada = p.realizada;
+  const sit = calcStatusAplicacao(p);
   const fazTalhao = p.fazenda ? `${p.fazenda} · ` : '';
-  // Datas: planejada (p.data) vs realizada (p.dataRealizada). Mostrar comparação se realizada em dia diferente
   const dataPlanejada = p.data ? formatarData(p.data) : '—';
-  const dataReal = p.dataRealizada ? formatarData(p.dataRealizada) : null;
-  const diasAtraso = (realizada && p.data && p.dataRealizada && p.data !== p.dataRealizada)
-    ? Math.round((new Date(p.dataRealizada) - new Date(p.data)) / 86400000)
-    : 0;
-  // Bloco de parâmetros do drone (planejamento)
   const pd = p.paramsDrone || {};
   const temParamsDrone = pd.alturaVoo || pd.larguraFaixa || pd.velocidade || pd.volumeCalda;
-  return `<div class="pulv-card ${realizada?'realizada':''}">
+  const badge = badgeStatus(sit.status);
+  // Barra de progresso (só pra parcial)
+  const pctProg = sit.haTotal > 0 ? Math.min(100, sit.haAplicado / sit.haTotal * 100) : 0;
+  const isParcial = sit.status === 'parcial';
+  const isRealizada = sit.status === 'realizada' || sit.status === 'encerrada_parcial';
+  // Resumo de aplicações (se tiver mais de uma, ou se encerrada parcial)
+  let renderAplicacoes = '';
+  if (sit.aplicacoes.length) {
+    renderAplicacoes = sit.aplicacoes.map((a,i) => {
+      const numAplic = sit.aplicacoes.length > 1 ? `<strong>Aplicação ${i+1}/${sit.aplicacoes.length}</strong> · ` : '';
+      const cabecalho = `${numAplic}📅 ${formatarData(a.data)} · 👤 ${sanitizar(a.operador||'—')} · 🌾 ${fmt(a.haAplicado,1)} ha`;
+      const prodsHtml = (a.produtos||[]).map(pu => `<div class="prod-usado-item">🧪 ${sanitizar(pu.produto)} · <strong>${(pu.dose||0)} ${sanitizar(pu.unidade||'')}/ha</strong> × ${fmt(pu.areaAplicada||a.haAplicado,1)} ha = <strong>${fmt(pu.totalUsado,2)} ${sanitizar(pu.unidade||'')}</strong></div>`).join('');
+      const obsHtml = a.observacao ? `<div class="obs-realizacao" style="margin-top:5px;">💬 ${sanitizar(a.observacao)}</div>` : '';
+      return `<div class="aplic-bloco">
+        <div class="aplic-cabec">${cabecalho}</div>
+        ${prodsHtml?`<div class="prod-usados-resumo" style="margin-top:5px;">${prodsHtml}</div>`:''}
+        ${obsHtml}
+      </div>`;
+    }).join('');
+  }
+  return `<div class="pulv-card ${isRealizada?'realizada':(isParcial?'parcial':'')}">
     <div class="pulv-header">
       <div>
         <div class="pulv-titulo">💧 ${fazTalhao}${p.talhaoNome||p.talhaoId||'—'}</div>
-        <div class="pulv-meta">📅 ${dataPlanejada} · ${p.modoAplicacao||'—'}</div>
+        <div class="pulv-meta">📅 ${dataPlanejada} · ${p.modoAplicacao||'—'}${sit.haTotal?' · '+fmt(sit.haTotal,1)+' ha':''}</div>
         ${p.drone?`<div class="pulv-drone">🚁 Drone: ${p.drone}</div>`:''}
       </div>
       <div class="pulv-status-wrap">
-        <div class="pulv-badge ${realizada?'badge-ok':'badge-pend'}">${realizada?'✅ Realizada':'⏳ Pendente'}</div>
+        <div class="pulv-badge ${badge.cls}">${badge.txt}</div>
         ${adm?`<button class="btn-rm-pulv" data-doc="${p._docId}" onclick="excluirPulv(this)">🗑</button>`:''}
       </div>
     </div>
@@ -240,24 +313,27 @@ function renderCardPulv(p) {
       ${(p.produtos||[]).map(pr=>`<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${pr.unidade||''}/ha</span>`:''}</div>`).join('')}
     </div>
     ${p.observacoes?`<div class="pulv-obs">💬 ${sanitizar(p.observacoes)}</div>`:''}
-    ${podConf?`<div class="pulv-acoes">
-      ${!realizada?`
-        <button class="btn-confirmar" onclick="abrirRelatorioPulv('${p._docId}')">📝 Fazer Relatório e Confirmar</button>`
-      :`<div class="conf-info">
-        ${diasAtraso !== 0
-          ? `<div style="font-size:.78rem;color:#92400e;background:#fffbeb;padding:5px 8px;border-radius:5px;border-left:3px solid #f59e0b;margin-bottom:6px;">📅 Planejada: <strong>${dataPlanejada}</strong> · ✅ Realizada: <strong>${dataReal}</strong> (${diasAtraso > 0 ? diasAtraso+' dia(s) atrasado' : Math.abs(diasAtraso)+' dia(s) antecipado'})</div>`
-          : `✅ Realizada em ${dataReal||'—'} por ${p.realizadoPor||'—'}`
-        }
-        ${diasAtraso !== 0 ? `<div style="font-size:.78rem;color:var(--c);margin-bottom:6px;">por ${p.realizadoPor||'—'}</div>` : ''}
-        ${p.obsRealizacao?`<div class="obs-realizacao">💬 ${sanitizar(p.obsRealizacao)}</div>`:''}
-        ${(p.produtosUsados||[]).length?`<div class="prod-usados-resumo">
-          <div class="prod-usados-tit">📦 Produtos baixados do estoque:</div>
-          ${p.produtosUsados.map(pu=>`<div class="prod-usado-item">🧪 ${sanitizar(pu.produto)} · <strong>${(pu.dose||0)} ${sanitizar(pu.unidade||'')}/ha</strong> × ${pu.areaAplicada||0} ha = <strong>${(pu.totalUsado||0).toLocaleString('pt-BR')} ${sanitizar(pu.unidade||'')}</strong></div>`).join('')}
-        </div>`:''}
+    ${(isParcial || isRealizada) && sit.haTotal>0 ? `<div class="prog-area">
+      <div class="prog-info">
+        <span><strong>${fmt(sit.haAplicado,1)}</strong> de ${fmt(sit.haTotal,1)} ha aplicados ${isParcial?`· faltam <strong>${fmt(sit.haRestante,1)} ha</strong>`:''}</span>
+        <span class="prog-pct">${fmt(pctProg,0)}%</span>
       </div>
-      ${adm?`<button class="btn-desfazer" onclick="desfazerPulv('${p._docId}')">↩ Desfazer e estornar estoque</button>`:''}`}
+      <div class="prog-bar"><div class="prog-fill" style="width:${pctProg}%;background:${isRealizada?'var(--v)':'#f59e0b'};"></div></div>
+    </div>` : ''}
+    ${renderAplicacoes ? `<div class="pulv-aplicacoes">${renderAplicacoes}</div>` : ''}
+    ${podConf?`<div class="pulv-acoes">
+      ${sit.status === 'pendente' ? `
+        <button class="btn-confirmar" onclick="abrirRelatorioPulv('${p._docId}')">📝 Fazer Relatório e Confirmar</button>` : ''}
+      ${sit.status === 'parcial' ? `
+        <button class="btn-confirmar" onclick="abrirRelatorioPulv('${p._docId}')">📝 Continuar aplicação (${fmt(sit.haRestante,1)} ha restantes)</button>
+        ${adm?`<button class="btn-encerrar" onclick="encerrarParcial('${p._docId}')">🟠 Encerrar como parcial</button>`:''}
+        ${adm?`<button class="btn-desfazer" onclick="desfazerUltimaParcial('${p._docId}')">↩ Desfazer última aplicação</button>`:''}
+      ` : ''}
+      ${(sit.status === 'realizada' || sit.status === 'encerrada_parcial') && adm ? `
+        <button class="btn-desfazer" onclick="desfazerUltimaParcial('${p._docId}')">↩ Desfazer última aplicação</button>
+      ` : ''}
       ${adm?`<button class="btn-duplicar" onclick="abrirDuplicarPulv('${p._docId}')">📋 Duplicar para outro dia</button>`:''}
-      ${adm?`<button class="btn-editar" onclick="abrirEditarPulv('${p._docId}')">✏️ ${realizada?'Editar informações':'Editar pulverização'}</button>`:''}
+      ${adm?`<button class="btn-editar" onclick="abrirEditarPulv('${p._docId}')">✏️ ${sit.status==='pendente'?'Editar pulverização':'Editar informações'}</button>`:''}
     </div>`:''}
   </div>`;
 }
@@ -278,15 +354,23 @@ window.abrirRelatorioPulv = async function(docId) {
   await carregarEstoqueParaPulv(p.fazenda);
   // Talhão pra pegar a área
   const talhao = talhoes.find(t => t.id === p.talhaoId);
-  const area = parseDose(talhao?.area);
-  // Inicializar produtos do relatório com os planejados
+  const areaTotal = parseDose(talhao?.area);
+  // Status atual da aplicação
+  const sit = calcStatusAplicacao(p);
+  const haRestante = sit.haRestante > 0 ? sit.haRestante : areaTotal;
+  const haDefault = sit.status === 'parcial' ? haRestante : areaTotal;
+  // Inicializar produtos do relatório
   window.relWIP = {
     docId,
     pulverizacao: p,
     fazenda: p.fazenda || '',
-    area,
+    areaTotalTalhao: areaTotal,
+    haAplicadoPrevio: sit.haAplicado,    // o que já foi feito antes desta parcial
+    haRestante,                          // o que ainda falta após o que já foi feito
+    haAplicarAgora: haDefault,           // editável pelo usuário
     talhaoNome: p.talhaoNome || '',
-    dataPlanejada: p.data || '',  // pra usar no alerta
+    dataPlanejada: p.data || '',
+    statusAtual: sit.status,
     produtos: (p.produtos||[]).map(pr => ({
       produto: pr.produto || '',
       dose: pr.dose || '',
@@ -295,13 +379,18 @@ window.abrirRelatorioPulv = async function(docId) {
     observacao: ''
   };
   renderizarRelatorioPulv();
-  // Preencher data padrão = hoje, e configurar alerta
   const inpData = document.getElementById('relDataAplicacao');
   if (inpData) {
     inpData.value = hoje();
     inpData.onchange = checarAlertaDataRel;
-    checarAlertaDataRel();  // checa logo no abrir
+    checarAlertaDataRel();
   }
+  // Preencher hectares aplicados (default = haRestante se parcial, senão areaTotal)
+  const inpHa = document.getElementById('relHaAplicados');
+  if (inpHa) {
+    inpHa.value = String(r.haAplicarAgora || '').replace('.', ',');
+  }
+  relAtualizarTodasLinhas();  // mostra aviso de progressão
   document.getElementById('overlayRelatorio').classList.add('open');
 };
 
@@ -345,9 +434,10 @@ function renderizarRelatorioPulv() {
   const r = window.relWIP; if (!r) return;
   const escAttr = s => String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const estoqFaz = _estoqueCache[r.fazenda] || [];
+  const haAplicar = parseDose(r.haAplicarAgora);
   const linhas = r.produtos.map((pr,i) => {
     const dose = parseDose(pr.dose);
-    const total = dose * r.area;
+    const total = dose * haAplicar;
     const nomeNorm = normalizarNome(pr.produto);
     const prodEstoque = estoqFaz.find(p => normalizarNome(p.nome) === nomeNorm);
     let infoEstoque = '';
@@ -373,8 +463,8 @@ function renderizarRelatorioPulv() {
         <button onclick="relRemProduto(${i})" class="btn-rm-prod">✕</button>
       </div>
       <div class="rel-prod-calc">
-        ${dose > 0 && r.area > 0
-          ? `Total: <strong>${total.toLocaleString('pt-BR')} ${pr.unidade}</strong> (${pr.dose} ${pr.unidade}/ha × ${r.area} ha)`
+        ${dose > 0 && haAplicar > 0
+          ? `Total: <strong>${total.toLocaleString('pt-BR')} ${pr.unidade}</strong> (${pr.dose} ${pr.unidade}/ha × ${haAplicar} ha)`
           : '<span style="color:#9ca3af;">Informe a dose/ha para calcular o total</span>'}
       </div>
       ${infoEstoque}
@@ -383,27 +473,28 @@ function renderizarRelatorioPulv() {
   // Datalist com nomes dos produtos do estoque (autocomplete nativo do navegador)
   const datalistOptions = estoqFaz.map(p => `<option value="${escAttr(p.nome)}">`).join('');
   document.getElementById('relProdsContainer').innerHTML = linhas + `<datalist id="estoqProds-${r.fazenda?'F':''}">${datalistOptions}</datalist>`;
-  // Cabeçalho com info
+  // Cabeçalho com info de hectares (e contexto de parcial se aplicável)
+  const labArea = r.statusAtual === 'parcial'
+    ? `· <strong style="color:#92400e;">Continuando aplicação</strong> · ${fmt(r.haAplicadoPrevio,1)} ha já aplicados · faltam ${fmt(r.haRestante,1)} ha`
+    : `· ${fmt(r.areaTotalTalhao,1)} ha total`;
   document.getElementById('relCabecalho').innerHTML = `
-    💧 <strong>${sanitizar(r.talhaoNome)}</strong> · ${sanitizar(r.fazenda||'sem fazenda')} · ${r.area?r.area+' ha':'<span style="color:#dc2626;">⚠️ talhão sem área cadastrada</span>'}
+    💧 <strong>${sanitizar(r.talhaoNome)}</strong> · ${sanitizar(r.fazenda||'sem fazenda')} ${r.areaTotalTalhao?labArea:'<span style="color:#dc2626;">⚠️ talhão sem área cadastrada</span>'}
   `;
 }
 
-// Atualização leve da linha (após oninput) — re-renderiza tudo, mas mantém foco
+// Atualização leve da linha (após oninput) — atualiza só "rel-prod-calc" e "rel-info-estoque"
 window.relAtualizarLinha = function(i) {
-  // Estratégia simples: re-renderiza tudo. Como o input que perde foco é o que disparou,
-  // o re-render imediato pode roubar o foco. Pra evitar, só atualizamos o "rel-prod-calc"
-  // e o "rel-info-estoque" da linha em questão.
   const r = window.relWIP; if (!r) return;
   const pr = r.produtos[i]; if (!pr) return;
+  const haAplicar = parseDose(r.haAplicarAgora);
   const dose = parseDose(pr.dose);
-  const total = dose * r.area;
+  const total = dose * haAplicar;
   const blocos = document.querySelectorAll('.rel-prod-bloco');
   const bloco = blocos[i]; if (!bloco) return;
   const calc = bloco.querySelector('.rel-prod-calc');
   if (calc) {
-    calc.innerHTML = dose > 0 && r.area > 0
-      ? `Total: <strong>${total.toLocaleString('pt-BR')} ${pr.unidade}</strong> (${pr.dose} ${pr.unidade}/ha × ${r.area} ha)`
+    calc.innerHTML = dose > 0 && haAplicar > 0
+      ? `Total: <strong>${total.toLocaleString('pt-BR')} ${pr.unidade}</strong> (${pr.dose} ${pr.unidade}/ha × ${haAplicar} ha)`
       : '<span style="color:#9ca3af;">Informe a dose/ha para calcular o total</span>';
   }
   // Atualizar info estoque
@@ -428,17 +519,41 @@ window.relAtualizarLinha = function(i) {
   }
 };
 
+// Atualiza todas as linhas (chamada quando muda haAplicarAgora)
+window.relAtualizarTodasLinhas = function() {
+  const r = window.relWIP; if (!r) return;
+  for (let i = 0; i < r.produtos.length; i++) relAtualizarLinha(i);
+  // Atualiza o aviso de ha (mostra contexto da aplicação atual)
+  const info = document.getElementById('relInfoHa');
+  if (info) {
+    const ha = parseDose(r.haAplicarAgora);
+    const aposTotal = parseDose(r.haAplicadoPrevio) + ha;
+    if (!ha || ha <= 0) {
+      info.innerHTML = `<span style="color:#dc2626;">⚠️ Informe quantos hectares foram aplicados.</span>`;
+    } else if (r.areaTotalTalhao > 0 && aposTotal < r.areaTotalTalhao - 0.01) {
+      const restante = r.areaTotalTalhao - aposTotal;
+      info.innerHTML = `🟡 <strong>Aplicação parcial</strong>: ${fmt(ha,1)} ha agora · após esta, faltam <strong>${fmt(restante,1)} ha</strong> de ${fmt(r.areaTotalTalhao,1)} ha totais.`;
+    } else if (r.areaTotalTalhao > 0 && aposTotal >= r.areaTotalTalhao - 0.01) {
+      info.innerHTML = `✅ <strong>Vai concluir o talhão</strong>: ${fmt(ha,1)} ha agora · total aplicado de ${fmt(aposTotal,1)} de ${fmt(r.areaTotalTalhao,1)} ha.`;
+    } else if (r.areaTotalTalhao > 0 && aposTotal > r.areaTotalTalhao + 0.01) {
+      info.innerHTML = `⚠️ Está aplicando <strong>mais que a área do talhão</strong> (${fmt(aposTotal,1)} de ${fmt(r.areaTotalTalhao,1)} ha). Verifique se está correto.`;
+    } else {
+      info.innerHTML = `${fmt(ha,1)} ha agora.`;
+    }
+  }
+};
+
 window.confirmarRelatorioPulv = async function() {
   const r = window.relWIP; if (!r) return;
   const p = r.pulverizacao;
   const prodsValidos = r.produtos.filter(pr => pr.produto.trim() && parseDose(pr.dose) > 0);
   if (!prodsValidos.length) { toast('⚠️ Informe ao menos um produto com dose.'); return; }
-  if (!r.area) {
-    if (!confirm('Talhão sem área cadastrada. A baixa do estoque será 0. Continuar mesmo assim?')) return;
+  const haAplicar = parseDose(r.haAplicarAgora);
+  if (!haAplicar || haAplicar <= 0) { toast('⚠️ Informe os hectares aplicados.'); return; }
+  if (r.areaTotalTalhao && haAplicar > r.haRestante + 0.01) {
+    if (!confirm(`Você informou ${haAplicar} ha aplicados, mas só faltam ${fmt(r.haRestante,1)} ha no talhão.\n\nContinuar mesmo assim?`)) return;
   }
-  // Data da aplicação (do campo do relatório)
   const dataAplic = document.getElementById('relDataAplicacao').value || hoje();
-  // Se data diferente do planejado, pedir confirmação
   if (r.dataPlanejada && dataAplic !== r.dataPlanejada) {
     if (!confirm(`Esta pulverização foi planejada para ${formatarData(r.dataPlanejada)}.\nVocê está informando que foi realizada em ${formatarData(dataAplic)}.\n\nContinuar?`)) return;
   }
@@ -451,7 +566,7 @@ window.confirmarRelatorioPulv = async function() {
     const produtosUsados = [];
     for (const pr of prodsValidos) {
       const dose = parseDose(pr.dose);
-      const total = Math.round(dose * r.area * 1000) / 1000;
+      const total = Math.round(dose * haAplicar * 1000) / 1000;
       const nomeNorm = normalizarNome(pr.produto);
       let prodEstoque = estoqFaz.find(p => normalizarNome(p.nome) === nomeNorm);
       if (!prodEstoque && r.fazenda) {
@@ -469,7 +584,7 @@ window.confirmarRelatorioPulv = async function() {
         _estoqueCache[r.fazenda].push(prodEstoque);
       }
       if (!prodEstoque) {
-        produtosUsados.push({produto:pr.produto.trim(), dose, unidade:pr.unidade, areaAplicada:r.area, totalUsado:total, semEstoque:true});
+        produtosUsados.push({produto:pr.produto.trim(), dose, unidade:pr.unidade, areaAplicada:haAplicar, totalUsado:total, semEstoque:true});
         continue;
       }
       const mov = {
@@ -483,9 +598,9 @@ window.confirmarRelatorioPulv = async function() {
         observacao: `Pulverização em ${r.talhaoNome}${obs?' · '+obs:''}`,
         talhaoId: p.talhaoId,
         talhaoNome: r.talhaoNome,
-        area: r.area,
+        area: haAplicar,
         dosePorHa: dose,
-        data: dataAplic,      // USA A DATA REAL DA APLICAÇÃO, não a planejada
+        data: dataAplic,
         criadoPor: usuarioAtual.email,
         criadoEm: new Date().toISOString(),
         pulverizacaoOrigemId: r.docId
@@ -499,23 +614,63 @@ window.confirmarRelatorioPulv = async function() {
         produto: prodEstoque.nome,
         dose,
         unidade: prodEstoque.unidade,
-        areaAplicada: r.area,
+        areaAplicada: haAplicar,
         totalUsado: total,
         produtoEstoqueId: prodEstoque._docId,
         movimentacaoEstoqueId: movRef.id
       });
     }
-    // Atualizar pulverização — usa a data real
-    await updateDoc(doc(db,'pulverizacoes',r.docId), {
-      realizada: true,
-      dataRealizada: dataAplic,   // data informada no relatório
-      realizadoPor: usuarioAtual.email,
-      obsRealizacao: obs,
-      produtosUsados,
-      movimentacoesEstoque: movimentacoesRef
-    });
-    await registrarLog('pulverizacao_confirmada', `${usuarioAtual.email} confirmou pulverização em ${r.talhaoNome} em ${formatarData(dataAplic)} (${movimentacoesRef.length} baixas no estoque)`);
-    toast(`✅ Confirmado! ${movimentacoesRef.length} produto(s) baixados do estoque.`);
+    // Montar a nova aplicação parcial
+    const novaAplic = {
+      data: dataAplic,
+      operador: usuarioAtual.email,
+      haAplicado: haAplicar,
+      produtos: produtosUsados,
+      observacao: obs,
+      movimentacoes: movimentacoesRef,
+      criadoEm: new Date().toISOString()
+    };
+    // Mesclar com aplicações existentes
+    let aplicacoesExistentes = Array.isArray(p.aplicacoes) ? [...p.aplicacoes] : [];
+    // Se a pulverização é legada (realizada:true sem aplicacoes[]), trata como uma aplicação inicial
+    if (!aplicacoesExistentes.length && p.realizada && (p.produtosUsados||[]).length) {
+      aplicacoesExistentes.push({
+        data: p.dataRealizada || dataAplic,
+        operador: p.realizadoPor || '—',
+        haAplicado: r.areaTotalTalhao,
+        produtos: p.produtosUsados || [],
+        observacao: p.obsRealizacao || '',
+        movimentacoes: p.movimentacoesEstoque || [],
+        _legado: true
+      });
+    }
+    aplicacoesExistentes.push(novaAplic);
+    // Calcular novo status
+    const haTotalAplicado = aplicacoesExistentes.reduce((s,a)=>s+parseDose(a.haAplicado), 0);
+    const completo = r.areaTotalTalhao > 0 && haTotalAplicado >= r.areaTotalTalhao - 0.01;
+    // Atualizar pulverização
+    const updateObj = {
+      aplicacoes: aplicacoesExistentes,
+      aplicacaoStatus: completo ? 'realizada' : 'parcial',
+      realizada: completo,                              // mantém compatibilidade
+      dataRealizada: completo ? dataAplic : null,
+      realizadoPor: completo ? usuarioAtual.email : null,
+      // Apaga os campos legados para evitar duplicar exibição
+      produtosUsados: null,
+      movimentacoesEstoque: null,
+      obsRealizacao: null
+    };
+    await updateDoc(doc(db,'pulverizacoes',r.docId), updateObj);
+    await registrarLog(
+      completo ? 'pulverizacao_concluida' : 'pulverizacao_parcial',
+      `${usuarioAtual.email} ${completo?'concluiu':'aplicação parcial em'} ${r.talhaoNome} · ${haAplicar} ha · ${movimentacoesRef.length} baixas`
+    );
+    if (completo) {
+      toast(`✅ Pulverização concluída! ${haAplicar} ha aplicados.`);
+    } else {
+      const restante = Math.max(0, r.areaTotalTalhao - haTotalAplicado);
+      toast(`🟡 Aplicação parcial salva. Faltam ${fmt(restante,1)} ha.`);
+    }
     fecharRelatorioPulv();
     fecharDia();
   } catch(e) {
@@ -595,16 +750,35 @@ window.confirmarPulv = async function(docId) {
   abrirRelatorioPulv(docId);
 };
 
-window.desfazerPulv = async function(docId) {
-  if (!confirm('Desfazer confirmação?\n\nIsso vai criar entradas reversas no estoque pra estornar tudo que foi baixado.')) return;
+// Desfaz só a ÚLTIMA aplicação parcial (estorna estoque dela)
+window.desfazerUltimaParcial = async function(docId) {
   try {
     const p = pulverizacoes.find(x => x._docId === docId);
     if (!p) { toast('❌ Pulverização não encontrada.'); return; }
-    // Estornar movimentações no estoque
-    const usados = p.produtosUsados || [];
+    // Normalizar: se for legado (sem aplicações[]), trata como uma única aplicação
+    let aplicacoes = Array.isArray(p.aplicacoes) ? [...p.aplicacoes] : [];
+    if (!aplicacoes.length && p.realizada && (p.produtosUsados||[]).length) {
+      // Caso legado: vira uma aplicação única e desfaz tudo
+      aplicacoes = [{
+        data: p.dataRealizada,
+        operador: p.realizadoPor,
+        haAplicado: (function(){ const t = talhoes.find(x=>x.id===p.talhaoId); return parseDose(t?.area); })(),
+        produtos: p.produtosUsados || [],
+        observacao: p.obsRealizacao,
+        movimentacoes: p.movimentacoesEstoque || []
+      }];
+    }
+    if (!aplicacoes.length) { toast('⚠️ Não há aplicação para desfazer.'); return; }
+    const ultima = aplicacoes[aplicacoes.length - 1];
+    const restantes = aplicacoes.length - 1;
+    const msg = aplicacoes.length === 1
+      ? `Desfazer esta aplicação?\n\nVai criar entradas reversas no estoque pra estornar tudo o que foi baixado nessa aplicação.`
+      : `Desfazer a ÚLTIMA aplicação (${aplicacoes.length} de ${aplicacoes.length})?\n\nVai estornar somente o que foi baixado nessa aplicação. ${restantes} aplicação(ões) anterior(es) ficam intactas.`;
+    if (!confirm(msg)) return;
+    // Estornar movimentações da última aplicação
+    const usados = ultima.produtos || [];
     for (const u of usados) {
       if (!u.produtoEstoqueId || !u.totalUsado) continue;
-      // Criar entrada de estorno
       const estorno = {
         fazenda: p.fazenda,
         produtoId: u.produtoEstoqueId,
@@ -621,7 +795,6 @@ window.desfazerPulv = async function(docId) {
         pulverizacaoOrigemId: docId
       };
       await addDoc(collection(db,'estoque_movimentacoes'), estorno);
-      // Atualizar saldo do produto: somar de volta
       try {
         const prodSnap = await getDoc(doc(db,'estoque_produtos',u.produtoEstoqueId));
         if (prodSnap.exists()) {
@@ -632,21 +805,60 @@ window.desfazerPulv = async function(docId) {
         }
       } catch(e) { console.error('Erro ao restaurar saldo:',e); }
     }
-    // Limpar campos da pulverização
-    await updateDoc(doc(db,'pulverizacoes',docId), {
-      realizada: false,
-      dataRealizada: null,
-      realizadoPor: null,
-      obsRealizacao: null,
+    // Remover a última aplicação e atualizar status
+    const aplicacoesNovas = aplicacoes.slice(0, -1);
+    const haTotal = (function(){ const t = talhoes.find(x=>x.id===p.talhaoId); return parseDose(t?.area); })();
+    const haAplicadoTotal = aplicacoesNovas.reduce((s,a)=>s+parseDose(a.haAplicado), 0);
+    const completo = haTotal > 0 && haAplicadoTotal >= haTotal - 0.01;
+    let novoStatus;
+    if (!aplicacoesNovas.length) novoStatus = 'pendente';
+    else if (completo) novoStatus = 'realizada';
+    else novoStatus = 'parcial';
+    const upd = {
+      aplicacoes: aplicacoesNovas,
+      aplicacaoStatus: novoStatus,
+      realizada: novoStatus === 'realizada',
+      // Limpar campos legados (vão ser recalculados a partir das aplicações)
       produtosUsados: null,
-      movimentacoesEstoque: null
-    });
-    await registrarLog('pulverizacao_desfeita', `${usuarioAtual.email} desfez pulverização e estornou ${usados.length} produtos`);
-    toast(`↩ Desfeito. ${usados.length} produto(s) estornados.`);
+      movimentacoesEstoque: null,
+      obsRealizacao: null
+    };
+    if (novoStatus === 'realizada') {
+      const ult = aplicacoesNovas[aplicacoesNovas.length-1];
+      upd.dataRealizada = ult.data;
+      upd.realizadoPor = ult.operador;
+    } else {
+      upd.dataRealizada = null;
+      upd.realizadoPor = null;
+    }
+    await updateDoc(doc(db,'pulverizacoes',docId), upd);
+    await registrarLog('pulverizacao_parcial_desfeita', `${usuarioAtual.email} desfez aplicação em ${p.talhaoNome} (${usados.length} produtos estornados)`);
+    toast(`↩ Aplicação desfeita. ${usados.length} produto(s) estornado(s).`);
   } catch(e) {
     console.error(e);
     toast('❌ Erro: '+e.message);
   }
+};
+
+// Mantém o nome antigo apontando pra nova função (caso algum botão antigo ainda chame)
+window.desfazerPulv = window.desfazerUltimaParcial;
+
+// Encerra uma pulverização parcial como "encerrada_parcial" — sem cobrar os ha faltantes
+window.encerrarParcial = async function(docId) {
+  const p = pulverizacoes.find(x => x._docId === docId);
+  if (!p) { toast('❌ Pulverização não encontrada.'); return; }
+  const sit = calcStatusAplicacao(p);
+  if (sit.status !== 'parcial') { toast('⚠️ Apenas pulverizações parciais podem ser encerradas.'); return; }
+  if (!confirm(`Encerrar esta pulverização como parcial?\n\nForam aplicados ${fmt(sit.haAplicado,1)} de ${fmt(sit.haTotal,1)} ha. Faltam ${fmt(sit.haRestante,1)} ha que NÃO serão aplicados.\n\nO status muda para "Encerrada parcial" e a pulverização sai da lista de pendentes.`)) return;
+  try {
+    await updateDoc(doc(db,'pulverizacoes',docId), {
+      aplicacaoStatus: 'encerrada_parcial',
+      encerradaEm: new Date().toISOString(),
+      encerradaPor: usuarioAtual.email
+    });
+    await registrarLog('pulverizacao_encerrada_parcial', `${usuarioAtual.email} encerrou pulverização parcial em ${p.talhaoNome} (${sit.haAplicado}/${sit.haTotal} ha)`);
+    toast('🟠 Pulverização encerrada como parcial.');
+  } catch(e) { toast('❌ Erro: '+e.message); }
 };
 
 window.excluirPulv = async function(btn) {
@@ -884,6 +1096,7 @@ async function registrarLog(tipo, mensagem) {
 }
 function hoje() { return new Date().toISOString().slice(0,10); }
 function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return`${dd}/${m}/${a}`; }
+function fmt(n,d){const v=Number(n)||0;const dec=d!==undefined?d:2;return v.toLocaleString('pt-BR',{minimumFractionDigits:dec,maximumFractionDigits:dec});}
 function sanitizar(str) { return (str||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
 window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
@@ -966,6 +1179,20 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .pulv-badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
 .badge-ok{background:#dcfce7;color:#16a34a;}
 .badge-pend{background:#fef9c3;color:#d97706;}
+.badge-parcial{background:#fef3c7;color:#92400e;border:1px solid #fbbf24;}
+.badge-encerrada{background:#ffedd5;color:#9a3412;border:1px solid #fb923c;}
+.pulv-card.parcial{border-left:4px solid #f59e0b;}
+.prog-area{padding:8px 14px;}
+.prog-info{display:flex;justify-content:space-between;align-items:center;font-size:.78rem;color:var(--c);margin-bottom:5px;}
+.prog-info strong{color:var(--ve);}
+.prog-pct{font-family:'DM Mono',monospace;font-weight:800;color:var(--ve);font-size:.85rem;}
+.prog-bar{height:8px;background:var(--cl);border-radius:99px;overflow:hidden;}
+.prog-fill{height:100%;transition:width .3s;border-radius:99px;}
+.pulv-aplicacoes{padding:0 14px 8px;display:flex;flex-direction:column;gap:6px;}
+.aplic-bloco{background:var(--cl);border-left:3px solid var(--v);border-radius:6px;padding:7px 10px;}
+.aplic-cabec{font-size:.78rem;color:var(--ve);font-weight:600;line-height:1.35;}
+.btn-encerrar{background:none;border:1.5px solid #fb923c;color:#9a3412;border-radius:6px;padding:7px 12px;font-size:.78rem;cursor:pointer;margin-top:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
+.btn-encerrar:active{transform:scale(.97);background:#fff7ed;}
 .btn-rm-pulv{background:none;border:none;cursor:pointer;font-size:1rem;color:var(--danger);}
 .pulv-produtos{padding:0 14px 10px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;}
 .prod-linha{display:inline-flex;align-items:center;gap:9px;background:var(--vb);border:1px solid #c8e0c8;border-radius:9px;padding:6px 10px;max-width:100%;}
@@ -1189,7 +1416,13 @@ input:disabled,select:disabled{background:#f3f4f6;color:#6b7280;cursor:not-allow
     <div class="modal-body">
       <div id="relCabecalho" class="rel-cabecalho"></div>
       <div class="rel-instrucao">
-        Confira/edite os produtos efetivamente usados. As quantidades serão baixadas do estoque desta fazenda automaticamente (dose/ha × área do talhão).
+        Confira/edite os produtos efetivamente usados. As quantidades serão baixadas do estoque desta fazenda automaticamente (dose/ha × ha aplicados).
+      </div>
+      <div class="campo">
+        <label>🌾 Hectares aplicados agora</label>
+        <input type="text" inputmode="decimal" class="campo-inp" id="relHaAplicados"
+          oninput="window.relWIP.haAplicarAgora=this.value;relAtualizarTodasLinhas()">
+        <div id="relInfoHa" style="font-size:.78rem;color:var(--c);margin-top:5px;line-height:1.4;"></div>
       </div>
       <div class="campo">
         <label>📅 Data em que foi aplicado</label>
