@@ -7,6 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- PDF.js para leitura de laudos Fullin -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+if (window['pdfjsLib']) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+</script>
 <style>
 :root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -76,6 +83,15 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 /* BOTÃO FAB */
 .fab{position:fixed;bottom:20px;right:20px;width:56px;height:56px;border-radius:50%;background:var(--v);color:white;border:none;font-size:1.6rem;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:50;}
 .fab:active{transform:scale(.95);}
+/* FAB grupo (importar + manual) */
+.fab-grupo{position:fixed;bottom:20px;right:20px;z-index:50;display:none;flex-direction:column-reverse;gap:9px;align-items:flex-end;}
+.fab-grupo .fab{position:static;width:56px;height:56px;}
+.fab-grupo .fab-pdf{width:50px;height:50px;font-size:1.3rem;background:#5d3a1a;}
+/* Overlay leitura PDF */
+.overlay-pdf{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9500;display:none;align-items:center;justify-content:center;}
+.overlay-pdf.aberto{display:flex;}
+.overlay-pdf-box{background:white;border-radius:14px;padding:30px 40px;display:flex;flex-direction:column;align-items:center;gap:15px;min-width:240px;box-shadow:var(--sf);}
+.overlay-pdf-box .loading-text{color:var(--ve);}
 
 /* MODAL */
 .overlay-an{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-start;justify-content:center;padding-top:30px;}
@@ -177,6 +193,114 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .placeholder-comparar{background:white;border-radius:var(--rad);padding:30px 20px;text-align:center;box-shadow:var(--s);}
 .placeholder-comparar .ico{font-size:3rem;margin-bottom:14px;}
 .placeholder-comparar p{color:var(--c);font-size:.9rem;line-height:1.5;margin-bottom:14px;}
+
+/* ━━━━━━━━━━ FASE B: COMPARAÇÃO ━━━━━━━━━━ */
+/* Botão de Faixas no header */
+.btn-faixas-header{background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:38px;height:38px;border-radius:8px;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;}
+
+/* Header da comparação (slots + sub-tabs) */
+.cmp-header{background:white;border-radius:var(--rad);padding:11px;box-shadow:var(--s);margin-bottom:10px;}
+.cmp-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px;}
+.slot-cmp{border-radius:10px;padding:9px 8px;min-height:115px;display:flex;flex-direction:column;cursor:pointer;transition:all .2s;border:2px dashed var(--cb);background:#fafafa;text-align:center;justify-content:center;align-items:center;gap:3px;}
+.slot-cmp.slot-vazio:hover{border-color:var(--v);background:var(--vb);}
+.slot-cmp.slot-preenchido{cursor:default;border-style:solid;text-align:left;justify-content:flex-start;align-items:stretch;}
+.slot-cmp.slot-solo{border-color:#5d3a1a;background:#fef7ed;}
+.slot-cmp.slot-folha{border-color:#1e5631;background:#f0fdf4;}
+.slot-plus{font-size:1.7rem;color:var(--cb);line-height:1;}
+.slot-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--c);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;}
+.slot-hint{font-size:.66rem;color:#9ca3af;}
+.slot-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.slot-tipo{font-size:1rem;}
+.slot-rm{background:none;border:none;color:var(--c);font-size:.85rem;cursor:pointer;padding:1px 5px;border-radius:4px;}
+.slot-rm:hover{background:#fee2e2;color:var(--danger);}
+.slot-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.86rem;color:var(--ve);line-height:1.2;margin-bottom:3px;}
+.slot-meta{font-size:.7rem;color:var(--c);line-height:1.3;flex:1;}
+.slot-trocar{background:none;border:1px solid var(--cb);color:var(--c);border-radius:5px;padding:3px 6px;font-size:.65rem;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;margin-top:4px;text-transform:uppercase;letter-spacing:.04em;}
+.slot-trocar:hover{background:var(--cl);}
+.cmp-acoes{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--cl);padding-top:9px;}
+
+.cmp-aviso-misto{background:#fef3c7;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:8px;padding:9px 11px;font-size:.78rem;color:#92400e;line-height:1.45;margin-bottom:10px;}
+
+/* TABELA comparativa */
+.cmp-tbl-wrap{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:.78rem;table-layout:fixed;}
+.cmp-tbl + .cmp-tbl{margin-top:14px;}
+.cmp-tbl th,.cmp-tbl td{padding:6px 5px;border-bottom:1px solid var(--cl);vertical-align:top;}
+.cmp-tbl th{background:var(--vb);font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--ve);text-align:left;font-size:.72rem;border-bottom:2px solid var(--v);}
+.cmp-th-tipo{font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
+.cmp-th-nome{font-size:.78rem;color:var(--ve);font-weight:800;line-height:1.2;}
+.cmp-th-vazia{background:#f9fafb!important;}
+.cmp-tit-secao td{background:#374151;color:white;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:.05em;padding:5px 8px;}
+.cmp-lab{font-weight:600;color:var(--t);font-size:.78rem;}
+.cmp-un{font-size:.65rem;color:var(--c);font-family:'DM Mono',monospace;}
+.cmp-cel{text-align:center;}
+.cmp-cel-val{font-family:'DM Mono',monospace;font-weight:700;font-size:.85rem;color:var(--ve);}
+.cmp-cel-class{display:inline-block;padding:1px 5px;border-radius:99px;font-size:.6rem;color:white;font-weight:700;margin-top:2px;}
+.cmp-cel-vazia{text-align:center;color:#9ca3af;font-style:italic;font-size:.78rem;}
+
+/* GRÁFICOS */
+.grafico-grupo{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;margin-bottom:10px;}
+.grafico-grupo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);margin-bottom:3px;}
+.grafico-grupo-sub{font-size:.74rem;color:var(--c);margin-bottom:11px;line-height:1.4;}
+.grafico-param{margin-bottom:14px;padding-bottom:11px;border-bottom:1px solid var(--cl);}
+.grafico-param:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
+.grafico-param-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
+.grafico-param-nome{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;color:var(--ve);}
+.grafico-param-un{font-size:.7rem;color:var(--c);font-family:'DM Mono',monospace;}
+.grafico-bar{position:relative;height:22px;background:#f3f4f6;border-radius:5px;margin-bottom:24px;overflow:visible;}
+.seg-faixa{position:absolute;top:0;bottom:0;opacity:.55;}
+.seg-faixa:first-child{border-radius:5px 0 0 5px;}
+.seg-faixa:last-child{border-radius:0 5px 5px 0;}
+.seg-marker{position:absolute;top:-3px;bottom:-3px;width:3px;border-radius:99px;box-shadow:0 0 0 2px white;z-index:2;}
+.seg-marker-val{position:absolute;bottom:-19px;left:50%;transform:translateX(-50%);font-family:'DM Mono',monospace;font-weight:700;font-size:.62rem;background:white;padding:1px 4px;border-radius:4px;border:1px solid var(--cb);white-space:nowrap;color:var(--ve);box-shadow:0 1px 2px rgba(0,0,0,.1);}
+.grafico-valores{display:flex;flex-direction:column;gap:3px;}
+.cmp-val-item{display:flex;align-items:center;gap:7px;font-size:.74rem;flex-wrap:wrap;}
+.cmp-val-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+.cmp-val-nome{flex:1;min-width:80px;color:var(--t);}
+.cmp-val-num{font-family:'DM Mono',monospace;font-weight:700;font-size:.74rem;color:var(--ve);}
+.cmp-val-cls{display:inline-block;padding:1px 6px;border-radius:99px;font-size:.6rem;color:white;font-weight:700;}
+
+.grafico-misto{background:#fffbeb;border:1px dashed #fde68a;border-radius:8px;padding:10px;}
+.grafico-misto-sub{margin-top:8px;}
+.grafico-misto-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.72rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
+
+/* SELETOR de amostra (lista) */
+.sel-amostra-lista{display:flex;flex-direction:column;gap:6px;}
+.sel-am-item{display:flex;align-items:center;gap:9px;padding:9px;background:#fafafa;border:1px solid var(--cb);border-radius:8px;cursor:pointer;transition:all .15s;}
+.sel-am-item:hover{background:var(--vb);border-color:var(--v);}
+.sel-am-item.ja-sel{opacity:.55;background:#f3f4f6;cursor:default;}
+.sel-am-tipo{flex-shrink:0;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.95rem;}
+.sel-am-info{flex:1;min-width:0;}
+.sel-am-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;color:var(--ve);line-height:1.2;}
+.sel-am-meta{font-size:.7rem;color:var(--c);line-height:1.35;margin-top:1px;}
+.sel-am-arrow{color:var(--cb);font-size:1.3rem;font-weight:700;flex-shrink:0;}
+.sel-am-tag{font-size:.6rem;background:var(--cb);color:var(--c);padding:2px 6px;border-radius:99px;text-transform:uppercase;font-weight:700;letter-spacing:.04em;}
+
+/* FAIXAS */
+.faixas-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--cb);padding-bottom:9px;}
+.faixas-tab{flex:1;background:#fafafa;border:1px solid var(--cb);border-radius:7px;padding:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--c);}
+.faixas-tab.ativa{background:var(--v);color:white;border-color:var(--v);}
+.faixas-grupo{margin-bottom:14px;}
+.faixas-grupo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.75rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;padding:5px 0 7px;border-bottom:1px solid var(--cb);margin-bottom:9px;}
+.faixa-param{background:#fafafa;border:1px solid var(--cb);border-radius:8px;padding:9px 11px;margin-bottom:7px;}
+.faixa-param-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;flex-wrap:wrap;gap:5px;}
+.faixa-param-nome{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--ve);}
+.faixa-param-un{font-size:.66rem;color:var(--c);font-family:'DM Mono',monospace;font-weight:500;}
+.faixa-param-status{font-size:.6rem;background:var(--cl);color:var(--c);padding:2px 7px;border-radius:99px;text-transform:uppercase;font-weight:700;letter-spacing:.04em;}
+.btn-faixa-reset{background:#fef3c7;border:1px solid #fde68a;color:#92400e;border-radius:6px;padding:3px 9px;font-size:.66rem;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
+.faixa-inputs{display:flex;gap:6px;flex-wrap:wrap;}
+.faixa-inp-grp{flex:1;min-width:75px;}
+.faixa-inp-grp label{display:block;font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:2px;}
+.faixa-inp{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;font-size:.82rem;font-family:'DM Mono',monospace;background:white;outline:none;text-align:right;}
+.faixa-inp.cust{border-color:var(--v);background:#f0fdf4;font-weight:700;}
+.faixa-inp:focus{border-color:var(--v);}
+.faixa-inp::placeholder{color:#9ca3af;font-weight:500;}
+.faixa-text-bloco{background:white;border:1px solid var(--cb);border-radius:7px;padding:6px 8px;margin-bottom:6px;}
+.faixa-text-bloco:last-child{margin-bottom:0;}
+.faixa-text-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;color:var(--ve);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}
+/* Banner de importação PDF */
+.banner-pdf-import{background:#dcfce7;border:1px solid #86efac;border-left:4px solid #16a34a;border-radius:8px;padding:10px 13px;font-size:.84rem;color:#166534;line-height:1.45;margin-bottom:13px;}
+.banner-pdf-import strong{color:#14532d;}
 </style>
 </head>
 <body>
@@ -195,6 +319,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
     </div>
   </div>
   <div class="header-user" id="userNome">—</div>
+  <button class="btn-faixas-header" id="btnAbrirFaixas" onclick="abrirFaixas()" title="Faixas de referência" style="display:none;">⚙️</button>
 </header>
 
 <div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
@@ -236,7 +361,12 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
   <div class="content" id="content"></div>
 </div>
 
-<button class="fab" id="fabNovo" onclick="abrirNovaAnalise()" style="display:none;">+</button>
+<!-- FAB grupo: importar PDF + novo manual -->
+<div class="fab-grupo" id="fabGrupo" style="display:none;">
+  <button class="fab fab-pdf" id="fabImportar" onclick="document.getElementById('inpPDF').click()" title="Importar PDF Fullin">📄</button>
+  <button class="fab" id="fabNovo" onclick="abrirNovaAnalise()" title="Nova análise manual">+</button>
+</div>
+<input type="file" id="inpPDF" accept=".pdf,application/pdf" style="display:none;" onchange="importarPDF(event)">
 
 <!-- MODAL: cadastrar/editar análise -->
 <div class="overlay-an" id="overlayAnalise">
@@ -264,13 +394,36 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
   </div>
 </div>
 
+<!-- MODAL: editar faixas de referência -->
+<div class="overlay-an" id="overlayFaixas">
+  <div class="modal-an">
+    <div class="modal-an-head">
+      <div class="modal-an-titulo">⚙️ Faixas de Referência</div>
+      <button class="modal-an-fechar" onclick="fecharFaixas()">✕</button>
+    </div>
+    <div class="modal-an-body" id="faixasBody"></div>
+    <div class="modal-an-footer">
+      <button class="btn-sec" onclick="fecharFaixas()">Cancelar</button>
+      <button class="btn-prim" id="btnSalvarFaixas" onclick="salvarFaixas()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- OVERLAY: lendo PDF -->
+<div class="overlay-pdf" id="overlayPDF">
+  <div class="overlay-pdf-box">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="pdfStatus">Lendo PDF...</div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
 // ━━━━━━━━━━ FIREBASE ━━━━━━━━━━
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -389,6 +542,12 @@ let tabAtual='lista';
 let editandoId=null;
 window.formWIP=null;
 window.texturaAtiva='medio';
+// COMPARAÇÃO
+window.slotsComparar=[null, null, null];   // até 3 amostras (IDs)
+window.modoComparar='tabela';              // 'tabela' | 'graficos'
+window.seletorSlotAlvo=null;               // qual slot está sendo selecionado (0/1/2)
+// FAIXAS CUSTOMIZADAS
+window.faixasCustom={solo:{}, folha:{}};   // sobrescreve PARAM_SOLO/PARAM_FOLHA
 
 // ━━━━━━━━━━ BOOTSTRAP ━━━━━━━━━━
 onAuthStateChanged(auth, async (user) => {
@@ -410,7 +569,8 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appHeader').style.display = 'flex';
   document.getElementById('appContent').style.display = 'flex';
-  if (podeEditar()) document.getElementById('fabNovo').style.display = 'block';
+  if (podeEditar()) document.getElementById('fabGrupo').style.display = 'flex';
+  if (isAdmin()) document.getElementById('btnAbrirFaixas').style.display = 'flex';
   gerarMenu();
 
   onSnapshot(collection(db,'talhoes'), snap => {
@@ -426,6 +586,17 @@ onAuthStateChanged(auth, async (user) => {
   onSnapshot(collection(db,'amostras'), snap => {
     amostras = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
     renderLista();
+  });
+  // Faixas customizadas (1 doc só, ID fixo)
+  onSnapshot(doc(db,'analises_faixas','global'), snap => {
+    if (snap.exists()) {
+      const d = snap.data();
+      window.faixasCustom = {solo: d.solo || {}, folha: d.folha || {}};
+    } else {
+      window.faixasCustom = {solo:{}, folha:{}};
+    }
+    // Re-renderiza se está numa tela que usa faixas
+    if (tabAtual === 'comparar') renderComparar();
   });
 });
 
@@ -507,6 +678,29 @@ window.abrirTab = function(t) {
 };
 
 // ━━━━━━━━━━ CLASSIFICAÇÃO (avalia parâmetro contra faixa) ━━━━━━━━━━
+// Retorna a faixa "efetiva" — custom (se existir) ou default do catálogo
+function faixaEfetiva(parametro, tipo) {
+  const custom = window.faixasCustom?.[tipo]?.[parametro.id];
+  if (parametro.faixaTextura) {
+    // Mesclar: custom sobrescreve por textura
+    const out = {};
+    for (const t of ['arenoso','medio','argiloso']) {
+      out[t] = (custom && custom[t]) ? custom[t] : parametro.faixaTextura[t];
+    }
+    return {tipo:'textura', faixa:out};
+  }
+  if (parametro.faixaIdeal) {
+    return {tipo:'ideal', faixa: (custom && custom.ideal !== undefined) ? {ideal:custom.ideal} : parametro.faixaIdeal};
+  }
+  if (parametro.faixa) {
+    return {tipo:'simples', faixa: custom || parametro.faixa};
+  }
+  if (parametro.faixaEspecial === 'ph') {
+    return {tipo:'ph'};
+  }
+  return null;
+}
+
 // Retorna { cls: 'mb'|'bx'|'md'|'at'|'ma'|'ne', label: 'Muito baixo'/'Bom'/...}
 function classificar(parametro, valor, tipo, textura) {
   if (valor == null || !isFinite(valor)) return {cls:'ne', label:'—'};
@@ -519,20 +713,23 @@ function classificar(parametro, valor, tipo, textura) {
     if (valor < 7.5) return {cls:'at', label:'Alcalino fraco'};
     return {cls:'ma', label:'Alcalino'};
   }
+  const ef = faixaEfetiva(parametro, tipo);
+  if (!ef) return {cls:'ne', label:'—'};
   // Faixa que varia por textura (P-Mehlich)
-  let faixa = parametro.faixa;
-  if (parametro.faixaTextura) {
-    faixa = parametro.faixaTextura[textura || 'medio'];
-  }
-  // Faixa ideal (relações iônicas — "perto de X é bom")
-  if (parametro.faixaIdeal) {
-    const ideal = parametro.faixaIdeal.ideal;
+  let faixa;
+  if (ef.tipo === 'textura') {
+    faixa = ef.faixa[textura || 'medio'];
+  } else if (ef.tipo === 'ideal') {
+    const ideal = ef.faixa.ideal;
+    if (!ideal) return {cls:'ne', label:'—'};
     const desvio = Math.abs(valor - ideal) / ideal;
     if (desvio <= 0.15) return {cls:'id', label:'Ideal'};
     if (desvio <= 0.40) return {cls:'fora', label:valor>ideal?'Acima':'Abaixo'};
     return {cls:'bx', label:valor>ideal?'Muito alto':'Muito baixo'};
+  } else {
+    faixa = ef.faixa;
   }
-  // Folha (só baixo/adequado/alto)
+  // Folha (baixo/adequado/alto)
   if (tipo === 'folha' && faixa && faixa.baixo !== undefined && faixa.muitoBaixo === undefined) {
     if (valor < faixa.baixo) return {cls:'bx', label:'Baixo'};
     if (valor <= faixa.alto) return {cls:'ad', label:'Adequado'};
@@ -540,7 +737,7 @@ function classificar(parametro, valor, tipo, textura) {
   }
   // Faixa padrão (solo): muito baixo/baixo/médio/alto/muito alto
   if (!faixa) return {cls:'ne', label:'—'};
-  const inv = parametro.inverter;  // se true, "baixo" é bom (ex: Al, sat_al)
+  const inv = parametro.inverter;
   if (valor < faixa.muitoBaixo) return inv ? {cls:'md', label:'Bom'} : {cls:'mb', label:'Muito baixo'};
   if (valor < faixa.baixo)      return inv ? {cls:'md', label:'Bom'} : {cls:'bx', label:'Baixo'};
   if (valor < faixa.alto)       return {cls:'md', label:'Médio/Bom'};
@@ -589,16 +786,1114 @@ window.renderLista = function() {
 };
 
 window.renderComparar = function() {
-  document.getElementById('content').innerHTML = `<div class="placeholder-comparar">
-    <div class="ico">📊</div>
-    <p><strong>Comparação de análises</strong><br>
-    Esta funcionalidade vem na próxima entrega (Fase B). Aqui você vai poder:<br>
-    • Selecionar até 3 amostras<br>
-    • Comparar solo × folha lado a lado<br>
-    • Ver gráficos por nutriente com faixas de classificação<br>
-    • Editar as faixas de referência</p>
-    <p style="font-size:.8rem;color:var(--c);font-style:italic;">Por ora, cadastre suas análises na aba "Análises".</p>
+  const cont = document.getElementById('content');
+  // Caso não tenha amostras cadastradas ainda
+  if (!amostras.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">📊</div><p><strong>Nada para comparar ainda.</strong><br>
+      <span style="font-size:.78rem;">Cadastre análises na aba "Análises" primeiro.</span></p></div>`;
+    return;
+  }
+  // SLOTS: até 3 amostras selecionadas
+  const slotsHtml = window.slotsComparar.map((amId, idx) => {
+    if (amId) {
+      const am = amostras.find(x => x._docId === amId);
+      if (!am) return `<div class="slot-cmp slot-vazio" onclick="abrirSeletorAmostra(${idx})">
+        <div class="slot-titulo">+ Amostra ${idx+1}</div>
+      </div>`;
+      const an = analises.find(x => x._docId === am.analiseId);
+      return `<div class="slot-cmp slot-preenchido ${am.tipo==='solo'?'slot-solo':'slot-folha'}">
+        <div class="slot-head">
+          <span class="slot-tipo">${am.tipo==='solo'?'🧪':'🍃'}</span>
+          <button class="slot-rm" onclick="removerSlot(${idx})">✕</button>
+        </div>
+        <div class="slot-nome">${escHtml(am.nome)}${am.profundidade?' <span style="color:var(--c);font-weight:500;font-size:.74rem;">('+escHtml(am.profundidade)+')</span>':''}</div>
+        <div class="slot-meta">${escHtml(an?.fazendaVinculada||'—')}<br><span style="font-size:.66rem;">${formatarData(an?.dataLaudo||an?.dataEntrada)}</span></div>
+        <button class="slot-trocar" onclick="abrirSeletorAmostra(${idx})">↻ trocar</button>
+      </div>`;
+    }
+    return `<div class="slot-cmp slot-vazio" onclick="abrirSeletorAmostra(${idx})">
+      <div class="slot-plus">+</div>
+      <div class="slot-titulo">Amostra ${idx+1}</div>
+      <div class="slot-hint">toque para escolher</div>
+    </div>`;
+  }).join('');
+  // Amostras efetivamente selecionadas
+  const selecionadas = window.slotsComparar
+    .map(id => id ? amostras.find(x => x._docId === id) : null)
+    .filter(Boolean);
+  let html = `<div class="cmp-header">
+    <div class="cmp-slots">${slotsHtml}</div>
+    ${selecionadas.length >= 2 ? `<div class="cmp-acoes">
+      <button class="btn-acao ${window.modoComparar==='tabela'?'primary':''}" onclick="window.modoComparar='tabela';renderComparar()">📋 Tabela</button>
+      <button class="btn-acao ${window.modoComparar==='graficos'?'primary':''}" onclick="window.modoComparar='graficos';renderComparar()">📊 Gráficos</button>
+      <button class="btn-acao" onclick="window.slotsComparar=[null,null,null];renderComparar()" style="margin-left:auto;">🗑 Limpar</button>
+    </div>` : ''}
   </div>`;
+  if (selecionadas.length === 0) {
+    html += `<div class="vazio" style="padding:30px 18px;"><div class="ico">👆</div><p style="font-size:.85rem;">Toque em "Amostra 1" acima para começar.<br>
+      <span style="font-size:.74rem;color:var(--c);">Você pode comparar de 2 a 3 amostras (solo e/ou folha).</span></p></div>`;
+  } else if (selecionadas.length === 1) {
+    html += `<div class="vazio" style="padding:30px 18px;"><div class="ico">🤏</div><p style="font-size:.85rem;">Adicione mais 1 amostra para comparar.</p></div>`;
+  } else {
+    // Verificar se mistura solo + folha
+    const temSolo = selecionadas.some(a => a.tipo === 'solo');
+    const temFolha = selecionadas.some(a => a.tipo === 'folha');
+    const misto = temSolo && temFolha;
+    // Toggle textura (só se tem alguma de solo)
+    if (temSolo) {
+      html += `<div class="textura-box">
+        <label>Textura do solo:</label>
+        <select onchange="window.texturaAtiva=this.value;renderComparar()">
+          ${TEXTURAS.map(t => `<option value="${t.id}" ${window.texturaAtiva===t.id?'selected':''}>${t.label}</option>`).join('')}
+        </select>
+      </div>`;
+    }
+    if (misto) {
+      html += `<div class="cmp-aviso-misto">
+        ⚠️ <strong>Comparação solo × folha</strong> — As unidades são diferentes, então comparamos por <strong>status colorido</strong> em vez do valor bruto. Quando o solo está "baixo" mas a folha está "adequada", indica boa absorção.
+      </div>`;
+    }
+    if (window.modoComparar === 'tabela') {
+      html += renderTabelaCmp(selecionadas, misto);
+    } else {
+      html += renderGraficosCmp(selecionadas, misto);
+    }
+  }
+  cont.innerHTML = html;
+};
+
+// ━━━ TABELA COMPARATIVA ━━━
+function renderTabelaCmp(selecionadas, misto) {
+  // Pega TODOS os parâmetros que aparecem em pelo menos uma amostra
+  // Organiza em grupos: Comuns / Só solo / Só folha
+  const ehSolo = a => a.tipo === 'solo';
+  const ehFolha = a => a.tipo === 'folha';
+  const selSolo = selecionadas.filter(ehSolo);
+  const selFolha = selecionadas.filter(ehFolha);
+  // Mapeamento de parâmetros comuns entre solo e folha (mesma "natureza")
+  // ID solo => ID folha
+  const COMUNS = {
+    p_mehlich:'p', potassio:'k', calcio:'ca', magnesio:'mg', enxofre:'s',
+    ferro:'fe', zinco:'zn', cobre:'cu', manganes:'mn', boro:'b', sodio:null,
+    rel_ca_mg:'rel_ca_mg_f'
+  };
+  // Lista de seções pra mostrar
+  let html = '<div class="cmp-tbl-wrap">';
+  if (misto && selSolo.length && selFolha.length) {
+    // Mostra primeiro os comuns lado a lado (solo X folha)
+    html += `<table class="cmp-tbl"><thead><tr>
+      <th>Nutriente</th>
+      ${selecionadas.map(a => `<th class="cmp-th">
+        <div class="cmp-th-tipo">${a.tipo==='solo'?'🧪 Solo':'🍃 Folha'}</div>
+        <div class="cmp-th-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</div>
+      </th>`).join('')}
+    </tr></thead><tbody>`;
+    // Linhas comuns
+    html += `<tr class="cmp-tit-secao"><td colspan="${selecionadas.length+1}">Nutrientes comuns (solo + folha)</td></tr>`;
+    for (const [paramIdSolo, paramIdFolha] of Object.entries(COMUNS)) {
+      if (!paramIdFolha) continue;  // pula os que não tem em folha
+      const paramSolo = PARAM_SOLO.find(p => p.id === paramIdSolo);
+      const paramFolha = PARAM_FOLHA.find(p => p.id === paramIdFolha);
+      if (!paramSolo || !paramFolha) continue;
+      const nomeNutri = paramFolha.label.replace(/ \([^)]+\)/, '');
+      html += `<tr>
+        <td class="cmp-lab">${escHtml(nomeNutri)}</td>
+        ${selecionadas.map(a => {
+          const param = a.tipo === 'solo' ? paramSolo : paramFolha;
+          const val = a.parametros?.[param.id];
+          return renderCelulaCmp(val, param, a.tipo);
+        }).join('')}
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    // Tabelas separadas pra "só solo" e "só folha"
+    if (selSolo.length) {
+      html += renderTabelaTipo(selSolo, 'solo', selecionadas);
+    }
+    if (selFolha.length) {
+      html += renderTabelaTipo(selFolha, 'folha', selecionadas);
+    }
+  } else {
+    // Mesmo tipo — tabela única com todos os parâmetros agrupados
+    const tipo = selecionadas[0].tipo;
+    html += renderTabelaTipo(selecionadas, tipo, selecionadas);
+  }
+  html += '</div>';
+  return html;
+}
+
+// Renderiza uma tabela só pra um tipo (solo ou folha) com todos os parâmetros agrupados
+function renderTabelaTipo(amostrasTipo, tipo, todasSelecionadas) {
+  const params = PARAMS[tipo];
+  const grupos = {};
+  params.forEach(p => {
+    if (!grupos[p.grupo]) grupos[p.grupo] = [];
+    grupos[p.grupo].push(p);
+  });
+  let html = `<table class="cmp-tbl"><thead><tr>
+    <th>${tipo==='solo'?'🧪 Solo':'🍃 Folha'}</th>
+    ${todasSelecionadas.map(a => {
+      // Quando a amostra é do tipo da tabela, mostra; se não é, célula vazia
+      if (a.tipo !== tipo) return `<th class="cmp-th cmp-th-vazia">—</th>`;
+      return `<th class="cmp-th">
+        <div class="cmp-th-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</div>
+        <div class="cmp-th-tipo" style="font-size:.65rem;color:var(--c);">${formatarData(analises.find(x=>x._docId===a.analiseId)?.dataLaudo)}</div>
+      </th>`;
+    }).join('')}
+  </tr></thead><tbody>`;
+  Object.entries(grupos).forEach(([nomeGrupo, paramsGrupo]) => {
+    html += `<tr class="cmp-tit-secao"><td colspan="${todasSelecionadas.length+1}">${escHtml(nomeGrupo)}</td></tr>`;
+    paramsGrupo.forEach(p => {
+      html += `<tr>
+        <td class="cmp-lab">${escHtml(p.label)} <span class="cmp-un">${escHtml(p.un)}</span></td>
+        ${todasSelecionadas.map(a => {
+          if (a.tipo !== tipo) return `<td class="cmp-cel-vazia">—</td>`;
+          const val = a.parametros?.[p.id];
+          return renderCelulaCmp(val, p, tipo);
+        }).join('')}
+      </tr>`;
+    });
+  });
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderCelulaCmp(val, param, tipo) {
+  if (val === undefined || val === null) {
+    return `<td class="cmp-cel-vazia">—</td>`;
+  }
+  const c = classificar(param, val, tipo, window.texturaAtiva);
+  return `<td class="cmp-cel">
+    <div class="cmp-cel-val">${fmt(val, val < 10 ? 2 : (val < 100 ? 1 : 0))}</div>
+    <span class="cmp-cel-class cls-${c.cls}">${escHtml(c.label)}</span>
+  </td>`;
+}
+
+// ━━━ GRÁFICOS COMPARATIVOS ━━━
+function renderGraficosCmp(selecionadas, misto) {
+  const ehSolo = a => a.tipo === 'solo';
+  const ehFolha = a => a.tipo === 'folha';
+  const selSolo = selecionadas.filter(ehSolo);
+  const selFolha = selecionadas.filter(ehFolha);
+  let html = '';
+  // Se misto, mostra os comuns no topo (dupla barra solo + folha)
+  const COMUNS = {
+    p_mehlich:'p', potassio:'k', calcio:'ca', magnesio:'mg', enxofre:'s',
+    ferro:'fe', zinco:'zn', cobre:'cu', manganes:'mn', boro:'b'
+  };
+  if (misto) {
+    html += `<div class="grafico-grupo">
+      <div class="grafico-grupo-tit">🔗 Nutrientes comuns (solo × folha)</div>
+      <div class="grafico-grupo-sub">Comparação por classificação — solo e folha em barras separadas</div>`;
+    for (const [idSolo, idFolha] of Object.entries(COMUNS)) {
+      const pSolo = PARAM_SOLO.find(p => p.id === idSolo);
+      const pFolha = PARAM_FOLHA.find(p => p.id === idFolha);
+      if (!pSolo || !pFolha) continue;
+      html += renderGraficoMisto(selecionadas, pSolo, pFolha);
+    }
+    html += `</div>`;
+  }
+  // Gráficos por tipo (só solo / só folha)
+  if (selSolo.length) {
+    html += `<div class="grafico-grupo">
+      <div class="grafico-grupo-tit">🧪 Solo</div>`;
+    PARAM_SOLO.forEach(p => {
+      html += renderGraficoParam(selSolo, p, 'solo');
+    });
+    html += `</div>`;
+  }
+  if (selFolha.length) {
+    html += `<div class="grafico-grupo">
+      <div class="grafico-grupo-tit">🍃 Folha</div>`;
+    PARAM_FOLHA.forEach(p => {
+      html += renderGraficoParam(selFolha, p, 'folha');
+    });
+    html += `</div>`;
+  }
+  return html;
+}
+
+// Renderiza UM gráfico horizontal pra um parâmetro com várias amostras
+function renderGraficoParam(amostrasTipo, param, tipo) {
+  // Verifica se pelo menos UMA amostra tem valor pra esse parâmetro
+  const temValor = amostrasTipo.some(a => a.parametros?.[param.id] !== undefined && a.parametros?.[param.id] !== null);
+  if (!temValor) return '';  // pula parâmetros sem dado
+  // Determina escala
+  const valores = amostrasTipo.map(a => a.parametros?.[param.id]).filter(v => v != null && isFinite(v));
+  const ef = faixaEfetiva(param, tipo);
+  let maxEscala = Math.max(...valores, 1);
+  let segmentos = [];  // [{cor, perc, label}]
+  // Construir segmentos visuais baseados na faixa
+  if (ef) {
+    if (ef.tipo === 'ph') {
+      // pH especial: 4 a 8
+      maxEscala = 8;
+      segmentos = [
+        {ate:5.0, cor:'#991b1b', lab:'Muito ácido'},
+        {ate:6.0, cor:'#dc2626', lab:'Ácido'},
+        {ate:6.9, cor:'#16a34a', lab:'Bom'},
+        {ate:7.5, cor:'#2563eb', lab:'Alcalino fraco'},
+        {ate:8.0, cor:'#7c3aed', lab:'Alcalino'}
+      ];
+    } else if (ef.tipo === 'textura') {
+      const f = ef.faixa[window.texturaAtiva || 'medio'];
+      maxEscala = Math.max(f.alto * 1.4, ...valores);
+      const inv = param.inverter;
+      segmentos = [
+        {ate:f.muitoBaixo, cor: inv?'#16a34a':'#991b1b', lab: inv?'Bom':'Muito baixo'},
+        {ate:f.baixo,      cor: inv?'#16a34a':'#dc2626', lab: inv?'Bom':'Baixo'},
+        {ate:f.alto,       cor:'#16a34a', lab:'Médio/Bom'},
+        {ate:maxEscala,    cor: inv?'#dc2626':'#2563eb', lab: inv?'Alto':'Alto'}
+      ];
+    } else if (ef.tipo === 'ideal') {
+      const ideal = ef.faixa.ideal;
+      const min = ideal * 0.6, max = ideal * 1.4;
+      maxEscala = Math.max(max, ...valores) * 1.1;
+      segmentos = [
+        {ate:min,     cor:'#dc2626', lab:'Abaixo'},
+        {ate:ideal*0.85, cor:'#f59e0b', lab:'Pouco abaixo'},
+        {ate:ideal*1.15, cor:'#16a34a', lab:'Ideal'},
+        {ate:max,     cor:'#f59e0b', lab:'Pouco acima'},
+        {ate:maxEscala, cor:'#dc2626', lab:'Acima'}
+      ];
+    } else if (ef.tipo === 'simples') {
+      const f = ef.faixa;
+      if (tipo === 'folha' && f.baixo !== undefined && f.muitoBaixo === undefined) {
+        // Folha
+        maxEscala = Math.max(f.alto * 1.5, ...valores);
+        segmentos = [
+          {ate:f.baixo, cor:'#dc2626', lab:'Baixo'},
+          {ate:f.alto,  cor:'#16a34a', lab:'Adequado'},
+          {ate:maxEscala, cor:'#2563eb', lab:'Alto'}
+        ];
+      } else if (f.muitoBaixo !== undefined) {
+        const inv = param.inverter;
+        const fimAlto = isFinite(f.alto) ? f.alto : (isFinite(f.muitoAlto) ? f.muitoAlto : Math.max(f.baixo*3, ...valores));
+        maxEscala = Math.max(fimAlto * 1.3, ...valores) * 1.05;
+        segmentos = [
+          {ate:f.muitoBaixo, cor:inv?'#16a34a':'#991b1b', lab:inv?'Bom':'Muito baixo'},
+          {ate:f.baixo,      cor:inv?'#16a34a':'#dc2626', lab:inv?'Bom':'Baixo'},
+          {ate:isFinite(f.alto)?f.alto:maxEscala*0.8, cor:'#16a34a', lab:'Médio/Bom'}
+        ];
+        if (isFinite(f.alto)) {
+          segmentos.push({ate:isFinite(f.muitoAlto)?f.muitoAlto:maxEscala*0.95, cor:inv?'#dc2626':'#2563eb', lab:inv?'Alto':'Alto'});
+        }
+        if (isFinite(f.muitoAlto)) {
+          segmentos.push({ate:maxEscala, cor:inv?'#991b1b':'#7c3aed', lab:inv?'Muito alto':'Muito alto'});
+        }
+      }
+    }
+  }
+  // Renderizar barra de fundo com segmentos coloridos
+  let segBg = '';
+  if (segmentos.length) {
+    let anterior = 0;
+    segBg = segmentos.map(s => {
+      const inicio = (anterior / maxEscala) * 100;
+      const fim = Math.min(100, (s.ate / maxEscala) * 100);
+      anterior = s.ate;
+      return `<div class="seg-faixa" style="left:${inicio}%;width:${fim-inicio}%;background:${s.cor};" title="${escAttr(s.lab)} (até ${fmt(s.ate, s.ate<10?2:0)})"></div>`;
+    }).join('');
+  }
+  // Marcadores das amostras
+  const cores = ['#1e3a5f', '#8b6914', '#722f37'];
+  const idxToCor = {};
+  selecionadas.forEach((sa, i) => { idxToCor[sa._docId] = cores[i % cores.length]; });
+  const marcadores = amostrasTipo.map((a, i) => {
+    const v = a.parametros?.[param.id];
+    if (v == null || !isFinite(v)) return '';
+    const pos = Math.min(100, (v / maxEscala) * 100);
+    return `<div class="seg-marker" style="left:${pos}%;background:${idxToCor[a._docId]};" title="${escAttr(a.nome+': '+v+' '+param.un)}">
+      <div class="seg-marker-val">${fmt(v, v < 10 ? 2 : (v < 100 ? 1 : 0))}</div>
+    </div>`;
+  }).join('');
+  // Legenda dos pontos
+  const legendaValores = amostrasTipo.map((a, i) => {
+    const v = a.parametros?.[param.id];
+    if (v == null) return '';
+    const c = classificar(param, v, tipo, window.texturaAtiva);
+    return `<div class="cmp-val-item">
+      <span class="cmp-val-dot" style="background:${idxToCor[a._docId]};"></span>
+      <span class="cmp-val-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</span>
+      <span class="cmp-val-num">${fmt(v, v<10?2:(v<100?1:0))} ${escHtml(param.un)}</span>
+      <span class="cmp-val-cls cls-${c.cls}">${escHtml(c.label)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="grafico-param">
+    <div class="grafico-param-head">
+      <div class="grafico-param-nome">${escHtml(param.label)}</div>
+      <div class="grafico-param-un">${escHtml(param.un)}</div>
+    </div>
+    <div class="grafico-bar">
+      ${segBg}
+      ${marcadores}
+    </div>
+    <div class="grafico-valores">${legendaValores}</div>
+  </div>`;
+}
+
+// Gráfico misto solo+folha (só pra parâmetros comuns)
+function renderGraficoMisto(selecionadas, paramSolo, paramFolha) {
+  const selSolo = selecionadas.filter(a => a.tipo === 'solo');
+  const selFolha = selecionadas.filter(a => a.tipo === 'folha');
+  const temSolo = selSolo.some(a => a.parametros?.[paramSolo.id] != null);
+  const temFolha = selFolha.some(a => a.parametros?.[paramFolha.id] != null);
+  if (!temSolo && !temFolha) return '';
+  const nomeNutri = paramFolha.label.replace(/ \([^)]+\)/, '');
+  let html = `<div class="grafico-param grafico-misto">
+    <div class="grafico-param-head">
+      <div class="grafico-param-nome">${escHtml(nomeNutri)}</div>
+    </div>`;
+  // 1 bloco solo + 1 bloco folha
+  if (temSolo) {
+    const sub = renderGraficoParam(selSolo, paramSolo, 'solo');
+    if (sub) html += `<div class="grafico-misto-sub"><div class="grafico-misto-tit">🧪 Solo (${escHtml(paramSolo.un)})</div>${sub}</div>`;
+  }
+  if (temFolha) {
+    const sub = renderGraficoParam(selFolha, paramFolha, 'folha');
+    if (sub) html += `<div class="grafico-misto-sub"><div class="grafico-misto-tit">🍃 Folha (${escHtml(paramFolha.un)})</div>${sub}</div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// ━━━ SELETOR DE AMOSTRA (slot) ━━━
+window.abrirSeletorAmostra = function(slotIdx) {
+  window.seletorSlotAlvo = slotIdx;
+  // Ordena: por análise (mais recente primeiro), tipo, profundidade
+  const itens = amostras.map(am => {
+    const an = analises.find(x => x._docId === am.analiseId);
+    return {
+      am, an,
+      dataOrd: an?.dataLaudo || an?.dataEntrada || '',
+      jaSelecionada: window.slotsComparar.includes(am._docId)
+    };
+  }).sort((a,b) => (b.dataOrd||'').localeCompare(a.dataOrd||''));
+  const html = `<div class="sel-amostra-lista">
+    ${itens.length === 0 ? '<p style="text-align:center;color:var(--c);padding:20px;">Nenhuma amostra cadastrada.</p>' : itens.map(it => {
+      const am = it.am, an = it.an;
+      if (!an) return '';
+      const cls = it.jaSelecionada ? 'sel-am-item ja-sel' : 'sel-am-item';
+      return `<div class="${cls}" onclick="selecionarAmostraSlot('${am._docId}')">
+        <div class="sel-am-tipo ${am.tipo==='solo'?'badge-solo':'badge-folha'}">${am.tipo==='solo'?'🧪':'🍃'}</div>
+        <div class="sel-am-info">
+          <div class="sel-am-nome">${escHtml(am.nome)}${am.profundidade?' <span style="color:var(--c);font-weight:500;font-size:.78rem;">('+escHtml(am.profundidade)+')</span>':''}</div>
+          <div class="sel-am-meta">${escHtml(an.fazendaVinculada||'—')} · ${formatarData(an.dataLaudo||an.dataEntrada)}${an.responsavelTecnico?' · '+escHtml(an.responsavelTecnico):''}</div>
+        </div>
+        ${it.jaSelecionada ? '<div class="sel-am-tag">já no slot</div>' : '<div class="sel-am-arrow">›</div>'}
+      </div>`;
+    }).join('')}
+  </div>`;
+  // Reusa o modal "ver" pra mostrar o seletor (com título adaptado)
+  document.getElementById('verTitulo').textContent = `Escolher amostra · Slot ${slotIdx+1}`;
+  document.getElementById('verBody').innerHTML = html;
+  document.getElementById('overlayVer').classList.add('aberto');
+};
+
+window.selecionarAmostraSlot = function(amId) {
+  const slot = window.seletorSlotAlvo;
+  if (slot === null) return;
+  // Se já está em outro slot, remove de lá primeiro
+  for (let i = 0; i < 3; i++) {
+    if (window.slotsComparar[i] === amId && i !== slot) {
+      window.slotsComparar[i] = null;
+    }
+  }
+  window.slotsComparar[slot] = amId;
+  window.seletorSlotAlvo = null;
+  document.getElementById('overlayVer').classList.remove('aberto');
+  renderComparar();
+};
+
+window.removerSlot = function(idx) {
+  window.slotsComparar[idx] = null;
+  renderComparar();
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// IMPORTADOR DE PDF FULLIN
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Mapeamento dos nomes de parâmetros como aparecem no PDF da Fullin → id interno
+// O parser vai fazer match aproximado (lowercase, sem acentos, sem unidades)
+const MAPA_PARAM_FULLIN_SOLO = {
+  'fosforo mehlich-1': 'p_mehlich',
+  'fosforo mehlich': 'p_mehlich',
+  'fosforo remanescente': 'p_remanescente',
+  'potassio': 'potassio',
+  'enxofre': 'enxofre',
+  'calcio': 'calcio',
+  'magnesio': 'magnesio',
+  'aluminio acidez trocavel': 'aluminio',
+  'aluminio': 'aluminio',
+  'hidrogenio extraivel h': 'h_extraivel',
+  'h al acidez potencial': 'h_al',
+  'h+al acidez potencial': 'h_al',
+  'h+al': 'h_al',
+  'ph em h2o acidez ativa': 'ph_h2o',
+  'ph em h2o': 'ph_h2o',
+  'ph smp': 'ph_smp',
+  'materia organica': 'mo',
+  'ferro': 'ferro',
+  'zinco': 'zinco',
+  'cobre': 'cobre',
+  'manganes': 'manganes',
+  'boro': 'boro',
+  'sodio': 'sodio',
+  'relacao ca mg': 'rel_ca_mg',
+  'relacao ca/mg': 'rel_ca_mg',
+  'relacao ca k': 'rel_ca_k',
+  'relacao ca/k': 'rel_ca_k',
+  'relacao mg k': 'rel_mg_k',
+  'relacao mg/k': 'rel_mg_k',
+  'sat ca na ctc t': 'sat_ca',
+  'sat. ca na ctc t': 'sat_ca',
+  'sat ca na ctc': 'sat_ca',
+  'sat mg na ctc t': 'sat_mg',
+  'sat. mg na ctc t': 'sat_mg',
+  'sat mg na ctc': 'sat_mg',
+  'sat k na ctc t': 'sat_k',
+  'sat. k na ctc t': 'sat_k',
+  'sat k na ctc': 'sat_k',
+  'sat h+ na ctc t': 'sat_h',
+  'sat. h+ na ctc t': 'sat_h',
+  'sat h na ctc': 'sat_h',
+  'indice sat sodio ina ou pst': 'sat_na',
+  'indice sat. sodio (ina) ou pst': 'sat_na',
+  'indice sat sodio': 'sat_na',
+  'soma de bases sb': 'sb',
+  'soma de bases (sb)': 'sb',
+  'ctc efetiva t': 'ctc_efetiva',
+  'ctc efetiva (t)': 'ctc_efetiva',
+  'ctc a ph 7 0 t': 'ctc_ph7',
+  'ctc a ph 7,0 t': 'ctc_ph7',
+  'ctc a ph 7,0 (t)': 'ctc_ph7',
+  'sat aluminio m': 'sat_al',
+  'sat. aluminio (m)': 'sat_al',
+  'saturacao de bases v': 'v',
+  'saturacao de bases (v)': 'v'
+};
+
+const MAPA_PARAM_FULLIN_FOLHA = {
+  'nitrogenio n': 'n',
+  'nitrogenio (n)': 'n',
+  'fosforo p': 'p',
+  'fosforo (p)': 'p',
+  'potassio k': 'k',
+  'potassio (k)': 'k',
+  'calcio ca': 'ca',
+  'calcio (ca)': 'ca',
+  'magnesio mg': 'mg',
+  'magnesio (mg)': 'mg',
+  'enxofre s': 's',
+  'enxofre (s)': 's',
+  'ferro fe': 'fe',
+  'ferro (fe)': 'fe',
+  'zinco zn': 'zn',
+  'zinco (zn)': 'zn',
+  'cobre cu': 'cu',
+  'cobre (cu)': 'cu',
+  'manganes mn': 'mn',
+  'manganes (mn)': 'mn',
+  'boro b': 'b',
+  'boro (b)': 'b',
+  'relacao n k': 'rel_n_k',
+  'relacao n/k': 'rel_n_k',
+  'relacao n p': 'rel_n_p',
+  'relacao n/p': 'rel_n_p',
+  'relacao n mg': 'rel_n_mg',
+  'relacao n/mg': 'rel_n_mg',
+  'relacao n s': 'rel_n_s',
+  'relacao n/s': 'rel_n_s',
+  'relacao n cu': 'rel_n_cu',
+  'relacao n/cu': 'rel_n_cu',
+  'relacao n b': 'rel_n_b',
+  'relacao n/b': 'rel_n_b',
+  'relacao n ca': 'rel_n_ca',
+  'relacao n/ca': 'rel_n_ca',
+  'relacao p mg': 'rel_p_mg',
+  'relacao p/mg': 'rel_p_mg',
+  'relacao p zn': 'rel_p_zn',
+  'relacao p/zn': 'rel_p_zn',
+  'relacao p cu': 'rel_p_cu',
+  'relacao p/cu': 'rel_p_cu',
+  'relacao p k': 'rel_p_k',
+  'relacao p/k': 'rel_p_k',
+  'relacao p s': 'rel_p_s',
+  'relacao p/s': 'rel_p_s',
+  'relacao k ca': 'rel_k_ca',
+  'relacao k/ca': 'rel_k_ca',
+  'relacao k mg': 'rel_k_mg',
+  'relacao k/mg': 'rel_k_mg',
+  'relacao k mn': 'rel_k_mn',
+  'relacao k/mn': 'rel_k_mn',
+  'relacao k s': 'rel_k_s',
+  'relacao k/s': 'rel_k_s',
+  'relacao ca mg': 'rel_ca_mg_f',
+  'relacao ca/mg': 'rel_ca_mg_f',
+  'relacao ca mn': 'rel_ca_mn',
+  'relacao ca/mn': 'rel_ca_mn',
+  'relacao ca b': 'rel_ca_b',
+  'relacao ca/b': 'rel_ca_b',
+  'relacao fe mn': 'rel_fe_mn',
+  'relacao fe/mn': 'rel_fe_mn'
+};
+
+// Normaliza string pra match (lowercase, sem acento, sem pontuação)
+function normParam(s) {
+  return String(s||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^\w\s+/()-]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+window.importarPDF = async function(event) {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  // Limpar input pra permitir importar mesmo arquivo de novo
+  event.target.value = '';
+  if (!window.pdfjsLib) {
+    toast('❌ PDF.js não carregou. Verifique sua conexão.'); return;
+  }
+  if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
+  // Mostra overlay
+  const ov = document.getElementById('overlayPDF');
+  const stat = document.getElementById('pdfStatus');
+  ov.classList.add('aberto');
+  stat.textContent = 'Lendo PDF...';
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
+    stat.textContent = `Processando ${pdf.numPages} página(s)...`;
+    // Extrair texto+posição de todas as páginas
+    const todasPaginas = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      // Cada item tem .str, .transform [a,b,c,d,e,f] onde e=x, f=y
+      const items = tc.items.map(it => ({
+        str: it.str,
+        x: Math.round(it.transform[4]),
+        y: Math.round(it.transform[5])
+      })).filter(it => it.str && it.str.trim());
+      todasPaginas.push(items);
+    }
+    stat.textContent = 'Analisando conteúdo...';
+    const resultado = parsearLaudoFullin(todasPaginas);
+    console.log('📄 PDF parseado:', resultado);
+    ov.classList.remove('aberto');
+    if (!resultado) {
+      toast('❌ Não consegui identificar o formato. Verifique se é laudo Fullin.');
+      return;
+    }
+    // Abrir formulário pré-preenchido pra revisar
+    abrirFormImportado(resultado);
+  } catch(e) {
+    console.error('Erro ao importar PDF:', e);
+    ov.classList.remove('aberto');
+    toast('❌ Erro: ' + e.message);
+  }
+};
+
+// ━━━ PARSER PRINCIPAL ━━━
+function parsearLaudoFullin(paginas) {
+  if (!paginas.length) return null;
+  // Detectar tipo
+  const textoCompleto = paginas.flat().map(it => it.str).join(' ').toLowerCase();
+  let tipo;
+  if (textoCompleto.includes('analise de solos') || textoCompleto.includes('análise de solos')) {
+    tipo = 'solo';
+  } else if (textoCompleto.includes('analise quimica de plantas') || textoCompleto.includes('análise química de plantas')) {
+    tipo = 'folha';
+  } else {
+    console.warn('Tipo não detectado. Texto começa com:', textoCompleto.slice(0, 200));
+    return null;
+  }
+  console.log('🔬 Tipo detectado:', tipo);
+  // Extrair cabeçalho
+  const cabecalho = extrairCabecalho(textoCompleto);
+  // Processar cada página, mesclando amostras de páginas diferentes
+  // Cada página tem até 4 colunas de amostras
+  const amostrasMapa = {};  // nome → {nome, profundidade, protocolo, parametros}
+  for (const itensPag of paginas) {
+    parsearPagina(itensPag, tipo, amostrasMapa);
+  }
+  // Ordenar por ordem de aparição (já no objeto)
+  const amostrasArray = Object.values(amostrasMapa);
+  console.log(`📦 ${amostrasArray.length} amostra(s) extraída(s):`, amostrasArray.map(a=>a.nome));
+  return {
+    tipo,
+    laboratorio: 'Fullin',
+    ...cabecalho,
+    amostras: amostrasArray
+  };
+}
+
+// Extrai cliente, propriedade, datas, RT do texto completo
+function extrairCabecalho(texto) {
+  const out = {
+    cliente: '',
+    propriedade: '',
+    dataEntrada: '',
+    dataLaudo: '',
+    responsavelTecnico: ''
+  };
+  // Cliente: depois de "CLIENTE :" até a quebra
+  const mCli = texto.match(/cliente\s*:\s*([^\n]+?)(?:endereco|endereço|cpf|propriedade)/i);
+  if (mCli) out.cliente = limparTexto(mCli[1]);
+  // Propriedade
+  const mProp = texto.match(/propriedade\s*:\s*([^\n]+?)(?:telefone|municipio|município|email|inscricao)/i);
+  if (mProp) out.propriedade = limparTexto(mProp[1]);
+  // Data de entrada (formato DD/MM/AAAA)
+  const mDataEnt = texto.match(/data\s*de\s*entrada\s*:?\s*(\d{2}\/\d{2}\/\d{4})/i);
+  if (mDataEnt) out.dataEntrada = converterData(mDataEnt[1]);
+  // Data do laudo: "Linhares-ES,DD/MM/AAAA"
+  const mDataLau = texto.match(/linhares[\s-]?es[,\s]+(\d{2}\/\d{2}\/\d{4})/i);
+  if (mDataLau) out.dataLaudo = converterData(mDataLau[1]);
+  // Responsável técnico: depois de "ELI ANTONIO FULLIN" ou similar (vem antes de "Responsável Técnico")
+  const mRT = texto.match(/(ELI ANTONIO FULLIN|[A-ZÁÉÍÓÚÂÊÔÃÇ ]{8,40})\s*Responsável\s*Técnico/i);
+  if (mRT) out.responsavelTecnico = limparTexto(mRT[1]);
+  return out;
+}
+
+function limparTexto(s) {
+  return String(s||'').replace(/\s+/g,' ').trim().replace(/^[:;\-\s]+/,'').replace(/[:;\-\s]+$/,'');
+}
+function converterData(dmy) {
+  // "DD/MM/AAAA" → "AAAA-MM-DD"
+  const m = dmy.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+
+// ━━━ PARSEAR UMA PÁGINA ━━━
+// Estratégia: agrupa items por linha (Y próximo). Identifica as linhas:
+//   1. Cabeçalho de amostras (4 nomes em 4 colunas X)
+//   2. Linha de protocolos (números formato XXXXX/AAAA)
+//   3. Linhas de parâmetros (nome + unidade + até 4 valores)
+function parsearPagina(items, tipo, amostrasMapa) {
+  // Agrupar por linha (Y arredondado em buckets de ~5px)
+  const linhas = {};
+  for (const it of items) {
+    const yKey = Math.round(it.y / 4) * 4;
+    if (!linhas[yKey]) linhas[yKey] = [];
+    linhas[yKey].push(it);
+  }
+  // Ordenar linhas por Y decrescente (no PDF, Y maior = mais alto)
+  const linhasOrd = Object.keys(linhas).map(Number).sort((a,b) => b - a);
+  // Encontrar linha com nomes das amostras
+  // Vem depois de "IDENTIFICAÇÃO DA AMOSTRA / RESULTADO DA ANÁLISE"
+  let yCabecalho = null;
+  let yProtocolo = null;
+  for (let i = 0; i < linhasOrd.length; i++) {
+    const y = linhasOrd[i];
+    const textoLinha = linhas[y].map(it=>it.str).join(' ').toLowerCase();
+    if (textoLinha.includes('identificacao da amostra') || textoLinha.includes('identificação da amostra')) {
+      // A linha de cabeçalho de amostras está logo abaixo
+      // Pula a label "PARÂMETRO ANALISADO" / "UNIDADE" e pega a próxima
+      yCabecalho = linhasOrd[i + 1] || null;
+      yProtocolo = linhasOrd[i + 2] || null;
+      break;
+    }
+  }
+  if (yCabecalho === null) {
+    console.warn('Cabeçalho de amostras não encontrado nesta página');
+    return;
+  }
+  // Extrair nomes das amostras (filtra textos que não são "PARÂMETRO" ou "UNIDADE")
+  const colsAmostras = [];  // [{x, nome}]
+  for (const it of linhas[yCabecalho]) {
+    const s = it.str.trim();
+    if (!s) continue;
+    const lower = s.toLowerCase();
+    if (lower.includes('parametro') || lower.includes('parâmetro') ||
+        lower.includes('analisado') || lower.includes('unidade') ||
+        lower === 'valor adequado' || lower.includes('valor')) continue;
+    colsAmostras.push({x: it.x, nome: s});
+  }
+  // Pode ter sido fragmentado (ex: "Area 1" + "A" + "/" + "0-20"). Mesclar items próximos no X
+  const colsAgrupadas = agruparPorProximidadeX(colsAmostras);
+  // No PDF de folha NÃO tem profundidade; no de solo SIM (formato "Nome / 0-20")
+  const amostrasPagina = colsAgrupadas.map(c => {
+    let nome = c.nome.trim();
+    let profundidade = '';
+    const m = nome.match(/^(.*?)\s*\/\s*(\d+[-]\d+)\s*$/);
+    if (m) {
+      nome = m[1].trim();
+      profundidade = m[2];
+    }
+    return {x: c.x, nome, profundidade};
+  });
+  console.log('📋 Amostras nesta página:', amostrasPagina);
+  // Extrair protocolos (linha abaixo) - números no formato XXXXX/AAAA
+  if (yProtocolo !== null && linhas[yProtocolo]) {
+    const protos = linhas[yProtocolo].filter(it => /^\d{3,6}\/?\d{0,4}$/.test(it.str.trim()));
+    // Match por proximidade de X
+    for (const a of amostrasPagina) {
+      const p = protos.find(pr => Math.abs(pr.x - a.x) < 30);
+      if (p) a.protocolo = p.str.trim();
+    }
+  }
+  // Adicionar/mesclar no amostrasMapa
+  amostrasPagina.forEach(a => {
+    const chave = `${a.nome}__${a.profundidade}`;
+    if (!amostrasMapa[chave]) {
+      amostrasMapa[chave] = {
+        nome: a.nome,
+        profundidade: a.profundidade,
+        protocolo: a.protocolo || '',
+        parametros: {},
+        _xPagina: a.x  // pra usar como referência de coluna nesta página
+      };
+    } else {
+      amostrasMapa[chave]._xPagina = a.x;  // atualiza X pra esta página
+      if (a.protocolo) amostrasMapa[chave].protocolo = a.protocolo;
+    }
+  });
+  // Agora processa cada linha que vem ABAIXO do protocolo: nome do parâmetro + unidade + valores
+  const yInicioParams = yProtocolo !== null ? yProtocolo - 1 : yCabecalho - 1;
+  for (const y of linhasOrd) {
+    if (y >= yInicioParams) continue;  // ainda não chegou nos parâmetros
+    parsearLinhaParametro(linhas[y], tipo, amostrasPagina, amostrasMapa);
+  }
+}
+
+// Agrupar items que estão próximos no X em "colunas" únicas (pra cabeçalhos fragmentados)
+function agruparPorProximidadeX(items) {
+  if (!items.length) return [];
+  // Ordena por X
+  const ord = [...items].sort((a,b)=>a.x - b.x);
+  const grupos = [];
+  let atual = {x: ord[0].x, nome: ord[0].nome, items:[ord[0]]};
+  for (let i = 1; i < ord.length; i++) {
+    const item = ord[i];
+    // Se está perto do anterior, mescla
+    const ultimoX = atual.items[atual.items.length-1].x;
+    if (item.x - ultimoX < 50) {
+      atual.nome += ' ' + item.nome;
+      atual.items.push(item);
+    } else {
+      grupos.push(atual);
+      atual = {x: item.x, nome: item.nome, items:[item]};
+    }
+  }
+  grupos.push(atual);
+  return grupos.map(g => ({x: g.x, nome: g.nome.trim()}));
+}
+
+// Parsear UMA linha de parâmetro: extrai nome+unidade+valores
+function parsearLinhaParametro(itensLinha, tipo, amostrasPagina, amostrasMapa) {
+  if (!itensLinha || !itensLinha.length) return;
+  // Ordenar por X
+  const ord = [...itensLinha].sort((a,b)=>a.x - b.x);
+  // Estratégia simplificada: o nome do parâmetro está no início (X baixo);
+  // a unidade vem logo depois; depois vêm os valores numéricos.
+  // Vamos separar:
+  // - items com X < 200 = parte do nome do parâmetro
+  // - items com 200 <= X < 300 = unidade
+  // - items com X >= 300 = valores (cada um numa coluna de amostra)
+  // OBS: esses cortes em X dependem do layout. Vou usar abordagem mais robusta:
+  //      identificar o primeiro número que parece valor (não data, não fragmento de unidade).
+  // Concatenar nome do parâmetro: tudo até o primeiro item que comece com dígito (e seja um número plausível)
+  let nomeBuffer = [];
+  let valores = [];  // {x, val}
+  for (const it of ord) {
+    const s = it.str.trim();
+    if (!s) continue;
+    // Tenta interpretar como número
+    const numStr = s.replace(/\./g, '').replace(',', '.'); // brasileiro: 1.234,56 → 1234.56
+    const num = parseFloat(numStr);
+    const ehNumPuro = /^-?\d+(?:[.,]\d+)?$/.test(s.replace(/\s/g,'')) ||
+                       /^-?\d+(?:[.,]\d+)?(\s|$)/.test(s);
+    if (ehNumPuro && !isNaN(num)) {
+      valores.push({x: it.x, val: num});
+    } else {
+      // Se já temos valores e aparece texto, é continuação fora da linha ou ruído. Ignora.
+      if (valores.length > 0) continue;
+      nomeBuffer.push(s);
+    }
+  }
+  if (!nomeBuffer.length || !valores.length) return;
+  // O nomeBuffer inclui o nome do parâmetro + (possivelmente) a unidade
+  const textoLinhaBruto = nomeBuffer.join(' ');
+  const paramId = matchParametro(textoLinhaBruto, tipo);
+  if (!paramId) {
+    // Não conseguiu identificar — ignora silenciosamente
+    return;
+  }
+  // Atribuir cada valor à amostra mais próxima por X
+  for (const v of valores) {
+    let melhor = null;
+    let menorDist = Infinity;
+    for (const a of amostrasPagina) {
+      const d = Math.abs(v.x - a.x);
+      if (d < menorDist) {
+        menorDist = d;
+        melhor = a;
+      }
+    }
+    if (melhor && menorDist < 80) {  // tolerância
+      const chave = `${melhor.nome}__${melhor.profundidade}`;
+      const amostraDestino = amostrasMapa[chave];
+      if (amostraDestino) {
+        amostraDestino.parametros[paramId] = v.val;
+      }
+    }
+  }
+}
+
+// Match aproximado de nome de parâmetro → id interno
+function matchParametro(texto, tipo) {
+  const mapa = tipo === 'solo' ? MAPA_PARAM_FULLIN_SOLO : MAPA_PARAM_FULLIN_FOLHA;
+  const norm = normParam(texto);
+  // Match exato primeiro
+  if (mapa[norm]) return mapa[norm];
+  // Tenta remover sufixo de unidade comum (mg/dm3, cmolc/dm3, etc.)
+  const semUni = norm.replace(/\b(mg|cmolc|cmol|dag|g|kg|mol|dm3|cm3|l|%)\b/g, '').replace(/\s+/g,' ').trim();
+  if (mapa[semUni]) return mapa[semUni];
+  // Match por inclusão (parâmetro é prefix do texto)
+  for (const [chave, id] of Object.entries(mapa)) {
+    if (norm.startsWith(chave)) return id;
+    if (norm.includes(chave) && chave.length > 5) return id;
+  }
+  return null;
+}
+
+// ━━━ ABRIR FORMULÁRIO PRÉ-PREENCHIDO ━━━
+function abrirFormImportado(dados) {
+  if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
+  editandoId = null;
+  // Tenta match automático da fazenda
+  let fazendaMatch = '';
+  if (dados.propriedade) {
+    const propNorm = normalizar(dados.propriedade);
+    fazendaMatch = fazendas.find(f => normalizar(f) === propNorm) || '';
+    if (!fazendaMatch) {
+      fazendaMatch = fazendas.find(f => normalizar(f).includes(propNorm) || propNorm.includes(normalizar(f))) || '';
+    }
+  }
+  // Monta formWIP a partir dos dados parseados
+  window.formWIP = {
+    tipo: dados.tipo,
+    laboratorio: dados.laboratorio || 'Fullin',
+    cliente: dados.cliente || '',
+    propriedade: dados.propriedade || '',
+    fazendaVinculada: fazendaMatch,
+    dataEntrada: dados.dataEntrada || hoje(),
+    dataLaudo: dados.dataLaudo || hoje(),
+    responsavelTecnico: dados.responsavelTecnico || '',
+    observacoes: '',
+    importadoDe: 'pdf_fullin',
+    amostras: dados.amostras.map(a => ({
+      nome: a.nome,
+      profundidade: a.profundidade || '',
+      protocolo: a.protocolo || '',
+      talhaoIdVinculado: '',
+      vincStatus: 'pendente',
+      parametros: a.parametros || {}
+    })),
+    amostrasRemovidas: []
+  };
+  document.getElementById('modalTitulo').textContent = '📄 Revisar dados do PDF';
+  renderFormAnalise();
+  // Banner informativo
+  const body = document.getElementById('modalBody');
+  const banner = document.createElement('div');
+  banner.className = 'banner-pdf-import';
+  const totalParams = window.formWIP.amostras.reduce((s,a)=>s+Object.keys(a.parametros||{}).length, 0);
+  banner.innerHTML = `📄 <strong>PDF importado!</strong> ${window.formWIP.amostras.length} amostra(s), ${totalParams} valor(es) extraídos.<br>
+    <span style="font-size:.74rem;">Confirme os vínculos com talhões abaixo (sugeridos automaticamente) e revise valores antes de salvar.</span>`;
+  body.insertBefore(banner, body.firstChild);
+  document.getElementById('overlayAnalise').classList.add('aberto');
+  toast(`✅ ${window.formWIP.amostras.length} amostras prontas pra revisar.`);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// ━━━ TELA DE EDIÇÃO DE FAIXAS DE REFERÊNCIA ━━━
+window.abrirFaixas = function() {
+  if (!isAdmin()) { toast('⛔ Só admin pode editar faixas.'); return; }
+  // Reseta WIP com cópia das faixas atuais (toda vez que abre)
+  window.faixasEditWIP = {
+    solo: JSON.parse(JSON.stringify(window.faixasCustom.solo || {})),
+    folha: JSON.parse(JSON.stringify(window.faixasCustom.folha || {}))
+  };
+  renderFaixas();
+  document.getElementById('overlayFaixas').classList.add('aberto');
+};
+window.fecharFaixas = () => document.getElementById('overlayFaixas').classList.remove('aberto');
+
+window.tipoFaixaAtiva = 'solo';  // tipo sendo editado
+window.faixasEditWIP = {solo:{}, folha:{}};
+
+window.renderFaixas = function() {
+  const body = document.getElementById('faixasBody');
+  const tipo = window.tipoFaixaAtiva;
+  const params = PARAMS[tipo];
+  // Apenas os com faixa editável
+  const editaveis = params.filter(p => p.faixa || p.faixaTextura || p.faixaIdeal);
+  let html = `<div class="faixas-tabs">
+    <button class="faixas-tab ${tipo==='solo'?'ativa':''}" onclick="window.tipoFaixaAtiva='solo';renderFaixas()">🧪 Solo</button>
+    <button class="faixas-tab ${tipo==='folha'?'ativa':''}" onclick="window.tipoFaixaAtiva='folha';renderFaixas()">🍃 Folha</button>
+  </div>
+  <div style="font-size:.78rem;color:var(--c);margin-bottom:12px;line-height:1.5;">
+    Os valores em <strong>cinza</strong> são padrões Embrapa/Incaper/Fullin. Edite para customizar — fica salvo no Firestore e usado em todas as classificações. Use "↩" pra restaurar o padrão de um parâmetro.
+  </div>`;
+  // Por grupo
+  const grupos = {};
+  editaveis.forEach(p => {
+    if (!grupos[p.grupo]) grupos[p.grupo] = [];
+    grupos[p.grupo].push(p);
+  });
+  Object.entries(grupos).forEach(([nomeGrupo, ps]) => {
+    html += `<div class="faixas-grupo">
+      <div class="faixas-grupo-tit">${escHtml(nomeGrupo)}</div>`;
+    ps.forEach(p => {
+      html += renderEditorParam(p, tipo);
+    });
+    html += `</div>`;
+  });
+  body.innerHTML = html;
+}
+
+function renderEditorParam(param, tipo) {
+  const custom = window.faixasEditWIP[tipo][param.id];
+  let html = `<div class="faixa-param">
+    <div class="faixa-param-head">
+      <div class="faixa-param-nome">${escHtml(param.label)} <span class="faixa-param-un">${escHtml(param.un)}</span></div>
+      ${custom ? `<button class="btn-faixa-reset" onclick="resetFaixa('${param.id}','${tipo}')">↩ Default</button>` : '<span class="faixa-param-status">padrão</span>'}
+    </div>`;
+  if (param.faixaTextura) {
+    // P-Mehlich: 3 texturas, cada uma com 3 limites
+    ['arenoso','medio','argiloso'].forEach(text => {
+      const def = param.faixaTextura[text];
+      const cu = custom?.[text] || {};
+      const v = (k) => cu[k] !== undefined ? cu[k] : def[k];
+      const ehCustom = (k) => cu[k] !== undefined && cu[k] !== def[k];
+      html += `<div class="faixa-text-bloco">
+        <div class="faixa-text-tit">${text.charAt(0).toUpperCase()+text.slice(1)}</div>
+        <div class="faixa-inputs">
+          <div class="faixa-inp-grp">
+            <label>Muito baixo &lt;</label>
+            <input type="text" inputmode="decimal" class="faixa-inp ${ehCustom('muitoBaixo')?'cust':''}" value="${ehCustom('muitoBaixo')?v('muitoBaixo'):''}" placeholder="${def.muitoBaixo}" oninput="setFaixaText('${param.id}','${tipo}','${text}','muitoBaixo',this.value)">
+          </div>
+          <div class="faixa-inp-grp">
+            <label>Baixo &lt;</label>
+            <input type="text" inputmode="decimal" class="faixa-inp ${ehCustom('baixo')?'cust':''}" value="${ehCustom('baixo')?v('baixo'):''}" placeholder="${def.baixo}" oninput="setFaixaText('${param.id}','${tipo}','${text}','baixo',this.value)">
+          </div>
+          <div class="faixa-inp-grp">
+            <label>Alto &lt;</label>
+            <input type="text" inputmode="decimal" class="faixa-inp ${ehCustom('alto')?'cust':''}" value="${ehCustom('alto')?v('alto'):''}" placeholder="${isFinite(def.alto)?def.alto:'∞'}" oninput="setFaixaText('${param.id}','${tipo}','${text}','alto',this.value)">
+          </div>
+        </div>
+      </div>`;
+    });
+  } else if (param.faixaIdeal) {
+    const def = param.faixaIdeal.ideal;
+    const cu = custom?.ideal;
+    const ehC = cu !== undefined && cu !== def;
+    html += `<div class="faixa-inputs">
+      <div class="faixa-inp-grp">
+        <label>Valor ideal</label>
+        <input type="text" inputmode="decimal" class="faixa-inp ${ehC?'cust':''}" value="${ehC?cu:''}" placeholder="${def}" oninput="setFaixa('${param.id}','${tipo}','ideal',this.value)">
+      </div>
+    </div>`;
+  } else if (param.faixa) {
+    const def = param.faixa;
+    const cu = custom || {};
+    const v = (k) => cu[k] !== undefined ? cu[k] : def[k];
+    const ehCust = (k) => cu[k] !== undefined && cu[k] !== def[k];
+    // Folha (só baixo/alto) ou solo (muitoBaixo/baixo/alto/muitoAlto)
+    if (tipo === 'folha' && def.muitoBaixo === undefined) {
+      html += `<div class="faixa-inputs">
+        <div class="faixa-inp-grp">
+          <label>Baixo &lt;</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('baixo')?'cust':''}" value="${ehCust('baixo')?v('baixo'):''}" placeholder="${def.baixo}" oninput="setFaixa('${param.id}','${tipo}','baixo',this.value)">
+        </div>
+        <div class="faixa-inp-grp">
+          <label>Alto ≥</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('alto')?'cust':''}" value="${ehCust('alto')?v('alto'):''}" placeholder="${def.alto}" oninput="setFaixa('${param.id}','${tipo}','alto',this.value)">
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="faixa-inputs">
+        <div class="faixa-inp-grp">
+          <label>Muito baixo &lt;</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('muitoBaixo')?'cust':''}" value="${ehCust('muitoBaixo')?v('muitoBaixo'):''}" placeholder="${def.muitoBaixo}" oninput="setFaixa('${param.id}','${tipo}','muitoBaixo',this.value)">
+        </div>
+        <div class="faixa-inp-grp">
+          <label>Baixo &lt;</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('baixo')?'cust':''}" value="${ehCust('baixo')?v('baixo'):''}" placeholder="${def.baixo}" oninput="setFaixa('${param.id}','${tipo}','baixo',this.value)">
+        </div>
+        <div class="faixa-inp-grp">
+          <label>Alto &lt;</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('alto')?'cust':''}" value="${ehCust('alto')?v('alto'):''}" placeholder="${isFinite(def.alto)?def.alto:'∞'}" oninput="setFaixa('${param.id}','${tipo}','alto',this.value)">
+        </div>
+        ${isFinite(def.muitoAlto) ? `<div class="faixa-inp-grp">
+          <label>Muito alto &lt;</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('muitoAlto')?'cust':''}" value="${ehCust('muitoAlto')?v('muitoAlto'):''}" placeholder="${def.muitoAlto}" oninput="setFaixa('${param.id}','${tipo}','muitoAlto',this.value)">
+        </div>` : ''}
+      </div>`;
+    }
+  }
+  if (param.inverter) html += `<div style="font-size:.7rem;color:#92400e;margin-top:5px;">⚠️ Valor baixo é desejável para este parâmetro</div>`;
+  html += `</div>`;
+  return html;
+}
+
+window.setFaixa = function(paramId, tipo, campo, valor) {
+  const n = parseDose(valor);
+  if (!window.faixasEditWIP[tipo][paramId]) window.faixasEditWIP[tipo][paramId] = {};
+  if (n === null || valor === '') {
+    delete window.faixasEditWIP[tipo][paramId][campo];
+    if (Object.keys(window.faixasEditWIP[tipo][paramId]).length === 0) delete window.faixasEditWIP[tipo][paramId];
+  } else {
+    window.faixasEditWIP[tipo][paramId][campo] = n;
+  }
+};
+window.setFaixaText = function(paramId, tipo, textura, campo, valor) {
+  const n = parseDose(valor);
+  if (!window.faixasEditWIP[tipo][paramId]) window.faixasEditWIP[tipo][paramId] = {};
+  if (!window.faixasEditWIP[tipo][paramId][textura]) window.faixasEditWIP[tipo][paramId][textura] = {};
+  if (n === null || valor === '') {
+    delete window.faixasEditWIP[tipo][paramId][textura][campo];
+    if (Object.keys(window.faixasEditWIP[tipo][paramId][textura]).length === 0) delete window.faixasEditWIP[tipo][paramId][textura];
+    if (Object.keys(window.faixasEditWIP[tipo][paramId]).length === 0) delete window.faixasEditWIP[tipo][paramId];
+  } else {
+    window.faixasEditWIP[tipo][paramId][textura][campo] = n;
+  }
+};
+window.resetFaixa = function(paramId, tipo) {
+  delete window.faixasEditWIP[tipo][paramId];
+  renderFaixas();
+};
+
+window.salvarFaixas = async function() {
+  if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
+  const btn = document.getElementById('btnSalvarFaixas');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const dados = {
+      solo: window.faixasEditWIP.solo || {},
+      folha: window.faixasEditWIP.folha || {},
+      atualizadoEm: new Date().toISOString(),
+      atualizadoPor: usuarioAtual.email
+    };
+    await setDoc(doc(db,'analises_faixas','global'), dados);
+    try {
+      await addDoc(collection(db,'logs'), {
+        tipo:'analise', mensagem:`${usuarioAtual.email} editou faixas de referência`,
+        criadoEm: new Date().toISOString(), uid: usuarioAtual.uid
+      });
+    } catch(e) {}
+    toast('✅ Faixas salvas!');
+    fecharFaixas();
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erro: '+e.message);
+  }
+  btn.disabled = false; btn.textContent = '💾 Salvar';
 };
 
 // ━━━━━━━━━━ NOVA / EDITAR ANÁLISE ━━━━━━━━━━
