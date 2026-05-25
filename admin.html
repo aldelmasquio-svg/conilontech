@@ -35,7 +35,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',estoque:'admin',gestao:'admin',admin:'admin'};
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',estoque:'admin',gestao:'admin',analises:'admin',admin:'admin'};
   }
   const isAdmin = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil === 'admin';
   if (!isAdmin) { window.location.href = 'index.html'; return; }
@@ -65,7 +65,7 @@ function gerarMenu() {
     {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
     {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
     {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
-    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},{href:'estoque.html',ico:'🏬',label:'Estoque'},{href:'gestao.html',ico:'📊',label:'Gestão'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},{href:'estoque.html',ico:'🏬',label:'Estoque'},{href:'gestao.html',ico:'📊',label:'Gestão'},{href:'analises.html',ico:'🔬',label:'Análises'},
     {href:'admin.html',ico:'⚙️',label:'Administração'},
   ];
   document.getElementById('menuModulos').innerHTML = items.map(m =>
@@ -95,6 +95,7 @@ function renderizarUsuarios() {
     {id:'pedidos',label:'Pedidos'},
     {id:'estoque',label:'Estoque'},
     {id:'gestao',label:'Gestão'},
+    {id:'analises',label:'Análises'},
   ];
   const NIVEIS = ['nenhum','encarregado','operador','gerente','admin'];
 
