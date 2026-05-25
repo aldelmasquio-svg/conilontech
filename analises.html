@@ -176,7 +176,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .cls-fora{background:#f59e0b;}
 
 /* TEXTURA TOGGLE */
-.textura-box{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 12px;margin-bottom:10px;display:flex;align-items:center;gap:9px;font-size:.78rem;flex-wrap:wrap;}
+.textura-box{background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:5px 9px;margin-bottom:8px;display:flex;align-items:center;gap:7px;font-size:.74rem;flex-wrap:wrap;}
 .textura-box label{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:#92400e;text-transform:uppercase;font-size:.7rem;letter-spacing:.04em;}
 .textura-box select{border:1.5px solid #fde68a;border-radius:6px;padding:4px 8px;font-size:.82rem;background:white;}
 
@@ -198,35 +198,37 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 /* Botão de Faixas no header */
 .btn-faixas-header{background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:38px;height:38px;border-radius:8px;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;}
 
-/* Header da comparação (slots + sub-tabs) */
-.cmp-header{background:white;border-radius:var(--rad);padding:11px;box-shadow:var(--s);margin-bottom:10px;}
-.cmp-slots{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:9px;}
-.slot-cmp{border-radius:10px;padding:9px 8px;min-height:115px;display:flex;flex-direction:column;cursor:pointer;transition:all .2s;border:2px dashed var(--cb);background:#fafafa;text-align:center;justify-content:center;align-items:center;gap:3px;}
-.slot-cmp.slot-vazio:hover{border-color:var(--v);background:var(--vb);}
-.slot-cmp.slot-preenchido{cursor:default;border-style:solid;text-align:left;justify-content:flex-start;align-items:stretch;}
-.slot-cmp.slot-solo{border-color:#5d3a1a;background:#fef7ed;}
-.slot-cmp.slot-folha{border-color:#1e5631;background:#f0fdf4;}
-.slot-plus{font-size:1.7rem;color:var(--cb);line-height:1;}
-.slot-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--c);font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;}
-.slot-hint{font-size:.66rem;color:#9ca3af;}
-.slot-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
-.slot-tipo{font-size:1rem;}
-.slot-rm{background:none;border:none;color:var(--c);font-size:.85rem;cursor:pointer;padding:1px 5px;border-radius:4px;}
-.slot-rm:hover{background:#fee2e2;color:var(--danger);}
-.slot-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.86rem;color:var(--ve);line-height:1.2;margin-bottom:3px;}
-.slot-meta{font-size:.7rem;color:var(--c);line-height:1.3;flex:1;}
-.slot-trocar{background:none;border:1px solid var(--cb);color:var(--c);border-radius:5px;padding:3px 6px;font-size:.65rem;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;margin-top:4px;text-transform:uppercase;letter-spacing:.04em;}
-.slot-trocar:hover{background:var(--cl);}
-.cmp-acoes{display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--cl);padding-top:9px;}
+/* Header compacto da comparação (chips + abas) */
+.cmp-bar{background:white;border-radius:var(--rad);padding:8px;box-shadow:var(--s);margin-bottom:10px;position:sticky;top:-1px;z-index:10;}
+.cmp-bar-slots{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px;}
+.slot-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 9px;border-radius:99px;font-size:.74rem;border:1.5px dashed var(--cb);background:#fafafa;color:var(--c);font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;flex:1;min-height:34px;justify-content:center;}
+.slot-chip-vazio:hover{border-color:var(--v);background:var(--vb);color:var(--ve);}
+.slot-chip-cheio{border-style:solid;cursor:default;text-transform:none;letter-spacing:0;font-weight:600;padding:5px 8px;justify-content:flex-start;text-align:left;}
+.slot-chip-solo{border-color:#5d3a1a;background:#fef7ed;color:#5d3a1a;}
+.slot-chip-folha{border-color:#1e5631;background:#f0fdf4;color:#1e5631;}
+.slot-chip-ico{font-size:.92rem;flex-shrink:0;}
+.slot-chip-txt{display:flex;flex-direction:column;line-height:1.1;flex:1;min-width:0;}
+.slot-chip-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.78rem;color:inherit;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.slot-chip-faz{font-size:.6rem;color:var(--c);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.slot-chip-x{background:rgba(0,0,0,.07);border:none;color:inherit;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;line-height:1;}
+.slot-chip-x:hover{background:#fee2e2;color:var(--danger);}
+
+/* Barra de modos (Tabela / Gráficos / Limpar) */
+.cmp-bar-modos{display:flex;gap:6px;border-top:1px solid var(--cl);padding-top:7px;align-items:center;}
+.cmp-modo-btn{flex:1;background:#fafafa;border:1.5px solid var(--cb);border-radius:8px;padding:9px 6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;color:var(--c);text-transform:uppercase;letter-spacing:.03em;min-height:38px;}
+.cmp-modo-btn.ativo{background:var(--v);color:white;border-color:var(--v);box-shadow:0 2px 6px rgba(45,106,45,.3);}
+.cmp-modo-btn:active{transform:scale(.97);}
+.cmp-modo-limpar{background:none;border:1.5px solid var(--cb);border-radius:8px;padding:9px 12px;cursor:pointer;font-size:.9rem;color:var(--c);min-height:38px;}
+.cmp-modo-limpar:hover{background:#fee2e2;color:var(--danger);border-color:#fca5a5;}
 
 .cmp-aviso-misto{background:#fef3c7;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:8px;padding:9px 11px;font-size:.78rem;color:#92400e;line-height:1.45;margin-bottom:10px;}
 
 /* TABELA comparativa */
-.cmp-tbl-wrap{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
-.cmp-tbl{width:100%;border-collapse:collapse;font-size:.78rem;table-layout:fixed;}
+.cmp-tbl-wrap{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:auto;-webkit-overflow-scrolling:touch;max-width:100%;}
+.cmp-tbl{width:100%;border-collapse:collapse;font-size:.74rem;}
 .cmp-tbl + .cmp-tbl{margin-top:14px;}
-.cmp-tbl th,.cmp-tbl td{padding:6px 5px;border-bottom:1px solid var(--cl);vertical-align:top;}
-.cmp-tbl th{background:var(--vb);font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--ve);text-align:left;font-size:.72rem;border-bottom:2px solid var(--v);}
+.cmp-tbl th,.cmp-tbl td{padding:5px 4px;border-bottom:1px solid var(--cl);vertical-align:top;}
+.cmp-tbl th{background:var(--vb);font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--ve);text-align:left;font-size:.7rem;border-bottom:2px solid var(--v);}
 .cmp-th-tipo{font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
 .cmp-th-nome{font-size:.78rem;color:var(--ve);font-weight:800;line-height:1.2;}
 .cmp-th-vazia{background:#f9fafb!important;}
@@ -254,6 +256,9 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .seg-marker{position:absolute;top:-3px;bottom:-3px;width:3px;border-radius:99px;box-shadow:0 0 0 2px white;z-index:2;}
 .seg-marker-val{position:absolute;bottom:-19px;left:50%;transform:translateX(-50%);font-family:'DM Mono',monospace;font-weight:700;font-size:.62rem;background:white;padding:1px 4px;border-radius:4px;border:1px solid var(--cb);white-space:nowrap;color:var(--ve);box-shadow:0 1px 2px rgba(0,0,0,.1);}
 .grafico-valores{display:flex;flex-direction:column;gap:3px;}
+.zonas-leg{display:flex;flex-wrap:wrap;gap:8px;margin:5px 0 8px;font-size:.66rem;color:var(--c);}
+.zona-leg{display:inline-flex;align-items:center;gap:4px;}
+.zona-leg-cor{width:10px;height:10px;border-radius:2px;display:inline-block;opacity:.7;}
 .cmp-val-item{display:flex;align-items:center;gap:7px;font-size:.74rem;flex-wrap:wrap;}
 .cmp-val-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
 .cmp-val-nome{flex:1;min-width:80px;color:var(--t);}
@@ -787,71 +792,62 @@ window.renderLista = function() {
 
 window.renderComparar = function() {
   const cont = document.getElementById('content');
-  // Caso não tenha amostras cadastradas ainda
   if (!amostras.length) {
     cont.innerHTML = `<div class="vazio"><div class="ico">📊</div><p><strong>Nada para comparar ainda.</strong><br>
       <span style="font-size:.78rem;">Cadastre análises na aba "Análises" primeiro.</span></p></div>`;
     return;
   }
-  // SLOTS: até 3 amostras selecionadas
-  const slotsHtml = window.slotsComparar.map((amId, idx) => {
-    if (amId) {
-      const am = amostras.find(x => x._docId === amId);
-      if (!am) return `<div class="slot-cmp slot-vazio" onclick="abrirSeletorAmostra(${idx})">
-        <div class="slot-titulo">+ Amostra ${idx+1}</div>
-      </div>`;
-      const an = analises.find(x => x._docId === am.analiseId);
-      return `<div class="slot-cmp slot-preenchido ${am.tipo==='solo'?'slot-solo':'slot-folha'}">
-        <div class="slot-head">
-          <span class="slot-tipo">${am.tipo==='solo'?'🧪':'🍃'}</span>
-          <button class="slot-rm" onclick="removerSlot(${idx})">✕</button>
-        </div>
-        <div class="slot-nome">${escHtml(am.nome)}${am.profundidade?' <span style="color:var(--c);font-weight:500;font-size:.74rem;">('+escHtml(am.profundidade)+')</span>':''}</div>
-        <div class="slot-meta">${escHtml(an?.fazendaVinculada||'—')}<br><span style="font-size:.66rem;">${formatarData(an?.dataLaudo||an?.dataEntrada)}</span></div>
-        <button class="slot-trocar" onclick="abrirSeletorAmostra(${idx})">↻ trocar</button>
-      </div>`;
-    }
-    return `<div class="slot-cmp slot-vazio" onclick="abrirSeletorAmostra(${idx})">
-      <div class="slot-plus">+</div>
-      <div class="slot-titulo">Amostra ${idx+1}</div>
-      <div class="slot-hint">toque para escolher</div>
-    </div>`;
-  }).join('');
-  // Amostras efetivamente selecionadas
+  // Amostras efetivamente selecionadas (limpar slots órfãos)
   const selecionadas = window.slotsComparar
     .map(id => id ? amostras.find(x => x._docId === id) : null)
     .filter(Boolean);
-  let html = `<div class="cmp-header">
-    <div class="cmp-slots">${slotsHtml}</div>
-    ${selecionadas.length >= 2 ? `<div class="cmp-acoes">
-      <button class="btn-acao ${window.modoComparar==='tabela'?'primary':''}" onclick="window.modoComparar='tabela';renderComparar()">📋 Tabela</button>
-      <button class="btn-acao ${window.modoComparar==='graficos'?'primary':''}" onclick="window.modoComparar='graficos';renderComparar()">📊 Gráficos</button>
-      <button class="btn-acao" onclick="window.slotsComparar=[null,null,null];renderComparar()" style="margin-left:auto;">🗑 Limpar</button>
+  // SLOTS como chips compactos horizontais
+  const slotsHtml = window.slotsComparar.map((amId, idx) => {
+    if (amId) {
+      const am = amostras.find(x => x._docId === amId);
+      if (!am) return `<button class="slot-chip slot-chip-vazio" type="button" onclick="abrirSeletorAmostra(${idx})">+ ${idx+1}</button>`;
+      const an = analises.find(x => x._docId === am.analiseId);
+      const fz = an?.fazendaVinculada ? an.fazendaVinculada.split(' ').slice(-1)[0] : '';
+      return `<div class="slot-chip slot-chip-cheio ${am.tipo==='solo'?'slot-chip-solo':'slot-chip-folha'}">
+        <span class="slot-chip-ico">${am.tipo==='solo'?'🧪':'🍃'}</span>
+        <span class="slot-chip-txt">
+          <span class="slot-chip-nome">${escHtml(am.nome)}${am.profundidade?' '+escHtml(am.profundidade):''}</span>
+          <span class="slot-chip-faz">${escHtml(fz)}</span>
+        </span>
+        <button type="button" class="slot-chip-x" onclick="event.stopPropagation();removerSlot(${idx})">✕</button>
+      </div>`;
+    }
+    return `<button class="slot-chip slot-chip-vazio" type="button" onclick="abrirSeletorAmostra(${idx})">+ Amostra ${idx+1}</button>`;
+  }).join('');
+  // Modo (tabela/gráficos) só faz sentido com 2+ selecionadas
+  const podeAlternar = selecionadas.length >= 2;
+  let html = `<div class="cmp-bar">
+    <div class="cmp-bar-slots">${slotsHtml}</div>
+    ${podeAlternar ? `<div class="cmp-bar-modos">
+      <button type="button" class="cmp-modo-btn ${window.modoComparar==='tabela'?'ativo':''}" onclick="setModoCmp('tabela')">📋 Tabela</button>
+      <button type="button" class="cmp-modo-btn ${window.modoComparar==='graficos'?'ativo':''}" onclick="setModoCmp('graficos')">📊 Gráficos</button>
+      <button type="button" class="cmp-modo-limpar" onclick="limparSlots()" title="Limpar tudo">🗑</button>
     </div>` : ''}
   </div>`;
   if (selecionadas.length === 0) {
-    html += `<div class="vazio" style="padding:30px 18px;"><div class="ico">👆</div><p style="font-size:.85rem;">Toque em "Amostra 1" acima para começar.<br>
-      <span style="font-size:.74rem;color:var(--c);">Você pode comparar de 2 a 3 amostras (solo e/ou folha).</span></p></div>`;
+    html += `<div class="vazio" style="padding:40px 18px;"><div class="ico">👆</div><p style="font-size:.88rem;">Toque em <strong>+ Amostra 1</strong> acima para começar.<br>
+      <span style="font-size:.74rem;color:var(--c);">Compare de 2 a 3 amostras (solo e/ou folha).</span></p></div>`;
   } else if (selecionadas.length === 1) {
-    html += `<div class="vazio" style="padding:30px 18px;"><div class="ico">🤏</div><p style="font-size:.85rem;">Adicione mais 1 amostra para comparar.</p></div>`;
+    html += `<div class="vazio" style="padding:30px 18px;"><div class="ico">🤏</div><p style="font-size:.88rem;">Adicione mais 1 amostra para comparar.</p></div>`;
   } else {
-    // Verificar se mistura solo + folha
     const temSolo = selecionadas.some(a => a.tipo === 'solo');
     const temFolha = selecionadas.some(a => a.tipo === 'folha');
     const misto = temSolo && temFolha;
-    // Toggle textura (só se tem alguma de solo)
     if (temSolo) {
       html += `<div class="textura-box">
-        <label>Textura do solo:</label>
+        <label>Textura:</label>
         <select onchange="window.texturaAtiva=this.value;renderComparar()">
           ${TEXTURAS.map(t => `<option value="${t.id}" ${window.texturaAtiva===t.id?'selected':''}>${t.label}</option>`).join('')}
         </select>
       </div>`;
     }
     if (misto) {
-      html += `<div class="cmp-aviso-misto">
-        ⚠️ <strong>Comparação solo × folha</strong> — As unidades são diferentes, então comparamos por <strong>status colorido</strong> em vez do valor bruto. Quando o solo está "baixo" mas a folha está "adequada", indica boa absorção.
-      </div>`;
+      html += `<div class="cmp-aviso-misto">⚠️ Solo × folha — unidades diferentes; comparamos por status colorido.</div>`;
     }
     if (window.modoComparar === 'tabela') {
       html += renderTabelaCmp(selecionadas, misto);
@@ -860,6 +856,16 @@ window.renderComparar = function() {
     }
   }
   cont.innerHTML = html;
+};
+
+// Helpers do comparar (corrigem bugs de re-render)
+window.setModoCmp = function(modo) {
+  window.modoComparar = modo;
+  renderComparar();
+};
+window.limparSlots = function() {
+  window.slotsComparar = [null, null, null];
+  renderComparar();
 };
 
 // ━━━ TABELA COMPARATIVA ━━━
@@ -998,7 +1004,7 @@ function renderGraficosCmp(selecionadas, misto) {
     html += `<div class="grafico-grupo">
       <div class="grafico-grupo-tit">🧪 Solo</div>`;
     PARAM_SOLO.forEach(p => {
-      html += renderGraficoParam(selSolo, p, 'solo');
+      html += renderGraficoParam(selSolo, p, 'solo', selecionadas);
     });
     html += `</div>`;
   }
@@ -1006,7 +1012,7 @@ function renderGraficosCmp(selecionadas, misto) {
     html += `<div class="grafico-grupo">
       <div class="grafico-grupo-tit">🍃 Folha</div>`;
     PARAM_FOLHA.forEach(p => {
-      html += renderGraficoParam(selFolha, p, 'folha');
+      html += renderGraficoParam(selFolha, p, 'folha', selecionadas);
     });
     html += `</div>`;
   }
@@ -1014,111 +1020,140 @@ function renderGraficosCmp(selecionadas, misto) {
 }
 
 // Renderiza UM gráfico horizontal pra um parâmetro com várias amostras
-function renderGraficoParam(amostrasTipo, param, tipo) {
-  // Verifica se pelo menos UMA amostra tem valor pra esse parâmetro
-  const temValor = amostrasTipo.some(a => a.parametros?.[param.id] !== undefined && a.parametros?.[param.id] !== null);
-  if (!temValor) return '';  // pula parâmetros sem dado
-  // Determina escala
-  const valores = amostrasTipo.map(a => a.parametros?.[param.id]).filter(v => v != null && isFinite(v));
+// Gera segmentos SIMPLIFICADOS de 3 cores (baixo/bom/alto) a partir da faixa efetiva
+// Retorna {segmentos:[{ate,cor,lab}], maxEscala}
+function gerarSegmentos3(param, tipo, valores) {
   const ef = faixaEfetiva(param, tipo);
-  let maxEscala = Math.max(...valores, 1);
-  let segmentos = [];  // [{cor, perc, label}]
-  // Construir segmentos visuais baseados na faixa
-  if (ef) {
-    if (ef.tipo === 'ph') {
-      // pH especial: 4 a 8
-      maxEscala = 8;
-      segmentos = [
-        {ate:5.0, cor:'#991b1b', lab:'Muito ácido'},
-        {ate:6.0, cor:'#dc2626', lab:'Ácido'},
-        {ate:6.9, cor:'#16a34a', lab:'Bom'},
-        {ate:7.5, cor:'#2563eb', lab:'Alcalino fraco'},
-        {ate:8.0, cor:'#7c3aed', lab:'Alcalino'}
-      ];
-    } else if (ef.tipo === 'textura') {
-      const f = ef.faixa[window.texturaAtiva || 'medio'];
-      maxEscala = Math.max(f.alto * 1.4, ...valores);
-      const inv = param.inverter;
-      segmentos = [
-        {ate:f.muitoBaixo, cor: inv?'#16a34a':'#991b1b', lab: inv?'Bom':'Muito baixo'},
-        {ate:f.baixo,      cor: inv?'#16a34a':'#dc2626', lab: inv?'Bom':'Baixo'},
-        {ate:f.alto,       cor:'#16a34a', lab:'Médio/Bom'},
-        {ate:maxEscala,    cor: inv?'#dc2626':'#2563eb', lab: inv?'Alto':'Alto'}
-      ];
-    } else if (ef.tipo === 'ideal') {
-      const ideal = ef.faixa.ideal;
-      const min = ideal * 0.6, max = ideal * 1.4;
-      maxEscala = Math.max(max, ...valores) * 1.1;
-      segmentos = [
-        {ate:min,     cor:'#dc2626', lab:'Abaixo'},
-        {ate:ideal*0.85, cor:'#f59e0b', lab:'Pouco abaixo'},
-        {ate:ideal*1.15, cor:'#16a34a', lab:'Ideal'},
-        {ate:max,     cor:'#f59e0b', lab:'Pouco acima'},
-        {ate:maxEscala, cor:'#dc2626', lab:'Acima'}
-      ];
-    } else if (ef.tipo === 'simples') {
-      const f = ef.faixa;
-      if (tipo === 'folha' && f.baixo !== undefined && f.muitoBaixo === undefined) {
-        // Folha
-        maxEscala = Math.max(f.alto * 1.5, ...valores);
-        segmentos = [
-          {ate:f.baixo, cor:'#dc2626', lab:'Baixo'},
-          {ate:f.alto,  cor:'#16a34a', lab:'Adequado'},
-          {ate:maxEscala, cor:'#2563eb', lab:'Alto'}
-        ];
-      } else if (f.muitoBaixo !== undefined) {
-        const inv = param.inverter;
-        const fimAlto = isFinite(f.alto) ? f.alto : (isFinite(f.muitoAlto) ? f.muitoAlto : Math.max(f.baixo*3, ...valores));
-        maxEscala = Math.max(fimAlto * 1.3, ...valores) * 1.05;
-        segmentos = [
-          {ate:f.muitoBaixo, cor:inv?'#16a34a':'#991b1b', lab:inv?'Bom':'Muito baixo'},
-          {ate:f.baixo,      cor:inv?'#16a34a':'#dc2626', lab:inv?'Bom':'Baixo'},
-          {ate:isFinite(f.alto)?f.alto:maxEscala*0.8, cor:'#16a34a', lab:'Médio/Bom'}
-        ];
-        if (isFinite(f.alto)) {
-          segmentos.push({ate:isFinite(f.muitoAlto)?f.muitoAlto:maxEscala*0.95, cor:inv?'#dc2626':'#2563eb', lab:inv?'Alto':'Alto'});
-        }
-        if (isFinite(f.muitoAlto)) {
-          segmentos.push({ate:maxEscala, cor:inv?'#991b1b':'#7c3aed', lab:inv?'Muito alto':'Muito alto'});
-        }
-      }
-    }
+  const COR_BAIXO = '#dc2626', COR_BOM = '#16a34a', COR_ALTO = '#2563eb';
+  if (!ef) return null;
+  // pH especial
+  if (ef.tipo === 'ph') {
+    return {
+      maxEscala: 8.0,
+      segmentos: [
+        {ate:6.0, cor:COR_BAIXO, lab:'Ácido'},
+        {ate:6.9, cor:COR_BOM,   lab:'Bom (6,0-6,9)'},
+        {ate:8.0, cor:COR_ALTO,  lab:'Alcalino'}
+      ]
+    };
   }
-  // Renderizar barra de fundo com segmentos coloridos
-  let segBg = '';
-  if (segmentos.length) {
-    let anterior = 0;
-    segBg = segmentos.map(s => {
-      const inicio = (anterior / maxEscala) * 100;
-      const fim = Math.min(100, (s.ate / maxEscala) * 100);
-      anterior = s.ate;
-      return `<div class="seg-faixa" style="left:${inicio}%;width:${fim-inicio}%;background:${s.cor};" title="${escAttr(s.lab)} (até ${fmt(s.ate, s.ate<10?2:0)})"></div>`;
+  // Faixa ideal (relações)
+  if (ef.tipo === 'ideal') {
+    const ideal = ef.faixa.ideal;
+    const baixoLim = ideal * 0.85;
+    const altoLim = ideal * 1.15;
+    const max = Math.max(ideal * 1.6, ...valores) * 1.1;
+    return {
+      maxEscala: max,
+      segmentos: [
+        {ate:baixoLim, cor:COR_BAIXO, lab:'Abaixo do ideal'},
+        {ate:altoLim,  cor:COR_BOM,   lab:`Ideal (~${fmt(ideal, ideal<1?2:1)})`},
+        {ate:max,      cor:COR_ALTO,  lab:'Acima do ideal'}
+      ]
+    };
+  }
+  // Faixa por textura (P-Mehlich)
+  let faixa;
+  if (ef.tipo === 'textura') {
+    faixa = ef.faixa[window.texturaAtiva || 'medio'];
+  } else if (ef.tipo === 'simples') {
+    faixa = ef.faixa;
+  }
+  if (!faixa) return null;
+  const inv = param.inverter;
+  // Folha: baixo/adequado/alto
+  if (tipo === 'folha' && faixa.baixo !== undefined && faixa.muitoBaixo === undefined) {
+    const max = Math.max(faixa.alto * 1.5, ...valores) * 1.05;
+    return {
+      maxEscala: max,
+      segmentos: [
+        {ate:faixa.baixo, cor:COR_BAIXO, lab:'Baixo'},
+        {ate:faixa.alto,  cor:COR_BOM,   lab:'Adequado'},
+        {ate:max,         cor:COR_ALTO,  lab:'Alto'}
+      ]
+    };
+  }
+  // Solo: simplificar p 3 segmentos (baixo / bom / alto)
+  // "baixo" = abaixo do faixa.baixo
+  // "bom" = entre faixa.baixo e faixa.alto
+  // "alto" = acima do faixa.alto
+  const limBaixo = faixa.baixo;
+  const limAlto = isFinite(faixa.alto) ? faixa.alto : Math.max(faixa.baixo * 3, ...valores);
+  const max = Math.max(limAlto * 1.3, ...valores) * 1.05;
+  return {
+    maxEscala: max,
+    segmentos: [
+      {ate:limBaixo, cor: inv ? COR_BOM : COR_BAIXO, lab: inv ? 'Bom (baixo)' : 'Baixo'},
+      {ate:limAlto,  cor: COR_BOM,                   lab: 'Médio/Bom'},
+      {ate:max,      cor: inv ? COR_BAIXO : COR_ALTO, lab: inv ? 'Alto (ruim)' : 'Alto'}
+    ]
+  };
+}
+
+function renderGraficoParam(amostrasTipo, param, tipo, todasSelecionadas) {
+  const temValor = amostrasTipo.some(a => a.parametros?.[param.id] !== undefined && a.parametros?.[param.id] !== null);
+  if (!temValor) return '';
+  const valores = amostrasTipo.map(a => a.parametros?.[param.id]).filter(v => v != null && isFinite(v));
+  const seg = gerarSegmentos3(param, tipo, valores);
+  if (!seg) {
+    // Sem faixa definida — só mostra os valores numéricos
+    const cores = ['#1e3a5f', '#8b6914', '#722f37'];
+    const idxCor = {};
+    (todasSelecionadas || amostrasTipo).forEach((a,i) => { idxCor[a._docId] = cores[i % cores.length]; });
+    const lst = amostrasTipo.map(a => {
+      const v = a.parametros?.[param.id];
+      if (v == null) return '';
+      return `<div class="cmp-val-item">
+        <span class="cmp-val-dot" style="background:${idxCor[a._docId]};"></span>
+        <span class="cmp-val-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</span>
+        <span class="cmp-val-num">${fmt(v, v<10?2:(v<100?1:0))} ${escHtml(param.un)}</span>
+      </div>`;
     }).join('');
+    return `<div class="grafico-param">
+      <div class="grafico-param-head">
+        <div class="grafico-param-nome">${escHtml(param.label)}</div>
+        <div class="grafico-param-un">${escHtml(param.un)}</div>
+      </div>
+      <div class="grafico-valores">${lst}</div>
+    </div>`;
   }
-  // Marcadores das amostras
+  const {segmentos, maxEscala} = seg;
+  // Renderizar 3 segmentos
+  let anterior = 0;
+  const segBg = segmentos.map(s => {
+    const inicio = (anterior / maxEscala) * 100;
+    const fim = Math.min(100, (s.ate / maxEscala) * 100);
+    anterior = s.ate;
+    return `<div class="seg-faixa" style="left:${inicio}%;width:${fim-inicio}%;background:${s.cor};" title="${escAttr(s.lab)} (até ${fmt(s.ate, s.ate<10?2:0)})"></div>`;
+  }).join('');
+  // Marcadores (paleta consistente entre slots)
   const cores = ['#1e3a5f', '#8b6914', '#722f37'];
-  const idxToCor = {};
-  selecionadas.forEach((sa, i) => { idxToCor[sa._docId] = cores[i % cores.length]; });
-  const marcadores = amostrasTipo.map((a, i) => {
+  const idxCor = {};
+  (todasSelecionadas || amostrasTipo).forEach((a,i) => { idxCor[a._docId] = cores[i % cores.length]; });
+  const marcadores = amostrasTipo.map(a => {
     const v = a.parametros?.[param.id];
     if (v == null || !isFinite(v)) return '';
-    const pos = Math.min(100, (v / maxEscala) * 100);
-    return `<div class="seg-marker" style="left:${pos}%;background:${idxToCor[a._docId]};" title="${escAttr(a.nome+': '+v+' '+param.un)}">
+    const pos = Math.min(99, (v / maxEscala) * 100);
+    return `<div class="seg-marker" style="left:${pos}%;background:${idxCor[a._docId]};" title="${escAttr(a.nome+': '+v+' '+param.un)}">
       <div class="seg-marker-val">${fmt(v, v < 10 ? 2 : (v < 100 ? 1 : 0))}</div>
     </div>`;
   }).join('');
   // Legenda dos pontos
-  const legendaValores = amostrasTipo.map((a, i) => {
+  const legendaValores = amostrasTipo.map(a => {
     const v = a.parametros?.[param.id];
     if (v == null) return '';
     const c = classificar(param, v, tipo, window.texturaAtiva);
     return `<div class="cmp-val-item">
-      <span class="cmp-val-dot" style="background:${idxToCor[a._docId]};"></span>
+      <span class="cmp-val-dot" style="background:${idxCor[a._docId]};"></span>
       <span class="cmp-val-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</span>
       <span class="cmp-val-num">${fmt(v, v<10?2:(v<100?1:0))} ${escHtml(param.un)}</span>
       <span class="cmp-val-cls cls-${c.cls}">${escHtml(c.label)}</span>
     </div>`;
   }).join('');
+  // Legenda das 3 zonas (com cor + label)
+  const legendaZonas = segmentos.map(s =>
+    `<span class="zona-leg"><span class="zona-leg-cor" style="background:${s.cor};"></span>${escHtml(s.lab)}</span>`
+  ).join('');
   return `<div class="grafico-param">
     <div class="grafico-param-head">
       <div class="grafico-param-nome">${escHtml(param.label)}</div>
@@ -1128,6 +1163,7 @@ function renderGraficoParam(amostrasTipo, param, tipo) {
       ${segBg}
       ${marcadores}
     </div>
+    <div class="zonas-leg">${legendaZonas}</div>
     <div class="grafico-valores">${legendaValores}</div>
   </div>`;
 }
@@ -1146,11 +1182,11 @@ function renderGraficoMisto(selecionadas, paramSolo, paramFolha) {
     </div>`;
   // 1 bloco solo + 1 bloco folha
   if (temSolo) {
-    const sub = renderGraficoParam(selSolo, paramSolo, 'solo');
+    const sub = renderGraficoParam(selSolo, paramSolo, 'solo', selecionadas);
     if (sub) html += `<div class="grafico-misto-sub"><div class="grafico-misto-tit">🧪 Solo (${escHtml(paramSolo.un)})</div>${sub}</div>`;
   }
   if (temFolha) {
-    const sub = renderGraficoParam(selFolha, paramFolha, 'folha');
+    const sub = renderGraficoParam(selFolha, paramFolha, 'folha', selecionadas);
     if (sub) html += `<div class="grafico-misto-sub"><div class="grafico-misto-tit">🍃 Folha (${escHtml(paramFolha.un)})</div>${sub}</div>`;
   }
   html += `</div>`;
@@ -1225,12 +1261,17 @@ const MAPA_PARAM_FULLIN_SOLO = {
   'calcio': 'calcio',
   'magnesio': 'magnesio',
   'aluminio acidez trocavel': 'aluminio',
+  'aluminio (acidez trocavel)': 'aluminio',
   'aluminio': 'aluminio',
   'hidrogenio extraivel h': 'h_extraivel',
+  'hidrogenio extraivel (h+)': 'h_extraivel',
+  'hidrogenio extraivel h+': 'h_extraivel',
   'h al acidez potencial': 'h_al',
   'h+al acidez potencial': 'h_al',
+  'h+al (acidez potencial)': 'h_al',
   'h+al': 'h_al',
   'ph em h2o acidez ativa': 'ph_h2o',
+  'ph em h2o (acidez ativa)': 'ph_h2o',
   'ph em h2o': 'ph_h2o',
   'ph smp': 'ph_smp',
   'materia organica': 'mo',
@@ -1247,18 +1288,27 @@ const MAPA_PARAM_FULLIN_SOLO = {
   'relacao mg k': 'rel_mg_k',
   'relacao mg/k': 'rel_mg_k',
   'sat ca na ctc t': 'sat_ca',
+  'sat ca na ctc (t)': 'sat_ca',
   'sat. ca na ctc t': 'sat_ca',
+  'sat. ca na ctc (t)': 'sat_ca',
   'sat ca na ctc': 'sat_ca',
   'sat mg na ctc t': 'sat_mg',
+  'sat mg na ctc (t)': 'sat_mg',
   'sat. mg na ctc t': 'sat_mg',
+  'sat. mg na ctc (t)': 'sat_mg',
   'sat mg na ctc': 'sat_mg',
   'sat k na ctc t': 'sat_k',
+  'sat k na ctc (t)': 'sat_k',
   'sat. k na ctc t': 'sat_k',
+  'sat. k na ctc (t)': 'sat_k',
   'sat k na ctc': 'sat_k',
   'sat h+ na ctc t': 'sat_h',
+  'sat h+ na ctc (t)': 'sat_h',
   'sat. h+ na ctc t': 'sat_h',
+  'sat. h+ na ctc (t)': 'sat_h',
   'sat h na ctc': 'sat_h',
   'indice sat sodio ina ou pst': 'sat_na',
+  'indice sat sodio (ina) ou pst': 'sat_na',
   'indice sat. sodio (ina) ou pst': 'sat_na',
   'indice sat sodio': 'sat_na',
   'soma de bases sb': 'sb',
@@ -1267,8 +1317,10 @@ const MAPA_PARAM_FULLIN_SOLO = {
   'ctc efetiva (t)': 'ctc_efetiva',
   'ctc a ph 7 0 t': 'ctc_ph7',
   'ctc a ph 7,0 t': 'ctc_ph7',
+  'ctc a ph 7 0 (t)': 'ctc_ph7',
   'ctc a ph 7,0 (t)': 'ctc_ph7',
   'sat aluminio m': 'sat_al',
+  'sat aluminio (m)': 'sat_al',
   'sat. aluminio (m)': 'sat_al',
   'saturacao de bases v': 'v',
   'saturacao de bases (v)': 'v'
@@ -1904,7 +1956,10 @@ window.fecharModalAnalise = () => {
   window.formWIP = null;
   editandoId = null;
 };
-window.fecharModalVer = () => document.getElementById('overlayVer').classList.remove('aberto');
+window.fecharModalVer = () => {
+  document.getElementById('overlayVer').classList.remove('aberto');
+  window.seletorSlotAlvo = null;
+};
 
 function abrirFormAnalise(id) {
   if (!podeEditar()) { toast('⛔ Sem permissão para criar/editar.'); return; }
