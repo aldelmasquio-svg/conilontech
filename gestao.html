@@ -140,9 +140,29 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 /* TABELA simples */
 .tbl{width:100%;border-collapse:collapse;font-size:.8rem;}
 .tbl th{background:var(--cl);text-align:left;padding:7px 9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:1px solid var(--cb);}
+.tbl th.num{text-align:right;}
 .tbl td{padding:7px 9px;border-bottom:1px solid var(--cl);}
-.tbl td.num{font-family:'DM Mono',monospace;text-align:right;font-weight:600;}
+.tbl td.num{font-family:'DM Mono',monospace;text-align:right;font-weight:600;white-space:nowrap;}
 .tbl tr:last-child td{border-bottom:none;}
+/* Variante "tbl-resumo" com bordas verticais e zebra (pro Resumo por fazenda etc) */
+.tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:8px;border:1px solid var(--cb);}
+.tbl-resumo{font-size:.82rem;}
+.tbl-resumo th{background:var(--vb);color:var(--ve);padding:9px 11px;border-bottom:2px solid var(--v);border-right:1px solid var(--cb);}
+.tbl-resumo th:last-child{border-right:none;}
+.tbl-resumo td{padding:9px 11px;border-right:1px solid var(--cl);border-bottom:1px solid var(--cl);}
+.tbl-resumo td:last-child{border-right:none;}
+.tbl-resumo tbody tr:nth-child(even){background:#f9fafb;}
+.tbl-resumo tbody tr:hover{background:var(--vb);}
+
+/* Seções de alerta e danger */
+.secao.secao-alerta{border-left:4px solid var(--warn);background:#fffbeb;}
+.secao.secao-danger{border-left:4px solid var(--danger);background:#fef2f2;}
+.lista-prods-zerados{display:flex;flex-direction:column;gap:6px;}
+.prod-zerado-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:white;border-radius:6px;border:1px solid var(--cl);}
+.prod-zerado-info{flex:1;min-width:0;}
+.prod-zerado-nome{font-weight:700;font-size:.88rem;color:var(--t);}
+.prod-zerado-meta{font-size:.7rem;color:var(--c);margin-top:1px;}
+.prod-zerado-und{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);font-weight:700;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -515,8 +535,9 @@ function renderGeral() {
   const pulvPend = pulverizacoes.filter(p => !p.realizada && (!faz || p.fazenda === faz)).length;
   // Adubações atrasadas
   const adubAtrasadas = calcAdubacoesAtrasadas();
-  // Produção total da safra atual (soma do histórico mais recente de cada talhão)
+  // Produção total da safra atual (soma de sc/ha × área de cada talhão)
   const prodSafraAtual = calcProducaoTotalSafraAtual(talhFil);
+  const mediaScHaFilial = calcProducaoMediaScHa(talhFil);
   // Gastos (período)
   const gastoDefensivos = calcGastoPorCategoria(movFil, 'defensivo');
   const gastoAdubos = calcGastoPorCategoria(movFil, 'adubo_mineral') + calcGastoPorCategoria(movFil, 'fertilizante_foliar');
@@ -534,7 +555,7 @@ function renderGeral() {
   }
   html += `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Área gerenciada</div><div class="kpi-value">${fmt(areaTotal,1)}</div><div class="kpi-aux">hectares ${faz?'· '+escHtml(faz):'· '+talhFil.length+' talhões'}</div></div>
-    <div class="kpi-card info"><div class="kpi-label">Produção safra atual</div><div class="kpi-value">${fmt(prodSafraAtual,0)}</div><div class="kpi-aux">sacas (somatório)</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Produção safra atual</div><div class="kpi-value">${fmt(prodSafraAtual,0)}</div><div class="kpi-aux">sacas${mediaScHaFilial>0?' · média '+fmt(mediaScHaFilial,1)+' sc/ha':''}</div></div>
     <div class="kpi-card ok"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">no período</div></div>
     <div class="kpi-card ok"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">no período</div></div>
     <div class="kpi-card"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}</div></div>
@@ -546,8 +567,13 @@ function renderGeral() {
   if (!faz && fazendas.length > 1) {
     html += `<div class="secao">
       <div class="secao-tit">🏡 Resumo por fazenda</div>
-      <table class="tbl"><thead><tr>
-        <th>Fazenda</th><th>Talhões</th><th>Área (ha)</th><th>ha pulverizados</th><th>Produção (sc)</th>
+      <div class="tbl-wrap"><table class="tbl tbl-resumo"><thead><tr>
+        <th>Fazenda</th>
+        <th class="num">Talhões</th>
+        <th class="num">Área (ha)</th>
+        <th class="num">ha pulv.</th>
+        <th class="num">Produção (sc/ha)</th>
+        <th class="num">Total (sc)</th>
       </tr></thead><tbody>
       ${fazendas.map(f => {
         const tFaz = talhoes.filter(t => t.fazenda === f);
@@ -556,10 +582,18 @@ function renderGeral() {
           const t = talhoes.find(x=>x.id===p.talhaoId);
           return s + parseDose(t?.area);
         }, 0);
-        const prod = calcProducaoTotalSafraAtual(tFaz);
-        return `<tr><td><strong>${escHtml(f)}</strong></td><td class="num">${tFaz.length}</td><td class="num">${fmt(area,1)}</td><td class="num">${fmt(haP,1)}</td><td class="num">${prod>0?fmt(prod,0):'—'}</td></tr>`;
+        const prodTotal = calcProducaoTotalSafraAtual(tFaz);
+        const mediaScHa = calcProducaoMediaScHa(tFaz);
+        return `<tr>
+          <td><strong>${escHtml(f)}</strong></td>
+          <td class="num">${tFaz.length}</td>
+          <td class="num">${fmt(area,1)}</td>
+          <td class="num">${fmt(haP,1)}</td>
+          <td class="num">${mediaScHa>0?fmt(mediaScHa,1):'—'}</td>
+          <td class="num">${prodTotal>0?fmt(prodTotal,0):'—'}</td>
+        </tr>`;
       }).join('')}
-      </tbody></table>
+      </tbody></table></div>
     </div>`;
   }
   html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
@@ -615,16 +649,37 @@ function calcAdubacoesAtrasadas() {
   return count;
 }
 
+// Calcula produção de um talhão na safra mais recente.
+// O "valor" cadastrado é interpretado como sc/ha.
+// Retorna { scHa, total, area, safra }.
+function calcProducaoTalhao(t) {
+  const area = parseDose(t.area);
+  if (!t.historico || !t.historico.length || area <= 0) return {scHa:0, total:0, area, safra:''};
+  const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
+  const scHa = parseValorProducao(ord[0].valor);
+  return {scHa, total: scHa * area, area, safra: ord[0].safra || ''};
+}
+
+// Retorna a soma da produção TOTAL (sacas) de uma lista de talhões na safra mais recente.
+// Cada talhão: sc/ha cadastrado × área = sacas totais.
 function calcProducaoTotalSafraAtual(talhList) {
-  // Soma o "valor" da safra mais recente do histórico de cada talhão
   let total = 0;
-  talhList.forEach(t => {
-    if (!t.historico || !t.historico.length) return;
-    // pegar entrada com maior "safra" (ordenação alfabética serve pra "2024/2025", "2025/2026")
-    const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
-    total += parseValorProducao(ord[0].valor);
-  });
+  talhList.forEach(t => { total += calcProducaoTalhao(t).total; });
   return total;
+}
+
+// Retorna a média ponderada (sc/ha) de uma lista de talhões na safra mais recente.
+// Só considera talhões com produção > 0 (pra não distorcer com talhões em reforma).
+function calcProducaoMediaScHa(talhList) {
+  let prodTot = 0, areaTot = 0;
+  talhList.forEach(t => {
+    const p = calcProducaoTalhao(t);
+    if (p.scHa > 0 && p.area > 0) {
+      prodTot += p.total;
+      areaTot += p.area;
+    }
+  });
+  return areaTot > 0 ? prodTot / areaTot : 0;
 }
 
 function calcGastoPorCategoria(movs, cat) {
@@ -655,15 +710,17 @@ function renderProdutividade() {
     </div>`;
   }
   // Calcular dados de produtividade
+  // IMPORTANTE: o "valor" cadastrado no histórico do talhão É sc/ha (produtividade)
+  // Total em sacas = sc/ha × área
   const dadosProd = talhFil.map(t => {
     const area = parseDose(t.area);
-    let producao = 0, safra = '';
+    let prodHa = 0, safra = '';
     if (t.historico && t.historico.length) {
       const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
-      producao = parseValorProducao(ord[0].valor);
+      prodHa = parseValorProducao(ord[0].valor);
       safra = ord[0].safra || '—';
     }
-    const prodHa = area > 0 ? producao / area : 0;
+    const producao = prodHa * area;  // total em sacas
     return {
       _docId: t._docId,
       id: t.id,
@@ -673,7 +730,7 @@ function renderProdutividade() {
       status: t.status,
       historico: t.historico || []
     };
-  }).filter(d => d.producao > 0);
+  }).filter(d => d.prodHa > 0);
   // KPIs de produtividade
   const producaoTotal = dadosProd.reduce((s,d)=>s+d.producao, 0);
   const areaProdutiva = dadosProd.reduce((s,d)=>s+d.area, 0);
@@ -743,16 +800,17 @@ function renderProdutividade() {
     // Evolução por safra (se há talhão com mais de uma safra)
     const safrasUnique = [...new Set(talhFil.flatMap(t => (t.historico||[]).map(h => h.safra).filter(Boolean)))].sort();
     if (safrasUnique.length > 1) {
-      // Pra cada safra, soma produção total e área dos talhões que tinham aquela safra
+      // Pra cada safra, soma produção total (sc/ha × área) e área dos talhões que tinham aquela safra
       const evolu = safrasUnique.map(s => {
         let prodTot = 0, areaTot = 0;
         talhFil.forEach(t => {
           const h = (t.historico||[]).find(x => x.safra === s);
           if (h) {
-            const v = parseValorProducao(h.valor);
-            if (v > 0) {
-              prodTot += v;
-              areaTot += parseDose(t.area);
+            const scHa = parseValorProducao(h.valor);
+            const area = parseDose(t.area);
+            if (scHa > 0 && area > 0) {
+              prodTot += scHa * area;
+              areaTot += area;
             }
           }
         });
@@ -1021,6 +1079,38 @@ function renderEstoque() {
     <div class="kpi-card ${prodsZerados>0?'alerta':''}"><div class="kpi-label">Produtos zerados</div><div class="kpi-value">${prodsZerados}</div><div class="kpi-aux">precisam reposição</div></div>
     <div class="kpi-card ${prodsNeg>0?'danger':''}"><div class="kpi-label">Saldo negativo</div><div class="kpi-value">${prodsNeg}</div><div class="kpi-aux">${prodsNeg>0?'erro no lançamento':'tudo certo'}</div></div>
   </div>`;
+  // Lista de produtos zerados (alerta de reposição)
+  const listaZerados = prodsFaz.filter(p => (Number(p.saldo)||0) === 0).sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+  if (listaZerados.length) {
+    html += `<div class="secao secao-alerta">
+      <div class="secao-tit">⚠️ Produtos zerados (precisam reposição)</div>
+      <div class="lista-prods-zerados">
+        ${listaZerados.map(p => `<div class="prod-zerado-item">
+          <div class="prod-zerado-info">
+            <div class="prod-zerado-nome">${escHtml(p.nome)}</div>
+            <div class="prod-zerado-meta">${escHtml(p.fazenda||'—')}${p.categoria?' · '+escHtml(CAT_LABELS[p.categoria]||p.categoria):''}</div>
+          </div>
+          <div class="prod-zerado-und">${escHtml(p.unidade||'—')}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+  // Lista de produtos com saldo negativo (erro de lançamento)
+  const listaNeg = prodsFaz.filter(p => (Number(p.saldo)||0) < 0).sort((a,b)=>(Number(a.saldo)||0) - (Number(b.saldo)||0));
+  if (listaNeg.length) {
+    html += `<div class="secao secao-danger">
+      <div class="secao-tit">🚨 Produtos com saldo negativo (verificar lançamentos)</div>
+      <div class="lista-prods-zerados">
+        ${listaNeg.map(p => `<div class="prod-zerado-item">
+          <div class="prod-zerado-info">
+            <div class="prod-zerado-nome">${escHtml(p.nome)}</div>
+            <div class="prod-zerado-meta">${escHtml(p.fazenda||'—')}${p.categoria?' · '+escHtml(CAT_LABELS[p.categoria]||p.categoria):''}</div>
+          </div>
+          <div class="prod-zerado-und" style="color:var(--danger);">${fmt(p.saldo,2)} ${escHtml(p.unidade||'')}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
   // Valor por categoria
   if (valorTotalEstoque > 0) {
     const arrCat = Object.entries(porCat).map(([k,v]) => ({
