@@ -138,10 +138,29 @@ function renderizarCalendario() {
     const todosFeitos = eventos.length > 0 && eventos.every(e => e.realizada);
     html += `<div class="cal-dia ${isHoje?'hoje':''} ${todosFeitos?'feito':temNaoRealizado?'pendente':''}" onclick="verDia(${d})">
       <span class="cal-num">${d}</span>
-      ${eventos.map(e=>`<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}">${e.talhaoNome||e.talhaoId||'—'}</div>`).join('')}
+      ${eventos.map(e=>{
+        const cor = corFazenda(e.fazenda);
+        return `<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}" style="background:${cor};border-color:${cor};" title="${escAttrCal(e.fazenda||'')}: ${escAttrCal(e.talhaoNome||e.talhaoId||'')}">${escAttrCal(e.talhaoNome||e.talhaoId||'—')}</div>`;
+      }).join('')}
     </div>`;
   }
   cal.innerHTML = html;
+  // Renderiza/atualiza a legenda de cores
+  renderLegendaFazendas();
+}
+
+// Pequeno escape inline (evitar quote no title/atributo)
+function escAttrCal(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// Renderiza a legenda de cores das fazendas (chips coloridos no topo do calendário)
+function renderLegendaFazendas() {
+  const el = document.getElementById('legendaFazendas');
+  if (!el) return;
+  const fazs = listaFazendasOrdenadas();
+  if (!fazs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = fazs.map(f =>
+    `<span class="leg-faz-chip" style="background:${corFazenda(f)};">${sanitizar(f)}</span>`
+  ).join('');
 }
 
 window.mesAnterior = function() { mesAtual--; if(mesAtual<0){mesAtual=11;anoAtual--;} renderizarCalendario(); };
@@ -267,7 +286,6 @@ function badgeStatus(status) {
 function renderCardPulv(p) {
   const adm = isAdmin(), podConf = podeConfirmar();
   const sit = calcStatusAplicacao(p);
-  const fazTalhao = p.fazenda ? `${p.fazenda} · ` : '';
   const dataPlanejada = p.data ? formatarData(p.data) : '—';
   const pd = p.paramsDrone || {};
   const temParamsDrone = pd.alturaVoo || pd.larguraFaixa || pd.velocidade || pd.volumeCalda;
@@ -291,10 +309,11 @@ function renderCardPulv(p) {
       </div>`;
     }).join('');
   }
-  return `<div class="pulv-card ${isRealizada?'realizada':(isParcial?'parcial':'')}">
+  const corFaz = corFazenda(p.fazenda);
+  return `<div class="pulv-card ${isRealizada?'realizada':(isParcial?'parcial':'')}" style="border-left:5px solid ${corFaz};">
     <div class="pulv-header">
       <div>
-        <div class="pulv-titulo">💧 ${fazTalhao}${p.talhaoNome||p.talhaoId||'—'}</div>
+        <div class="pulv-titulo">💧 <span class="pulv-faz-tag" style="background:${corFaz};">${escAttrCal(p.fazenda||'—')}</span> ${p.talhaoNome||p.talhaoId||'—'}</div>
         <div class="pulv-meta">📅 ${dataPlanejada} · ${p.modoAplicacao||'—'}${sit.haTotal?' · '+fmt(sit.haTotal,1)+' ha':''}</div>
         ${p.drone?`<div class="pulv-drone">🚁 Drone: ${p.drone}</div>`:''}
       </div>
@@ -419,6 +438,21 @@ window.relRemProduto = function(i) {
 
 function normalizarNome(s) {
   return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim();
+}
+
+// ─── COR POR FAZENDA ───
+const FARM_COLORS = ['#1e3a5f','#1e5631','#5d3a1a','#37474f','#8b6914','#722f37','#1d5b6e','#556b2f','#a0522d','#455a64'];
+function listaFazendasOrdenadas() {
+  const set = new Set();
+  talhoes.forEach(t => { if (t.fazenda) set.add(t.fazenda); });
+  return [...set].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+function corFazenda(nome) {
+  if (!nome) return '#6b7280';
+  const ord = listaFazendasOrdenadas();
+  const idx = ord.indexOf(nome);
+  if (idx < 0) return '#6b7280';
+  return FARM_COLORS[idx % FARM_COLORS.length];
 }
 
 // Converte string com vírgula brasileira (ex: "0,45") em número.
@@ -1156,9 +1190,14 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .cal-dia.pendente{background:#fef9c3;}
 .cal-dia.feito{background:#dcfce7;}
 .cal-num{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:700;display:block;margin-bottom:2px;}
-.cal-evento{font-size:.58rem;border-radius:4px;padding:1px 4px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ev-pend{background:#fef08a;color:#854d0e;}
-.ev-feito{background:#bbf7d0;color:#166534;}
+.cal-evento{font-size:.58rem;border-radius:3px;padding:2px 5px;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:white;font-weight:600;border-left:3px solid;line-height:1.2;}
+.ev-pend{opacity:.88;}
+.ev-feito{opacity:1;}
+.ev-feito::before{content:'✓ ';font-weight:800;}
+/* Legenda de fazendas no calendário */
+.legenda-fazendas{display:flex;flex-wrap:wrap;gap:5px;padding:6px 4px 8px;}
+.leg-faz-chip{display:inline-block;font-size:.66rem;color:white;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.02em;line-height:1.3;}
+.pulv-faz-tag{display:inline-block;font-size:.65rem;color:white;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.02em;vertical-align:middle;margin-right:3px;}
 /* LISTA */
 #viewLista{flex:1;overflow-y:auto;padding:12px 14px 20px;display:none;flex-direction:column;gap:10px;}
 .filtros-lista{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;}
@@ -1305,6 +1344,7 @@ input:disabled,select:disabled{background:#f3f4f6;color:#6b7280;cursor:not-allow
 
     <!-- CALENDÁRIO -->
     <div id="viewCalendario">
+      <div class="legenda-fazendas" id="legendaFazendas"></div>
       <div class="calendario" id="calendario"></div>
     </div>
 

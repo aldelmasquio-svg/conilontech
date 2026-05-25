@@ -153,6 +153,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .tbl-resumo td:last-child{border-right:none;}
 .tbl-resumo tbody tr:nth-child(even){background:#f9fafb;}
 .tbl-resumo tbody tr:hover{background:var(--vb);}
+/* Bolinha colorida indicando fazenda */
+.faz-bullet{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;flex-shrink:0;}
 
 /* Seções de alerta e danger */
 .secao.secao-alerta{border-left:4px solid var(--warn);background:#fffbeb;}
@@ -374,6 +376,19 @@ function parseValorProducao(v){
 function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
 function hoje(){return new Date().toISOString().slice(0,10);}
 
+// ─── COR POR FAZENDA ───
+const FARM_COLORS = ['#1e3a5f','#1e5631','#5d3a1a','#37474f','#8b6914','#722f37','#1d5b6e','#556b2f','#a0522d','#455a64'];
+function listaFazendasOrdenadas() {
+  return [...fazendas].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+function corFazenda(nome) {
+  if (!nome) return '#6b7280';
+  const ord = listaFazendasOrdenadas();
+  const idx = ord.indexOf(nome);
+  if (idx < 0) return '#6b7280';
+  return FARM_COLORS[idx % FARM_COLORS.length];
+}
+
 // Calcula intervalo do filtro de período
 function periodoFiltro() {
   const sel = document.getElementById('selPeriodo')?.value || '3meses';
@@ -585,7 +600,7 @@ function renderGeral() {
         const prodTotal = calcProducaoTotalSafraAtual(tFaz);
         const mediaScHa = calcProducaoMediaScHa(tFaz);
         return `<tr>
-          <td><strong>${escHtml(f)}</strong></td>
+          <td><span class="faz-bullet" style="background:${corFazenda(f)};"></span><strong>${escHtml(f)}</strong></td>
           <td class="num">${tFaz.length}</td>
           <td class="num">${fmt(area,1)}</td>
           <td class="num">${fmt(haP,1)}</td>
@@ -770,7 +785,7 @@ function renderProdutividade() {
         <div class="rank-num ${i<3?'top':''}">${i+1}</div>
         <div class="rank-info">
           <div class="rank-nome">${escHtml(d.id||'')} · ${escHtml(d.nome||'')}</div>
-          <div class="rank-meta">${escHtml(d.fazenda||'—')} · ${fmt(d.area,1)} ha · ${escHtml(d.safra)}</div>
+          <div class="rank-meta"><span class="faz-bullet" style="background:${corFazenda(d.fazenda)};"></span>${escHtml(d.fazenda||'—')} · ${fmt(d.area,1)} ha · ${escHtml(d.safra)}</div>
         </div>
         <div class="rank-valor">${fmt(d.prodHa,1)}<div class="rank-und">sc/ha</div></div>
       </div>`).join('')}
@@ -790,11 +805,14 @@ function renderProdutividade() {
       const maxProdHa = Math.max(...fazRank.map(f=>f.prodHa), 1);
       html += `<div class="secao">
         <div class="secao-tit">🏡 Produtividade por fazenda</div>
-        ${fazRank.map(f => `<div class="bar-row">
-          <div class="bar-label">${escHtml(f.fazenda)}</div>
-          <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8, f.prodHa/maxProdHa*100)}%;">${fmt(f.prodHa,1)}</div></div>
-          <div class="bar-value">${fmt(f.producao,0)} sc</div>
-        </div>`).join('')}
+        ${fazRank.map(f => {
+          const cor = corFazenda(f.fazenda);
+          return `<div class="bar-row">
+            <div class="bar-label"><span class="faz-bullet" style="background:${cor};"></span>${escHtml(f.fazenda)}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8, f.prodHa/maxProdHa*100)}%;background:${cor};">${fmt(f.prodHa,1)}</div></div>
+            <div class="bar-value">${fmt(f.producao,0)} sc</div>
+          </div>`;
+        }).join('')}
       </div>`;
     }
     // Evolução por safra (se há talhão com mais de uma safra)
@@ -922,7 +940,7 @@ function renderPulverizacoes() {
         <div class="rank-num ${i<3?'top':''}">${i+1}</div>
         <div class="rank-info">
           <div class="rank-nome">${escHtml(t.id||'')} · ${escHtml(t.talhaoNome||'')}</div>
-          <div class="rank-meta">${escHtml(t.fazenda||'—')} · ${fmt(t.ha,1)} ha total</div>
+          <div class="rank-meta"><span class="faz-bullet" style="background:${corFazenda(t.fazenda)};"></span>${escHtml(t.fazenda||'—')} · ${fmt(t.ha,1)} ha total</div>
         </div>
         <div class="rank-valor">${t.qtd}<div class="rank-und">aplic.</div></div>
       </div>`).join('')}
@@ -1036,7 +1054,7 @@ function renderPulverizacoes() {
             <div class="rank-num ${i<3?'top':''}">${i+1}</div>
             <div class="rank-info">
               <div class="rank-nome">${escHtml(t.id||'')} · ${escHtml(t.talhaoNome||'')}</div>
-              <div class="rank-meta">${escHtml(t.fazenda||'—')} · ${fmt(ha,1)} ha · ${ha>0?fmtRS(t.custo/ha)+'/ha':'—'}</div>
+              <div class="rank-meta"><span class="faz-bullet" style="background:${corFazenda(t.fazenda)};"></span>${escHtml(t.fazenda||'—')} · ${fmt(ha,1)} ha · ${ha>0?fmtRS(t.custo/ha)+'/ha':'—'}</div>
             </div>
             <div class="rank-valor">${fmtRS(t.custo)}</div>
           </div>`;
@@ -1088,7 +1106,7 @@ function renderEstoque() {
         ${listaZerados.map(p => `<div class="prod-zerado-item">
           <div class="prod-zerado-info">
             <div class="prod-zerado-nome">${escHtml(p.nome)}</div>
-            <div class="prod-zerado-meta">${escHtml(p.fazenda||'—')}${p.categoria?' · '+escHtml(CAT_LABELS[p.categoria]||p.categoria):''}</div>
+            <div class="prod-zerado-meta"><span class="faz-bullet" style="background:${corFazenda(p.fazenda)};"></span>${escHtml(p.fazenda||'—')}${p.categoria?' · '+escHtml(CAT_LABELS[p.categoria]||p.categoria):''}</div>
           </div>
           <div class="prod-zerado-und">${escHtml(p.unidade||'—')}</div>
         </div>`).join('')}
@@ -1104,7 +1122,7 @@ function renderEstoque() {
         ${listaNeg.map(p => `<div class="prod-zerado-item">
           <div class="prod-zerado-info">
             <div class="prod-zerado-nome">${escHtml(p.nome)}</div>
-            <div class="prod-zerado-meta">${escHtml(p.fazenda||'—')}${p.categoria?' · '+escHtml(CAT_LABELS[p.categoria]||p.categoria):''}</div>
+            <div class="prod-zerado-meta"><span class="faz-bullet" style="background:${corFazenda(p.fazenda)};"></span>${escHtml(p.fazenda||'—')}${p.categoria?' · '+escHtml(CAT_LABELS[p.categoria]||p.categoria):''}</div>
           </div>
           <div class="prod-zerado-und" style="color:var(--danger);">${fmt(p.saldo,2)} ${escHtml(p.unidade||'')}</div>
         </div>`).join('')}
