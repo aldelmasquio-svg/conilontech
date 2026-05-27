@@ -1,0 +1,1708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Conilon Tech · Recomendações</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--purple:#8b5cf6;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+
+/* HEADER */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-titles{line-height:1;}
+.header-title-main{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.btn-icon-header{background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:38px;height:38px;border-radius:8px;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;}
+
+/* MENU LATERAL */
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
+.menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
+.menu-body{flex:1;padding:10px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:1.1rem;}
+.menu-footer{padding:14px;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+
+.app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+
+/* TABS DE TOPO (Nova | Lista) */
+.tabs-top{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;}
+.tab-top{flex:1;padding:13px 8px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;}
+.tab-top.ativa{color:var(--v);border-bottom-color:var(--v);}
+
+/* CABEÇALHO STICKY DA RECOMENDAÇÃO */
+.rec-sticky{background:white;border-bottom:1px solid var(--cb);padding:10px 12px;flex-shrink:0;position:relative;z-index:5;box-shadow:0 2px 6px rgba(0,0,0,.04);}
+.rec-sticky-row{display:flex;gap:7px;flex-wrap:wrap;}
+.rec-sticky-col{flex:1;min-width:120px;}
+.rec-sticky-col label{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.62rem;text-transform:uppercase;color:var(--c);letter-spacing:.04em;margin-bottom:3px;}
+.rec-sticky-col select,.rec-sticky-col input{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:7px 9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;}
+.rec-sticky-col select:focus,.rec-sticky-col input:focus{border-color:var(--v);}
+.rec-hist-prod{font-size:.65rem;color:var(--c);margin-top:3px;font-style:italic;}
+
+/* CONTEÚDO ROLÁVEL */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;padding:12px 14px 200px;}
+.content > *{margin-bottom:10px;}
+.content > *:last-child{margin-bottom:0;}
+.content::-webkit-scrollbar{width:8px;}
+.content::-webkit-scrollbar-thumb{background:var(--cb);border-radius:4px;}
+.content::-webkit-scrollbar-track{background:transparent;}
+
+/* Garante que os cards nunca colapsem */
+.card-rec-body{display:block;}
+.card-rec.fechado .card-rec-body{display:none !important;}
+
+/* CARDS COLAPSÁVEIS */
+.card-rec{display:block;width:100%;background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
+.card-rec-head{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#fafafa;border-bottom:1px solid var(--cl);user-select:none;-webkit-user-select:none;}
+.card-rec.fechado .card-rec-head{border-bottom:none;}
+.card-rec-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
+.card-rec-sub{font-size:.7rem;color:var(--c);font-weight:600;}
+.card-rec-toggle{background:none;border:none;color:var(--c);font-size:1.1rem;cursor:pointer;padding:5px 8px;transition:transform .2s;pointer-events:none;}
+.card-rec.fechado .card-rec-toggle{transform:rotate(-90deg);}
+.card-rec-body{padding:14px;display:block;}
+.card-rec.fechado .card-rec-body{display:none !important;}
+
+/* DESTAQUES (resultados) */
+.dose-grande{font-family:'DM Mono',monospace;font-weight:700;font-size:1.6rem;color:var(--ve);line-height:1;}
+
+/* AJUSTE DE DOSE (sugerido vs aplicar) */
+.dose-box{background:var(--vb);border:1px solid var(--v);border-radius:8px;padding:11px;margin-bottom:9px;}
+.dose-box.ajustada{background:#fffbeb;border-color:#f59e0b;}
+.dose-linhas{display:flex;gap:10px;align-items:stretch;}
+.dose-col-sug{flex:1;text-align:center;padding:5px 8px;border-right:1px dashed var(--cb);}
+.dose-col-apl{flex:1.2;text-align:center;padding:5px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.dose-label{font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
+.dose-sug-val{font-family:'DM Mono',monospace;font-weight:700;font-size:1.5rem;color:var(--c);line-height:1;margin-top:3px;}
+.dose-apl-inp{font-family:'DM Mono',monospace;font-weight:800;font-size:1.6rem;color:var(--ve);text-align:center;border:2px solid var(--v);border-radius:6px;padding:5px 6px;width:100%;max-width:120px;outline:none;background:white;}
+.dose-apl-inp:focus{box-shadow:0 0 0 3px var(--vb);}
+.dose-box.ajustada .dose-apl-inp{border-color:#f59e0b;color:#92400e;}
+.dose-un-small{font-size:.7rem;color:var(--c);margin-top:-2px;}
+.tag-ajustada{display:inline-flex;align-items:center;gap:3px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:1px 7px;border-radius:99px;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
+.btn-restaurar{background:none;border:1px dashed var(--cb);color:var(--c);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;padding:3px 8px;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
+.btn-restaurar:hover{background:var(--cl);color:var(--ve);border-style:solid;}
+.dose-unidade{font-size:.75rem;color:var(--c);margin-left:4px;font-weight:600;}
+.dose-zero{color:var(--c);}
+.dose-explica{font-size:.75rem;color:var(--c);line-height:1.5;margin-top:5px;}
+.dose-explica strong{color:var(--ve);}
+
+/* TAGS DE CLASSIFICAÇÃO */
+.cls-tag{display:inline-block;padding:2px 9px;border-radius:99px;font-size:.66rem;color:white;font-weight:700;letter-spacing:.02em;}
+.cls-muitoBaixo,.cls-mb{background:#991b1b;}
+.cls-baixo,.cls-bx{background:#dc2626;}
+.cls-medio,.cls-md{background:#16a34a;}
+.cls-alto,.cls-at{background:#2563eb;}
+.cls-muitoAlto,.cls-ma{background:#7c3aed;}
+.cls-adequado,.cls-ad{background:#16a34a;}
+.cls-ideal,.cls-id{background:#16a34a;}
+
+/* GRID DE PARÂMETROS DA ANÁLISE (resumo) */
+.params-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;}
+.param-mini{background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:7px 9px;}
+.param-mini-lab{font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.03em;font-weight:700;}
+.param-mini-val{font-family:'DM Mono',monospace;font-weight:700;font-size:.95rem;color:var(--ve);margin-top:2px;}
+.param-mini-cls{margin-top:3px;}
+
+/* INPUTS DENTRO DOS CARDS */
+.inp-linha{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+.inp-linha label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.03em;flex:1;min-width:90px;}
+.inp-linha input,.inp-linha select{border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:.85rem;font-family:'DM Mono',monospace;background:white;outline:none;width:80px;text-align:right;}
+.inp-linha select{width:140px;text-align:left;font-family:'Barlow',sans-serif;font-weight:600;}
+.inp-linha input:focus,.inp-linha select:focus{border-color:var(--v);}
+.inp-linha-un{font-size:.7rem;color:var(--c);font-family:'DM Mono',monospace;}
+
+/* BOTÕES SEGMENTADOS (escolha de método) */
+.seg-btns{display:flex;background:#fafafa;border:1px solid var(--cb);border-radius:7px;padding:3px;gap:3px;margin-bottom:9px;}
+.seg-btn{flex:1;border:none;background:transparent;padding:7px 9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--c);border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;}
+.seg-btn.ativo{background:var(--v);color:white;box-shadow:0 1px 4px rgba(45,106,45,.3);}
+
+/* FÓRMULAS */
+.formula-box{background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:7px;padding:8px 11px;font-family:'DM Mono',monospace;font-size:.74rem;color:#92400e;line-height:1.55;margin:8px 0;overflow-x:auto;}
+.formula-box strong{font-family:'Barlow Condensed',sans-serif;color:#78350f;}
+
+/* ALERTAS */
+.alerta-tec{background:#fef3c7;border:1px solid #fde68a;border-left:4px solid var(--warn);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#92400e;line-height:1.45;margin-top:8px;}
+.alerta-tec strong{color:#78350f;}
+.alerta-info{background:#dbeafe;border:1px solid #bfdbfe;border-left:4px solid var(--blue);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#1e40af;line-height:1.45;margin-top:8px;}
+.alerta-ok{background:#dcfce7;border:1px solid #86efac;border-left:4px solid var(--ok);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#166534;line-height:1.45;margin-top:8px;}
+
+/* FONTE DE INFORMAÇÃO */
+.fonte{font-size:.66rem;color:var(--c);font-style:italic;margin-top:7px;text-align:right;}
+
+/* RODAPÉ FIXO COM RESUMO */
+.rec-rodape{background:white;border-top:2px solid var(--v);padding:9px 12px;flex-shrink:0;display:none;flex-direction:column;gap:7px;box-shadow:0 -3px 10px rgba(0,0,0,.08);}
+.rec-rodape.visivel{display:flex;}
+.rec-rodape-resumo{display:flex;gap:6px;flex-wrap:wrap;font-size:.7rem;}
+.rec-rodape-item{background:var(--vb);border:1px solid var(--v);border-radius:99px;padding:3px 9px;color:var(--ve);font-family:'DM Mono',monospace;font-weight:700;font-size:.7rem;}
+.rec-rodape-item.zero{background:var(--cl);border-color:var(--cb);color:var(--c);}
+.rec-rodape-acoes{display:flex;gap:6px;}
+.rec-rodape-acoes button{flex:1;border:none;border-radius:7px;padding:9px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;cursor:pointer;letter-spacing:.03em;text-transform:uppercase;}
+.btn-salvar{background:var(--v);color:white;}
+.btn-salvar:active{transform:scale(.97);}
+.btn-copiar{background:#fafafa;color:var(--c);border:1px solid var(--cb);}
+.btn-limpar{background:none;color:var(--danger);border:1px solid #fca5a5;flex:0 0 auto !important;padding:9px 14px !important;}
+
+/* LISTA DE RECOMENDAÇÕES SALVAS */
+.rec-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:11px 13px;border-left:4px solid var(--v);}
+.rec-card-status-rascunho{border-left-color:var(--c);}
+.rec-card-status-aprovada{border-left-color:var(--blue);}
+.rec-card-status-aplicada{border-left-color:var(--ok);}
+.rec-card-status-cancelada{border-left-color:var(--danger);opacity:.7;}
+.rec-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.rec-card-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.98rem;color:var(--ve);}
+.rec-card-meta{font-size:.72rem;color:var(--c);margin-top:2px;line-height:1.4;}
+.rec-status-badge{font-size:.62rem;padding:2px 9px;border-radius:99px;color:white;font-weight:700;letter-spacing:.02em;text-transform:uppercase;flex-shrink:0;}
+.rec-status-rascunho{background:var(--c);}
+.rec-status-aprovada{background:var(--blue);}
+.rec-status-aplicada{background:var(--ok);}
+.rec-status-cancelada{background:var(--danger);}
+.rec-card-doses{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
+.rec-card-dose{font-family:'DM Mono',monospace;font-size:.7rem;background:var(--vb);color:var(--ve);padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid var(--v);}
+.rec-card-acoes{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap;}
+.btn-acao{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 10px;font-size:.72rem;color:var(--c);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.02em;text-transform:uppercase;}
+.btn-acao.primary{background:var(--v);border-color:var(--v);color:white;}
+.btn-acao.danger{border-color:#fca5a5;color:var(--danger);}
+
+/* VAZIO */
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 24px;text-align:center;color:var(--c);}
+.vazio .ico{font-size:3.5rem;margin-bottom:10px;opacity:.4;}
+.vazio p{font-size:.92rem;line-height:1.5;}
+
+/* TOAST */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--ve);color:white;padding:11px 18px;border-radius:8px;font-size:.85rem;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
+.toast.show{opacity:1;}
+
+/* MODAL (visualização recomendação salva) */
+.overlay-rec{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-start;justify-content:center;padding-top:30px;}
+.overlay-rec.aberto{display:flex;}
+.modal-rec{background:white;border-radius:14px 14px 0 0;width:100%;max-width:720px;max-height:calc(100dvh - 30px);display:flex;flex-direction:column;box-shadow:var(--sf);overflow:hidden;}
+.modal-rec-head{padding:14px 16px;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--ve);color:white;}
+.modal-rec-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
+.modal-rec-fechar{background:rgba(255,255,255,.12);border:none;color:white;font-size:1.2rem;width:34px;height:34px;border-radius:7px;cursor:pointer;}
+.modal-rec-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;}
+
+/* TAG DE FASE DA LAVOURA */
+.fase-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:#f59e0b;color:white;}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Carregando recomendações...</div>
+</div>
+
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="header-left">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="header-titles">
+      <div class="header-title-main">Conilon Tech</div>
+      <div class="header-title-sub">Recomendações de adubação</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;">
+    <div class="header-user" id="userNome">—</div>
+    <button class="btn-icon-header" id="btnTabelas" onclick="abrirTabelas()" title="Tabelas de recomendação" style="display:none;">⚙️</button>
+  </div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<aside class="menu-lateral" id="menuLateral">
+  <div class="menu-header">
+    <div class="menu-user-nome" id="menuUserNome">—</div>
+    <div class="menu-user-email" id="menuUserEmail">—</div>
+  </div>
+  <div class="menu-body" id="menuModulos"></div>
+  <div class="menu-footer"><button class="btn-logout" onclick="fazerLogout()">↩ Sair</button></div>
+</aside>
+
+<div class="app-main" id="appContent" style="display:none;">
+  <!-- TABS -->
+  <div class="tabs-top">
+    <button class="tab-top ativa" id="tabNova" onclick="abrirTab('nova')">🧮 Nova</button>
+    <button class="tab-top" id="tabLista" onclick="abrirTab('lista')">📋 Salvas</button>
+  </div>
+
+  <!-- CABEÇALHO STICKY (só na aba Nova) -->
+  <div class="rec-sticky" id="recSticky">
+    <div class="rec-sticky-row">
+      <div class="rec-sticky-col" style="flex:2;min-width:160px;">
+        <label>Talhão</label>
+        <select id="selTalhao" onchange="onTrocaTalhao()">
+          <option value="">— selecione —</option>
+        </select>
+      </div>
+      <div class="rec-sticky-col" style="flex:2;min-width:160px;">
+        <label>Análise de solo</label>
+        <select id="selAnalise" onchange="onTrocaAnalise()" disabled>
+          <option value="">—</option>
+        </select>
+      </div>
+    </div>
+    <div class="rec-sticky-row" style="margin-top:7px;">
+      <div class="rec-sticky-col">
+        <label>Produtividade esperada (sc/ha)</label>
+        <input type="text" inputmode="decimal" id="inpProd" placeholder="ex: 80" oninput="onRecalcular()">
+        <div class="rec-hist-prod" id="histProd"></div>
+      </div>
+      <div class="rec-sticky-col">
+        <label>Manual técnico</label>
+        <select id="selManual" onchange="onRecalcular()">
+          <option value="incaper">Incaper (ES)</option>
+          <option value="embrapa_ro">Embrapa-RO</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONTEÚDO -->
+  <div class="content" id="content"></div>
+
+  <!-- RODAPÉ FIXO -->
+  <div class="rec-rodape" id="recRodape">
+    <div class="rec-rodape-resumo" id="rodapeResumo"></div>
+    <div class="rec-rodape-acoes">
+      <button class="btn-limpar" onclick="limparRecomendacao()" title="Limpar">🗑</button>
+      <button class="btn-copiar" onclick="copiarResumo()">📋 Copiar</button>
+      <button class="btn-salvar" id="btnSalvarRec" onclick="salvarRecomendacao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: visualizar recomendação salva -->
+<div class="overlay-rec" id="overlayVer">
+  <div class="modal-rec">
+    <div class="modal-rec-head">
+      <div class="modal-rec-titulo" id="verTitulo">Recomendação</div>
+      <button class="modal-rec-fechar" onclick="fecharModalVer()">✕</button>
+    </div>
+    <div class="modal-rec-body" id="verBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: editar tabelas (admin) -->
+<div class="overlay-rec" id="overlayTabelas">
+  <div class="modal-rec">
+    <div class="modal-rec-head">
+      <div class="modal-rec-titulo">⚙️ Tabelas de Recomendação</div>
+      <button class="modal-rec-fechar" onclick="fecharTabelas()">✕</button>
+    </div>
+    <div class="modal-rec-body" id="tabelasBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+enableIndexedDbPersistence(db).catch(()=>{});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// TABELAS DE RECOMENDAÇÃO — CAFÉ CONILON EM PRODUÇÃO
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const TABELA_N_K_PRODUCAO_DEFAULT = [
+  {prodMin:0,   prodMax:20,  n:200, k:[170, 100, 30,  0]},
+  {prodMin:21,  prodMax:30,  n:260, k:[230, 160, 90,  0]},
+  {prodMin:31,  prodMax:50,  n:320, k:[290, 220, 150, 0]},
+  {prodMin:51,  prodMax:70,  n:380, k:[350, 280, 210, 80]},
+  {prodMin:71,  prodMax:100, n:440, k:[410, 340, 270, 140]},
+  {prodMin:101, prodMax:130, n:500, k:[470, 400, 330, 200]},
+  {prodMin:131, prodMax:170, n:560, k:[530, 460, 390, 260]},
+  {prodMin:171, prodMax:9999,n:620, k:[600, 520, 450, 320]}
+];
+
+const FAIXAS_K_SOLO = [
+  {min:0,    max:60,   idx:0, label:'< 60 (baixo)'},
+  {min:60,   max:120,  idx:1, label:'60-120 (médio)'},
+  {min:120,  max:200,  idx:2, label:'120-200 (alto)'},
+  {min:200,  max:9999, idx:3, label:'> 200 (muito alto)'}
+];
+
+const FAIXAS_P_POR_PREM_DEFAULT = {
+  baixoPrem:  {min:0,  max:20,   faixas:[ {ate:3,  cls:'muitoBaixo'}, {ate:6,  cls:'baixo'}, {ate:10, cls:'medio'}, {ate:9999, cls:'alto'} ]},
+  medioPrem:  {min:20, max:40,   faixas:[ {ate:5,  cls:'muitoBaixo'}, {ate:10, cls:'baixo'}, {ate:20, cls:'medio'}, {ate:9999, cls:'alto'} ]},
+  altoPrem:   {min:40, max:9999, faixas:[{ate:10, cls:'muitoBaixo'}, {ate:20, cls:'baixo'}, {ate:30, cls:'medio'}, {ate:9999, cls:'alto'} ]}
+};
+
+const TABELA_P_DEFAULT = [
+  {prodMin:51,  prodMax:70,  dose:[85,  70,  30, 0]},
+  {prodMin:71,  prodMax:100, dose:[95,  80,  45, 10]},
+  {prodMin:101, prodMax:130, dose:[110, 100, 60, 30]},
+  {prodMin:131, prodMax:170, dose:[125, 110, 70, 50]},
+  {prodMin:171, prodMax:9999,dose:[145, 125, 90, 70]}
+];
+
+const TABELA_MICROS_DEFAULT = {
+  zn: {nome:'Zinco (Zn)',    paramId:'zinco',    un:'mg/dm³', faixas:[{ate:2.0,cls:'baixo',dose:3},{ate:6.0,cls:'medio',dose:2},{ate:9999,cls:'alto',dose:0}]},
+  b:  {nome:'Boro (B)',      paramId:'boro',     un:'mg/dm³', faixas:[{ate:0.2,cls:'baixo',dose:2},{ate:0.6,cls:'medio',dose:1},{ate:9999,cls:'alto',dose:0}]},
+  cu: {nome:'Cobre (Cu)',    paramId:'cobre',    un:'mg/dm³', faixas:[{ate:0.5,cls:'baixo',dose:3},{ate:1.5,cls:'medio',dose:2},{ate:9999,cls:'alto',dose:0}]},
+  mn: {nome:'Manganês (Mn)', paramId:'manganes', un:'mg/dm³', faixas:[{ate:5.0,cls:'baixo',dose:15},{ate:15.0,cls:'medio',dose:10},{ate:9999,cls:'alto',dose:0}]}
+};
+
+const TABELA_COMPLEMENTO_CA_MG_DEFAULT = {
+  ca: [
+    {ate:1.5, dose:100, nota:'Solo muito carente'},
+    {ate:2.0, dose:75,  nota:'Carência moderada'},
+    {ate:3.0, dose:50,  nota:'Manutenção'},
+    {ate:9999,dose:0,   nota:'Sem necessidade'}
+  ],
+  mg: [
+    {ate:1.1, dose:30,  nota:'Carência de Mg'},
+    {ate:9999,dose:0,   nota:'Sem necessidade'}
+  ]
+};
+
+const METAS_CALAGEM_DEFAULT = {
+  incaper:    {nome:'Incaper (ES)',  descricao:'5ª aproximação ES — Conilon em produção', v2:60, ca2:3.0, mg2:1.0},
+  embrapa_ro: {nome:'Embrapa-RO',    descricao:'Sistema de Produção Conilon RO',          v2:50, ca2:2.5, mg2:0.8}
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ESTADO
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], analises=[], amostras=[], recomendacoes=[];
+let tabAtual='nova';
+
+// Tabelas em uso (default + override custom do admin)
+window.TABELA_N_K = TABELA_N_K_PRODUCAO_DEFAULT;
+window.FAIXAS_P_POR_PREM = FAIXAS_P_POR_PREM_DEFAULT;
+window.TABELA_P = TABELA_P_DEFAULT;
+window.TABELA_MICROS = TABELA_MICROS_DEFAULT;
+window.TABELA_COMPLEMENTO = TABELA_COMPLEMENTO_CA_MG_DEFAULT;
+window.METAS_CALAGEM = METAS_CALAGEM_DEFAULT;
+
+// Estado da recomendação atual (working state)
+window.recWIP = {
+  talhaoId: '',
+  amostraId: '',
+  produtividade: null,
+  manual: 'incaper',
+  // calagem
+  metodoCalagem: 'v',     // 'v' | 'cmag' | 'complemento'
+  v2: 60,
+  ca2: 3.0,
+  mg2: 1.0,
+  prnt: 80,
+  profundidade: 20,
+  // AJUSTES MANUAIS (sobrescreve a sugestão da tabela)
+  // null = usa sugerido. Número = ajuste manual
+  ajustes: {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
+  // cards abertos
+  cardsAbertos: {resumo:true, calagem:true, n:true, p:true, k:true, micros:true},
+  // observações
+  observacoes: ''
+};
+window.editandoId = null;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BOOTSTRAP
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin'};
+  }
+  if (!temAcesso()) {
+    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:3rem;">⛔</div><div style="font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:1.1rem;color:var(--c);margin-top:10px;">Sem permissão</div><a href="index.html" style="display:inline-block;margin-top:14px;color:var(--v);">← Voltar</a></div>';
+    return;
+  }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'flex';
+  if (isAdmin()) document.getElementById('btnTabelas').style.display = 'flex';
+  gerarMenu();
+
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    popularTalhoes();
+  });
+  onSnapshot(collection(db,'analises'), snap => {
+    analises = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
+    if (window.recWIP.talhaoId) onTrocaTalhao();
+  });
+  onSnapshot(collection(db,'amostras'), snap => {
+    amostras = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
+    if (window.recWIP.talhaoId) onTrocaTalhao();
+  });
+  onSnapshot(collection(db,'recomendacoes'), snap => {
+    recomendacoes = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
+    if (tabAtual === 'lista') renderLista();
+  });
+  // Tabelas custom (override do admin)
+  onSnapshot(doc(db,'tabelas_recomendacao','global'), snap => {
+    if (snap.exists()) {
+      const d = snap.data();
+      if (d.tabela_n_k) window.TABELA_N_K = d.tabela_n_k;
+      if (d.faixas_p_prem) window.FAIXAS_P_POR_PREM = d.faixas_p_prem;
+      if (d.tabela_p) window.TABELA_P = d.tabela_p;
+      if (d.tabela_micros) window.TABELA_MICROS = d.tabela_micros;
+      if (d.tabela_complemento) window.TABELA_COMPLEMENTO = d.tabela_complemento;
+      if (d.metas_calagem) window.METAS_CALAGEM = d.metas_calagem;
+    }
+    if (tabAtual === 'nova') onRecalcular();
+  });
+});
+
+function temAcesso() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  if (m.recomendacoes) return true;
+  if (m.admin === 'admin') return true;
+  if (Object.values(m).includes('admin')) return true;
+  return false;
+}
+function podeEditar() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  const lvl = m.recomendacoes;
+  return lvl === 'admin' || lvl === 'gerente';
+}
+function isAdmin() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  return m.recomendacoes === 'admin' || m.admin === 'admin';
+}
+
+function gerarMenu() {
+  const isAdm = perfilAtual.perfil==='admin' || Object.values(perfilAtual.modulos||{}).includes('admin');
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos'},
+    {href:'estoque.html',ico:'🏬',label:'Estoque'},
+    {href:'gestao.html',ico:'📊',label:'Gestão'},
+    {href:'analises.html',ico:'🔬',label:'Análises'},
+    {href:'recomendacoes.html',ico:'💊',label:'Recomendações'},
+    {href:'planejamento.html',ico:'🗓️',label:'Planejamento'}
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='recomendacoes.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+function popularTalhoes() {
+  const sel = document.getElementById('selTalhao');
+  const val = sel.value;
+  // Agrupa por fazenda, ordena por fazenda+nome
+  const ord = [...talhoes]
+    .filter(t => t.status === 'ativo' || !t.status)
+    .sort((a,b) => (a.fazenda||'').localeCompare(b.fazenda||'') || (a.nome||'').localeCompare(b.nome||''));
+  sel.innerHTML = '<option value="">— selecione —</option>' + ord.map(t =>
+    `<option value="${escAttr(t._docId)}">${escHtml((t.fazenda?t.fazenda+' · ':'') + (t.nome || t.id))}</option>`
+  ).join('');
+  if (val) sel.value = val;
+}
+
+// ━━━━━━━━━━ UTILS ━━━━━━━━━━
+
+function escHtml(s){return String(s||'').replace(/[<>&"']/g,ch=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch]));}
+function escAttr(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(n,d){const v=Number(n);if(!isFinite(v))return '—';return v.toLocaleString('pt-BR',{minimumFractionDigits:d!==undefined?d:0,maximumFractionDigits:d!==undefined?d:2});}
+function parseDose(s){if(s==null||s==='')return null;const limpo=String(s).replace(/\s/g,'').replace(',','.');const n=parseFloat(limpo);return isNaN(n)?null:n;}
+function formatarData(d){if(!d)return'—';const[a,m,dd]=d.split('-');return `${dd}/${m}/${a}`;}
+function hoje(){return new Date().toISOString().slice(0,10);}
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+
+window.toggleMenu = () => { document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu = () => { document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout = async () => { await signOut(auth); window.location.href='login.html'; };
+window.fecharModalVer = () => document.getElementById('overlayVer').classList.remove('aberto');
+window.fecharTabelas = () => document.getElementById('overlayTabelas').classList.remove('aberto');
+
+// ━━━━━━━━━━ TABS ━━━━━━━━━━
+
+window.abrirTab = function(t) {
+  tabAtual = t;
+  document.querySelectorAll('.tab-top').forEach(b => b.classList.remove('ativa'));
+  document.getElementById(t==='nova'?'tabNova':'tabLista').classList.add('ativa');
+  document.getElementById('recSticky').style.display = t==='nova' ? 'block' : 'none';
+  if (t === 'nova') onRecalcular();
+  else renderLista();
+};
+
+// (Bloco 2: cards de cálculo, salvar, listar, tabelas admin)
+
+window.onTrocaTalhao = function() {
+  const id = document.getElementById('selTalhao').value;
+  window.recWIP.talhaoId = id;
+  const selAn = document.getElementById('selAnalise');
+  if (!id) {
+    selAn.innerHTML = '<option value="">—</option>';
+    selAn.disabled = true;
+    window.recWIP.amostraId = '';
+    document.getElementById('histProd').textContent = '';
+    onRecalcular();
+    return;
+  }
+  const t = talhoes.find(x => x._docId === id);
+  // Histórico de produção
+  if (t && t.historico && t.historico.length) {
+    const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
+    const ult3 = ord.slice(0,3);
+    const med = ult3.reduce((s,h)=>s+(parseDose(h.valor)||0), 0) / ult3.length;
+    document.getElementById('histProd').textContent = `Histórico: ${ult3.map(h=>fmt(parseDose(h.valor)||0,0)).join(' · ')} sc/ha (média ${fmt(med,0)})`;
+  } else {
+    document.getElementById('histProd').textContent = 'Sem histórico de produção.';
+  }
+  // Listar amostras de solo vinculadas ao talhão
+  // Match pelo id do talhão (t.id) — não pelo _docId
+  const talhaoId = t?.id;
+  const amos = amostras.filter(am => am.tipo === 'solo' && am.talhaoIdVinculado === talhaoId);
+  // Ordenar: mais recentes primeiro (pega data da análise pai)
+  const amosOrd = amos.map(am => {
+    const an = analises.find(x => x._docId === am.analiseId);
+    return {am, an, data: an?.dataLaudo || an?.dataEntrada || ''};
+  }).sort((a,b) => b.data.localeCompare(a.data));
+  if (!amosOrd.length) {
+    selAn.innerHTML = '<option value="">Nenhuma análise de solo vinculada</option>';
+    selAn.disabled = true;
+  } else {
+    selAn.innerHTML = '<option value="">— selecione —</option>' + amosOrd.map(o =>
+      `<option value="${escAttr(o.am._docId)}">${escHtml(o.am.nome + (o.am.profundidade?' ('+o.am.profundidade+'cm)':'') + ' · ' + formatarData(o.data))}</option>`
+    ).join('');
+    selAn.disabled = false;
+    // Auto-seleciona a primeira (mais recente) se nenhuma escolhida
+    if (!window.recWIP.amostraId || !amosOrd.find(o => o.am._docId === window.recWIP.amostraId)) {
+      window.recWIP.amostraId = amosOrd[0].am._docId;
+      selAn.value = window.recWIP.amostraId;
+    } else {
+      selAn.value = window.recWIP.amostraId;
+    }
+  }
+  onRecalcular();
+};
+
+window.onTrocaAnalise = function() {
+  window.recWIP.amostraId = document.getElementById('selAnalise').value;
+  onRecalcular();
+};
+
+// Stub — implementado no bloco 2
+window.onRecalcular = function() {
+  if (tabAtual !== 'nova') return;
+  // Sincroniza inputs com state
+  const prodInp = document.getElementById('inpProd');
+  if (prodInp) window.recWIP.produtividade = parseDose(prodInp.value);
+  const manualSel = document.getElementById('selManual');
+  if (manualSel) {
+    window.recWIP.manual = manualSel.value;
+    const meta = window.METAS_CALAGEM[manualSel.value];
+    if (meta) {
+      window.recWIP.v2 = meta.v2;
+      window.recWIP.ca2 = meta.ca2;
+      window.recWIP.mg2 = meta.mg2;
+    }
+  }
+  renderRecomendacao();
+};
+
+window.renderRecomendacao = function() {
+  const cont = document.getElementById('content');
+  const rodape = document.getElementById('recRodape');
+  const am = window.recWIP.amostraId ? amostras.find(a => a._docId === window.recWIP.amostraId) : null;
+  if (!window.recWIP.talhaoId) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">💊</div><p><strong>Selecione um talhão acima</strong><br>
+      <span style="font-size:.78rem;">Os cálculos vão aparecer aqui.</span></p></div>`;
+    rodape.classList.remove('visivel');
+    return;
+  }
+  if (!am) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">🔬</div><p>Selecione uma análise de solo vinculada a este talhão.<br>
+      <span style="font-size:.78rem;">Se não existe, cadastre em "🔬 Análises" e vincule.</span></p></div>`;
+    rodape.classList.remove('visivel');
+    return;
+  }
+  const params = am.parametros || {};
+  const prod = window.recWIP.produtividade;
+  const talhao = talhoes.find(t => t._docId === window.recWIP.talhaoId);
+  const analise = analises.find(an => an._docId === am.analiseId);
+  // Faixa pra ver se está em prod (talhão ativo)
+  let html = '';
+  // FASE da lavoura (informativo)
+  html += `<div style="display:flex;align-items:center;gap:7px;margin-bottom:2px;">
+    <span class="fase-tag">📌 Lavoura em produção</span>
+    <span style="font-size:.7rem;color:var(--c);">Tabelas baseadas em Conilon adulto · manutenção</span>
+  </div>`;
+  // ━━━ CARD 1 — RESUMO DA ANÁLISE ━━━
+  html += renderCardResumo(am, params, talhao, analise);
+  // ━━━ CARD 2 — CALAGEM ━━━
+  html += renderCardCalagem(params);
+  // ━━━ CARD 3 — NITROGÊNIO ━━━
+  html += renderCardN(prod);
+  // ━━━ CARD 4 — FÓSFORO ━━━
+  html += renderCardP(prod, params);
+  // ━━━ CARD 5 — POTÁSSIO ━━━
+  html += renderCardK(prod, params);
+  // ━━━ CARD 6 — MICRONUTRIENTES ━━━
+  html += renderCardMicros(params);
+  // ━━━ OBSERVAÇÕES ━━━
+  html += `<div class="card-rec">
+    <div class="card-rec-head" onclick="toggleCard('obs')">
+      <div class="card-rec-tit">📝 Observações</div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      <textarea id="recObs" oninput="window.recWIP.observacoes=this.value" placeholder="Anotações técnicas, condições de campo, ressalvas..." style="width:100%;min-height:60px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:'Barlow',sans-serif;font-size:.85rem;resize:vertical;outline:none;">${escHtml(window.recWIP.observacoes||'')}</textarea>
+    </div>
+  </div>`;
+  cont.innerHTML = html;
+  // Rodapé com resumo
+  renderRodape(prod, params);
+  rodape.classList.add('visivel');
+};
+
+// ━━━ CARD: RESUMO DA ANÁLISE ━━━
+function renderCardResumo(am, params, talhao, analise) {
+  const aberto = window.recWIP.cardsAbertos.resumo !== false;
+  // Parâmetros chave + classificação rápida
+  const itens = [
+    {id:'ph_h2o',  lab:'pH H₂O',    fmt:(v)=>fmt(v,1), cls: (v) => v == null ? 'ne' : v < 5.5 ? 'bx' : v <= 6.9 ? 'md' : 'at'},
+    {id:'v',       lab:'V%',         fmt:(v)=>fmt(v,1), cls: (v) => v == null ? 'ne' : v < 50 ? 'bx' : v <= 70 ? 'md' : 'at', un:'%'},
+    {id:'mo',      lab:'M.O.',       fmt:(v)=>fmt(v,1), cls: (v) => v == null ? 'ne' : v < 1.6 ? 'bx' : v <= 3 ? 'md' : 'at', un:'dag/dm³'},
+    {id:'calcio',  lab:'Ca',         fmt:(v)=>fmt(v,2), cls: (v) => v == null ? 'ne' : v < 1.5 ? 'bx' : v <= 4 ? 'md' : 'at', un:'cmolc'},
+    {id:'magnesio',lab:'Mg',         fmt:(v)=>fmt(v,2), cls: (v) => v == null ? 'ne' : v < 0.6 ? 'bx' : v <= 1 ? 'md' : 'at', un:'cmolc'},
+    {id:'potassio',lab:'K',          fmt:(v)=>fmt(v,0), cls: (v) => v == null ? 'ne' : v < 60 ? 'bx' : v <= 120 ? 'md' : 'at', un:'mg/dm³'},
+    {id:'p_mehlich',lab:'P-Mehlich', fmt:(v)=>fmt(v,0), cls: (v) => { if (v == null) return 'ne'; const pRem = params.p_remanescente; let limAlto = 10; if (pRem >= 20 && pRem < 40) limAlto = 20; else if (pRem >= 40) limAlto = 30; return v < limAlto/3 ? 'bx' : v <= limAlto ? 'md' : 'at'; }, un:'mg/dm³'},
+    {id:'p_remanescente',lab:'P-rem', fmt:(v)=>fmt(v,0), cls:() => 'md', un:'mg/L'},
+    {id:'sat_al',  lab:'m% (Sat.Al)',fmt:(v)=>fmt(v,1), cls: (v) => v == null ? 'ne' : v < 20 ? 'md' : v <= 40 ? 'bx' : 'mb', un:'%'},
+    {id:'ctc_ph7', lab:'CTC pH 7',   fmt:(v)=>fmt(v,2), cls: () => 'md', un:'cmolc'}
+  ];
+  const cardsItens = itens.map(it => {
+    const v = params[it.id];
+    if (v == null || v === undefined) return '';
+    const cls = it.cls(v);
+    return `<div class="param-mini">
+      <div class="param-mini-lab">${escHtml(it.lab)}</div>
+      <div class="param-mini-val">${it.fmt(v)} ${it.un?`<span style="font-size:.6rem;color:var(--c);">${escHtml(it.un)}</span>`:''}</div>
+      ${cls !== 'md' && cls !== 'ne' ? `<div class="param-mini-cls"><span class="cls-tag cls-${cls}">${cls==='bx'?'Baixo':cls==='at'?'Alto':cls==='mb'?'M.Baixo':cls==='ma'?'M.Alto':'Ok'}</span></div>` : ''}
+    </div>`;
+  }).filter(Boolean).join('');
+  // Alertas técnicos rápidos
+  const alertas = gerarAlertas(params);
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardResumo">
+    <div class="card-rec-head" onclick="toggleCard('resumo')">
+      <div class="card-rec-tit">📊 Resumo da análise <span class="card-rec-sub">${escHtml(am.nome + (am.profundidade?' ('+am.profundidade+'cm)':''))} · ${formatarData(analise?.dataLaudo||analise?.dataEntrada)}</span></div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      <div class="params-grid">${cardsItens}</div>
+      ${alertas}
+    </div>
+  </div>`;
+}
+
+function gerarAlertas(params) {
+  const alertas = [];
+  if (params.sat_al > 20) alertas.push({tipo:'tec', msg:`⚠️ Saturação de Alumínio = ${fmt(params.sat_al,1)}% — fazer calagem prioritariamente.`});
+  if (params.ph_h2o < 5.0) alertas.push({tipo:'tec', msg:`⚠️ pH muito ácido (${fmt(params.ph_h2o,2)}) — risco de toxicidade por Al.`});
+  if (params.magnesio < 0.5) alertas.push({tipo:'tec', msg:`⚠️ Mg muito baixo (${fmt(params.magnesio,2)}) — usar calcário dolomítico.`});
+  if (params.calcio < 1.5) alertas.push({tipo:'tec', msg:`⚠️ Ca baixo (${fmt(params.calcio,2)}) — considere complementação com gesso.`});
+  if (params.calcio && params.magnesio) {
+    const rel = params.calcio / params.magnesio;
+    if (rel < 3) alertas.push({tipo:'tec', msg:`⚠️ Relação Ca/Mg = ${fmt(rel,1)} (ideal 3-4). Priorizar dolomítico.`});
+    else if (rel > 5) alertas.push({tipo:'info', msg:`ℹ️ Relação Ca/Mg = ${fmt(rel,1)} (alta). Pode aplicar calcítico.`});
+  }
+  if (params.boro < 0.15) alertas.push({tipo:'tec', msg:`⚠️ Boro muito baixo (${fmt(params.boro,2)}) — risco de chochamento.`});
+  if (alertas.length === 0) alertas.push({tipo:'ok', msg:'✅ Solo sem alertas técnicos críticos.'});
+  return alertas.map(a => {
+    const cls = a.tipo === 'tec' ? 'alerta-tec' : a.tipo === 'info' ? 'alerta-info' : 'alerta-ok';
+    return `<div class="${cls}">${a.msg}</div>`;
+  }).join('');
+}
+
+// ━━━ CARD: CALAGEM ━━━
+function renderCardCalagem(params) {
+  const aberto = window.recWIP.cardsAbertos.calagem !== false;
+  const w = window.recWIP;
+  const v1 = params.v;
+  const ca1 = params.calcio;
+  const mg1 = params.magnesio;
+  const ctc = params.ctc_ph7;
+  // Resultados dos 3 métodos
+  const resV = calcCalagemVImpl(v1, ctc, w.v2, w.prnt, w.profundidade);
+  const resCaMg = calcCalagemCaMgImpl(ca1, mg1, w.ca2, w.mg2, w.prnt, w.profundidade);
+  const resComp = calcComplementoCaMgImpl(ca1, mg1);
+  const tipoCalc = sugerirCalcarioImpl(ca1, mg1);
+  // Painel principal
+  let painelMetodo = '';
+  if (w.metodoCalagem === 'v') {
+    painelMetodo = `<div class="formula-box">
+      <strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ (PRNT × 10)<br>
+      ${resV ? (resV.jaCorrigido ? `<span style="color:var(--ok);">✓ V% atual (${fmt(v1,1)}%) já está ≥ alvo (${w.v2}%). Não precisa calagem.</span>` : `Cálculo: ${escHtml(resV.formulaTxt)}<br>NC (20cm) = <strong>${fmt(resV.nc,2)}</strong> t/ha<br>Fator profundidade (${w.profundidade}cm) = × ${fmt(resV.fatorProf,2)}<br>NC final = <strong>${fmt(resV.ncCorrigida,2)} t/ha</strong>`) : '<span style="color:var(--danger);">Dados insuficientes (V%, CTC, V₂, PRNT)</span>'}
+    </div>
+    <div class="inp-linha">
+      <label>V₂ (saturação alvo)</label>
+      <input type="text" inputmode="decimal" value="${w.v2}" oninput="window.recWIP.v2=parseDose(this.value)||0;onRecalcular()">
+      <span class="inp-linha-un">%</span>
+    </div>`;
+  } else if (w.metodoCalagem === 'cmag') {
+    painelMetodo = `<div class="formula-box">
+      <strong>Fórmula (equivalentes):</strong> NC (t/ha) = ((Ca₂+Mg₂) − (Ca₁+Mg₁)) × 100 ÷ PRNT<br>
+      ${resCaMg ? (resCaMg.jaCorrigido ? `<span style="color:var(--ok);">✓ Ca+Mg atuais (${fmt((ca1||0)+(mg1||0),2)}) já ≥ meta (${w.ca2+w.mg2}). Não precisa.</span>` : `Cálculo: ${escHtml(resCaMg.formulaTxt)}<br>NC (20cm) = <strong>${fmt(resCaMg.nc,2)}</strong> t/ha<br>Fator profundidade (${w.profundidade}cm) = × ${fmt(resCaMg.fatorProf,2)}<br>NC final = <strong>${fmt(resCaMg.ncCorrigida,2)} t/ha</strong>`) : '<span style="color:var(--danger);">Dados insuficientes</span>'}
+    </div>
+    <div class="inp-linha">
+      <label>Ca₂ (cmolc/dm³)</label>
+      <input type="text" inputmode="decimal" value="${w.ca2}" oninput="window.recWIP.ca2=parseDose(this.value)||0;onRecalcular()">
+    </div>
+    <div class="inp-linha">
+      <label>Mg₂ (cmolc/dm³)</label>
+      <input type="text" inputmode="decimal" value="${w.mg2}" oninput="window.recWIP.mg2=parseDose(this.value)||0;onRecalcular()">
+    </div>`;
+  } else if (w.metodoCalagem === 'complemento') {
+    painelMetodo = `<div class="alerta-info">
+      ℹ️ <strong>Tabela de complementação Ca/Mg</strong> — aplicação direta de Ca (via gesso) e Mg (via sulfato de Mg) independente da calagem por V% ou Ca/Mg.
+    </div>
+    <div style="margin-top:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 9px;background:#fafafa;border-radius:7px;margin-bottom:5px;">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--ve);">Cálcio (Ca)</div>
+          <div style="font-size:.7rem;color:var(--c);">Solo: ${fmt(ca1,2)} cmolc/dm³ · ${escHtml(resComp.ca?.nota||'—')}</div>
+        </div>
+        <div>
+          <span class="dose-grande">${fmt(resComp.ca?.dose||0,0)}</span><span class="dose-unidade">kg/ha</span>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 9px;background:#fafafa;border-radius:7px;">
+        <div>
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--ve);">Magnésio (Mg)</div>
+          <div style="font-size:.7rem;color:var(--c);">Solo: ${fmt(mg1,2)} cmolc/dm³ · ${escHtml(resComp.mg?.nota||'—')}</div>
+        </div>
+        <div>
+          <span class="dose-grande">${fmt(resComp.mg?.dose||0,0)}</span><span class="dose-unidade">kg/ha</span>
+        </div>
+      </div>
+    </div>`;
+  }
+  // Doses gerais (sempre PRNT e profundidade quando V% ou Ca/Mg)
+  const inputsBase = (w.metodoCalagem !== 'complemento') ? `
+    <div class="inp-linha">
+      <label>PRNT do calcário</label>
+      <input type="text" inputmode="decimal" value="${w.prnt}" oninput="window.recWIP.prnt=parseDose(this.value)||0;onRecalcular()">
+      <span class="inp-linha-un">%</span>
+    </div>
+    <div class="inp-linha">
+      <label>Profundidade de correção</label>
+      <select onchange="window.recWIP.profundidade=parseInt(this.value);onRecalcular()">
+        <option value="10" ${w.profundidade==10?'selected':''}>10 cm (superficial)</option>
+        <option value="20" ${w.profundidade==20?'selected':''}>20 cm (padrão)</option>
+        <option value="40" ${w.profundidade==40?'selected':''}>40 cm (em profundidade)</option>
+      </select>
+    </div>` : '';
+  // Resultado final destacado (dose recomendada baseada no método)
+  let resultado = '';
+  if (w.metodoCalagem === 'v' && resV && !resV.jaCorrigido) {
+    const doseKg = Math.round(resV.ncCorrigida * 1000);
+    resultado = `${renderDoseBox('calagem', doseKg, 'kg/ha de calcário')}
+      ${tipoCalc ? `<div style="text-align:center;font-size:.78rem;color:var(--ve);margin-top:-4px;margin-bottom:7px;"><strong>${tipoCalc.tipo === 'dolomitico' ? '🟫 Dolomítico' : tipoCalc.tipo === 'calcitico' ? '⚪ Calcítico' : '🟧 Magnesiano'}</strong> — ${escHtml(tipoCalc.motivo)}</div>` : ''}`;
+  } else if (w.metodoCalagem === 'cmag' && resCaMg && !resCaMg.jaCorrigido) {
+    const doseKg = Math.round(resCaMg.ncCorrigida * 1000);
+    resultado = `${renderDoseBox('calagem', doseKg, 'kg/ha de calcário')}
+      ${tipoCalc ? `<div style="text-align:center;font-size:.78rem;color:var(--ve);margin-top:-4px;margin-bottom:7px;"><strong>${tipoCalc.tipo === 'dolomitico' ? '🟫 Dolomítico' : tipoCalc.tipo === 'calcitico' ? '⚪ Calcítico' : '🟧 Magnesiano'}</strong> — ${escHtml(tipoCalc.motivo)}</div>` : ''}`;
+  } else if (w.metodoCalagem === 'complemento') {
+    const ca = resComp.ca?.dose || 0;
+    const mg = resComp.mg?.dose || 0;
+    if (ca > 0 || mg > 0) {
+      resultado = `<div style="background:var(--vb);border:1px solid var(--v);border-radius:8px;padding:10px;text-align:center;margin-top:9px;">
+        <div style="font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Aplicação direta</div>
+        <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:1.1rem;color:var(--ve);margin-top:3px;">${ca} kg Ca/ha · ${mg} kg Mg/ha</div>
+        <div style="font-size:.7rem;color:var(--c);margin-top:4px;">Fontes: gesso agrícola (Ca) · sulfato de magnésio (Mg)</div>
+        <div style="font-size:.66rem;color:var(--c);margin-top:6px;font-style:italic;">(Complemento usa tabela fixa — sem ajuste manual)</div>
+      </div>`;
+    }
+  }
+  // Compara V% e Ca/Mg se ambos calculáveis (info pra decisão)
+  let comparacao = '';
+  if (resV && resCaMg && !resV.jaCorrigido && !resCaMg.jaCorrigido) {
+    const dif = Math.abs(resV.ncCorrigida - resCaMg.ncCorrigida);
+    if (dif > 0.5) {
+      comparacao = `<div class="alerta-info" style="margin-top:8px;">
+        📊 <strong>Comparação:</strong> V% → ${fmt(resV.ncCorrigida,2)} t/ha · Ca+Mg → ${fmt(resCaMg.ncCorrigida,2)} t/ha. Métodos divergem em ${fmt(dif,2)} t/ha. Use seu critério técnico.
+      </div>`;
+    }
+  }
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardCalagem">
+    <div class="card-rec-head" onclick="toggleCard('calagem')">
+      <div class="card-rec-tit">🟤 Calagem</div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      <div class="seg-btns">
+        <button class="seg-btn ${w.metodoCalagem==='v'?'ativo':''}" onclick="setMetodoCalagem('v')">V%</button>
+        <button class="seg-btn ${w.metodoCalagem==='cmag'?'ativo':''}" onclick="setMetodoCalagem('cmag')">Ca + Mg</button>
+        <button class="seg-btn ${w.metodoCalagem==='complemento'?'ativo':''}" onclick="setMetodoCalagem('complemento')">Complemento</button>
+      </div>
+      ${painelMetodo}
+      ${inputsBase}
+      ${resultado}
+      ${comparacao}
+      <div class="fonte">Manual: ${escHtml(window.METAS_CALAGEM[w.manual]?.nome || '—')}</div>
+    </div>
+  </div>`;
+}
+
+window.setMetodoCalagem = function(m) {
+  window.recWIP.metodoCalagem = m;
+  onRecalcular();
+};
+
+// ━━━ HELPER: dose-box editável (sugerido + aplicar) ━━━
+// nutriente: chave em recWIP.ajustes (n, p2o5, k2o, zn, b, cu, mn, calagem)
+// sugerido: valor calculado pela tabela
+// unidade: ex 'kg N/ha/ano', 'kg P₂O₅/ha/ano', 'kg/ha'
+function renderDoseBox(nutriente, sugerido, unidade) {
+  const ajuste = window.recWIP.ajustes[nutriente];
+  const aplicar = (ajuste !== null && ajuste !== undefined) ? ajuste : sugerido;
+  const foiAjustado = ajuste !== null && ajuste !== undefined && Number(ajuste) !== Number(sugerido);
+  return `<div class="dose-box ${foiAjustado?'ajustada':''}">
+    <div class="dose-linhas">
+      <div class="dose-col-sug">
+        <div class="dose-label">Sugerido</div>
+        <div class="dose-sug-val">${fmt(sugerido,0)}</div>
+        <div class="dose-un-small">${escHtml(unidade)}</div>
+      </div>
+      <div class="dose-col-apl">
+        <div class="dose-label" style="color:var(--ve);">Aplicar</div>
+        <input class="dose-apl-inp" type="text" inputmode="decimal" value="${fmt(aplicar,0)}" oninput="setAjuste('${nutriente}', this.value, ${sugerido})">
+        ${foiAjustado ? `<span class="tag-ajustada">✏️ Ajustado</span><button type="button" class="btn-restaurar" onclick="restaurarAjuste('${nutriente}')">↻ Restaurar sugestão</button>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+window.setAjuste = function(nutriente, valor, sugerido) {
+  const v = parseDose(valor);
+  if (v === null) {
+    window.recWIP.ajustes[nutriente] = null;
+  } else if (Number(v) === Number(sugerido)) {
+    // se digitou igual ao sugerido, considera não-ajustado
+    window.recWIP.ajustes[nutriente] = null;
+  } else {
+    window.recWIP.ajustes[nutriente] = v;
+  }
+  // Re-render apenas o rodapé pra atualizar resumo
+  // (não re-renderiza tudo, senão o input perde foco)
+  const am = window.recWIP.amostraId ? amostras.find(a => a._docId === window.recWIP.amostraId) : null;
+  if (am) renderRodape(window.recWIP.produtividade, am.parametros || {});
+};
+
+window.restaurarAjuste = function(nutriente) {
+  window.recWIP.ajustes[nutriente] = null;
+  renderRecomendacao();
+};
+
+// Pega valor efetivo (= ajuste se houver, senão sugerido)
+function valorAplicar(nutriente, sugerido) {
+  const a = window.recWIP.ajustes[nutriente];
+  return (a !== null && a !== undefined) ? a : sugerido;
+}
+
+// ━━━ CARD: NITROGÊNIO ━━━
+function renderCardN(prod) {
+  const aberto = window.recWIP.cardsAbertos.n !== false;
+  if (prod == null || prod <= 0) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardN">
+      <div class="card-rec-head" onclick="toggleCard('n')">
+        <div class="card-rec-tit">🟢 Nitrogênio (N) <span class="card-rec-sub">aguardando produtividade</span></div>
+        <button class="card-rec-toggle" type="button">▼</button>
+      </div>
+      <div class="card-rec-body">
+        <div class="alerta-info" style="margin:0;">ℹ️ <strong>Informe a produtividade esperada acima</strong><br>Sem ela não dá pra calcular a dose de N (a tabela é baseada em sc/ha).</div>
+      </div>
+    </div>`;
+  }
+  const linha = window.TABELA_N_K.find(r => prod >= r.prodMin && prod <= r.prodMax);
+  if (!linha) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardN">
+      <div class="card-rec-head" onclick="toggleCard('n')">
+        <div class="card-rec-tit">🟢 Nitrogênio (N)</div>
+        <button class="card-rec-toggle" type="button">▼</button>
+      </div>
+      <div class="card-rec-body">
+        <div class="alerta-tec" style="margin:0;">⚠️ Produtividade ${fmt(prod,0)} sc/ha fora das faixas da tabela.</div>
+      </div>
+    </div>`;
+  }
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardN">
+    <div class="card-rec-head" onclick="toggleCard('n')">
+      <div class="card-rec-tit">🟢 Nitrogênio (N) <span class="card-rec-sub">${fmt(valorAplicar('n',linha.n),0)} kg/ha</span></div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      ${renderDoseBox('n', linha.n, 'kg N/ha/ano')}
+      <div class="dose-explica">
+        <strong>Produtividade:</strong> ${fmt(prod,0)} sc/ha → faixa <strong>${linha.prodMin}-${linha.prodMax===9999?'+':linha.prodMax} sc/ha</strong> → ${linha.n} kg N/ha<br>
+        <span style="color:var(--c);font-size:.7rem;">Parcelar conforme programação no módulo Adubações.</span>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ━━━ CARD: FÓSFORO ━━━
+function renderCardP(prod, params) {
+  const aberto = window.recWIP.cardsAbertos.p !== false;
+  const pMehlich = params.p_mehlich;
+  const pRem = params.p_remanescente;
+  if (prod == null || prod <= 0) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardP">
+      <div class="card-rec-head" onclick="toggleCard('p')"><div class="card-rec-tit">🔴 Fósforo (P₂O₅) <span class="card-rec-sub">aguardando produtividade</span></div><button class="card-rec-toggle" type="button">▼</button></div>
+      <div class="card-rec-body"><div class="alerta-info" style="margin:0;">ℹ️ <strong>Informe a produtividade esperada acima.</strong></div></div>
+    </div>`;
+  }
+  if (pMehlich == null || pRem == null) {
+    const faltando = [];
+    if (pMehlich == null) faltando.push('P-Mehlich');
+    if (pRem == null) faltando.push('P-rem');
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardP">
+      <div class="card-rec-head" onclick="toggleCard('p')"><div class="card-rec-tit">🔴 Fósforo (P₂O₅) <span class="card-rec-sub">dados faltando</span></div><button class="card-rec-toggle" type="button">▼</button></div>
+      <div class="card-rec-body"><div class="alerta-tec" style="margin:0;">⚠️ Análise sem ${faltando.join(' e ')}. Edite a análise em "🔬 Análises" e adicione esses parâmetros.</div></div>
+    </div>`;
+  }
+  // Classifica
+  let classe;
+  if (pRem < 20) classe = window.FAIXAS_P_POR_PREM.baixoPrem;
+  else if (pRem < 40) classe = window.FAIXAS_P_POR_PREM.medioPrem;
+  else classe = window.FAIXAS_P_POR_PREM.altoPrem;
+  const faixa = classe.faixas.find(f => pMehlich <= f.ate);
+  const cls = faixa.cls;
+  const idxCls = ['muitoBaixo','baixo','medio','alto'].indexOf(cls);
+  const linha = window.TABELA_P.find(r => prod >= r.prodMin && prod <= r.prodMax);
+  if (!linha) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardP">
+      <div class="card-rec-head" onclick="toggleCard('p')"><div class="card-rec-tit">🔴 Fósforo (P₂O₅)</div><button class="card-rec-toggle" type="button">▼</button></div>
+      <div class="card-rec-body"><div class="alerta-tec">⚠️ Produtividade fora das faixas da tabela.</div></div>
+    </div>`;
+  }
+  const dose = linha.dose[idxCls];
+  const labelCls = cls==='muitoBaixo'?'Muito Baixo':cls==='baixo'?'Baixo':cls==='medio'?'Médio':'Alto';
+  const premLab = pRem<20?'< 20 (argiloso)':pRem<40?'20-40 (médio)':'> 40 (arenoso)';
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardP">
+    <div class="card-rec-head" onclick="toggleCard('p')">
+      <div class="card-rec-tit">🔴 Fósforo (P₂O₅) <span class="card-rec-sub">${fmt(valorAplicar('p2o5',dose),0)} kg/ha</span></div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      ${renderDoseBox('p2o5', dose, 'kg P₂O₅/ha/ano')}
+      <div class="dose-explica">
+        <strong>P-rem:</strong> ${fmt(pRem,0)} mg/L → ${premLab}<br>
+        <strong>P-Mehlich:</strong> ${fmt(pMehlich,0)} mg/dm³ → classe <span class="cls-tag cls-${cls==='medio'?'md':cls==='baixo'?'bx':cls==='muitoBaixo'?'mb':'at'}">${labelCls}</span><br>
+        <strong>Produtividade:</strong> ${fmt(prod,0)} sc/ha (faixa ${linha.prodMin}-${linha.prodMax===9999?'+':linha.prodMax})<br>
+        → ${dose} kg P₂O₅/ha
+        ${dose === 0 ? '<br><span style="color:var(--ok);font-size:.7rem;">✓ Solo bem suprido — não precisa P.</span>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ━━━ CARD: POTÁSSIO ━━━
+function renderCardK(prod, params) {
+  const aberto = window.recWIP.cardsAbertos.k !== false;
+  const k = params.potassio;
+  if (prod == null || prod <= 0) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardK">
+      <div class="card-rec-head" onclick="toggleCard('k')"><div class="card-rec-tit">🔵 Potássio (K₂O) <span class="card-rec-sub">aguardando produtividade</span></div><button class="card-rec-toggle" type="button">▼</button></div>
+      <div class="card-rec-body"><div class="alerta-info" style="margin:0;">ℹ️ <strong>Informe a produtividade esperada acima.</strong></div></div>
+    </div>`;
+  }
+  if (k == null) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardK">
+      <div class="card-rec-head" onclick="toggleCard('k')"><div class="card-rec-tit">🔵 Potássio (K₂O) <span class="card-rec-sub">dados faltando</span></div><button class="card-rec-toggle" type="button">▼</button></div>
+      <div class="card-rec-body"><div class="alerta-tec" style="margin:0;">⚠️ Análise sem valor de K no solo.</div></div>
+    </div>`;
+  }
+  const faixaK = FAIXAS_K_SOLO.find(f => k >= f.min && k < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
+  const linha = window.TABELA_N_K.find(r => prod >= r.prodMin && prod <= r.prodMax);
+  if (!linha) return '';
+  const dose = linha.k[faixaK.idx];
+  const clsK = faixaK.idx === 0 ? 'bx' : faixaK.idx === 1 ? 'md' : faixaK.idx === 2 ? 'md' : 'at';
+  const labelK = faixaK.idx === 0 ? 'Baixo' : faixaK.idx === 1 ? 'Médio' : faixaK.idx === 2 ? 'Alto' : 'Muito alto';
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardK">
+    <div class="card-rec-head" onclick="toggleCard('k')">
+      <div class="card-rec-tit">🔵 Potássio (K₂O) <span class="card-rec-sub">${fmt(valorAplicar('k2o',dose),0)} kg/ha</span></div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      ${renderDoseBox('k2o', dose, 'kg K₂O/ha/ano')}
+      <div class="dose-explica">
+        <strong>K no solo:</strong> ${fmt(k,0)} mg/dm³ → <span class="cls-tag cls-${clsK}">${labelK}</span> (${escHtml(faixaK.label)})<br>
+        <strong>Produtividade:</strong> ${fmt(prod,0)} sc/ha (faixa ${linha.prodMin}-${linha.prodMax===9999?'+':linha.prodMax})<br>
+        → ${dose} kg K₂O/ha
+        ${dose === 0 ? '<br><span style="color:var(--ok);font-size:.7rem;">✓ Solo bem suprido — não precisa K.</span>' : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+// ━━━ CARD: MICRONUTRIENTES ━━━
+function renderCardMicros(params) {
+  const aberto = window.recWIP.cardsAbertos.micros !== false;
+  const microsOut = {};
+  const mapa = {zn:'zinco', b:'boro', cu:'cobre', mn:'manganes'};
+  for (const [k, paramId] of Object.entries(mapa)) {
+    const val = params[paramId];
+    const tabela = window.TABELA_MICROS[k];
+    if (val == null || !tabela) continue;
+    const faixa = tabela.faixas.find(f => val <= f.ate);
+    microsOut[k] = {valor: val, classe: faixa.cls, dose: faixa.dose, nome: tabela.nome, un: tabela.un};
+  }
+  const itens = Object.entries(microsOut).map(([k, m]) => {
+    const cls = m.classe === 'baixo' ? 'bx' : m.classe === 'medio' ? 'md' : 'at';
+    const labelCls = m.classe.charAt(0).toUpperCase() + m.classe.slice(1);
+    const aplicar = valorAplicar(k, m.dose);
+    const ajuste = window.recWIP.ajustes[k];
+    const foiAjustado = ajuste !== null && ajuste !== undefined && Number(ajuste) !== Number(m.dose);
+    return `<div style="background:#fafafa;border-radius:8px;border:1px solid var(--cl);margin-bottom:7px;overflow:hidden;${foiAjustado?'border-color:#f59e0b;background:#fffbeb;':''}">
+      <div style="padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;color:var(--ve);">${escHtml(m.nome)}</div>
+          <div style="font-size:.7rem;color:var(--c);">${fmt(m.valor, m.valor < 1 ? 2 : 1)} ${escHtml(m.un)} · <span class="cls-tag cls-${cls}">${labelCls}</span></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:7px;">
+          <div style="text-align:right;">
+            <div style="font-size:.58rem;color:var(--c);text-transform:uppercase;font-weight:700;line-height:1;">Sugerido</div>
+            <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:1.1rem;color:var(--c);line-height:1.2;">${m.dose}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:.58rem;color:var(--ve);text-transform:uppercase;font-weight:700;line-height:1;">Aplicar</div>
+            <input type="text" inputmode="decimal" value="${fmt(aplicar,0)}" oninput="setAjuste('${k}', this.value, ${m.dose})" style="font-family:'DM Mono',monospace;font-weight:800;font-size:1.1rem;color:var(--ve);text-align:center;border:1.5px solid var(--v);border-radius:5px;padding:3px 4px;width:54px;outline:none;background:white;${foiAjustado?'border-color:#f59e0b;color:#92400e;':''}">
+          </div>
+          <span class="dose-unidade" style="font-size:.66rem;">kg/ha</span>
+        </div>
+      </div>
+      ${foiAjustado ? `<div style="padding:4px 10px 7px;display:flex;align-items:center;gap:7px;justify-content:flex-end;">
+        <span class="tag-ajustada">✏️ Ajustado</span>
+        <button type="button" class="btn-restaurar" onclick="restaurarAjuste('${k}')">↻ Restaurar</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+  if (!itens) {
+    return `<div class="card-rec ${aberto?'':'fechado'}" id="cardMicros">
+      <div class="card-rec-head" onclick="toggleCard('micros')"><div class="card-rec-tit">🟣 Micronutrientes <span class="card-rec-sub">dados faltando</span></div><button class="card-rec-toggle" type="button">▼</button></div>
+      <div class="card-rec-body"><div class="alerta-tec" style="margin:0;">⚠️ Análise sem micronutrientes (Zn, B, Cu, Mn). Comum em análises de subsolo. Edite em "🔬 Análises" se quiser adicionar.</div></div>
+    </div>`;
+  }
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardMicros">
+    <div class="card-rec-head" onclick="toggleCard('micros')">
+      <div class="card-rec-tit">🟣 Micronutrientes</div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      ${itens}
+      <div style="font-size:.7rem;color:var(--c);margin-top:8px;line-height:1.4;">Dose zerada = solo já está com teor adequado/alto, não aplicar.</div>
+    </div>
+  </div>`;
+}
+
+window.toggleCard = function(id) {
+  window.recWIP.cardsAbertos[id] = !window.recWIP.cardsAbertos[id];
+  const card = document.getElementById('card' + id.charAt(0).toUpperCase() + id.slice(1));
+  if (card) card.classList.toggle('fechado');
+};
+
+// ━━━ RODAPÉ: RESUMO COMPACTO ━━━
+function renderRodape(prod, params) {
+  if (prod == null || prod <= 0) {
+    document.getElementById('rodapeResumo').innerHTML = '<div style="color:var(--c);font-size:.74rem;padding:3px 0;">Informe produtividade pra ver resumo</div>';
+    return;
+  }
+  const w = window.recWIP;
+  // N
+  const linhaNK = window.TABELA_N_K.find(r => prod >= r.prodMin && prod <= r.prodMax);
+  // P
+  let pDose = null;
+  if (params.p_mehlich != null && params.p_remanescente != null) {
+    let classe;
+    if (params.p_remanescente < 20) classe = window.FAIXAS_P_POR_PREM.baixoPrem;
+    else if (params.p_remanescente < 40) classe = window.FAIXAS_P_POR_PREM.medioPrem;
+    else classe = window.FAIXAS_P_POR_PREM.altoPrem;
+    const faixa = classe.faixas.find(f => params.p_mehlich <= f.ate);
+    const idxCls = ['muitoBaixo','baixo','medio','alto'].indexOf(faixa.cls);
+    const linhaP = window.TABELA_P.find(r => prod >= r.prodMin && prod <= r.prodMax);
+    if (linhaP) pDose = linhaP.dose[idxCls];
+  }
+  // K
+  let kDose = null;
+  if (params.potassio != null && linhaNK) {
+    const faixaK = FAIXAS_K_SOLO.find(f => params.potassio >= f.min && params.potassio < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
+    kDose = linhaNK.k[faixaK.idx];
+  }
+  // Calagem
+  let calcDose = null;
+  if (w.metodoCalagem === 'v') {
+    const r = calcCalagemVImpl(params.v, params.ctc_ph7, w.v2, w.prnt, w.profundidade);
+    calcDose = r && !r.jaCorrigido ? r.ncCorrigida * 1000 : 0;
+  } else if (w.metodoCalagem === 'cmag') {
+    const r = calcCalagemCaMgImpl(params.calcio, params.magnesio, w.ca2, w.mg2, w.prnt, w.profundidade);
+    calcDose = r && !r.jaCorrigido ? r.ncCorrigida * 1000 : 0;
+  }
+  // Micros
+  const micros = {};
+  const mapa = {zn:'zinco', b:'boro', cu:'cobre', mn:'manganes'};
+  for (const [k, pid] of Object.entries(mapa)) {
+    const val = params[pid];
+    const t = window.TABELA_MICROS[k];
+    if (val == null || !t) continue;
+    const faixa = t.faixas.find(f => val <= f.ate);
+    if (faixa.dose > 0) micros[k] = faixa.dose;
+  }
+  const itens = [];
+  if (linhaNK) {
+    const v = valorAplicar('n', linhaNK.n);
+    itens.push({lab:'N', dose:v, un:'kg/ha', ajustado: v !== linhaNK.n});
+  }
+  if (pDose !== null) {
+    const v = valorAplicar('p2o5', pDose);
+    itens.push({lab:'P₂O₅', dose:v, un:'kg/ha', ajustado: v !== pDose});
+  }
+  if (kDose !== null) {
+    const v = valorAplicar('k2o', kDose);
+    itens.push({lab:'K₂O', dose:v, un:'kg/ha', ajustado: v !== kDose});
+  }
+  if (calcDose !== null && calcDose > 0) {
+    const v = valorAplicar('calagem', Math.round(calcDose));
+    itens.push({lab:'Calc.', dose:v, un:'kg/ha', ajustado: v !== Math.round(calcDose)});
+  }
+  for (const m of ['zn','b','cu','mn']) {
+    if (micros[m]) {
+      const v = valorAplicar(m, micros[m]);
+      itens.push({lab:m.toUpperCase(), dose:v, un:'kg/ha', ajustado: v !== micros[m]});
+    }
+  }
+  document.getElementById('rodapeResumo').innerHTML = itens.map(i =>
+    `<span class="rec-rodape-item ${i.dose===0?'zero':''}" ${i.ajustado?'style="background:#fef3c7;border-color:#f59e0b;color:#92400e;"':''}>${escHtml(i.lab)}: ${fmt(i.dose,0)}${i.ajustado?' ✏️':''}</span>`
+  ).join('') || '<div style="color:var(--c);font-size:.74rem;padding:3px 0;">Nenhuma dose recomendada.</div>';
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CÁLCULOS (versões inline pra usar window.TABELAS)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+function calcCalagemVImpl(v1, ctc, v2, prnt, profundidade) {
+  if (v1 == null || ctc == null || v2 == null || prnt == null) return null;
+  if (v1 >= v2) return {nc:0, fatorProf:profundidade/20, ncCorrigida:0, jaCorrigido:true};
+  const nc = (v2 - v1) * ctc / (prnt * 10);
+  const fatorProf = profundidade / 20;
+  return {nc, fatorProf, ncCorrigida:nc*fatorProf, formulaTxt:`NC = (${v2} − ${v1.toFixed(1)}) × ${ctc.toFixed(2)} / (${prnt} × 10)`, jaCorrigido:false};
+}
+function calcCalagemCaMgImpl(ca1, mg1, ca2, mg2, prnt, profundidade) {
+  if (ca1 == null || mg1 == null || ca2 == null || mg2 == null || prnt == null) return null;
+  const deficit = (ca2 + mg2) - (ca1 + mg1);
+  if (deficit <= 0) return {nc:0, fatorProf:profundidade/20, ncCorrigida:0, jaCorrigido:true};
+  const nc = deficit * 100 / prnt;
+  const fatorProf = profundidade / 20;
+  return {nc, fatorProf, ncCorrigida:nc*fatorProf, formulaTxt:`NC = ((${ca2}+${mg2}) − (${ca1.toFixed(2)}+${mg1.toFixed(2)})) × 100 / ${prnt}`, jaCorrigido:false};
+}
+function calcComplementoCaMgImpl(ca, mg) {
+  const out = {};
+  if (ca != null) {
+    const faixa = window.TABELA_COMPLEMENTO.ca.find(f => ca <= f.ate);
+    out.ca = {valor:ca, dose:faixa.dose, nota:faixa.nota};
+  }
+  if (mg != null) {
+    const faixa = window.TABELA_COMPLEMENTO.mg.find(f => mg <= f.ate);
+    out.mg = {valor:mg, dose:faixa.dose, nota:faixa.nota};
+  }
+  return out;
+}
+function sugerirCalcarioImpl(ca, mg) {
+  if (ca == null || mg == null) return null;
+  const relCaMg = ca / mg;
+  if (mg < 0.6) return {tipo:'dolomitico', motivo:'Mg baixo — precisa elevar'};
+  if (relCaMg < 3) return {tipo:'dolomitico', motivo:`Ca/Mg = ${fmt(relCaMg,1)} (< 3) — precisa elevar Mg`};
+  if (relCaMg > 5 && mg >= 1.0) return {tipo:'calcitico', motivo:`Ca/Mg = ${fmt(relCaMg,1)} alto e Mg adequado`};
+  return {tipo:'magnesiano', motivo:`Ca/Mg = ${fmt(relCaMg,1)} razoável`};
+}
+
+window.renderLista = function() {
+  const cont = document.getElementById('content');
+  cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--c);">📋 Lista de recomendações salvas (Bloco 3)</div>';
+};
+
+window.salvarRecomendacao = async function() {
+  if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
+  const w = window.recWIP;
+  if (!w.talhaoId) { toast('⚠️ Selecione um talhão.'); return; }
+  if (!w.amostraId) { toast('⚠️ Selecione uma análise.'); return; }
+  if (!w.produtividade || w.produtividade <= 0) { toast('⚠️ Informe a produtividade esperada.'); return; }
+  const btn = document.getElementById('btnSalvarRec');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const am = amostras.find(a => a._docId === w.amostraId);
+    const params = am?.parametros || {};
+    const talhao = talhoes.find(t => t._docId === w.talhaoId);
+    const analise = analises.find(an => an._docId === am?.analiseId);
+    // Calcular todos os resultados pra gravar (snapshot)
+    const linhaNK = window.TABELA_N_K.find(r => w.produtividade >= r.prodMin && w.produtividade <= r.prodMax);
+    let pDose = null;
+    if (params.p_mehlich != null && params.p_remanescente != null) {
+      let classe;
+      if (params.p_remanescente < 20) classe = window.FAIXAS_P_POR_PREM.baixoPrem;
+      else if (params.p_remanescente < 40) classe = window.FAIXAS_P_POR_PREM.medioPrem;
+      else classe = window.FAIXAS_P_POR_PREM.altoPrem;
+      const faixa = classe.faixas.find(f => params.p_mehlich <= f.ate);
+      const idx = ['muitoBaixo','baixo','medio','alto'].indexOf(faixa.cls);
+      const linhaP = window.TABELA_P.find(r => w.produtividade >= r.prodMin && w.produtividade <= r.prodMax);
+      if (linhaP) pDose = linhaP.dose[idx];
+    }
+    let kDose = null;
+    if (params.potassio != null && linhaNK) {
+      const faixaK = FAIXAS_K_SOLO.find(f => params.potassio >= f.min && params.potassio < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
+      kDose = linhaNK.k[faixaK.idx];
+    }
+    let calagem = {metodo: w.metodoCalagem, dose_sugerida: 0, dose: 0, tipo: null};
+    if (w.metodoCalagem === 'v') {
+      const r = calcCalagemVImpl(params.v, params.ctc_ph7, w.v2, w.prnt, w.profundidade);
+      if (r && !r.jaCorrigido) {
+        calagem.dose_sugerida = Math.round(r.ncCorrigida * 1000);
+        calagem.dose = valorAplicar('calagem', calagem.dose_sugerida);
+      }
+      calagem.v2 = w.v2; calagem.prnt = w.prnt; calagem.profundidade = w.profundidade;
+    } else if (w.metodoCalagem === 'cmag') {
+      const r = calcCalagemCaMgImpl(params.calcio, params.magnesio, w.ca2, w.mg2, w.prnt, w.profundidade);
+      if (r && !r.jaCorrigido) {
+        calagem.dose_sugerida = Math.round(r.ncCorrigida * 1000);
+        calagem.dose = valorAplicar('calagem', calagem.dose_sugerida);
+      }
+      calagem.ca2 = w.ca2; calagem.mg2 = w.mg2; calagem.prnt = w.prnt; calagem.profundidade = w.profundidade;
+    } else if (w.metodoCalagem === 'complemento') {
+      const r = calcComplementoCaMgImpl(params.calcio, params.magnesio);
+      calagem.ca_dose = r.ca?.dose || 0;
+      calagem.mg_dose = r.mg?.dose || 0;
+    }
+    const tipoCalc = sugerirCalcarioImpl(params.calcio, params.magnesio);
+    if (tipoCalc) calagem.tipo = tipoCalc.tipo;
+    const microsOut = {};
+    const mapa = {zn:'zinco', b:'boro', cu:'cobre', mn:'manganes'};
+    for (const [k, pid] of Object.entries(mapa)) {
+      const val = params[pid];
+      const t = window.TABELA_MICROS[k];
+      if (val == null || !t) continue;
+      const faixa = t.faixas.find(f => val <= f.ate);
+      microsOut[k] = {
+        valor: val,
+        classe: faixa.cls,
+        dose_sugerida: faixa.dose,
+        dose: valorAplicar(k, faixa.dose)
+      };
+    }
+    const nSug = linhaNK ? linhaNK.n : null;
+    const dadosRec = {
+      talhaoId: w.talhaoId,
+      talhaoNome: talhao?.nome || talhao?.id || '',
+      fazenda: talhao?.fazenda || '',
+      amostraId: w.amostraId,
+      amostraNome: am?.nome || '',
+      analiseId: am?.analiseId || '',
+      dataAnalise: analise?.dataLaudo || analise?.dataEntrada || '',
+      fase: 'producao',
+      produtividade: w.produtividade,
+      manual: w.manual,
+      calagem,
+      // Doses: _sugerido (tabela) e o valor a aplicar (= sugerido OU ajuste manual)
+      n_sugerido: nSug,
+      n: nSug !== null ? valorAplicar('n', nSug) : null,
+      p2o5_sugerido: pDose,
+      p2o5: pDose !== null ? valorAplicar('p2o5', pDose) : null,
+      k2o_sugerido: kDose,
+      k2o: kDose !== null ? valorAplicar('k2o', kDose) : null,
+      micros: microsOut,
+      ajustes: window.recWIP.ajustes,    // snapshot dos ajustes pra reabertura
+      observacoes: w.observacoes || '',
+      status: 'rascunho',
+      atualizadoEm: new Date().toISOString(),
+      atualizadoPor: usuarioAtual.email
+    };
+    if (window.editandoId) {
+      await updateDoc(doc(db,'recomendacoes',window.editandoId), dadosRec);
+    } else {
+      dadosRec.criadoEm = new Date().toISOString();
+      dadosRec.criadoPor = usuarioAtual.email;
+      await addDoc(collection(db,'recomendacoes'), dadosRec);
+    }
+    try {
+      await addDoc(collection(db,'logs'), {
+        tipo:'recomendacao',
+        mensagem:`${usuarioAtual.email} ${window.editandoId?'editou':'criou'} recomendação (${dadosRec.fazenda} · ${dadosRec.talhaoNome}, ${dadosRec.produtividade} sc/ha)`,
+        criadoEm: new Date().toISOString(), uid: usuarioAtual.uid
+      });
+    } catch(e) {}
+    toast(`✅ Recomendação ${window.editandoId?'atualizada':'salva'}!`);
+    window.editandoId = null;
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erro: '+e.message);
+  }
+  btn.disabled = false; btn.textContent = '💾 Salvar';
+};
+
+window.copiarResumo = function() {
+  const w = window.recWIP;
+  if (!w.talhaoId || !w.amostraId || !w.produtividade) {
+    toast('⚠️ Complete a recomendação primeiro.'); return;
+  }
+  const talhao = talhoes.find(t => t._docId === w.talhaoId);
+  const am = amostras.find(a => a._docId === w.amostraId);
+  const analise = analises.find(an => an._docId === am?.analiseId);
+  const params = am?.parametros || {};
+  // Recalcular
+  const linhaNK = window.TABELA_N_K.find(r => w.produtividade >= r.prodMin && w.produtividade <= r.prodMax);
+  let pDose = null;
+  if (params.p_mehlich != null && params.p_remanescente != null) {
+    let classe;
+    if (params.p_remanescente < 20) classe = window.FAIXAS_P_POR_PREM.baixoPrem;
+    else if (params.p_remanescente < 40) classe = window.FAIXAS_P_POR_PREM.medioPrem;
+    else classe = window.FAIXAS_P_POR_PREM.altoPrem;
+    const faixa = classe.faixas.find(f => params.p_mehlich <= f.ate);
+    const idx = ['muitoBaixo','baixo','medio','alto'].indexOf(faixa.cls);
+    const linhaP = window.TABELA_P.find(r => w.produtividade >= r.prodMin && w.produtividade <= r.prodMax);
+    if (linhaP) pDose = linhaP.dose[idx];
+  }
+  let kDose = null;
+  if (params.potassio != null && linhaNK) {
+    const faixaK = FAIXAS_K_SOLO.find(f => params.potassio >= f.min && params.potassio < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
+    kDose = linhaNK.k[faixaK.idx];
+  }
+  let calagemTxt = '';
+  if (w.metodoCalagem === 'v') {
+    const r = calcCalagemVImpl(params.v, params.ctc_ph7, w.v2, w.prnt, w.profundidade);
+    if (r && !r.jaCorrigido) {
+      const sug = Math.round(r.ncCorrigida * 1000);
+      const apl = valorAplicar('calagem', sug);
+      const ajustadoTag = apl !== sug ? ' ⚠️ ajustado (sugerido era '+sug+')' : '';
+      calagemTxt = `Calcário: ${fmt(apl, 0)} kg/ha (V%, ${w.profundidade}cm, PRNT ${w.prnt}%)${ajustadoTag}`;
+    }
+  } else if (w.metodoCalagem === 'cmag') {
+    const r = calcCalagemCaMgImpl(params.calcio, params.magnesio, w.ca2, w.mg2, w.prnt, w.profundidade);
+    if (r && !r.jaCorrigido) {
+      const sug = Math.round(r.ncCorrigida * 1000);
+      const apl = valorAplicar('calagem', sug);
+      const ajustadoTag = apl !== sug ? ' ⚠️ ajustado (sugerido era '+sug+')' : '';
+      calagemTxt = `Calcário: ${fmt(apl, 0)} kg/ha (Ca+Mg, ${w.profundidade}cm, PRNT ${w.prnt}%)${ajustadoTag}`;
+    }
+  } else {
+    const r = calcComplementoCaMgImpl(params.calcio, params.magnesio);
+    if ((r.ca?.dose||0) > 0 || (r.mg?.dose||0) > 0) calagemTxt = `Complemento: ${r.ca?.dose||0} kg Ca/ha · ${r.mg?.dose||0} kg Mg/ha`;
+  }
+  const mapa = {zn:'Zn', b:'B', cu:'Cu', mn:'Mn'};
+  const microsTxt = [];
+  for (const [k, lab] of Object.entries(mapa)) {
+    const val = params[k === 'b' ? 'boro' : k === 'zn' ? 'zinco' : k === 'cu' ? 'cobre' : 'manganes'];
+    const t = window.TABELA_MICROS[k];
+    if (val == null || !t) continue;
+    const faixa = t.faixas.find(f => val <= f.ate);
+    const apl = valorAplicar(k, faixa.dose);
+    if (apl > 0) {
+      const tag = apl !== faixa.dose ? ` ⚠️ ajustado (sug. ${faixa.dose})` : '';
+      microsTxt.push(`${lab}: ${apl} kg/ha${tag}`);
+    }
+  }
+  const nApl = linhaNK ? valorAplicar('n', linhaNK.n) : null;
+  const pApl = pDose !== null ? valorAplicar('p2o5', pDose) : null;
+  const kApl = kDose !== null ? valorAplicar('k2o', kDose) : null;
+  const linhaN = linhaNK ? `• N: ${nApl}${nApl !== linhaNK.n ? ` ⚠️ ajustado (sug. ${linhaNK.n})` : ''}\n` : '';
+  const linhaP = pDose !== null ? `• P₂O₅: ${pApl}${pApl !== pDose ? ` ⚠️ ajustado (sug. ${pDose})` : ''}\n` : '';
+  const linhaK = kDose !== null ? `• K₂O: ${kApl}${kApl !== kDose ? ` ⚠️ ajustado (sug. ${kDose})` : ''}\n` : '';
+  const txt = `🌱 RECOMENDAÇÃO TÉCNICA
+Fazenda: ${talhao?.fazenda || '—'}
+Talhão: ${talhao?.nome || talhao?.id || '—'}
+Análise: ${am?.nome || '—'} (${formatarData(analise?.dataLaudo || analise?.dataEntrada)})
+Produtividade esperada: ${fmt(w.produtividade,0)} sc/ha
+Manual: ${window.METAS_CALAGEM[w.manual]?.nome || w.manual}
+
+ADUBAÇÃO (kg/ha/ano):
+${linhaN}${linhaP}${linhaK}${microsTxt.length ? '\nMICROS:\n' + microsTxt.map(m=>'• '+m).join('\n') + '\n' : ''}
+CORREÇÃO:
+${calagemTxt ? '• ' + calagemTxt : '• Não há necessidade de correção'}
+
+${w.observacoes ? 'Observações: ' + w.observacoes : ''}
+---
+Gerado em ${formatarData(hoje())} via Conilon Tech`;
+  navigator.clipboard.writeText(txt).then(() => {
+    toast('📋 Copiado pra área de transferência!');
+  }).catch(e => {
+    console.error(e);
+    toast('❌ Não consegui copiar. Use uma versão recente do navegador.');
+  });
+};
+
+// ━━━━━━━━━━ LISTA DE RECOMENDAÇÕES SALVAS ━━━━━━━━━━
+
+window.renderLista = function() {
+  const cont = document.getElementById('content');
+  if (!recomendacoes.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">📋</div><p><strong>Nenhuma recomendação salva ainda.</strong><br>
+      <span style="font-size:.78rem;">Vá em "🧮 Nova" pra calcular.</span></p></div>`;
+    return;
+  }
+  const lista = [...recomendacoes].sort((a,b) => (b.atualizadoEm||b.criadoEm||'').localeCompare(a.atualizadoEm||a.criadoEm||''));
+  cont.innerHTML = lista.map(r => {
+    const dosesItens = [];
+    const ajust = (val, sug) => (sug !== null && sug !== undefined && Number(val) !== Number(sug));
+    if (r.n) dosesItens.push({lab:`N: ${r.n}`, ajustada: ajust(r.n, r.n_sugerido)});
+    if (r.p2o5 !== null && r.p2o5 !== undefined) dosesItens.push({lab:`P₂O₅: ${r.p2o5}`, ajustada: ajust(r.p2o5, r.p2o5_sugerido)});
+    if (r.k2o !== null && r.k2o !== undefined) dosesItens.push({lab:`K₂O: ${r.k2o}`, ajustada: ajust(r.k2o, r.k2o_sugerido)});
+    if (r.calagem?.dose > 0) dosesItens.push({lab:`Calc.: ${fmt(r.calagem.dose,0)}`, ajustada: ajust(r.calagem.dose, r.calagem.dose_sugerida)});
+    if (r.calagem?.ca_dose > 0) dosesItens.push({lab:`Ca: ${r.calagem.ca_dose}`, ajustada:false});
+    if (r.calagem?.mg_dose > 0) dosesItens.push({lab:`Mg: ${r.calagem.mg_dose}`, ajustada:false});
+    if (r.micros) {
+      for (const [k, m] of Object.entries(r.micros)) {
+        const v = m.dose ?? 0;
+        if (v > 0) dosesItens.push({lab:`${k.toUpperCase()}: ${v}`, ajustada: ajust(v, m.dose_sugerida)});
+      }
+    }
+    const temAjuste = dosesItens.some(d => d.ajustada);
+    return `<div class="rec-card rec-card-status-${r.status || 'rascunho'}">
+      <div class="rec-card-head">
+        <div style="flex:1;min-width:0;">
+          <div class="rec-card-tit">💊 ${escHtml(r.fazenda || '—')} · ${escHtml(r.talhaoNome || '—')} ${temAjuste?`<span class="tag-ajustada" style="margin-left:5px;">✏️</span>`:''}</div>
+          <div class="rec-card-meta">
+            📊 ${fmt(r.produtividade,0)} sc/ha · ${escHtml(r.amostraNome || '—')} (${formatarData(r.dataAnalise)})<br>
+            <span style="font-size:.65rem;">📅 ${formatarData((r.atualizadoEm||r.criadoEm||'').slice(0,10))} · ${escHtml(window.METAS_CALAGEM[r.manual]?.nome || r.manual || '—')}</span>
+          </div>
+        </div>
+        <span class="rec-status-badge rec-status-${r.status||'rascunho'}">${(r.status||'rascunho').toUpperCase()}</span>
+      </div>
+      <div class="rec-card-doses">
+        ${dosesItens.map(d => `<span class="rec-card-dose" ${d.ajustada?'style="background:#fef3c7;border-color:#f59e0b;color:#92400e;"':''}>${escHtml(d.lab)}${d.ajustada?' ✏️':''}</span>`).join('')}
+      </div>
+      <div class="rec-card-acoes">
+        <button class="btn-acao primary" onclick="verRecomendacao('${r._docId}')">👁 Ver</button>
+        ${podeEditar() && r.status !== 'aplicada' ? `<button class="btn-acao" onclick="editarRecomendacao('${r._docId}')">✏️ Editar</button>` : ''}
+        ${podeEditar() && r.status === 'rascunho' ? `<button class="btn-acao" onclick="mudarStatusRec('${r._docId}','aprovada')">✓ Aprovar</button>` : ''}
+        ${podeEditar() && r.status === 'aprovada' ? `<button class="btn-acao" onclick="mudarStatusRec('${r._docId}','aplicada')">✓ Marcar aplicada</button>` : ''}
+        ${isAdmin() ? `<button class="btn-acao danger" onclick="excluirRecomendacao('${r._docId}')">🗑</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+};
+
+window.verRecomendacao = function(id) {
+  const r = recomendacoes.find(x => x._docId === id);
+  if (!r) return;
+  document.getElementById('verTitulo').textContent = `💊 ${r.fazenda} · ${r.talhaoNome}`;
+  const calagemTxt = renderCalagemTxt(r.calagem);
+  // Helper: linha de nutriente com ajuste visível
+  const linhaNut = (lab, valSug, val) => {
+    if (val === null || val === undefined) return '';
+    const foiAjust = (valSug !== null && valSug !== undefined && Number(val) !== Number(valSug));
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--cl);gap:8px;">
+      <span style="flex:1;">${lab}</span>
+      ${foiAjust ? `<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);text-decoration:line-through;">${valSug}</span>` : ''}
+      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${foiAjust?'#92400e':'var(--ve)'};">${val}</span>
+      ${foiAjust ? `<span class="tag-ajustada">✏️</span>` : ''}
+    </div>`;
+  };
+  const microsTxt = r.micros ? Object.entries(r.micros).filter(([_,m])=>{
+    const v = (m.dose !== undefined) ? m.dose : 0;
+    return v > 0;
+  }).map(([k,m]) => {
+    const v = m.dose ?? 0;
+    const sug = m.dose_sugerida ?? m.dose ?? 0;
+    return linhaNut(k.toUpperCase(), sug, v);
+  }).join('') : '';
+  document.getElementById('verBody').innerHTML = `
+    <div style="background:#fafafa;padding:10px;border-radius:8px;margin-bottom:11px;font-size:.82rem;line-height:1.6;">
+      <div><strong>Análise:</strong> ${escHtml(r.amostraNome)} (${formatarData(r.dataAnalise)})</div>
+      <div><strong>Produtividade:</strong> ${fmt(r.produtividade,0)} sc/ha</div>
+      <div><strong>Manual:</strong> ${escHtml(window.METAS_CALAGEM[r.manual]?.nome || r.manual)}</div>
+      <div><strong>Status:</strong> <span class="rec-status-badge rec-status-${r.status||'rascunho'}">${(r.status||'rascunho').toUpperCase()}</span></div>
+    </div>
+    <div style="background:white;padding:11px;border-radius:8px;border:1px solid var(--cl);margin-bottom:11px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);margin-bottom:8px;font-size:.95rem;">ADUBAÇÃO (kg/ha/ano)</div>
+      ${linhaNut('Nitrogênio (N)', r.n_sugerido ?? r.n, r.n)}
+      ${linhaNut('Fósforo (P₂O₅)', r.p2o5_sugerido ?? r.p2o5, r.p2o5)}
+      ${linhaNut('Potássio (K₂O)', r.k2o_sugerido ?? r.k2o, r.k2o)}
+      ${microsTxt}
+      <div style="font-size:.66rem;color:var(--c);margin-top:6px;font-style:italic;">✏️ = valor ajustado manualmente (riscado = sugerido pela tabela)</div>
+    </div>
+    <div style="background:white;padding:11px;border-radius:8px;border:1px solid var(--cl);margin-bottom:11px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);margin-bottom:8px;font-size:.95rem;">CORREÇÃO DO SOLO</div>
+      ${calagemTxt}
+    </div>
+    ${r.observacoes ? `<div style="background:#fffbeb;padding:10px;border-radius:8px;border:1px solid #fde68a;font-size:.82rem;line-height:1.5;"><strong>Observações:</strong><br>${escHtml(r.observacoes)}</div>` : ''}
+  `;
+  document.getElementById('overlayVer').classList.add('aberto');
+};
+
+function renderCalagemTxt(c) {
+  if (!c) return '<div style="color:var(--c);">Sem dados de calagem.</div>';
+  if (c.metodo === 'complemento') {
+    const itens = [];
+    if (c.ca_dose > 0) itens.push(`Cálcio: <strong>${c.ca_dose} kg/ha</strong> (gesso)`);
+    if (c.mg_dose > 0) itens.push(`Magnésio: <strong>${c.mg_dose} kg/ha</strong> (sulfato Mg)`);
+    return itens.length ? `<div style="font-size:.82rem;line-height:1.7;">${itens.map(i => '• '+i).join('<br>')}</div>` : '<div style="color:var(--ok);font-size:.85rem;">✓ Sem necessidade de complementação.</div>';
+  }
+  if (!c.dose || c.dose === 0) return '<div style="color:var(--ok);font-size:.85rem;">✓ Não precisa calagem.</div>';
+  const sug = c.dose_sugerida ?? c.dose;
+  const foiAjust = Number(c.dose) !== Number(sug);
+  return `<div style="font-size:.82rem;line-height:1.6;">
+    <strong>Calcário:</strong>
+    ${foiAjust ? `<span style="font-family:'DM Mono',monospace;color:var(--c);text-decoration:line-through;margin-right:6px;">${fmt(sug,0)}</span>` : ''}
+    <span style="font-family:'DM Mono',monospace;font-weight:700;color:${foiAjust?'#92400e':'var(--ve)'};">${fmt(c.dose,0)} kg/ha</span>
+    ${foiAjust ? `<span class="tag-ajustada" style="margin-left:5px;">✏️ Ajustado</span>` : ''}
+    ${c.tipo ? ` (${c.tipo === 'dolomitico' ? 'dolomítico' : c.tipo === 'calcitico' ? 'calcítico' : 'magnesiano'})` : ''}<br>
+    <span style="font-size:.72rem;color:var(--c);">Método: ${c.metodo === 'v' ? `V% (V₂=${c.v2})` : `Ca+Mg (Ca=${c.ca2}, Mg=${c.mg2})`} · PRNT ${c.prnt}% · ${c.profundidade}cm</span>
+  </div>`;
+}
+
+window.editarRecomendacao = function(id) {
+  const r = recomendacoes.find(x => x._docId === id);
+  if (!r) return;
+  // Carrega no formulário e troca pra aba Nova
+  window.editandoId = id;
+  window.recWIP = {
+    talhaoId: r.talhaoId,
+    amostraId: r.amostraId,
+    produtividade: r.produtividade,
+    manual: r.manual || 'incaper',
+    metodoCalagem: r.calagem?.metodo || 'v',
+    v2: r.calagem?.v2 || 60,
+    ca2: r.calagem?.ca2 || 3.0,
+    mg2: r.calagem?.mg2 || 1.0,
+    prnt: r.calagem?.prnt || 80,
+    profundidade: r.calagem?.profundidade || 20,
+    ajustes: r.ajustes || {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
+    cardsAbertos: {resumo:true, calagem:true, n:true, p:true, k:true, micros:true},
+    observacoes: r.observacoes || ''
+  };
+  document.getElementById('selTalhao').value = r.talhaoId;
+  document.getElementById('inpProd').value = r.produtividade;
+  document.getElementById('selManual').value = r.manual || 'incaper';
+  abrirTab('nova');
+  onTrocaTalhao();
+  toast('✏️ Editando recomendação');
+};
+
+window.mudarStatusRec = async function(id, novoStatus) {
+  if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
+  try {
+    await updateDoc(doc(db,'recomendacoes',id), {
+      status: novoStatus,
+      atualizadoEm: new Date().toISOString(),
+      atualizadoPor: usuarioAtual.email
+    });
+    toast(`✅ Status: ${novoStatus}`);
+  } catch(e) {
+    console.error(e); toast('❌ Erro: '+e.message);
+  }
+};
+
+window.excluirRecomendacao = async function(id) {
+  if (!isAdmin()) { toast('⛔ Só admin pode excluir.'); return; }
+  const r = recomendacoes.find(x => x._docId === id);
+  if (!r) return;
+  if (!confirm(`Excluir recomendação de ${r.fazenda} · ${r.talhaoNome}?\n\nEsta ação não pode ser desfeita.`)) return;
+  try {
+    await deleteDoc(doc(db,'recomendacoes',id));
+    toast('🗑 Recomendação excluída.');
+  } catch(e) {
+    console.error(e); toast('❌ Erro: '+e.message);
+  }
+};
+
+window.limparRecomendacao = function() {
+  window.editandoId = null;
+  window.recWIP = {
+    talhaoId:'', amostraId:'', produtividade:null, manual:'incaper',
+    metodoCalagem:'v', v2:60, ca2:3.0, mg2:1.0, prnt:80, profundidade:20,
+    ajustes: {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
+    cardsAbertos:{resumo:true, calagem:true, n:true, p:true, k:true, micros:true},
+    observacoes:''
+  };
+  document.getElementById('selTalhao').value = '';
+  document.getElementById('selAnalise').innerHTML = '<option value="">—</option>';
+  document.getElementById('selAnalise').disabled = true;
+  document.getElementById('inpProd').value = '';
+  document.getElementById('histProd').textContent = '';
+  document.getElementById('selManual').value = 'incaper';
+  onRecalcular();
+};
+
+// ━━━━━━━━━━ TELA: EDITAR TABELAS DE RECOMENDAÇÃO (admin) ━━━━━━━━━━
+
+window.abrirTabelas = function() {
+  if (!isAdmin()) { toast('⛔ Só admin'); return; }
+  renderTabelasAdmin();
+  document.getElementById('overlayTabelas').classList.add('aberto');
+};
+
+function renderTabelasAdmin() {
+  const body = document.getElementById('tabelasBody');
+  body.innerHTML = `
+    <div class="alerta-info">
+      ℹ️ Estas tabelas servem de base pros cálculos. Por enquanto, edição direta dos valores é <strong>read-only</strong> (mostra os defaults). Em uma próxima entrega vou habilitar a edição. Pra mudar agora, fale comigo.
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 1 — Nitrogênio + Potássio</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+        ${window.TABELA_N_K.map(r => `<div>${r.prodMin}-${r.prodMax===9999?'+':r.prodMax} sc/ha → N: ${r.n}, K: [${r.k.join(', ')}]</div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 2 — Fósforo</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+        ${window.TABELA_P.map(r => `<div>${r.prodMin}-${r.prodMax===9999?'+':r.prodMax} sc/ha → dose: [${r.dose.join(', ')}]</div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 3 — Micronutrientes</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+        ${Object.entries(window.TABELA_MICROS).map(([k,m]) => `<div>${m.nome}: ${m.faixas.map(f=>`≤${f.ate}→${f.dose}`).join(' · ')}</div>`).join('')}
+      </div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 4 — Complemento Ca/Mg</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+        <div><strong>Ca:</strong> ${window.TABELA_COMPLEMENTO.ca.map(f=>`≤${f.ate}→${f.dose}kg`).join(' · ')}</div>
+        <div><strong>Mg:</strong> ${window.TABELA_COMPLEMENTO.mg.map(f=>`≤${f.ate}→${f.dose}kg`).join(' · ')}</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;">
+      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Metas de calagem</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+        ${Object.entries(window.METAS_CALAGEM).map(([k,m]) => `<div><strong>${m.nome}</strong>: V₂=${m.v2}%, Ca₂=${m.ca2}, Mg₂=${m.mg2}</div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+</script>
+</body>
+</html>
