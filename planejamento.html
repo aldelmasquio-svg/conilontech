@@ -1,0 +1,1557 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Conilon Tech · Planejamento de Safra</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--purple:#8b5cf6;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+
+/* HEADER */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-titles{line-height:1;}
+.header-title-main{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+
+/* MENU LATERAL */
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
+.menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
+.menu-body{flex:1;padding:10px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:1.1rem;}
+.menu-footer{padding:14px;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+
+.app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+
+/* TABS */
+.tabs-top{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;}
+.tab-top{flex:1;padding:13px 8px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;}
+.tab-top.ativa{color:var(--v);border-bottom-color:var(--v);}
+
+/* CONTEÚDO ROLÁVEL — usa block layout para não colapsar conteúdo */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;padding:12px 14px 200px;}
+.content > *{margin-bottom:10px;}
+.content > *:last-child{margin-bottom:0;}
+.content::-webkit-scrollbar{width:8px;}
+.content::-webkit-scrollbar-thumb{background:var(--cb);border-radius:4px;}
+.content::-webkit-scrollbar-track{background:transparent;}
+
+/* CARDS DOS PASSOS */
+.card-passo{display:block;width:100%;background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
+.card-passo-head{padding:12px 14px;background:linear-gradient(135deg,var(--vb),#fafafa);border-bottom:2px solid var(--v);}
+.card-passo-num{display:inline-block;background:var(--v);color:white;width:24px;height:24px;border-radius:50%;text-align:center;line-height:24px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;margin-right:7px;}
+.card-passo-tit{display:inline;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);}
+.card-passo-sub{font-size:.7rem;color:var(--c);margin-top:3px;margin-left:31px;line-height:1.4;}
+.card-passo-body{padding:14px;display:block;}
+
+/* CAMPOS DE INPUT */
+.campo-row{margin-bottom:11px;}
+.campo-row:last-child{margin-bottom:0;}
+.campo-row label{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;text-transform:uppercase;color:var(--c);letter-spacing:.04em;margin-bottom:4px;}
+.campo-row select,.campo-row input[type="text"]{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px 11px;font-size:.92rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;}
+.campo-row select:focus,.campo-row input:focus{border-color:var(--v);box-shadow:0 0 0 3px var(--vb);}
+
+.campo-row-2{display:flex;gap:9px;margin-bottom:11px;}
+.campo-row-2 > div{flex:1;min-width:0;}
+
+.area-info{background:#f0f9ff;border:1px solid #93c5fd;border-radius:7px;padding:8px 11px;font-size:.8rem;color:#1e40af;display:flex;align-items:center;gap:7px;margin-top:7px;}
+
+/* CARD DE RECOMENDAÇÃO PRA IMPORTAR */
+.rec-import-card{background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px solid #fcd34d;border-radius:8px;padding:11px;margin-top:10px;}
+.rec-import-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;color:#78350f;margin-bottom:5px;display:flex;align-items:center;gap:6px;}
+.rec-import-meta{font-size:.72rem;color:#92400e;line-height:1.4;}
+.rec-import-doses{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;}
+.rec-import-dose{font-family:'DM Mono',monospace;font-size:.7rem;background:white;color:#78350f;padding:2px 8px;border-radius:99px;font-weight:700;border:1px solid #fcd34d;}
+.rec-import-btn{width:100%;background:#f59e0b;color:white;border:none;border-radius:7px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.86rem;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;margin-top:9px;}
+.rec-import-btn:active{transform:scale(.97);}
+.rec-import-vazio{font-size:.78rem;color:var(--c);font-style:italic;padding:9px 0;text-align:center;}
+
+/* GRID DE NUTRIENTES (demanda) */
+.dem-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px;}
+.dem-grid-grupo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin:7px 0 5px;grid-column:1/-1;display:flex;align-items:center;gap:6px;}
+.dem-grid-grupo::after{content:'';flex:1;height:1px;background:var(--cl);}
+.dem-item{background:#fafafa;border:1.5px solid var(--cb);border-radius:7px;padding:7px 9px;transition:all .2s;}
+.dem-item:focus-within{border-color:var(--v);background:white;box-shadow:0 0 0 3px var(--vb);}
+.dem-item-lab{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;color:var(--ve);letter-spacing:.02em;}
+.dem-item-inp{width:100%;border:none;background:transparent;outline:none;font-family:'DM Mono',monospace;font-weight:800;font-size:1.1rem;color:var(--ve);text-align:right;padding:0;margin-top:2px;}
+.dem-item-un{font-size:.62rem;color:var(--c);text-align:right;font-family:'DM Mono',monospace;margin-top:-2px;}
+.dem-item.importado{border-color:#f59e0b;background:#fffbeb;}
+
+/* RODAPÉ FIXO */
+.plan-rodape{background:white;border-top:2px solid var(--v);padding:9px 12px;flex-shrink:0;display:flex;gap:7px;box-shadow:0 -3px 10px rgba(0,0,0,.08);}
+.plan-rodape button{flex:1;border:none;border-radius:7px;padding:11px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.88rem;cursor:pointer;letter-spacing:.03em;text-transform:uppercase;min-height:42px;}
+.btn-salvar-rasc{background:var(--v);color:white;}
+.btn-salvar-rasc:active{transform:scale(.97);}
+.btn-cancelar{background:none;color:var(--c);border:1.5px solid var(--cb) !important;flex:0 0 auto !important;padding:11px 16px !important;}
+.btn-aprovar{background:var(--blue);color:white;}
+.btn-aprovar:disabled{background:var(--cl);color:var(--c);cursor:not-allowed;}
+
+/* LISTA DE PLANEJAMENTOS SALVOS */
+.plan-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:11px 13px;border-left:4px solid var(--v);}
+.plan-card-status-rascunho{border-left-color:var(--c);}
+.plan-card-status-aprovado{border-left-color:var(--blue);}
+.plan-card-status-aplicado{border-left-color:var(--ok);}
+.plan-card-status-cancelado{border-left-color:var(--danger);opacity:.7;}
+.plan-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.plan-card-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.98rem;color:var(--ve);}
+.plan-card-meta{font-size:.72rem;color:var(--c);margin-top:2px;line-height:1.4;}
+.plan-status-badge{font-size:.62rem;padding:2px 9px;border-radius:99px;color:white;font-weight:700;letter-spacing:.02em;text-transform:uppercase;flex-shrink:0;}
+.plan-status-rascunho{background:var(--c);}
+.plan-status-aprovado{background:var(--blue);}
+.plan-status-aplicado{background:var(--ok);}
+.plan-status-cancelado{background:var(--danger);}
+.plan-card-acoes{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap;}
+.btn-acao{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 10px;font-size:.72rem;color:var(--c);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.02em;text-transform:uppercase;}
+.btn-acao.primary{background:var(--v);border-color:var(--v);color:white;}
+.btn-acao.danger{border-color:#fca5a5;color:var(--danger);}
+
+/* ALERTAS */
+.alerta-info{background:#dbeafe;border:1px solid #bfdbfe;border-left:4px solid var(--blue);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#1e40af;line-height:1.45;}
+.alerta-warn{background:#fef3c7;border:1px solid #fde68a;border-left:4px solid var(--warn);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#92400e;line-height:1.45;}
+
+/* VAZIO */
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:50px 24px;text-align:center;color:var(--c);}
+.vazio .ico{font-size:3.5rem;margin-bottom:10px;opacity:.4;}
+.vazio p{font-size:.92rem;line-height:1.5;}
+
+/* TOAST */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--ve);color:white;padding:11px 18px;border-radius:8px;font-size:.85rem;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
+.toast.show{opacity:1;}
+
+/* INDICADOR DE PRÓXIMA FASE */
+.next-phase{background:linear-gradient(135deg,#fef3c7,#fffbeb);border:1px dashed #fcd34d;border-radius:10px;padding:13px 14px;text-align:center;color:#78350f;}
+.next-phase-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;margin-bottom:5px;}
+.next-phase-sub{font-size:.78rem;line-height:1.5;}
+
+/* CARD 3 — DISTRIBUIÇÃO MENSAL */
+.meses-toolbar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:11px;flex-wrap:wrap;}
+.meses-toolbar-info{font-size:.74rem;color:var(--c);}
+.btn-add-mes{background:var(--v);color:white;border:none;border-radius:7px;padding:8px 13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;display:inline-flex;align-items:center;gap:5px;min-height:36px;}
+.btn-add-mes:active{transform:scale(.97);}
+
+/* TABELA DE DISTRIBUIÇÃO */
+.dist-wrap{background:#fafafa;border-radius:8px;padding:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.dist-tbl{width:100%;border-collapse:separate;border-spacing:3px;font-size:.78rem;min-width:480px;}
+.dist-tbl th{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;color:var(--ve);background:white;padding:6px 4px;border-radius:6px;text-align:center;text-transform:uppercase;letter-spacing:.03em;}
+.dist-tbl th.mes-col{text-align:left;padding-left:9px;background:var(--vb);min-width:88px;}
+.dist-tbl td{background:white;padding:0;border-radius:6px;}
+.dist-tbl td.mes-col{font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);padding:8px 9px;background:var(--vb);text-align:left;min-width:88px;position:relative;}
+.dist-tbl td.tot-row{font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);background:#fffbeb !important;border:1px solid #fcd34d;padding:6px 4px;text-align:center;font-size:.85rem;}
+.dist-tbl td.tot-row.ok{background:#dcfce7 !important;border-color:var(--ok);color:#15803d;}
+.dist-tbl td.tot-row.warn{background:#fffbeb !important;border-color:var(--warn);color:#92400e;}
+.dist-tbl td.tot-row.err{background:#fee2e2 !important;border-color:var(--danger);color:#991b1b;}
+.dist-tbl td.tot-row-lab{background:transparent !important;font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--c);text-align:right;padding-right:9px;text-transform:uppercase;font-size:.72rem;letter-spacing:.04em;}
+.dist-inp{width:100%;border:1.5px solid transparent;background:transparent;outline:none;font-family:'DM Mono',monospace;font-weight:700;font-size:.86rem;text-align:center;padding:7px 2px;color:var(--ve);border-radius:5px;}
+.dist-inp:focus{border-color:var(--v);background:white;box-shadow:0 0 0 2px var(--vb);}
+.dist-inp::placeholder{color:#d1d5db;font-weight:400;}
+.btn-rm-mes{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.06);border:none;color:var(--c);width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:.6rem;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;}
+.btn-rm-mes:hover{background:#fee2e2;color:var(--danger);}
+
+/* MODAL: SELECIONAR MÊS */
+.overlay-mes{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-start;justify-content:center;padding-top:60px;}
+.overlay-mes.aberto{display:flex;}
+.modal-mes{background:white;border-radius:14px;width:92%;max-width:380px;display:flex;flex-direction:column;box-shadow:var(--sf);overflow:hidden;max-height:80vh;}
+.modal-mes-head{padding:13px 15px;background:var(--ve);color:white;display:flex;justify-content:space-between;align-items:center;}
+.modal-mes-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
+.modal-mes-fechar{background:rgba(255,255,255,.12);border:none;color:white;font-size:1rem;width:30px;height:30px;border-radius:6px;cursor:pointer;}
+.modal-mes-body{padding:13px;overflow-y:auto;flex:1;}
+.modal-mes-templates{display:flex;flex-direction:column;gap:7px;margin-bottom:13px;}
+.tpl-btn{background:var(--vb);border:1.5px solid var(--v);color:var(--ve);border-radius:7px;padding:10px 12px;text-align:left;cursor:pointer;font-family:'Barlow',sans-serif;}
+.tpl-btn:hover{background:var(--v);color:white;}
+.tpl-btn-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.88rem;margin-bottom:2px;}
+.tpl-btn-sub{font-size:.7rem;opacity:.85;}
+.modal-mes-divisor{display:flex;align-items:center;gap:9px;margin:10px 0;color:var(--c);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.modal-mes-divisor::before,.modal-mes-divisor::after{content:'';flex:1;height:1px;background:var(--cb);}
+.meses-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.mes-opt{background:#fafafa;border:1.5px solid var(--cb);border-radius:7px;padding:9px 4px;text-align:center;cursor:pointer;font-family:'Barlow',sans-serif;font-size:.74rem;color:var(--ve);font-weight:600;}
+.mes-opt:hover{border-color:var(--v);background:var(--vb);}
+.mes-opt.ja-usado{opacity:.35;cursor:not-allowed;}
+.mes-opt-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
+.mes-opt-ano{font-size:.62rem;color:var(--c);margin-top:2px;}
+.ano-selector{display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:9px;}
+.ano-selector button{background:var(--vb);border:1px solid var(--v);color:var(--ve);width:30px;height:30px;border-radius:6px;cursor:pointer;font-weight:800;font-size:1rem;}
+.ano-selector .ano-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--ve);min-width:60px;text-align:center;}
+
+/* CARD 4 — ADUBOS POR MÊS */
+.mes-bloco{background:#fafafa;border:1.5px solid var(--cb);border-radius:9px;padding:11px;margin-bottom:11px;}
+.mes-bloco-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:9px;flex-wrap:wrap;}
+.mes-bloco-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.98rem;color:var(--ve);}
+.mes-bloco-meta{font-size:.72rem;color:var(--c);margin-top:2px;line-height:1.4;}
+.mes-bloco-meta strong{color:var(--ve);}
+.btn-add-adubo{background:var(--vb);border:1.5px solid var(--v);color:var(--ve);border-radius:7px;padding:7px 11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.76rem;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;min-height:34px;display:inline-flex;align-items:center;gap:5px;}
+.btn-add-adubo:active{transform:scale(.97);}
+
+.adubo-linha{background:white;border:1px solid var(--cl);border-radius:7px;padding:9px 11px;margin-top:7px;}
+.adubo-linha-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.adubo-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.88rem;color:var(--ve);flex:1;min-width:0;}
+.adubo-formula{font-family:'DM Mono',monospace;font-size:.65rem;background:#dbeafe;color:#1e40af;padding:1px 7px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;display:inline-block;margin-left:5px;}
+.adubo-btns{display:flex;gap:4px;}
+.btn-trava{background:none;border:1px solid var(--cb);width:28px;height:28px;border-radius:5px;cursor:pointer;font-size:.85rem;color:var(--c);display:flex;align-items:center;justify-content:center;padding:0;}
+.btn-trava.travado{background:#fef3c7;border-color:var(--warn);color:#92400e;}
+.btn-rm-adubo{background:none;border:1px solid var(--cb);width:28px;height:28px;border-radius:5px;cursor:pointer;font-size:.75rem;color:var(--c);display:flex;align-items:center;justify-content:center;padding:0;}
+.btn-rm-adubo:hover{border-color:var(--danger);color:var(--danger);}
+
+.adubo-dose-row{display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap;}
+.adubo-dose-inp{font-family:'DM Mono',monospace;font-weight:800;font-size:1.05rem;color:var(--ve);text-align:right;border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;width:100px;outline:none;}
+.adubo-dose-inp:focus{border-color:var(--v);background:white;box-shadow:0 0 0 3px var(--vb);}
+.adubo-dose-inp.travada{border-color:var(--warn);background:#fffbeb;}
+.adubo-dose-un{font-size:.74rem;color:var(--c);}
+.adubo-entrega{font-size:.7rem;color:var(--c);flex:1;font-family:'DM Mono',monospace;line-height:1.3;}
+.adubo-entrega strong{color:var(--ve);}
+
+.adubo-vazio{text-align:center;padding:18px 8px;color:var(--c);font-size:.78rem;background:white;border:1px dashed var(--cb);border-radius:7px;margin-top:7px;}
+
+/* RESUMO POR MÊS (entregue vs meta) */
+.mes-resumo{margin-top:9px;background:white;border-radius:7px;padding:8px 10px;border:1px solid var(--cl);}
+.mes-resumo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.03em;margin-bottom:5px;}
+.mes-resumo-grid{display:flex;flex-wrap:wrap;gap:5px;}
+.mes-resumo-chip{font-family:'DM Mono',monospace;font-size:.72rem;padding:3px 9px;border-radius:99px;font-weight:700;border:1px solid;}
+.mes-resumo-chip.ok{background:#dcfce7;color:#15803d;border-color:#86efac;}
+.mes-resumo-chip.warn{background:#fef3c7;color:#92400e;border-color:#fcd34d;}
+.mes-resumo-chip.err{background:#fee2e2;color:#991b1b;border-color:#fca5a5;}
+.mes-resumo-chip.zero{background:#fafafa;color:var(--c);border-color:var(--cb);}
+
+/* MODAL SELECIONAR ADUBO */
+.overlay-adubo{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;display:none;align-items:flex-start;justify-content:center;padding-top:40px;}
+.overlay-adubo.aberto{display:flex;}
+.modal-adubo{background:white;border-radius:14px;width:94%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:var(--sf);overflow:hidden;}
+.modal-adubo-head{padding:13px 15px;background:var(--ve);color:white;display:flex;justify-content:space-between;align-items:center;}
+.modal-adubo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
+.modal-adubo-sub{font-size:.7rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.modal-adubo-fechar{background:rgba(255,255,255,.12);border:none;color:white;font-size:1rem;width:30px;height:30px;border-radius:6px;cursor:pointer;}
+.modal-adubo-body{padding:11px;overflow-y:auto;flex:1;}
+.adubo-busca{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px 11px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;margin-bottom:10px;}
+.adubo-opt{background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:9px 11px;margin-bottom:5px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.adubo-opt:hover{background:var(--vb);border-color:var(--v);}
+.adubo-opt-info{flex:1;min-width:0;}
+.adubo-opt-nome{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;color:var(--ve);}
+.adubo-opt-sub{font-size:.66rem;color:var(--c);margin-top:2px;line-height:1.3;}
+.adubo-opt-saldo{font-size:.7rem;color:var(--c);font-family:'DM Mono',monospace;flex-shrink:0;text-align:right;}
+.adubo-opt-saldo-val{font-weight:700;color:var(--ve);}
+
+/* APROVAÇÃO */
+.btn-aprovar-plano{background:var(--blue);color:white;flex:1.3;}
+.btn-aprovar-plano:disabled{background:var(--cl);color:var(--c);cursor:not-allowed;}
+.aprov-status{margin-top:11px;padding:9px 11px;background:#dbeafe;border:1px solid #bfdbfe;border-left:4px solid var(--blue);border-radius:7px;font-size:.78rem;color:#1e40af;line-height:1.5;}
+
+/* OBSERVAÇÕES */
+.obs-textarea{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:9px 11px;font-family:'Barlow',sans-serif;font-size:.88rem;color:var(--ve);outline:none;resize:vertical;min-height:80px;background:white;}
+.obs-textarea:focus{border-color:var(--v);box-shadow:0 0 0 3px var(--vb);}
+</style>
+</head>
+<body>
+
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Carregando planejamento...</div>
+</div>
+
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="header-left">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="header-titles">
+      <div class="header-title-main">Conilon Tech</div>
+      <div class="header-title-sub">Planejamento de Safra</div>
+    </div>
+  </div>
+  <div class="header-user" id="userNome">—</div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<aside class="menu-lateral" id="menuLateral">
+  <div class="menu-header">
+    <div class="menu-user-nome" id="menuUserNome">—</div>
+    <div class="menu-user-email" id="menuUserEmail">—</div>
+  </div>
+  <div class="menu-body" id="menuModulos"></div>
+  <div class="menu-footer"><button class="btn-logout" onclick="fazerLogout()">↩ Sair</button></div>
+</aside>
+
+<div class="app-main" id="appContent" style="display:none;">
+  <!-- TABS -->
+  <div class="tabs-top">
+    <button class="tab-top ativa" id="tabNovo" onclick="abrirTab('novo')">🗓️ Novo</button>
+    <button class="tab-top" id="tabLista" onclick="abrirTab('lista')">📋 Salvos</button>
+  </div>
+
+  <!-- CONTEÚDO -->
+  <div class="content" id="content"></div>
+
+  <!-- RODAPÉ (só na aba Novo) -->
+  <div class="plan-rodape" id="planRodape" style="display:none;">
+    <button class="btn-cancelar" onclick="cancelarNovo()" title="Cancelar">🗑</button>
+    <button class="btn-salvar-rasc" onclick="salvarPlanoRascunho()">💾 Salvar rascunho</button>
+    <button class="btn-aprovar-plano" id="btnAprovarPlano" onclick="aprovarPlanoSafra()">✓ Aprovar</button>
+  </div>
+</div>
+
+<!-- MODAL: SELECIONAR MÊS -->
+<div class="overlay-mes" id="overlayMes">
+  <div class="modal-mes">
+    <div class="modal-mes-head">
+      <div class="modal-mes-tit">📅 Adicionar mês</div>
+      <button class="modal-mes-fechar" onclick="fecharModalMes()">✕</button>
+    </div>
+    <div class="modal-mes-body" id="modalMesBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: SELECIONAR ADUBO -->
+<div class="overlay-adubo" id="overlayAdubo">
+  <div class="modal-adubo">
+    <div class="modal-adubo-head">
+      <div>
+        <div class="modal-adubo-tit">🧪 Selecionar adubo</div>
+        <div class="modal-adubo-sub" id="modalAduboSub">—</div>
+      </div>
+      <button class="modal-adubo-fechar" onclick="fecharModalAdubo()">✕</button>
+    </div>
+    <div class="modal-adubo-body" id="modalAduboBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+enableIndexedDbPersistence(db).catch(()=>{});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ESTADO
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], recomendacoes=[], planejamentos=[], produtosEstoque=[];
+let tabAtual='novo';
+
+// Working state do plano sendo criado/editado
+window.planWIP = {
+  talhaoId: '',
+  safra: '',
+  area: null,
+  recomendacaoOrigemId: null,
+  demanda: {n:null, p2o5:null, k2o:null, s:null, ca:null, mg:null, zn:null, b:null, cu:null, mn:null},
+  meses: [],       // C.2: array de {mes, distribuicao, adubos}
+  observacoes: '',
+  status: 'rascunho'
+};
+window.editandoPlanId = null;
+
+// Nutrientes em ordem
+const NUTRIENTES = [
+  {id:'n',    lab:'N',      un:'kg/ha', grupo:'macro'},
+  {id:'p2o5', lab:'P₂O₅',   un:'kg/ha', grupo:'macro'},
+  {id:'k2o',  lab:'K₂O',    un:'kg/ha', grupo:'macro'},
+  {id:'s',    lab:'S',      un:'kg/ha', grupo:'secundario'},
+  {id:'ca',   lab:'Ca',     un:'kg/ha', grupo:'secundario'},
+  {id:'mg',   lab:'Mg',     un:'kg/ha', grupo:'secundario'},
+  {id:'zn',   lab:'Zn',     un:'kg/ha', grupo:'micro'},
+  {id:'b',    lab:'B',      un:'kg/ha', grupo:'micro'},
+  {id:'cu',   lab:'Cu',     un:'kg/ha', grupo:'micro'},
+  {id:'mn',   lab:'Mn',     un:'kg/ha', grupo:'micro'}
+];
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// BOOTSTRAP
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin'};
+  }
+  if (!temAcesso()) {
+    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:3rem;">⛔</div><div style="font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:1.1rem;color:var(--c);margin-top:10px;">Sem permissão</div><a href="index.html" style="display:inline-block;margin-top:14px;color:var(--v);">← Voltar</a></div>';
+    return;
+  }
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appHeader').style.display = 'flex';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu();
+  // Safra default: ano corrente / próximo (Conilon florada outubro)
+  const hoje = new Date();
+  const ano = hoje.getMonth() >= 6 ? hoje.getFullYear() : hoje.getFullYear() - 1;
+  window.planWIP.safra = `${ano}/${ano+1}`;
+  // Listeners
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    if (tabAtual === 'novo') renderNovo();
+  });
+  onSnapshot(collection(db,'recomendacoes'), snap => {
+    recomendacoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    if (tabAtual === 'novo') renderNovo();
+  });
+  onSnapshot(collection(db,'planejamentos_safra'), snap => {
+    planejamentos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    if (tabAtual === 'lista') renderLista();
+  });
+  onSnapshot(collection(db,'estoque_produtos'), snap => {
+    produtosEstoque = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    if (tabAtual === 'novo') renderNovo();
+  });
+});
+
+function temAcesso() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  if (m.planejamento) return true;
+  if (m.admin === 'admin') return true;
+  if (Object.values(m).includes('admin')) return true;
+  return false;
+}
+function podeEditar() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  return m.planejamento === 'admin' || m.planejamento === 'gerente';
+}
+function isAdmin() {
+  if (perfilAtual.perfil === 'admin') return true;
+  const m = perfilAtual.modulos || {};
+  return m.planejamento === 'admin' || m.admin === 'admin';
+}
+
+function gerarMenu() {
+  const isAdm = perfilAtual.perfil==='admin' || Object.values(perfilAtual.modulos||{}).includes('admin');
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos'},
+    {href:'estoque.html',ico:'🏬',label:'Estoque'},
+    {href:'gestao.html',ico:'📊',label:'Gestão'},
+    {href:'analises.html',ico:'🔬',label:'Análises'},
+    {href:'recomendacoes.html',ico:'💊',label:'Recomendações'},
+    {href:'planejamento.html',ico:'🗓️',label:'Planejamento'}
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
+    `<a class="menu-item ${m.href==='planejamento.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+// ━━━━━━━━━━ UTILS ━━━━━━━━━━
+
+function escHtml(s){return String(s||'').replace(/[<>&"']/g,ch=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch]));}
+function escAttr(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(n,d){const v=Number(n);if(!isFinite(v))return '—';return v.toLocaleString('pt-BR',{minimumFractionDigits:d!==undefined?d:0,maximumFractionDigits:d!==undefined?d:2});}
+function parseDose(s){if(s==null||s==='')return null;const limpo=String(s).replace(/\s/g,'').replace(',','.');const n=parseFloat(limpo);return isNaN(n)?null:n;}
+function formatarData(d){if(!d)return'—';const[a,m,dd]=String(d).split('-');return `${dd}/${m}/${a}`;}
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+
+window.toggleMenu = () => { document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu = () => { document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout = async () => { await signOut(auth); window.location.href='login.html'; };
+
+// ━━━━━━━━━━ TABS ━━━━━━━━━━
+
+window.abrirTab = function(t) {
+  tabAtual = t;
+  document.querySelectorAll('.tab-top').forEach(b => b.classList.remove('ativa'));
+  document.getElementById(t==='novo'?'tabNovo':'tabLista').classList.add('ativa');
+  document.getElementById('planRodape').style.display = t==='novo' ? 'flex' : 'none';
+  if (t === 'novo') renderNovo();
+  else renderLista();
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ABA NOVO — renderiza os cards 1 e 2 (C.1)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+window.renderNovo = function() {
+  const cont = document.getElementById('content');
+  let html = '';
+  // Card 1: Talhão + Safra
+  html += renderCard1();
+  // Card 2: Demanda (só se talhão selecionado)
+  if (window.planWIP.talhaoId) {
+    html += renderCard2();
+  }
+  // Card 3: Meses + Distribuição (só se tem demanda)
+  if (window.planWIP.talhaoId && temDemandaPreenchida()) {
+    html += renderCard3();
+  }
+  // Card 4: Adubos por mês (só se tem mês com algum % preenchido)
+  if (window.planWIP.talhaoId && temDemandaPreenchida() && (window.planWIP.meses||[]).length > 0) {
+    html += renderCard4();
+  }
+  // Card 5: Observações
+  if (window.planWIP.talhaoId && temDemandaPreenchida()) {
+    html += renderCardObs();
+  }
+  cont.innerHTML = html;
+  // Atualiza estado do botão Aprovar
+  const btnAprov = document.getElementById('btnAprovarPlano');
+  if (btnAprov) {
+    const meses = window.planWIP.meses || [];
+    const temAdubos = meses.some(m => m.adubos && m.adubos.length > 0);
+    // Habilita se tem pelo menos um mês com adubo
+    if (temAdubos && window.planWIP.status !== 'aprovado' && window.planWIP.status !== 'aplicado') {
+      btnAprov.disabled = false;
+      btnAprov.style.display = '';
+    } else if (window.planWIP.status === 'aprovado' || window.planWIP.status === 'aplicado') {
+      // Já aprovado: mostra status mas desabilita
+      btnAprov.disabled = true;
+      btnAprov.textContent = window.planWIP.status === 'aplicado' ? '✓ Aplicado' : '✓ Aprovado';
+    } else {
+      btnAprov.disabled = true;
+    }
+  }
+};
+
+function renderCard1() {
+  const w = window.planWIP;
+  const talhao = w.talhaoId ? talhoes.find(t => t._docId === w.talhaoId) : null;
+  // Lista talhões ativos agrupados
+  const talhoesOrd = [...talhoes]
+    .filter(t => t.status === 'ativo' || !t.status)
+    .sort((a,b) => (a.fazenda||'').localeCompare(b.fazenda||'') || (a.nome||'').localeCompare(b.nome||''));
+  const opcoesT = '<option value="">— selecione —</option>' + talhoesOrd.map(t =>
+    `<option value="${escAttr(t._docId)}" ${t._docId===w.talhaoId?'selected':''}>${escHtml((t.fazenda?t.fazenda+' · ':'') + (t.nome || t.id))}</option>`
+  ).join('');
+  // Recomendações aprovadas para este talhão
+  const recsAprov = w.talhaoId ? recomendacoes.filter(r => r.talhaoId === w.talhaoId && r.status === 'aprovada')
+    .sort((a,b) => (b.atualizadoEm||b.criadoEm||'').localeCompare(a.atualizadoEm||a.criadoEm||''))
+    : [];
+  const recImportHtml = w.talhaoId ? renderRecImport(recsAprov) : '';
+  const areaHtml = talhao && talhao.area ? `<div class="area-info">📐 Área: <strong>${fmt(talhao.area,2)} ha</strong> ${talhao.clone?'· Clone: <strong>'+escHtml(talhao.clone)+'</strong>':''}</div>` : '';
+  return `<div class="card-passo">
+    <div class="card-passo-head">
+      <div><span class="card-passo-num">1</span><span class="card-passo-tit">Talhão e safra</span></div>
+      <div class="card-passo-sub">Escolha o talhão alvo do planejamento e a safra.</div>
+    </div>
+    <div class="card-passo-body">
+      <div class="campo-row">
+        <label>Talhão</label>
+        <select id="selTalhao" onchange="onTrocaTalhao()">${opcoesT}</select>
+      </div>
+      <div class="campo-row-2">
+        <div>
+          <label>Safra</label>
+          <input type="text" id="inpSafra" value="${escAttr(w.safra||'')}" oninput="window.planWIP.safra=this.value" placeholder="2026/2027">
+        </div>
+      </div>
+      ${areaHtml}
+      ${recImportHtml}
+    </div>
+  </div>`;
+}
+
+function renderRecImport(recsAprov) {
+  if (!recsAprov.length) {
+    return `<div class="rec-import-card" style="background:#fafafa;border-color:var(--cb);">
+      <div class="rec-import-tit" style="color:var(--c);">💡 Recomendação técnica</div>
+      <div class="rec-import-vazio">Nenhuma recomendação aprovada para este talhão.<br>
+        <a href="recomendacoes.html" style="color:var(--v);text-decoration:underline;">Criar uma em "Recomendações"</a>
+      </div>
+    </div>`;
+  }
+  const r = recsAprov[0]; // mais recente
+  // Chips de doses (usar o valor a aplicar)
+  const chips = [];
+  if (r.n != null) chips.push(`N: ${r.n}`);
+  if (r.p2o5 != null) chips.push(`P₂O₅: ${r.p2o5}`);
+  if (r.k2o != null) chips.push(`K₂O: ${r.k2o}`);
+  if (r.micros) {
+    for (const [k,m] of Object.entries(r.micros)) {
+      const v = m.dose ?? 0;
+      if (v > 0) chips.push(`${k.toUpperCase()}: ${v}`);
+    }
+  }
+  const idImport = window.planWIP.recomendacaoOrigemId === r._docId;
+  return `<div class="rec-import-card">
+    <div class="rec-import-tit">💡 Recomendação aprovada disponível</div>
+    <div class="rec-import-meta">
+      📅 ${formatarData((r.atualizadoEm||r.criadoEm||'').slice(0,10))} · ${escHtml(r.amostraNome||'—')} · ${fmt(r.produtividade,0)} sc/ha
+    </div>
+    <div class="rec-import-doses">
+      ${chips.map(c => `<span class="rec-import-dose">${escHtml(c)}</span>`).join('')}
+    </div>
+    <button class="rec-import-btn" onclick="importarRecomendacao('${r._docId}')">
+      ${idImport ? '✓ Importada — clique para reimportar' : '⬇️ Importar para demanda'}
+    </button>
+  </div>`;
+}
+
+function renderCard2() {
+  const w = window.planWIP;
+  const importou = !!w.recomendacaoOrigemId;
+  // Agrupar nutrientes
+  const grupos = {macro:'🌾 Macronutrientes', secundario:'🌱 Secundários', micro:'🟣 Micronutrientes'};
+  let nutHtml = '';
+  for (const [grupoId, grupoLab] of Object.entries(grupos)) {
+    const nuts = NUTRIENTES.filter(n => n.grupo === grupoId);
+    nutHtml += `<div class="dem-grid-grupo">${escHtml(grupoLab)}</div>`;
+    nuts.forEach(n => {
+      const val = w.demanda[n.id];
+      const ehImportado = importou && val !== null && val !== undefined;
+      nutHtml += `<div class="dem-item ${ehImportado?'importado':''}">
+        <div class="dem-item-lab">${escHtml(n.lab)}</div>
+        <input class="dem-item-inp" type="text" inputmode="decimal" value="${val !== null && val !== undefined ? fmt(val,0).replace(/\\./g,'') : ''}" oninput="setDemanda('${n.id}',this.value)" placeholder="0">
+        <div class="dem-item-un">${escHtml(n.un)}</div>
+      </div>`;
+    });
+  }
+  return `<div class="card-passo">
+    <div class="card-passo-head">
+      <div><span class="card-passo-num">2</span><span class="card-passo-tit">Demanda nutricional (kg/ha)</span></div>
+      <div class="card-passo-sub">Total de cada nutriente que será aplicado na safra. Importe da recomendação ou digite.</div>
+    </div>
+    <div class="card-passo-body">
+      <div class="dem-grid">${nutHtml}</div>
+      ${importou ? `<div class="alerta-info" style="margin-top:11px;">📥 Valores destacados em amarelo foram importados de uma recomendação. Você pode editar livremente.</div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CARD 3 — DISTRIBUIÇÃO MENSAL DOS NUTRIENTES
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Nomes curtos dos meses (1-12)
+const MES_LABELS = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+
+// Templates pré-prontos pra Conilon
+// Cada template tem nomes "relativos à safra": out0/dez0 são do ano atual; jan1/fev1/mar1/abr1/mai1/jun1 do ano seguinte
+const TEMPLATES_CONILON = [
+  {
+    id: 'conilon4',
+    nome: 'Conilon padrão (4 aplicações)',
+    sub: 'Out · Dez · Fev · Abr — distribuição clássica',
+    meses: [
+      // mesIdx 1-12, anoOffset 0 ou 1 (safra começa em jul/ago)
+      {mesIdx:10, anoOffset:0, distrib:{n:20, p2o5:100, k2o:30, s:30, ca:50, mg:50, zn:100, b:50, cu:50, mn:50}},
+      {mesIdx:12, anoOffset:0, distrib:{n:30, p2o5:0,   k2o:30, s:30, ca:0,  mg:0,  zn:0,   b:0,  cu:0,  mn:0}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:30, p2o5:0,   k2o:25, s:25, ca:50, mg:50, zn:0,   b:50, cu:50, mn:50}},
+      {mesIdx:4,  anoOffset:1, distrib:{n:20, p2o5:0,   k2o:15, s:15, ca:0,  mg:0,  zn:0,   b:0,  cu:0,  mn:0}}
+    ]
+  },
+  {
+    id: 'conilon3',
+    nome: 'Conilon 3 aplicações',
+    sub: 'Out · Jan · Mar — simplificado',
+    meses: [
+      {mesIdx:10, anoOffset:0, distrib:{n:30, p2o5:100, k2o:35, s:35, ca:50, mg:50, zn:100, b:50, cu:100, mn:100}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:40, p2o5:0,   k2o:35, s:35, ca:50, mg:50, zn:0,   b:50, cu:0,   mn:0}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:30, p2o5:0,   k2o:30, s:30, ca:0,  mg:0,  zn:0,   b:0,  cu:0,   mn:0}}
+    ]
+  }
+];
+
+function renderCard3() {
+  const meses = window.planWIP.meses || [];
+  let body = '';
+  if (!meses.length) {
+    body = `<div class="alerta-info" style="margin-bottom:11px;">
+      ℹ️ Adicione os meses em que vai adubar e defina a porcentagem de cada nutriente por mês.
+    </div>`;
+  } else {
+    body = renderTabelaDistribuicao();
+  }
+  return `<div class="card-passo">
+    <div class="card-passo-head">
+      <div><span class="card-passo-num">3</span><span class="card-passo-tit">Distribuição mensal (%)</span></div>
+      <div class="card-passo-sub">Defina os meses de aplicação e o % de cada nutriente em cada mês.</div>
+    </div>
+    <div class="card-passo-body">
+      <div class="meses-toolbar">
+        <div class="meses-toolbar-info">${meses.length ? `${meses.length} mês(es) planejado(s)` : 'Nenhum mês ainda'}</div>
+        <button class="btn-add-mes" type="button" onclick="abrirModalMes()">➕ Adicionar mês</button>
+      </div>
+      ${body}
+    </div>
+  </div>`;
+}
+
+// Calcula label de exibição para um mês (yyyy-mm)
+function labelMes(mesYM) {
+  const [a, m] = String(mesYM).split('-');
+  const idx = parseInt(m, 10) - 1;
+  if (isNaN(idx) || idx < 0 || idx > 11) return mesYM;
+  return `${MES_LABELS[idx]}/${String(a).slice(-2)}`;
+}
+
+// Tabela: linhas = meses, colunas = nutrientes (só os que têm demanda > 0)
+function renderTabelaDistribuicao() {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  // Nutrientes ativos (com demanda > 0)
+  const nutsAtivos = NUTRIENTES.filter(n => {
+    const v = window.planWIP.demanda[n.id];
+    return v !== null && v !== undefined && v > 0;
+  });
+  if (!nutsAtivos.length) {
+    return `<div class="alerta-warn">⚠️ Preencha a demanda nutricional acima primeiro.</div>`;
+  }
+  // Header
+  let html = `<div class="dist-wrap"><table class="dist-tbl">
+    <thead><tr>
+      <th class="mes-col">Mês</th>
+      ${nutsAtivos.map(n => `<th>${escHtml(n.lab)}</th>`).join('')}
+    </tr></thead>
+    <tbody>`;
+  // Linhas dos meses
+  meses.forEach((m, idx) => {
+    html += `<tr>
+      <td class="mes-col">${escHtml(labelMes(m.mes))}
+        <button class="btn-rm-mes" type="button" onclick="removerMes(${idx})" title="Remover mês">✕</button>
+      </td>
+      ${nutsAtivos.map(n => {
+        const v = m.distribuicao?.[n.id];
+        const valStr = (v !== null && v !== undefined && v !== '') ? String(v) : '';
+        return `<td><input class="dist-inp" type="text" inputmode="decimal" value="${escAttr(valStr)}" placeholder="0" oninput="setDistribuicao(${idx},'${n.id}',this.value)"></td>`;
+      }).join('')}
+    </tr>`;
+  });
+  // Linha de totais
+  html += `<tr>
+    <td class="tot-row-lab">Total %</td>
+    ${nutsAtivos.map(n => {
+      const total = meses.reduce((s, m) => s + (parseFloat(m.distribuicao?.[n.id]) || 0), 0);
+      let cls = 'ok';
+      if (total === 0) cls = 'err';
+      else if (Math.abs(total - 100) < 0.5) cls = 'ok';
+      else if (Math.abs(total - 100) <= 5) cls = 'warn';
+      else cls = 'err';
+      const icon = cls === 'ok' ? '✓' : cls === 'warn' ? '⚠' : '✕';
+      return `<td class="tot-row ${cls}">${fmt(total,0)}% ${icon}</td>`;
+    }).join('')}
+  </tr>`;
+  html += `</tbody></table></div>`;
+  // Indicador de meta calculada (mostra kg/ha por mês)
+  html += `<div style="margin-top:11px;padding:9px 11px;background:var(--vb);border:1px solid var(--v);border-radius:8px;font-size:.74rem;color:var(--ve);line-height:1.6;">
+    <strong style="font-family:'Barlow Condensed',sans-serif;letter-spacing:.03em;text-transform:uppercase;font-size:.72rem;">📊 Demanda por mês (kg/ha)</strong>
+    <div id="resumoPorMes" style="margin-top:6px;display:flex;flex-direction:column;gap:4px;">
+      ${meses.map(m => {
+        const partes = nutsAtivos.map(n => {
+          const pct = parseFloat(m.distribuicao?.[n.id]) || 0;
+          const total = window.planWIP.demanda[n.id] || 0;
+          const dose = (pct / 100) * total;
+          if (dose === 0) return null;
+          return `${n.lab}:${fmt(dose,1)}`;
+        }).filter(Boolean);
+        return `<div style="font-family:'DM Mono',monospace;font-size:.72rem;"><strong>${escHtml(labelMes(m.mes))}:</strong> ${partes.join(' · ') || '—'}</div>`;
+      }).join('')}
+    </div>
+  </div>`;
+  return html;
+}
+
+window.setDistribuicao = function(idxMes, nutId, valor) {
+  const meses = window.planWIP.meses || [];
+  const mesesOrd = [...meses].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = mesesOrd[idxMes];
+  if (!m) return;
+  if (!m.distribuicao) m.distribuicao = {};
+  const v = parseDose(valor);
+  m.distribuicao[nutId] = (v === null) ? '' : v;
+  // Atualiza só os totais e o resumo, sem re-renderizar tudo (preserva foco)
+  atualizarTotaisDistribuicao();
+};
+
+// Atualiza apenas a linha de totais e o resumo "por mês" sem destruir os inputs (preserva foco)
+function atualizarTotaisDistribuicao() {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const nutsAtivos = NUTRIENTES.filter(n => {
+    const v = window.planWIP.demanda[n.id];
+    return v !== null && v !== undefined && v > 0;
+  });
+  // 1) Atualizar células de total na tabela
+  const tabela = document.querySelector('.dist-tbl tbody');
+  if (tabela) {
+    const linhaTotais = tabela.lastElementChild;
+    if (linhaTotais) {
+      const cells = linhaTotais.querySelectorAll('td');
+      nutsAtivos.forEach((n, i) => {
+        const td = cells[i + 1];
+        if (!td) return;
+        const total = meses.reduce((s, m) => s + (parseFloat(m.distribuicao?.[n.id]) || 0), 0);
+        let cls = 'tot-row ';
+        let icon;
+        if (total === 0) { cls += 'err'; icon = '✕'; }
+        else if (Math.abs(total - 100) < 0.5) { cls += 'ok'; icon = '✓'; }
+        else if (Math.abs(total - 100) <= 5) { cls += 'warn'; icon = '⚠'; }
+        else { cls += 'err'; icon = '✕'; }
+        td.className = cls;
+        td.textContent = `${fmt(total,0)}% ${icon}`;
+      });
+    }
+  }
+  // 2) Atualizar resumo "demanda por mês" (kg/ha) — substitui o div inteiro
+  const resumoBox = document.getElementById('resumoPorMes');
+  if (resumoBox) {
+    resumoBox.innerHTML = meses.map(m => {
+      const partes = nutsAtivos.map(n => {
+        const pct = parseFloat(m.distribuicao?.[n.id]) || 0;
+        const total = window.planWIP.demanda[n.id] || 0;
+        const dose = (pct / 100) * total;
+        if (dose === 0) return null;
+        return `${n.lab}:${fmt(dose,1)}`;
+      }).filter(Boolean);
+      return `<div style="font-family:'DM Mono',monospace;font-size:.72rem;"><strong>${escHtml(labelMes(m.mes))}:</strong> ${partes.join(' · ') || '—'}</div>`;
+    }).join('');
+  }
+}
+
+window.removerMes = function(idxMes) {
+  const meses = window.planWIP.meses || [];
+  const mesesOrd = [...meses].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = mesesOrd[idxMes];
+  if (!m) return;
+  if (!confirm(`Remover ${labelMes(m.mes)} do planejamento?`)) return;
+  window.planWIP.meses = meses.filter(x => x.mes !== m.mes);
+  renderNovo();
+};
+
+// ━━━ MODAL DE SELEÇÃO DE MÊS ━━━
+
+let modalMesAnoBase = null;
+
+window.abrirModalMes = function() {
+  // Ano base = primeiro ano da safra (ex: "2026/2027" → 2026)
+  const safra = window.planWIP.safra || '';
+  const matchAno = String(safra).match(/(\d{4})/);
+  modalMesAnoBase = matchAno ? parseInt(matchAno[1], 10) : new Date().getFullYear();
+  renderModalMes();
+  document.getElementById('overlayMes').classList.add('aberto');
+};
+
+window.fecharModalMes = function() {
+  document.getElementById('overlayMes').classList.remove('aberto');
+};
+
+function renderModalMes() {
+  const body = document.getElementById('modalMesBody');
+  const safra = window.planWIP.safra || '';
+  const matchAno = String(safra).match(/(\d{4})/);
+  const anoBase = matchAno ? parseInt(matchAno[1], 10) : new Date().getFullYear();
+  const mesesUsados = (window.planWIP.meses || []).map(m => m.mes);
+  // Templates só se ainda não tem nenhum mês
+  const mostrarTpl = !(window.planWIP.meses || []).length;
+  let html = '';
+  if (mostrarTpl) {
+    html += `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--c);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">⚡ Templates prontos</div>
+    <div class="modal-mes-templates">
+      ${TEMPLATES_CONILON.map(t => `<button type="button" class="tpl-btn" onclick="aplicarTemplate('${t.id}')">
+        <div class="tpl-btn-tit">${escHtml(t.nome)}</div>
+        <div class="tpl-btn-sub">${escHtml(t.sub)}</div>
+      </button>`).join('')}
+    </div>
+    <div class="modal-mes-divisor">ou adicione manualmente</div>`;
+  }
+  // Seletor de ano + grid de meses
+  html += `<div class="ano-selector">
+    <button type="button" onclick="mudarAnoModalMes(-1)">−</button>
+    <div class="ano-val" id="anoSelVal">${modalMesAnoBase}</div>
+    <button type="button" onclick="mudarAnoModalMes(1)">+</button>
+  </div>
+  <div class="meses-grid">
+    ${MES_LABELS.map((lab, i) => {
+      const mesYM = `${modalMesAnoBase}-${String(i+1).padStart(2,'0')}`;
+      const usado = mesesUsados.includes(mesYM);
+      return `<div class="mes-opt ${usado?'ja-usado':''}" onclick="${usado?'':`adicionarMes('${mesYM}')`}">
+        <div class="mes-opt-nome">${lab}</div>
+        <div class="mes-opt-ano">${modalMesAnoBase}</div>
+      </div>`;
+    }).join('')}
+  </div>`;
+  body.innerHTML = html;
+}
+
+window.mudarAnoModalMes = function(delta) {
+  modalMesAnoBase += delta;
+  renderModalMes();
+};
+
+window.adicionarMes = function(mesYM) {
+  const meses = window.planWIP.meses || [];
+  if (meses.find(m => m.mes === mesYM)) {
+    toast('⚠️ Mês já adicionado');
+    return;
+  }
+  // Distribuição vazia, usuário preenche
+  const distribuicao = {};
+  NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
+  meses.push({mes: mesYM, distribuicao});
+  window.planWIP.meses = meses;
+  fecharModalMes();
+  renderNovo();
+  toast(`✅ ${labelMes(mesYM)} adicionado`);
+};
+
+window.aplicarTemplate = function(tplId) {
+  const tpl = TEMPLATES_CONILON.find(t => t.id === tplId);
+  if (!tpl) return;
+  // Ano base = primeiro ano da safra
+  const safra = window.planWIP.safra || '';
+  const matchAno = String(safra).match(/(\d{4})/);
+  const anoBase = matchAno ? parseInt(matchAno[1], 10) : new Date().getFullYear();
+  // Gera meses
+  const novosMeses = tpl.meses.map(item => {
+    const ano = anoBase + item.anoOffset;
+    const mesYM = `${ano}-${String(item.mesIdx).padStart(2,'0')}`;
+    // Filtra distribuição só pra nutrientes que existem na demanda
+    const distribuicao = {};
+    NUTRIENTES.forEach(n => {
+      distribuicao[n.id] = item.distrib[n.id] !== undefined ? item.distrib[n.id] : '';
+    });
+    return {mes: mesYM, distribuicao};
+  });
+  window.planWIP.meses = novosMeses;
+  fecharModalMes();
+  renderNovo();
+  toast(`✅ Template "${tpl.nome}" aplicado`);
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// CARD 4 — ADUBOS POR MÊS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Estrutura de cada adubo em meses[i].adubos: {produtoId, nome, composicao:{n,p2o5,...}, dose:Number, travado:Boolean}
+
+function renderCard4() {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const nutsAtivos = NUTRIENTES.filter(n => {
+    const v = window.planWIP.demanda[n.id];
+    return v !== null && v !== undefined && v > 0;
+  });
+  if (!meses.length) return '';
+  // Pra cada mês: calcular meta (kg/ha de cada nutriente) + render dos adubos
+  let body = '';
+  meses.forEach((m, idxMes) => {
+    // metas em kg/ha
+    const metas = {};
+    nutsAtivos.forEach(n => {
+      const pct = parseFloat(m.distribuicao?.[n.id]) || 0;
+      const total = window.planWIP.demanda[n.id] || 0;
+      metas[n.id] = (pct / 100) * total;
+    });
+    // Auto-recalcula doses dos adubos não-travados
+    recalcularDosesMes(m, metas);
+    // Renderiza o bloco
+    body += renderMesBloco(m, idxMes, metas, nutsAtivos);
+  });
+  return `<div class="card-passo">
+    <div class="card-passo-head">
+      <div><span class="card-passo-num">4</span><span class="card-passo-tit">Adubos por mês</span></div>
+      <div class="card-passo-sub">Escolha os adubos pra cada mês. Sistema calcula a dose pra entregar a meta de nutrientes.</div>
+    </div>
+    <div class="card-passo-body">
+      ${body || '<div class="alerta-info">ℹ️ Defina os meses no Card 3 primeiro.</div>'}
+    </div>
+  </div>`;
+}
+
+// Recalcula automaticamente as doses dos adubos não-travados pra cumprir as metas
+// Divide por nutriente: pra cada nutriente, identifica adubos que o fornecem,
+// trava os que já foram editados, distribui o restante entre os não-travados em partes iguais.
+function recalcularDosesMes(mes, metas) {
+  const adubos = mes.adubos || [];
+  if (!adubos.length) return;
+  // Pra cada nutriente, calcular o quanto cada adubo já fornece pelo seu valor atual travado
+  // e o quanto falta entregar (meta - já fornecido pelos travados)
+  // Adubos não-travados dividem o que falta em proporção igual da meta de cada nutriente.
+
+  // Mapa: pra cada adubo, lista de nutrientes que ele fornece (composicao > 0)
+  const aduboNutrientes = adubos.map(a => {
+    const c = a.composicao || {};
+    const ativos = [];
+    NUTRIENTES.forEach(n => {
+      const pct = c[n.id];
+      if (pct && pct > 0) ativos.push(n.id);
+    });
+    return ativos;
+  });
+
+  // Pra cada nutriente, qual é o "nutriente principal" do adubo (maior % na composição)?
+  function principalDo(a) {
+    const c = a.composicao || {};
+    let melhor = null, maior = 0;
+    NUTRIENTES.forEach(n => {
+      const v = c[n.id] || 0;
+      if (v > maior) { maior = v; melhor = n.id; }
+    });
+    return melhor;
+  }
+
+  // Estratégia: cada adubo NÃO-travado tem dose calculada pra entregar a meta do nutriente principal dele
+  // Se mais de um adubo tem o mesmo principal, divide igualmente a meta entre eles
+  // Os outros nutrientes que o adubo fornece "vêm de brinde" — não controlam a dose
+
+  const adubosNTravados = adubos.filter(a => !a.travado);
+  if (!adubosNTravados.length) return;
+
+  // Agrupa por nutriente principal
+  const grupos = {};
+  adubosNTravados.forEach(a => {
+    const p = principalDo(a);
+    if (!p) return;
+    if (!grupos[p]) grupos[p] = [];
+    grupos[p].push(a);
+  });
+
+  // Calcular o que os travados já entregam (pra subtrair da meta)
+  const entregueTravados = {};
+  NUTRIENTES.forEach(n => { entregueTravados[n.id] = 0; });
+  adubos.forEach(a => {
+    if (!a.travado) return;
+    const dose = parseFloat(a.dose) || 0;
+    const c = a.composicao || {};
+    NUTRIENTES.forEach(n => {
+      const pct = c[n.id] || 0;
+      entregueTravados[n.id] += dose * (pct / 100);
+    });
+  });
+
+  // Pra cada grupo, calcula dose
+  Object.entries(grupos).forEach(([nutPrincipal, adubosGrupo]) => {
+    const meta = metas[nutPrincipal] || 0;
+    const restante = Math.max(0, meta - (entregueTravados[nutPrincipal] || 0));
+    // Divisão = igualmente entre os adubos do grupo
+    const metaPorAdubo = restante / adubosGrupo.length;
+    adubosGrupo.forEach(a => {
+      const pct = (a.composicao?.[nutPrincipal] || 0);
+      if (pct > 0) {
+        a.dose = metaPorAdubo / (pct / 100);
+      } else {
+        a.dose = 0;
+      }
+    });
+  });
+}
+
+function renderMesBloco(mes, idxMes, metas, nutsAtivos) {
+  const adubos = mes.adubos || [];
+  // Calcular entrega total
+  const entregue = {};
+  NUTRIENTES.forEach(n => { entregue[n.id] = 0; });
+  adubos.forEach(a => {
+    const dose = parseFloat(a.dose) || 0;
+    const c = a.composicao || {};
+    NUTRIENTES.forEach(n => {
+      const pct = c[n.id] || 0;
+      entregue[n.id] += dose * (pct / 100);
+    });
+  });
+  // Render dos adubos
+  let adubosHtml = '';
+  if (!adubos.length) {
+    adubosHtml = `<div class="adubo-vazio">Nenhum adubo selecionado. Toque em "➕ Adicionar adubo".</div>`;
+  } else {
+    adubosHtml = adubos.map((a, idxA) => renderAduboLinha(a, idxMes, idxA, metas)).join('');
+  }
+  // Resumo entregue × meta
+  const resumoChips = nutsAtivos.map(n => {
+    const meta = metas[n.id] || 0;
+    const ent = entregue[n.id] || 0;
+    if (meta === 0 && ent === 0) return '';
+    let cls = 'zero';
+    if (meta > 0) {
+      const ratio = ent / meta;
+      if (ratio >= 0.95 && ratio <= 1.05) cls = 'ok';
+      else if (ratio >= 0.85 && ratio <= 1.15) cls = 'warn';
+      else cls = 'err';
+    } else if (ent > 0) {
+      cls = 'warn'; // entregando algo que não foi pedido
+    }
+    return `<span class="mes-resumo-chip ${cls}">${escHtml(n.lab)}: ${fmt(ent,1)}/${fmt(meta,1)}</span>`;
+  }).filter(Boolean).join('');
+  // Mostrar metas dos nutrientes principais do mês
+  const metasInfo = nutsAtivos.map(n => {
+    const meta = metas[n.id] || 0;
+    if (meta === 0) return null;
+    return `${escHtml(n.lab)}:${fmt(meta,1)}`;
+  }).filter(Boolean).join(' · ');
+  return `<div class="mes-bloco">
+    <div class="mes-bloco-head">
+      <div style="flex:1;min-width:0;">
+        <div class="mes-bloco-tit">📅 ${escHtml(labelMes(mes.mes))}</div>
+        <div class="mes-bloco-meta">Meta: <strong>${metasInfo || '—'}</strong></div>
+      </div>
+      <button class="btn-add-adubo" type="button" onclick="abrirModalAdubo(${idxMes})">➕ Adubo</button>
+    </div>
+    ${adubosHtml}
+    ${adubos.length ? `<div class="mes-resumo">
+      <div class="mes-resumo-tit">⚖️ Entregue × Meta (kg/ha)</div>
+      <div class="mes-resumo-grid">${resumoChips || '—'}</div>
+    </div>` : ''}
+  </div>`;
+}
+
+function renderAduboLinha(a, idxMes, idxA, metas) {
+  const c = a.composicao || {};
+  // Fórmula NPK + extras
+  const n = c.n || 0, p = c.p2o5 || 0, k = c.k2o || 0;
+  const extras = [];
+  ['s','ca','mg','zn','b','cu','mn'].forEach(k2 => { if (c[k2]) extras.push(`${k2.toUpperCase()}:${c[k2]}`); });
+  const formula = `${n}-${p}-${k}${extras.length?' · '+extras.join(' · '):''}`;
+  // Dose e entrega
+  const dose = parseFloat(a.dose) || 0;
+  // O que esse adubo entrega
+  const entregaParts = [];
+  NUTRIENTES.forEach(nt => {
+    const pct = c[nt.id] || 0;
+    if (pct > 0) {
+      const ent = dose * (pct / 100);
+      if (ent > 0) entregaParts.push(`${nt.lab}:${fmt(ent,1)}`);
+    }
+  });
+  return `<div class="adubo-linha">
+    <div class="adubo-linha-head">
+      <div class="adubo-nome">${escHtml(a.nome)}<span class="adubo-formula">${escHtml(formula)}</span></div>
+      <div class="adubo-btns">
+        <button class="btn-trava ${a.travado?'travado':''}" type="button" onclick="toggleTravaAdubo(${idxMes},${idxA})" title="${a.travado?'Travado (dose fixa)':'Auto (sistema calcula)'}">${a.travado?'🔒':'🔓'}</button>
+        <button class="btn-rm-adubo" type="button" onclick="removerAdubo(${idxMes},${idxA})">✕</button>
+      </div>
+    </div>
+    <div class="adubo-dose-row">
+      <input class="adubo-dose-inp ${a.travado?'travada':''}" type="text" inputmode="decimal" value="${fmt(dose,1).replace(/\\./g,'')}" oninput="setDoseAdubo(${idxMes},${idxA},this.value)" onblur="onBlurDoseAdubo()">
+      <span class="adubo-dose-un">kg/ha</span>
+      <div class="adubo-entrega">→ <strong>${entregaParts.join(' · ') || '—'}</strong></div>
+    </div>
+  </div>`;
+}
+
+// ━━━ HANDLERS DO CARD 4 ━━━
+
+window.toggleTravaAdubo = function(idxMes, idxA) {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[idxMes];
+  if (!m || !m.adubos || !m.adubos[idxA]) return;
+  m.adubos[idxA].travado = !m.adubos[idxA].travado;
+  renderNovo();
+};
+
+window.removerAdubo = function(idxMes, idxA) {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[idxMes];
+  if (!m || !m.adubos) return;
+  m.adubos.splice(idxA, 1);
+  renderNovo();
+};
+
+// Quando edita dose manualmente: trava automaticamente e marca pra re-render apenas no blur
+window.setDoseAdubo = function(idxMes, idxA, valor) {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[idxMes];
+  if (!m || !m.adubos || !m.adubos[idxA]) return;
+  const v = parseDose(valor);
+  m.adubos[idxA].dose = v || 0;
+  m.adubos[idxA].travado = true;  // editar manualmente = trava
+};
+
+// Ao sair do campo: re-renderiza (recalcula outros adubos e atualiza resumos)
+window.onBlurDoseAdubo = function() {
+  renderNovo();
+};
+
+// ━━━ MODAL SELECIONAR ADUBO ━━━
+
+let modalAduboMesIdx = null;
+
+window.abrirModalAdubo = function(idxMes) {
+  modalAduboMesIdx = idxMes;
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[idxMes];
+  if (!m) return;
+  document.getElementById('modalAduboSub').textContent = `Adicionar ao mês ${labelMes(m.mes)}`;
+  renderModalAdubo('');
+  document.getElementById('overlayAdubo').classList.add('aberto');
+};
+
+window.fecharModalAdubo = function() {
+  document.getElementById('overlayAdubo').classList.remove('aberto');
+  modalAduboMesIdx = null;
+};
+
+function renderModalAdubo(busca) {
+  // Lista produtos do estoque que TÊM composição
+  const talhao = talhoes.find(t => t._docId === window.planWIP.talhaoId);
+  const fazendaSel = talhao?.fazenda || '';
+  const buscaNorm = (busca||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const produtos = produtosEstoque
+    .filter(p => p.composicao)  // só os que têm composição cadastrada
+    .filter(p => !fazendaSel || p.fazenda === fazendaSel || !p.fazenda)
+    .filter(p => {
+      if (!buscaNorm) return true;
+      const nomeN = String(p.nome||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      return nomeN.includes(buscaNorm);
+    })
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  const body = document.getElementById('modalAduboBody');
+  let html = `<input class="adubo-busca" type="search" placeholder="🔍 Buscar adubo..." oninput="renderModalAdubo(this.value)" value="${escAttr(busca||'')}">`;
+  if (!produtos.length) {
+    html += `<div class="alerta-warn">
+      ${fazendaSel ? `Nenhum adubo da fazenda <strong>${escHtml(fazendaSel)}</strong> com composição cadastrada.` : 'Nenhum adubo cadastrado com composição.'}<br>
+      <span style="font-size:.74rem;">Vá em "🏬 Estoque" → toque no produto → "Classificar" → preencha a composição NPK.</span>
+    </div>`;
+  } else {
+    html += produtos.map(p => {
+      const c = p.composicao || {};
+      const n = c.n || 0, pp = c.p2o5 || 0, k = c.k2o || 0;
+      const extras = [];
+      ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (c[kk]) extras.push(`${kk.toUpperCase()}:${c[kk]}`); });
+      const formula = `${n}-${pp}-${k}${extras.length?' · '+extras.join(' · '):''}`;
+      const saldo = Number(p.saldo) || 0;
+      return `<div class="adubo-opt" onclick="adicionarAduboAoMes('${escAttr(p._docId)}')">
+        <div class="adubo-opt-info">
+          <div class="adubo-opt-nome">${escHtml(p.nome)}</div>
+          <div class="adubo-opt-sub">${escHtml(formula)} · ${escHtml(p.fazenda||'todas')}</div>
+        </div>
+        <div class="adubo-opt-saldo">
+          Saldo<br><span class="adubo-opt-saldo-val">${fmt(saldo,0)} ${escHtml(p.unidade||'')}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  body.innerHTML = html;
+}
+
+window.renderModalAdubo = renderModalAdubo;
+
+window.adicionarAduboAoMes = function(produtoId) {
+  if (modalAduboMesIdx === null) return;
+  const p = produtosEstoque.find(x => x._docId === produtoId);
+  if (!p) { toast('❌ Produto não encontrado'); return; }
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[modalAduboMesIdx];
+  if (!m) return;
+  if (!m.adubos) m.adubos = [];
+  // Verifica duplicado
+  if (m.adubos.find(a => a.produtoId === produtoId)) {
+    toast('⚠️ Adubo já adicionado nesse mês');
+    return;
+  }
+  m.adubos.push({
+    produtoId,
+    nome: p.nome,
+    composicao: p.composicao,
+    dose: 0,            // será calculada pelo recalcularDosesMes
+    travado: false
+  });
+  toast(`✅ ${p.nome} adicionado`);
+  fecharModalAdubo();
+  renderNovo();
+};
+
+// ━━━ CARD OBSERVAÇÕES ━━━
+
+function renderCardObs() {
+  const w = window.planWIP;
+  return `<div class="card-passo">
+    <div class="card-passo-head">
+      <div><span class="card-passo-num">5</span><span class="card-passo-tit">Observações</span></div>
+      <div class="card-passo-sub">Anotações técnicas, mudanças no plano, condições de campo etc.</div>
+    </div>
+    <div class="card-passo-body">
+      <textarea class="obs-textarea" id="planObs" oninput="window.planWIP.observacoes=this.value" placeholder="Ex: chuva atrasou Out → mudei pra Nov; substitui MAP por SuperTriplo...">${escHtml(w.observacoes||'')}</textarea>
+      ${w.status === 'aprovado' || w.status === 'aplicado' ? `<div class="alerta-warn" style="margin-top:9px;">⚠️ Plano já aprovado. Use este campo pra registrar qualquer mudança feita após aprovação.</div>` : ''}
+    </div>
+  </div>`;
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// APROVAR PLANO — gera planosAdubacao (integração)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+window.aprovarPlanoSafra = async function() {
+  if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
+  const w = window.planWIP;
+  if (!w.talhaoId) { toast('⚠️ Selecione um talhão.'); return; }
+  if (!w.safra) { toast('⚠️ Informe a safra.'); return; }
+  if (!temDemandaPreenchida()) { toast('⚠️ Preencha a demanda nutricional.'); return; }
+  const meses = w.meses || [];
+  if (!meses.length) { toast('⚠️ Adicione pelo menos um mês.'); return; }
+  // Verifica se cada mês tem pelo menos 1 adubo
+  const mesesSemAdubo = meses.filter(m => !m.adubos || m.adubos.length === 0);
+  if (mesesSemAdubo.length) {
+    if (!confirm(`${mesesSemAdubo.length} mês(es) sem adubo. Aprovar mesmo assim?`)) return;
+  }
+  if (!confirm(`Aprovar este planejamento de safra?\n\nO sistema vai criar automaticamente os planos mensais no módulo Adubações.`)) return;
+  const btn = document.getElementById('btnAprovarPlano');
+  btn.disabled = true; btn.textContent = 'Aprovando...';
+  try {
+    // 1. Salva o planejamento como "aprovado"
+    w.status = 'aprovado';
+    await salvarPlanoRascunho(true);  // true = sem toast nem trocar status
+    // 2. Gera planosAdubacao
+    const talhao = talhoes.find(t => t._docId === w.talhaoId);
+    let criados = 0, atualizados = 0;
+    for (const m of meses) {
+      if (!m.adubos || !m.adubos.length) continue;
+      const [ano, mesIdx] = m.mes.split('-').map(Number);
+      const mesAno = `${ano}-${String(mesIdx).padStart(2,'0')}`;
+      // Aplicação: cada mês vira UMA aplicação com todos os adubos como produtos
+      const aplicacao = {
+        id: 'pl' + Date.now() + Math.random().toString(36).slice(2,5),
+        semana: labelMes(m.mes),
+        modo: 'planejamento',
+        obs: `Gerado do Planejamento de Safra ${w.safra}`,
+        fase: 'producao',
+        produtos: m.adubos.map(a => ({
+          produto: a.nome,
+          dose: parseFloat(a.dose) || 0,
+          unidade: 'kg/ha'
+        })),
+        feito: false,
+        origemPlanejamentoId: window.editandoPlanId
+      };
+      // Procura plano existente do mesmo talhão+mês
+      // (precisa do talhao.id interno, não _docId)
+      const talhaoIdInterno = talhao?.id || talhao?._docId;
+      // Query inline — usa planejamentos_safra mas queremos planosAdubacao
+      // Como não temos snapshot ao vivo aqui, faz query manual
+      try {
+        // Tenta criar — se há um existente do mesmo talhão+mes, vamos updateDoc
+        // Como não temos cache local de planosAdubacao, sempre vamos criar um doc novo
+        // O módulo de adubações vai fazer merge na visualização
+        await addDoc(collection(db,'planosAdubacao'), {
+          talhaoId: talhaoIdInterno,
+          talhaoNome: talhao?.nome || talhao?.id || '',
+          fazenda: talhao?.fazenda || '',
+          mesAno,
+          mesIdx,
+          ano,
+          aplicacoes: [aplicacao],
+          origemPlanejamentoId: window.editandoPlanId
+        });
+        criados++;
+      } catch(e) {
+        console.error('Erro ao criar plano', e);
+      }
+    }
+    // 3. Log
+    try {
+      await addDoc(collection(db,'logs'), {
+        tipo:'planejamento_aprovado',
+        mensagem:`${usuarioAtual.email} aprovou planejamento ${w.safra} (${talhao?.fazenda} · ${talhao?.nome}) → ${criados} plano(s) gerado(s)`,
+        criadoEm: new Date().toISOString(), uid: usuarioAtual.uid
+      });
+    } catch(e) {}
+    toast(`✅ Planejamento aprovado! ${criados} mês(es) enviado(s) para Adubações.`);
+  } catch(e) {
+    console.error(e);
+    toast('❌ Erro: '+e.message);
+    w.status = 'rascunho';
+  }
+  btn.disabled = false; btn.textContent = '✓ Aprovar';
+};
+
+// Eventos do Card 1
+
+window.onTrocaTalhao = function() {
+  const id = document.getElementById('selTalhao').value;
+  window.planWIP.talhaoId = id;
+  // Não limpa demanda — usuário pode trocar talhão mantendo valores se quiser
+  renderNovo();
+};
+
+window.importarRecomendacao = function(recId) {
+  const r = recomendacoes.find(x => x._docId === recId);
+  if (!r) { toast('❌ Recomendação não encontrada'); return; }
+  // Importa valores APLICAR (não os sugeridos)
+  const d = window.planWIP.demanda;
+  if (r.n != null) d.n = r.n;
+  if (r.p2o5 != null) d.p2o5 = r.p2o5;
+  if (r.k2o != null) d.k2o = r.k2o;
+  // S/Ca/Mg: não vêm da recomendação direta (só na calagem). Mantém o que está.
+  // Micros
+  if (r.micros) {
+    for (const k of ['zn','b','cu','mn']) {
+      const m = r.micros[k];
+      if (m && (m.dose !== undefined)) d[k] = m.dose;
+    }
+  }
+  window.planWIP.recomendacaoOrigemId = recId;
+  toast('✅ Demanda importada da recomendação');
+  renderNovo();
+};
+
+window.setDemanda = function(nutId, valor) {
+  window.planWIP.demanda[nutId] = parseDose(valor);
+  // Se o usuário editar manualmente um valor importado, desliga o flag de origem
+  // (mas só se TODOS os valores foram alterados — senão mantém pra manter destaque)
+  // Decisão simples: mantém flag de origem mesmo se editar (mostra que veio dali)
+};
+
+function temDemandaPreenchida() {
+  const d = window.planWIP.demanda;
+  return Object.values(d).some(v => v !== null && v !== undefined && v > 0);
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// SALVAR
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+window.salvarPlanoRascunho = async function(silencioso) {
+  if (!podeEditar()) { if (!silencioso) toast('⛔ Sem permissão.'); return false; }
+  const w = window.planWIP;
+  if (!w.talhaoId) { if (!silencioso) toast('⚠️ Selecione um talhão.'); return false; }
+  if (!w.safra || w.safra.trim().length < 4) { if (!silencioso) toast('⚠️ Informe a safra (ex: 2026/2027).'); return false; }
+  if (!temDemandaPreenchida()) { if (!silencioso) toast('⚠️ Preencha pelo menos um nutriente da demanda.'); return false; }
+  const talhao = talhoes.find(t => t._docId === w.talhaoId);
+  const dados = {
+    talhaoId: w.talhaoId,
+    talhaoNome: talhao?.nome || talhao?.id || '',
+    fazenda: talhao?.fazenda || '',
+    area: talhao?.area || null,
+    safra: w.safra.trim(),
+    recomendacaoOrigemId: w.recomendacaoOrigemId || null,
+    demanda: w.demanda,
+    meses: w.meses || [],
+    observacoes: w.observacoes || '',
+    status: w.status || 'rascunho',
+    atualizadoEm: new Date().toISOString(),
+    atualizadoPor: usuarioAtual.email
+  };
+  try {
+    if (window.editandoPlanId) {
+      await updateDoc(doc(db,'planejamentos_safra',window.editandoPlanId), dados);
+    } else {
+      dados.criadoEm = new Date().toISOString();
+      dados.criadoPor = usuarioAtual.email;
+      const ref = await addDoc(collection(db,'planejamentos_safra'), dados);
+      window.editandoPlanId = ref.id;
+    }
+    if (!silencioso) {
+      try {
+        await addDoc(collection(db,'logs'), {
+          tipo:'planejamento',
+          mensagem:`${usuarioAtual.email} salvou planejamento (${dados.fazenda} · ${dados.talhaoNome} · ${dados.safra})`,
+          criadoEm: new Date().toISOString(), uid: usuarioAtual.uid
+        });
+      } catch(e) {}
+      toast('✅ Rascunho salvo!');
+    }
+    return true;
+  } catch(e) {
+    console.error(e);
+    if (!silencioso) toast('❌ Erro: '+e.message);
+    return false;
+  }
+};
+
+window.cancelarNovo = function() {
+  if (window.editandoPlanId || temDemandaPreenchida()) {
+    if (!confirm('Descartar este planejamento sem salvar?')) return;
+  }
+  window.editandoPlanId = null;
+  const hoje = new Date();
+  const ano = hoje.getMonth() >= 6 ? hoje.getFullYear() : hoje.getFullYear() - 1;
+  window.planWIP = {
+    talhaoId: '', safra: `${ano}/${ano+1}`, area: null,
+    recomendacaoOrigemId: null,
+    demanda: {n:null, p2o5:null, k2o:null, s:null, ca:null, mg:null, zn:null, b:null, cu:null, mn:null},
+    meses: [], observacoes: '', status: 'rascunho'
+  };
+  renderNovo();
+  toast('🗑 Planejamento descartado');
+};
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ABA LISTA
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+window.renderLista = function() {
+  const cont = document.getElementById('content');
+  if (!planejamentos.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">🗓️</div><p><strong>Nenhum planejamento salvo ainda.</strong><br>
+      <span style="font-size:.78rem;">Vá em "🗓️ Novo" pra criar.</span></p></div>`;
+    return;
+  }
+  const lista = [...planejamentos].sort((a,b) => (b.atualizadoEm||b.criadoEm||'').localeCompare(a.atualizadoEm||a.criadoEm||''));
+  cont.innerHTML = lista.map(p => {
+    const dosesChips = [];
+    const d = p.demanda || {};
+    for (const n of NUTRIENTES) {
+      const v = d[n.id];
+      if (v !== null && v !== undefined && v > 0) dosesChips.push(`${n.lab}: ${fmt(v,0)}`);
+    }
+    const numMeses = (p.meses && p.meses.length) || 0;
+    return `<div class="plan-card plan-card-status-${p.status||'rascunho'}">
+      <div class="plan-card-head">
+        <div style="flex:1;min-width:0;">
+          <div class="plan-card-tit">🗓️ ${escHtml(p.fazenda||'—')} · ${escHtml(p.talhaoNome||'—')}</div>
+          <div class="plan-card-meta">
+            🌾 Safra ${escHtml(p.safra||'—')} ${p.area?`· ${fmt(p.area,2)} ha`:''}<br>
+            <span style="font-size:.65rem;">📅 ${formatarData((p.atualizadoEm||p.criadoEm||'').slice(0,10))} · ${numMeses} mês(es) planejado(s)</span>
+          </div>
+        </div>
+        <span class="plan-status-badge plan-status-${p.status||'rascunho'}">${(p.status||'rascunho').toUpperCase()}</span>
+      </div>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;">
+        ${dosesChips.slice(0,8).map(c => `<span style="font-family:'DM Mono',monospace;font-size:.66rem;background:var(--vb);color:var(--ve);padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid var(--v);">${escHtml(c)}</span>`).join('')}
+      </div>
+      <div class="plan-card-acoes">
+        <button class="btn-acao primary" onclick="editarPlano('${p._docId}')">✏️ Continuar</button>
+        ${podeEditar() && p.status === 'rascunho' ? '' : ''}
+        ${isAdmin() ? `<button class="btn-acao danger" onclick="excluirPlano('${p._docId}')">🗑</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+};
+
+window.editarPlano = function(id) {
+  const p = planejamentos.find(x => x._docId === id);
+  if (!p) return;
+  window.editandoPlanId = id;
+  window.planWIP = {
+    talhaoId: p.talhaoId || '',
+    safra: p.safra || '',
+    area: p.area || null,
+    recomendacaoOrigemId: p.recomendacaoOrigemId || null,
+    demanda: p.demanda || {n:null,p2o5:null,k2o:null,s:null,ca:null,mg:null,zn:null,b:null,cu:null,mn:null},
+    meses: p.meses || [],
+    observacoes: p.observacoes || '',
+    status: p.status || 'rascunho'
+  };
+  abrirTab('novo');
+  toast('✏️ Editando planejamento');
+};
+
+window.excluirPlano = async function(id) {
+  if (!isAdmin()) { toast('⛔ Só admin pode excluir.'); return; }
+  const p = planejamentos.find(x => x._docId === id);
+  if (!p) return;
+  if (!confirm(`Excluir planejamento de ${p.fazenda} · ${p.talhaoNome} (${p.safra})?\n\nEsta ação não pode ser desfeita.`)) return;
+  try {
+    await deleteDoc(doc(db,'planejamentos_safra',id));
+    toast('🗑 Planejamento excluído.');
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+</script>
+</body>
+</html>

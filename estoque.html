@@ -95,6 +95,24 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .cat-row{background:white;border-radius:var(--rs);padding:11px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--s);}
 .prod-cat-tag{display:inline-block;font-size:.68rem;background:var(--vb);color:var(--ve);padding:2px 8px;border-radius:99px;font-weight:600;}
 .prod-cat-tag.prod-cat-vazia{background:#fffbeb;color:#92400e;border:1px solid #fde68a;}
+
+/* COMPOSIÇÃO NPK */
+.prod-comp-chip{display:inline-block;font-family:'DM Mono',monospace;font-size:.68rem;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;margin-left:5px;}
+.comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;}
+.comp-inp-w{display:flex;align-items:center;gap:3px;background:#fafafa;border:1px solid var(--cb);border-radius:6px;padding:4px 6px;}
+.comp-inp-w label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.72rem;color:var(--ve);min-width:28px;}
+.comp-inp-w input{width:100%;border:none;background:transparent;outline:none;font-family:'DM Mono',monospace;font-weight:700;font-size:.85rem;text-align:right;color:var(--ve);min-width:0;}
+.comp-inp-w span{font-size:.66rem;color:var(--c);}
+.btn-comp-atalho{background:var(--vb);border:1px solid var(--v);color:var(--ve);border-radius:7px;padding:5px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.72rem;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;}
+.btn-comp-atalho:active{transform:scale(.96);}
+.lista-adubos{position:absolute;right:0;top:calc(100% + 4px);background:white;border:1px solid var(--cb);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:50;min-width:220px;max-height:280px;overflow-y:auto;}
+.lista-adubos-item{padding:8px 11px;font-size:.82rem;cursor:pointer;border-bottom:1px solid var(--cl);display:flex;flex-direction:column;gap:2px;}
+.lista-adubos-item:last-child{border-bottom:none;}
+.lista-adubos-item:hover{background:var(--vb);}
+.lista-adubos-item-nome{font-weight:700;color:var(--ve);}
+.lista-adubos-item-comp{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--c);}
+.preview-formula{margin-top:7px;text-align:center;font-family:'DM Mono',monospace;font-size:.95rem;font-weight:700;color:var(--ve);background:var(--vb);padding:6px;border-radius:6px;display:none;}
+.preview-formula.visivel{display:block;}
 .preco-box{background:#fef3c7;border:1.5px solid #fbbf24;border-radius:var(--rs);padding:10px 12px;margin-bottom:12px;}
 .cat-nome{flex:1;font-weight:700;color:var(--t);}
 .cat-und{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);background:var(--cl);padding:3px 8px;border-radius:5px;}
@@ -297,7 +315,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
     <div class="modal-sub" id="classifSub"></div>
     <div class="campo">
       <label class="campo-label">Categoria</label>
-      <select class="campo-sel" id="selCategoria" onchange="atualizarSubcategorias()"></select>
+      <select class="campo-sel" id="selCategoria" onchange="atualizarSubcategorias();atualizarComposicao()"></select>
     </div>
     <div class="campo" id="campoSubcategoria">
       <label class="campo-label">Subcategoria</label>
@@ -307,6 +325,32 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <label class="campo-label">Especifique (opcional)</label>
       <input type="text" class="campo-inp" id="inpSubcatLivre" placeholder="Ex: Acaricida especial, formulado próprio...">
     </div>
+
+    <!-- COMPOSIÇÃO NPK (só pra adubos/calcários/fertilizantes) -->
+    <div id="blocoComposicao" style="display:none;margin-top:6px;border-top:1px solid var(--cb);padding-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+        <label class="campo-label" style="margin:0;">🌱 Composição (% em massa)</label>
+        <div style="position:relative;">
+          <button type="button" class="btn-comp-atalho" onclick="toggleListaAdubos(event)">+ Adubo comum ▾</button>
+          <div id="listaAdubosComuns" class="lista-adubos" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="comp-grid">
+        <div class="comp-inp-w"><label>N</label><input type="text" inputmode="decimal" id="compN" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>P₂O₅</label><input type="text" inputmode="decimal" id="compP" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>K₂O</label><input type="text" inputmode="decimal" id="compK" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>S</label><input type="text" inputmode="decimal" id="compS" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>Ca</label><input type="text" inputmode="decimal" id="compCa" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>Mg</label><input type="text" inputmode="decimal" id="compMg" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>Zn</label><input type="text" inputmode="decimal" id="compZn" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>B</label><input type="text" inputmode="decimal" id="compB" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>Cu</label><input type="text" inputmode="decimal" id="compCu" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+        <div class="comp-inp-w"><label>Mn</label><input type="text" inputmode="decimal" id="compMn" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
+      </div>
+      <div id="previewFormula" class="preview-formula"></div>
+      <div style="font-size:.66rem;color:var(--c);margin-top:4px;line-height:1.45;">Deixe em branco o que não tiver. Usado pra cálculo automático de doses no Planejamento de Safra.</div>
+    </div>
+
     <div class="modal-acoes">
       <button class="btn btn-v btn-full" onclick="confirmarClassificar()">💾 Salvar</button>
       <button class="btn btn-c btn-full" onclick="fecharClassificar()">Cancelar</button>
@@ -374,6 +418,23 @@ function subcategoriasDe(catId) {
 function labelCategoria(catId) {
   const c = CATEGORIAS.find(x => x.id === catId);
   return c ? c.label : '—';
+}
+
+// Renderiza chip "20-05-20" com outros nutrientes embaixo, se houver composição
+function formatarChipComposicao(comp) {
+  if (!comp) return '';
+  const n = comp.n || 0, p = comp.p2o5 || 0, k = comp.k2o || 0;
+  const extras = [];
+  if (comp.s)  extras.push(`S:${comp.s}`);
+  if (comp.ca) extras.push(`Ca:${comp.ca}`);
+  if (comp.mg) extras.push(`Mg:${comp.mg}`);
+  if (comp.zn) extras.push(`Zn:${comp.zn}`);
+  if (comp.b)  extras.push(`B:${comp.b}`);
+  if (comp.cu) extras.push(`Cu:${comp.cu}`);
+  if (comp.mn) extras.push(`Mn:${comp.mn}`);
+  if (n === 0 && p === 0 && k === 0 && extras.length === 0) return '';
+  const titulo = `Composição: ${n}-${p}-${k}${extras.length ? ' · ' + extras.join(' · ') : ''}`;
+  return `<span class="prod-comp-chip" title="${sanitizar(titulo)}">${n}-${p}-${k}${extras.length?'+':''}</span>`;
 }
 
 // ─── BOOTSTRAP ───
@@ -458,7 +519,7 @@ function gerarMenu() {
     {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
     {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
     {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
-    {href:'estoque.html',ico:'🏬',label:'Estoque'},{href:'gestao.html',ico:'📊',label:'Gestão'},{href:'analises.html',ico:'🔬',label:'Análises'}
+    {href:'estoque.html',ico:'🏬',label:'Estoque'},{href:'gestao.html',ico:'📊',label:'Gestão'},{href:'analises.html',ico:'🔬',label:'Análises'},{href:'recomendacoes.html',ico:'💊',label:'Recomendações'},{href:'planejamento.html',ico:'🗓️',label:'Planejamento'}
   ];
   if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
   document.getElementById('menuModulos').innerHTML = items.map(m =>
@@ -589,11 +650,12 @@ function renderizarSaldos() {
       const catTxt = p.categoria
         ? `<span class="prod-cat-tag">${labelCategoria(p.categoria)}${p.subcategoria?' · '+sanitizar(p.subcategoria):''}</span>`
         : `<span class="prod-cat-tag prod-cat-vazia">⚠️ Sem classificação</span>`;
+      const compTxt = formatarChipComposicao(p.composicao);
       html += `<div class="prod-card" data-nome="${normalizar(p.nome)}" onclick="abrirAcoesProduto('${p._docId}')">
         <div class="prod-card-top">
           <div style="flex:1;min-width:0;">
             <div class="prod-nome">${sanitizar(p.nome)}</div>
-            <div style="margin-top:4px;">${catTxt}</div>
+            <div style="margin-top:4px;">${catTxt}${compTxt}</div>
           </div>
           <div class="prod-saldo-wrap">
             <div class="prod-saldo-val ${cls}">${fmt(saldo)}</div>
@@ -1088,6 +1150,125 @@ window.abrirRenomear = function(prodId) {
 };
 window.fecharRenomear = () => document.getElementById('modalRenomear').classList.remove('aberto');
 
+// ─── COMPOSIÇÃO DE ADUBOS (Entrega B) ───
+
+// Categorias que aceitam composição NPK
+const CATEGORIAS_COM_COMPOSICAO = ['adubo_mineral','fertilizante_foliar','calcario_gesso','adubo_organico'];
+
+// Lista pré-cadastrada de adubos comuns (Conilon)
+const ADUBOS_COMUNS = [
+  {nome:'Ureia',                    n:45,  p2o5:0,  k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'Sulfato de amônio',        n:21,  p2o5:0,  k2o:0,  s:23, ca:0,  mg:0},
+  {nome:'Nitrato de amônio',        n:32,  p2o5:0,  k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'Nitrato de cálcio',        n:15.5,p2o5:0,  k2o:0,  s:0,  ca:19, mg:0},
+  {nome:'MAP (mono-amônio fosfato)',n:11,  p2o5:50, k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'DAP (di-amônio fosfato)',  n:18,  p2o5:46, k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'Super simples',            n:0,   p2o5:18, k2o:0,  s:12, ca:18, mg:0},
+  {nome:'Super triplo',             n:0,   p2o5:44, k2o:0,  s:0,  ca:13, mg:0},
+  {nome:'Cloreto de potássio (KCl)',n:0,   p2o5:0,  k2o:60, s:0,  ca:0,  mg:0},
+  {nome:'Sulfato de potássio',      n:0,   p2o5:0,  k2o:50, s:18, ca:0,  mg:0},
+  {nome:'Sulfato de magnésio',      n:0,   p2o5:0,  k2o:0,  s:13, ca:0,  mg:9},
+  {nome:'Gesso agrícola',           n:0,   p2o5:0,  k2o:0,  s:15, ca:17, mg:0},
+  {nome:'Calcário dolomítico',      n:0,   p2o5:0,  k2o:0,  s:0,  ca:21, mg:7},
+  {nome:'Calcário calcítico',       n:0,   p2o5:0,  k2o:0,  s:0,  ca:32, mg:1}
+];
+
+const CAMPOS_COMP = ['n','p2o5','k2o','s','ca','mg','zn','b','cu','mn'];
+
+// Mostra/esconde bloco composição conforme categoria
+window.atualizarComposicao = function() {
+  const catId = document.getElementById('selCategoria').value;
+  const bloco = document.getElementById('blocoComposicao');
+  if (CATEGORIAS_COM_COMPOSICAO.includes(catId)) {
+    bloco.style.display = 'block';
+    atualizarPreviewComposicao();
+  } else {
+    bloco.style.display = 'none';
+  }
+};
+
+// Lê os inputs e retorna objeto composição (só com valores > 0)
+function lerComposicaoForm() {
+  const out = {};
+  CAMPOS_COMP.forEach(k => {
+    const id = 'comp' + k.charAt(0).toUpperCase() + k.slice(1);
+    const v = parseFloat((document.getElementById(id)?.value || '').replace(',','.'));
+    if (isFinite(v) && v > 0) out[k] = v;
+  });
+  return Object.keys(out).length ? out : null;
+}
+
+// Preenche os inputs com uma composição
+function preencherComposicaoForm(comp) {
+  CAMPOS_COMP.forEach(k => {
+    const id = 'comp' + k.charAt(0).toUpperCase() + k.slice(1);
+    const el = document.getElementById(id);
+    if (!el) return;
+    const v = (comp && comp[k] != null) ? comp[k] : '';
+    el.value = v === '' ? '' : String(v).replace('.',',');
+  });
+  atualizarPreviewComposicao();
+}
+
+// Preview "20-05-20" embaixo dos inputs
+window.atualizarPreviewComposicao = function() {
+  const c = lerComposicaoForm() || {};
+  const n = c.n || 0, p = c.p2o5 || 0, k = c.k2o || 0;
+  const extra = [];
+  if (c.s)  extra.push(`S:${c.s}`);
+  if (c.ca) extra.push(`Ca:${c.ca}`);
+  if (c.mg) extra.push(`Mg:${c.mg}`);
+  if (c.zn) extra.push(`Zn:${c.zn}`);
+  if (c.b)  extra.push(`B:${c.b}`);
+  if (c.cu) extra.push(`Cu:${c.cu}`);
+  if (c.mn) extra.push(`Mn:${c.mn}`);
+  const el = document.getElementById('previewFormula');
+  if (!el) return;
+  if (n === 0 && p === 0 && k === 0 && extra.length === 0) {
+    el.classList.remove('visivel');
+    return;
+  }
+  el.classList.add('visivel');
+  el.innerHTML = `${n}-${p}-${k}${extra.length ? ' · ' + extra.join(' · ') : ''}`;
+};
+
+// Lista dropdown de adubos comuns
+window.toggleListaAdubos = function(e) {
+  e.stopPropagation();
+  const lista = document.getElementById('listaAdubosComuns');
+  if (lista.style.display === 'block') {
+    lista.style.display = 'none';
+    return;
+  }
+  // Popular lista
+  lista.innerHTML = ADUBOS_COMUNS.map((a, i) => {
+    const extras = [];
+    if (a.s)  extras.push(`S:${a.s}`);
+    if (a.ca) extras.push(`Ca:${a.ca}`);
+    if (a.mg) extras.push(`Mg:${a.mg}`);
+    return `<div class="lista-adubos-item" onclick="aplicarAduboComum(${i})">
+      <div class="lista-adubos-item-nome">${sanitizar(a.nome)}</div>
+      <div class="lista-adubos-item-comp">${a.n}-${a.p2o5}-${a.k2o}${extras.length?' · '+extras.join(' · '):''}</div>
+    </div>`;
+  }).join('');
+  lista.style.display = 'block';
+  // Fechar ao clicar fora
+  setTimeout(() => {
+    document.addEventListener('click', fecharListaAdubosUmaVez, {once:true});
+  }, 0);
+};
+function fecharListaAdubosUmaVez() {
+  const lista = document.getElementById('listaAdubosComuns');
+  if (lista) lista.style.display = 'none';
+}
+window.aplicarAduboComum = function(idx) {
+  const a = ADUBOS_COMUNS[idx];
+  if (!a) return;
+  preencherComposicaoForm(a);
+  document.getElementById('listaAdubosComuns').style.display = 'none';
+  toast(`✅ Preenchido com ${a.nome}`);
+};
+
 // ─── CLASSIFICAR PRODUTO ───
 let _classifAlvo = null;
 window.abrirClassificar = function(prodId) {
@@ -1113,6 +1294,9 @@ window.abrirClassificar = function(prodId) {
       document.getElementById('inpSubcatLivre').value = p.subcategoria;
     }
   }
+  // Composição: pré-preencher se existe; mostrar/esconder bloco
+  preencherComposicaoForm(p.composicao || null);
+  atualizarComposicao();
   document.getElementById('modalClassificar').classList.add('aberto');
 };
 window.fecharClassificar = () => document.getElementById('modalClassificar').classList.remove('aberto');
@@ -1148,11 +1332,20 @@ window.confirmarClassificar = async function() {
   if (subcat === '__livre__' || !subcat) {
     subcat = livre || '';  // pode ficar vazia
   }
+  // Composição: só salva se categoria aceita
+  const dadosUpdate = {
+    categoria: catId,
+    subcategoria: subcat
+  };
+  if (CATEGORIAS_COM_COMPOSICAO.includes(catId)) {
+    const comp = lerComposicaoForm();
+    dadosUpdate.composicao = comp;   // null se vazio (limpa)
+  } else {
+    // Categoria não-fertilizante: limpa composição se existia
+    dadosUpdate.composicao = null;
+  }
   try {
-    await updateDoc(doc(db,'estoque_produtos',_classifAlvo._docId), {
-      categoria: catId,
-      subcategoria: subcat
-    });
+    await updateDoc(doc(db,'estoque_produtos',_classifAlvo._docId), dadosUpdate);
     toast('✅ Classificação salva.');
     fecharClassificar();
   } catch(e) { toast('❌ Erro: '+e.message); }
