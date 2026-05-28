@@ -354,10 +354,10 @@ const ADUBOS_PRE = [
   {nome:'Super triplo',             n:0,   p2o5:44, k2o:0,  s:0,  ca:13, mg:0},
   {nome:'Cloreto de potássio',      n:0,   p2o5:0,  k2o:60, s:0,  ca:0,  mg:0},
   {nome:'Sulfato de potássio',      n:0,   p2o5:0,  k2o:50, s:18, ca:0,  mg:0},
-  {nome:'Sulfato de magnésio',      n:0,   p2o5:0,  k2o:0,  s:13, ca:0,  mg:9},
-  {nome:'Gesso agrícola',           n:0,   p2o5:0,  k2o:0,  s:15, ca:17, mg:0},
-  {nome:'Calcário dolomítico',      n:0,   p2o5:0,  k2o:0,  s:0,  ca:21, mg:7},
-  {nome:'Calcário calcítico',       n:0,   p2o5:0,  k2o:0,  s:0,  ca:32, mg:1}
+  {nome:'Sulfato de magnésio',      n:0,   p2o5:0,  k2o:0,  s:13, ca:0,  mg:9,   tipoCorretivo:'sulfato_mg'},
+  {nome:'Gesso agrícola',           n:0,   p2o5:0,  k2o:0,  s:15, ca:17, mg:0,   tipoCorretivo:'gesso'},
+  {nome:'Calcário dolomítico',      n:0,   p2o5:0,  k2o:0,  s:0,  ca:21, mg:7,   prnt:80, tipoCorretivo:'calcario_dolomitico'},
+  {nome:'Calcário calcítico',       n:0,   p2o5:0,  k2o:0,  s:0,  ca:32, mg:1,   prnt:80, tipoCorretivo:'calcario_calcitico'}
 ];
 
 const CAMPOS_NUT = ['n','p2o5','k2o','s','ca','mg','zn','b','cu','mn'];
@@ -417,6 +417,8 @@ window.popularComunsCat = async function() {
       if (jaExiste) { pulados++; continue; }
       const dados = {nome: a.nome, nomeNormalizado: normNome(a.nome)};
       CAMPOS_NUT.forEach(k => { if (a[k]) dados[k] = a[k]; });
+      if (a.prnt) dados.prnt = a.prnt;
+      if (a.tipoCorretivo) dados.tipoCorretivo = a.tipoCorretivo;
       dados.criadoEm = new Date().toISOString();
       await addDoc(collection(db,'catalogo_adubos'), dados);
       criados++;
@@ -446,6 +448,11 @@ window.abrirAduboCat = function(id) {
     const v = a && a[k] != null ? a[k] : '';
     el.value = v === '' ? '' : String(v).replace('.',',');
   });
+  // PRNT e tipo de corretivo (opcionais)
+  const elPrnt = document.getElementById('catPRNT');
+  const elTipo = document.getElementById('catTipoCorretivo');
+  if (elPrnt) elPrnt.value = (a && a.prnt != null) ? String(a.prnt).replace('.',',') : '';
+  if (elTipo) elTipo.value = (a && a.tipoCorretivo) ? a.tipoCorretivo : '';
   document.getElementById('btnDelAduboCat').style.display = a ? '' : 'none';
   atualizarPreviewCat();
   document.getElementById('modalAduboCat').classList.add('aberto');
@@ -490,6 +497,11 @@ window.salvarAduboCat = async function() {
     if (isFinite(v) && v > 0) { dados[k] = v; temAlgo = true; }
   });
   if (!temAlgo) { toast('⚠️ Preencha pelo menos um nutriente'); return; }
+  // PRNT e tipo de corretivo (opcionais, podem ficar zerados)
+  const prntVal = parseFloat((document.getElementById('catPRNT')?.value||'').replace(',','.'));
+  if (isFinite(prntVal) && prntVal > 0) dados.prnt = prntVal;
+  const tipoCorr = document.getElementById('catTipoCorretivo')?.value || '';
+  if (tipoCorr) dados.tipoCorretivo = tipoCorr;
   // Verificar duplicado por nome (caso novo)
   if (!_aduboCatEditando) {
     const dup = catalogoAdubos.find(x => normNome(x.nome) === dados.nomeNormalizado);
@@ -751,6 +763,26 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <div class="cat-inp"><label>B</label><input type="text" inputmode="decimal" id="catB" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
       <div class="cat-inp"><label>Cu</label><input type="text" inputmode="decimal" id="catCu" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
       <div class="cat-inp"><label>Mn</label><input type="text" inputmode="decimal" id="catMn" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+    </div>
+    <!-- Campos especiais pra corretivos de acidez -->
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:9px 10px;margin-top:8px;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:#92400e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;">🪨 Só p/ calcários (acidez)</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <div class="cat-inp" style="flex:1;"><label>PRNT</label><input type="text" inputmode="decimal" id="catPRNT" placeholder="80"><span>%</span></div>
+        <div style="flex:2;">
+          <label style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Tipo de corretivo</label>
+          <select id="catTipoCorretivo" style="width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-size:.82rem;background:white;outline:none;">
+            <option value="">— não é corretivo —</option>
+            <option value="calcario_calcitico">Calcário calcítico</option>
+            <option value="calcario_dolomitico">Calcário dolomítico</option>
+            <option value="cal_virgem">Cal virgem (CaO)</option>
+            <option value="oxido_mg">Óxido de Mg (MgO)</option>
+            <option value="gesso">Gesso agrícola (sem PRNT)</option>
+            <option value="sulfato_mg">Sulfato de magnésio</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:.66rem;color:#92400e;margin-top:5px;line-height:1.4;">PRNT só se aplica a calcários. Cal virgem, óxido de Mg e gesso ignoram PRNT.</div>
     </div>
     <div class="modal-acoes">
       <button class="btn btn-v btn-full" onclick="salvarAduboCat()">💾 Salvar</button>

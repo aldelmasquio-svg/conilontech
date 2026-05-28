@@ -143,6 +143,35 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .alerta-tec strong{color:#78350f;}
 .alerta-info{background:#dbeafe;border:1px solid #bfdbfe;border-left:4px solid var(--blue);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#1e40af;line-height:1.45;margin-top:8px;}
 .alerta-ok{background:#dcfce7;border:1px solid #86efac;border-left:4px solid var(--ok);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#166534;line-height:1.45;margin-top:8px;}
+.alerta-warn{background:#fef3c7;border:1px solid #fde68a;border-left:4px solid var(--warn);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#92400e;line-height:1.45;margin-top:8px;}
+
+/* EQUILÍBRIO IÔNICO */
+.eq-grid{display:flex;flex-direction:column;gap:6px;margin-bottom:9px;}
+.eq-linha{background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:8px 11px;border-left:3px solid var(--cb);}
+.eq-linha.ok{border-left-color:var(--ok);background:#f0fdf4;}
+.eq-linha.warn{border-left-color:var(--warn);background:#fffbeb;}
+.eq-linha.err{border-left-color:var(--danger);background:#fef2f2;}
+.eq-linha-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);margin-bottom:4px;}
+.eq-linha-vals{display:flex;flex-wrap:wrap;gap:9px;font-size:.7rem;}
+.eq-linha-vals > div{display:flex;flex-direction:column;align-items:flex-start;gap:0;}
+.eq-lab{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;}
+.eq-val{font-family:'DM Mono',monospace;font-weight:700;font-size:.82rem;color:var(--ve);}
+.eq-val.ok{color:var(--ok);}
+.eq-val.def{color:var(--danger);}
+
+.prod-sug-box{background:white;border:1px solid var(--cl);border-radius:8px;padding:9px 11px;margin-bottom:5px;}
+.prod-sug-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+.prod-sug-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;}
+.prod-sug-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.88rem;color:var(--ve);margin-top:2px;}
+.prod-sug-formula{font-family:'DM Mono',monospace;font-size:.62rem;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;display:inline-block;margin-left:4px;}
+.prod-sug-dose{font-family:'DM Mono',monospace;font-weight:800;font-size:1.4rem;color:var(--ve);line-height:1;}
+.prod-sug-un{font-size:.66rem;color:var(--c);}
+.prod-sug-detail{margin-top:6px;font-size:.7rem;color:var(--c);line-height:1.5;font-family:'DM Mono',monospace;}
+
+.inp-linha-mini{display:flex;flex-direction:column;}
+.inp-linha-mini label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}
+.inp-linha-mini input, .inp-linha-mini select{border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;font-family:'DM Mono',monospace;font-weight:700;font-size:.82rem;color:var(--ve);outline:none;background:white;width:100%;}
+.inp-linha-mini input:focus, .inp-linha-mini select:focus{border-color:var(--v);}
 
 /* FONTE DE INFORMAÇÃO */
 .fonte{font-size:.66rem;color:var(--c);font-style:italic;margin-top:7px;text-align:right;}
@@ -386,7 +415,7 @@ const METAS_CALAGEM_DEFAULT = {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 let usuarioAtual=null, perfilAtual={};
-let talhoes=[], analises=[], amostras=[], recomendacoes=[];
+let talhoes=[], analises=[], amostras=[], recomendacoes=[], catalogoAdubos=[];
 let tabAtual='nova';
 
 // Tabelas em uso (default + override custom do admin)
@@ -404,12 +433,19 @@ window.recWIP = {
   produtividade: null,
   manual: 'incaper',
   // calagem
-  metodoCalagem: 'v',     // 'v' | 'cmag' | 'complemento'
+  metodoCalagem: 'v',     // 'v' (saturação V%) | 'equilibrio' (equilíbrio iônico CTC)
   v2: 60,
-  ca2: 3.0,
-  mg2: 1.0,
+  ca2: 3.0,  // legado (compatibilidade c/ planos antigos)
+  mg2: 1.0,  // legado
   prnt: 80,
   profundidade: 20,
+  // Equilíbrio iônico — metas em % da CTC (defaults: Ca 60, Mg 15, K 5)
+  eqCaPct: 60,
+  eqMgPct: 15,
+  eqKPct: 5,
+  // Produto selecionado para correção (Ca/Mg) — id do catalogo_adubos
+  eqProdutoCaId: null,
+  eqProdutoMgId: null,
   // AJUSTES MANUAIS (sobrescreve a sugestão da tabela)
   // null = usa sugerido. Número = ajuste manual
   ajustes: {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
@@ -461,6 +497,10 @@ onAuthStateChanged(auth, async (user) => {
   onSnapshot(collection(db,'recomendacoes'), snap => {
     recomendacoes = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
     if (tabAtual === 'lista') renderLista();
+  });
+  onSnapshot(collection(db,'catalogo_adubos'), snap => {
+    catalogoAdubos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    if (tabAtual === 'nova') renderRecomendacao();
   });
   // Tabelas custom (override do admin)
   onSnapshot(doc(db,'tabelas_recomendacao','global'), snap => {
@@ -752,128 +792,221 @@ function gerarAlertas(params) {
 function renderCardCalagem(params) {
   const aberto = window.recWIP.cardsAbertos.calagem !== false;
   const w = window.recWIP;
+  // Compatibilidade: planos antigos com 'cmag' ou 'complemento' viram 'equilibrio' para edição nova
+  if (w.metodoCalagem === 'cmag' || w.metodoCalagem === 'complemento') {
+    w.metodoCalagem = 'equilibrio';
+  }
   const v1 = params.v;
   const ca1 = params.calcio;
   const mg1 = params.magnesio;
   const ctc = params.ctc_ph7;
-  // Resultados dos 3 métodos
   const resV = calcCalagemVImpl(v1, ctc, w.v2, w.prnt, w.profundidade);
-  const resCaMg = calcCalagemCaMgImpl(ca1, mg1, w.ca2, w.mg2, w.prnt, w.profundidade);
-  const resComp = calcComplementoCaMgImpl(ca1, mg1);
-  const tipoCalc = sugerirCalcarioImpl(ca1, mg1);
   // Painel principal
   let painelMetodo = '';
   if (w.metodoCalagem === 'v') {
-    painelMetodo = `<div class="formula-box">
-      <strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ (PRNT × 10)<br>
-      ${resV ? (resV.jaCorrigido ? `<span style="color:var(--ok);">✓ V% atual (${fmt(v1,1)}%) já está ≥ alvo (${w.v2}%). Não precisa calagem.</span>` : `Cálculo: ${escHtml(resV.formulaTxt)}<br>NC (20cm) = <strong>${fmt(resV.nc,2)}</strong> t/ha<br>Fator profundidade (${w.profundidade}cm) = × ${fmt(resV.fatorProf,2)}<br>NC final = <strong>${fmt(resV.ncCorrigida,2)} t/ha</strong>`) : '<span style="color:var(--danger);">Dados insuficientes (V%, CTC, V₂, PRNT)</span>'}
+    painelMetodo = renderPainelV(resV, v1, ctc, w);
+  } else if (w.metodoCalagem === 'equilibrio') {
+    painelMetodo = renderPainelEquilibrio(params, w);
+  }
+  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardCalagem">
+    <div class="card-rec-head" onclick="toggleCard('calagem')">
+      <div class="card-rec-tit">🟤 Calagem e correção de bases</div>
+      <button class="card-rec-toggle" type="button">▼</button>
     </div>
+    <div class="card-rec-body">
+      <div class="seg-btns">
+        <button class="seg-btn ${w.metodoCalagem==='v'?'ativo':''}" onclick="setMetodoCalagem('v')">📊 Saturação V%</button>
+        <button class="seg-btn ${w.metodoCalagem==='equilibrio'?'ativo':''}" onclick="setMetodoCalagem('equilibrio')">⚖️ Equilíbrio iônico</button>
+      </div>
+      ${painelMetodo}
+      <div class="fonte">Manual: ${escHtml(window.METAS_CALAGEM[w.manual]?.nome || '—')}</div>
+    </div>
+  </div>`;
+}
+
+// PAINEL V% (mantido como estava, simplificado)
+function renderPainelV(resV, v1, ctc, w) {
+  const txtCalc = resV
+    ? (resV.jaCorrigido
+        ? `<span style="color:var(--ok);">✓ V% atual (${fmt(v1,1)}%) já está ≥ alvo (${w.v2}%). Não precisa calagem.</span>`
+        : `Cálculo: ${escHtml(resV.formulaTxt)}<br>NC (20cm) = <strong>${fmt(resV.nc,2)}</strong> t/ha<br>Fator profundidade (${w.profundidade}cm) = × ${fmt(resV.fatorProf,2)}<br>NC final = <strong>${fmt(resV.ncCorrigida,2)} t/ha</strong>`)
+    : '<span style="color:var(--danger);">Dados insuficientes (V%, CTC pH7, PRNT)</span>';
+  const inputsBase = `
     <div class="inp-linha">
       <label>V₂ (saturação alvo)</label>
       <input type="text" inputmode="decimal" value="${w.v2}" oninput="window.recWIP.v2=parseDose(this.value)||0;onRecalcular()">
       <span class="inp-linha-un">%</span>
-    </div>`;
-  } else if (w.metodoCalagem === 'cmag') {
-    painelMetodo = `<div class="formula-box">
-      <strong>Fórmula (equivalentes):</strong> NC (t/ha) = ((Ca₂+Mg₂) − (Ca₁+Mg₁)) × 100 ÷ PRNT<br>
-      ${resCaMg ? (resCaMg.jaCorrigido ? `<span style="color:var(--ok);">✓ Ca+Mg atuais (${fmt((ca1||0)+(mg1||0),2)}) já ≥ meta (${w.ca2+w.mg2}). Não precisa.</span>` : `Cálculo: ${escHtml(resCaMg.formulaTxt)}<br>NC (20cm) = <strong>${fmt(resCaMg.nc,2)}</strong> t/ha<br>Fator profundidade (${w.profundidade}cm) = × ${fmt(resCaMg.fatorProf,2)}<br>NC final = <strong>${fmt(resCaMg.ncCorrigida,2)} t/ha</strong>`) : '<span style="color:var(--danger);">Dados insuficientes</span>'}
     </div>
-    <div class="inp-linha">
-      <label>Ca₂ (cmolc/dm³)</label>
-      <input type="text" inputmode="decimal" value="${w.ca2}" oninput="window.recWIP.ca2=parseDose(this.value)||0;onRecalcular()">
-    </div>
-    <div class="inp-linha">
-      <label>Mg₂ (cmolc/dm³)</label>
-      <input type="text" inputmode="decimal" value="${w.mg2}" oninput="window.recWIP.mg2=parseDose(this.value)||0;onRecalcular()">
-    </div>`;
-  } else if (w.metodoCalagem === 'complemento') {
-    painelMetodo = `<div class="alerta-info">
-      ℹ️ <strong>Tabela de complementação Ca/Mg</strong> — aplicação direta de Ca (via gesso) e Mg (via sulfato de Mg) independente da calagem por V% ou Ca/Mg.
-    </div>
-    <div style="margin-top:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 9px;background:#fafafa;border-radius:7px;margin-bottom:5px;">
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--ve);">Cálcio (Ca)</div>
-          <div style="font-size:.7rem;color:var(--c);">Solo: ${fmt(ca1,2)} cmolc/dm³ · ${escHtml(resComp.ca?.nota||'—')}</div>
-        </div>
-        <div>
-          <span class="dose-grande">${fmt(resComp.ca?.dose||0,0)}</span><span class="dose-unidade">kg/ha</span>
-        </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 9px;background:#fafafa;border-radius:7px;">
-        <div>
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--ve);">Magnésio (Mg)</div>
-          <div style="font-size:.7rem;color:var(--c);">Solo: ${fmt(mg1,2)} cmolc/dm³ · ${escHtml(resComp.mg?.nota||'—')}</div>
-        </div>
-        <div>
-          <span class="dose-grande">${fmt(resComp.mg?.dose||0,0)}</span><span class="dose-unidade">kg/ha</span>
-        </div>
-      </div>
-    </div>`;
-  }
-  // Doses gerais (sempre PRNT e profundidade quando V% ou Ca/Mg)
-  const inputsBase = (w.metodoCalagem !== 'complemento') ? `
     <div class="inp-linha">
       <label>PRNT do calcário</label>
       <input type="text" inputmode="decimal" value="${w.prnt}" oninput="window.recWIP.prnt=parseDose(this.value)||0;onRecalcular()">
       <span class="inp-linha-un">%</span>
     </div>
     <div class="inp-linha">
-      <label>Profundidade de correção</label>
+      <label>Profundidade</label>
       <select onchange="window.recWIP.profundidade=parseInt(this.value);onRecalcular()">
-        <option value="10" ${w.profundidade==10?'selected':''}>10 cm (superficial)</option>
+        <option value="10" ${w.profundidade==10?'selected':''}>10 cm</option>
         <option value="20" ${w.profundidade==20?'selected':''}>20 cm (padrão)</option>
-        <option value="40" ${w.profundidade==40?'selected':''}>40 cm (em profundidade)</option>
+        <option value="40" ${w.profundidade==40?'selected':''}>40 cm (profundo)</option>
       </select>
-    </div>` : '';
-  // Resultado final destacado (dose recomendada baseada no método)
+    </div>`;
   let resultado = '';
-  if (w.metodoCalagem === 'v' && resV && !resV.jaCorrigido) {
+  if (resV && !resV.jaCorrigido) {
     const doseKg = Math.round(resV.ncCorrigida * 1000);
+    const tipoCalc = sugerirCalcarioImpl(window.recWIP._caTmp, window.recWIP._mgTmp);
     resultado = `${renderDoseBox('calagem', doseKg, 'kg/ha de calcário')}
       ${tipoCalc ? `<div style="text-align:center;font-size:.78rem;color:var(--ve);margin-top:-4px;margin-bottom:7px;"><strong>${tipoCalc.tipo === 'dolomitico' ? '🟫 Dolomítico' : tipoCalc.tipo === 'calcitico' ? '⚪ Calcítico' : '🟧 Magnesiano'}</strong> — ${escHtml(tipoCalc.motivo)}</div>` : ''}`;
-  } else if (w.metodoCalagem === 'cmag' && resCaMg && !resCaMg.jaCorrigido) {
-    const doseKg = Math.round(resCaMg.ncCorrigida * 1000);
-    resultado = `${renderDoseBox('calagem', doseKg, 'kg/ha de calcário')}
-      ${tipoCalc ? `<div style="text-align:center;font-size:.78rem;color:var(--ve);margin-top:-4px;margin-bottom:7px;"><strong>${tipoCalc.tipo === 'dolomitico' ? '🟫 Dolomítico' : tipoCalc.tipo === 'calcitico' ? '⚪ Calcítico' : '🟧 Magnesiano'}</strong> — ${escHtml(tipoCalc.motivo)}</div>` : ''}`;
-  } else if (w.metodoCalagem === 'complemento') {
-    const ca = resComp.ca?.dose || 0;
-    const mg = resComp.mg?.dose || 0;
-    if (ca > 0 || mg > 0) {
-      resultado = `<div style="background:var(--vb);border:1px solid var(--v);border-radius:8px;padding:10px;text-align:center;margin-top:9px;">
-        <div style="font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;">Aplicação direta</div>
-        <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:1.1rem;color:var(--ve);margin-top:3px;">${ca} kg Ca/ha · ${mg} kg Mg/ha</div>
-        <div style="font-size:.7rem;color:var(--c);margin-top:4px;">Fontes: gesso agrícola (Ca) · sulfato de magnésio (Mg)</div>
-        <div style="font-size:.66rem;color:var(--c);margin-top:6px;font-style:italic;">(Complemento usa tabela fixa — sem ajuste manual)</div>
-      </div>`;
-    }
   }
-  // Compara V% e Ca/Mg se ambos calculáveis (info pra decisão)
-  let comparacao = '';
-  if (resV && resCaMg && !resV.jaCorrigido && !resCaMg.jaCorrigido) {
-    const dif = Math.abs(resV.ncCorrigida - resCaMg.ncCorrigida);
-    if (dif > 0.5) {
-      comparacao = `<div class="alerta-info" style="margin-top:8px;">
-        📊 <strong>Comparação:</strong> V% → ${fmt(resV.ncCorrigida,2)} t/ha · Ca+Mg → ${fmt(resCaMg.ncCorrigida,2)} t/ha. Métodos divergem em ${fmt(dif,2)} t/ha. Use seu critério técnico.
-      </div>`;
-    }
+  return `<div class="formula-box"><strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ (PRNT × 10)<br>${txtCalc}</div>${inputsBase}${resultado}`;
+}
+
+// PAINEL EQUILÍBRIO IÔNICO
+function renderPainelEquilibrio(params, w) {
+  const produtos = produtosCorretivosDoCatalogo();
+  const res = calcEquilibrioIonicoImpl(params, w, produtos);
+  if (res.erro) {
+    return `<div class="alerta-info" style="background:#fee2e2;border-color:#fca5a5;color:#991b1b;border-left-color:#dc2626;">⚠️ ${escHtml(res.erro)}</div>`;
   }
-  return `<div class="card-rec ${aberto?'':'fechado'}" id="cardCalagem">
-    <div class="card-rec-head" onclick="toggleCard('calagem')">
-      <div class="card-rec-tit">🟤 Calagem</div>
-      <button class="card-rec-toggle" type="button">▼</button>
-    </div>
-    <div class="card-rec-body">
-      <div class="seg-btns">
-        <button class="seg-btn ${w.metodoCalagem==='v'?'ativo':''}" onclick="setMetodoCalagem('v')">V%</button>
-        <button class="seg-btn ${w.metodoCalagem==='cmag'?'ativo':''}" onclick="setMetodoCalagem('cmag')">Ca + Mg</button>
-        <button class="seg-btn ${w.metodoCalagem==='complemento'?'ativo':''}" onclick="setMetodoCalagem('complemento')">Complemento</button>
+  // guardar pra dose-box (calagem) — não há "dose única" aqui, dose vem da sugestão
+  // Vamos calcular um total agregado pra dose-box (calcário sugerido principal)
+  const doseTotalCalcario =
+    (res.sugestao.mg?.doseCorrigida || 0) +
+    (res.sugestao.ca?.doseCorrigida || 0) +
+    (res.sugestao.ca_complemento && !produtoEhGesso(res.sugestao.ca_complemento.produto) ? res.sugestao.ca_complemento.doseCorrigida : 0);
+  const doseGesso = (res.sugestao.ca_complemento && produtoEhGesso(res.sugestao.ca_complemento.produto)) ? res.sugestao.ca_complemento.doseCorrigida : 0;
+  // Cards por nutriente
+  const cardCa = renderEqLinha('Cálcio (Ca)', '🟫', res.deficits.ca, res.deficitsKg.ca, 'cmolc/dm³');
+  const cardMg = renderEqLinha('Magnésio (Mg)', '🟩', res.deficits.mg, res.deficitsKg.mg, 'cmolc/dm³');
+  const cardK = res.deficits.k
+    ? renderEqLinhaK(res.deficits.k, res.deficitsKg.k, res.kMg)
+    : `<div class="alerta-warn" style="font-size:.74rem;">⚠️ K não disponível no laudo (campo "potassio"). Não foi possível calcular.</div>`;
+  // Sugestões de produto
+  let blocoProdutos = '';
+  if (!produtos.length) {
+    blocoProdutos = `<div class="alerta-warn" style="margin-top:9px;">
+      📭 <strong>Catálogo de adubos vazio.</strong> Cadastre os corretivos em <strong>Admin → 🧪 Adubos</strong> (PRNT, tipo).
+    </div>`;
+  } else {
+    blocoProdutos = renderSugestaoProdutos(res.sugestao);
+  }
+  // Inputs editáveis: metas e profundidade
+  const inputsBase = `
+    <details style="margin-top:9px;background:#fafafa;border-radius:7px;padding:8px 11px;">
+      <summary style="cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--ve);">⚙️ Ajustar metas e profundidade</summary>
+      <div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px;">
+        <div class="inp-linha-mini"><label>Ca (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqCaPct||60}" oninput="window.recWIP.eqCaPct=parseDose(this.value)||60;onRecalcular()"></div>
+        <div class="inp-linha-mini"><label>Mg (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqMgPct||15}" oninput="window.recWIP.eqMgPct=parseDose(this.value)||15;onRecalcular()"></div>
+        <div class="inp-linha-mini"><label>K (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqKPct||5}" oninput="window.recWIP.eqKPct=parseDose(this.value)||5;onRecalcular()"></div>
+        <div class="inp-linha-mini"><label>Prof (cm)</label>
+          <select onchange="window.recWIP.profundidade=parseInt(this.value);onRecalcular()">
+            <option value="10" ${w.profundidade==10?'selected':''}>10</option>
+            <option value="20" ${w.profundidade==20?'selected':''}>20</option>
+            <option value="40" ${w.profundidade==40?'selected':''}>40</option>
+          </select>
+        </div>
       </div>
-      ${painelMetodo}
-      ${inputsBase}
-      ${resultado}
-      ${comparacao}
-      <div class="fonte">Manual: ${escHtml(window.METAS_CALAGEM[w.manual]?.nome || '—')}</div>
+    </details>`;
+  // Dose-box principal: total de calcário agregado (sem gesso)
+  let resultado = '';
+  if (doseTotalCalcario > 0) {
+    resultado = renderDoseBox('calagem', Math.round(doseTotalCalcario), 'kg/ha de calcário (total)');
+  }
+  if (doseGesso > 0) {
+    resultado += `<div style="background:#fef3c7;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:7px;padding:8px 11px;margin-top:7px;font-size:.78rem;color:#92400e;">
+      <strong>+ Gesso agrícola:</strong> ${fmt(doseGesso,0)} kg/ha
+      <div style="font-size:.66rem;margin-top:3px;">⚠️ Aplicar separado do calcário. Não eleva pH, atua em profundidade.</div>
+    </div>`;
+  }
+  // Resumo de déficits + sugestões
+  return `<div class="alerta-info" style="margin-bottom:9px;">
+    📐 <strong>CTC pH7:</strong> ${fmt(res.ctc,2)} cmolc/dm³ · Profundidade: ${res.profCm} cm · Metas: Ca ${w.eqCaPct||60}% · Mg ${w.eqMgPct||15}% · K ${w.eqKPct||5}%
+  </div>
+  <div class="eq-grid">${cardCa}${cardMg}${cardK}</div>
+  ${blocoProdutos}
+  ${resultado}
+  ${inputsBase}`;
+}
+
+// Render de uma linha de nutriente (Ca/Mg)
+function renderEqLinha(nome, ico, deficit, deficitKg, un) {
+  if (!deficit) return `<div class="eq-linha">${ico} ${nome}: dados insuficientes</div>`;
+  const ok = deficit.deficit <= 0;
+  const cls = ok ? 'ok' : (deficit.deficit > deficit.meta * 0.5 ? 'err' : 'warn');
+  return `<div class="eq-linha ${cls}">
+    <div class="eq-linha-tit">${ico} ${escHtml(nome)}</div>
+    <div class="eq-linha-vals">
+      <div><span class="eq-lab">Atual</span><span class="eq-val">${fmt(deficit.valorAtual,2)}</span></div>
+      <div><span class="eq-lab">Meta</span><span class="eq-val">${fmt(deficit.meta,2)}</span></div>
+      <div><span class="eq-lab">${ok?'Status':'Déficit'}</span><span class="eq-val ${ok?'ok':'def'}">${ok?'✓':fmt(deficit.deficit,2)}</span></div>
+      ${ok ? '' : `<div><span class="eq-lab">kg/ha</span><span class="eq-val def">${fmt(deficitKg,0)}</span></div>`}
+    </div>
+  </div>`;
+}
+
+// Linha do K — mostra também em K₂O
+function renderEqLinhaK(deficit, deficitKg, kMg) {
+  const ok = deficit.deficit <= 0;
+  const cls = ok ? 'ok' : (deficit.deficit > deficit.meta * 0.5 ? 'err' : 'warn');
+  const deficitK2O = deficitKg * 1.2;  // K → K₂O
+  return `<div class="eq-linha ${cls}">
+    <div class="eq-linha-tit">🟦 Potássio (K) <span style="font-size:.65rem;color:var(--c);font-weight:400;">— estrutural, não substitui adubação anual</span></div>
+    <div class="eq-linha-vals">
+      <div><span class="eq-lab">Laudo</span><span class="eq-val">${fmt(kMg,0)} mg/dm³</span></div>
+      <div><span class="eq-lab">Atual</span><span class="eq-val">${fmt(deficit.valorAtual,2)}</span></div>
+      <div><span class="eq-lab">Meta</span><span class="eq-val">${fmt(deficit.meta,2)}</span></div>
+      <div><span class="eq-lab">${ok?'Status':'Déficit'}</span><span class="eq-val ${ok?'ok':'def'}">${ok?'✓':fmt(deficit.deficit,2)}</span></div>
+      ${ok ? '' : `<div><span class="eq-lab">kg K/ha</span><span class="eq-val def">${fmt(deficitKg,0)}</span></div>`}
+      ${ok ? '' : `<div><span class="eq-lab">kg K₂O/ha</span><span class="eq-val def">${fmt(deficitK2O,0)}</span></div>`}
+    </div>
+  </div>`;
+}
+
+// Render das sugestões de produto
+function renderSugestaoProdutos(sug) {
+  const blocos = [];
+  if (sug.mg) {
+    blocos.push(renderProdutoBlock('🟫 Fonte Mg+Ca', sug.mg));
+  }
+  if (sug.ca) {
+    blocos.push(renderProdutoBlock('⚪ Fonte Ca', sug.ca));
+  }
+  if (sug.ca_complemento) {
+    const tit = produtoEhGesso(sug.ca_complemento.produto) ? '🟧 Complemento Ca (gesso)' : '⚪ Complemento Ca (calcítico)';
+    blocos.push(renderProdutoBlock(tit, sug.ca_complemento));
+  }
+  if (sug.notas && sug.notas.length) {
+    blocos.push(`<div class="alerta-warn" style="margin-top:5px;font-size:.74rem;">${sug.notas.map(n => '• '+escHtml(n)).join('<br>')}</div>`);
+  }
+  if (!blocos.length) {
+    return `<div class="alerta-info" style="margin-top:9px;background:#dcfce7;border-color:#86efac;color:#15803d;border-left-color:#22c55e;">✓ Sem necessidade de correção de bases. Solo equilibrado.</div>`;
+  }
+  return `<div style="margin-top:9px;">
+    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.78rem;color:var(--ve);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;">🛒 Produtos sugeridos</div>
+    ${blocos.join('')}
+  </div>`;
+}
+
+function renderProdutoBlock(titulo, item) {
+  const p = item.produto;
+  const n = p.n||0, pp=p.p2o5||0, k=p.k2o||0;
+  const extras = [];
+  ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (p[kk]) extras.push(`${kk.toUpperCase()}:${p[kk]}`); });
+  const formula = extras.length ? `${n}-${pp}-${k} · ${extras.join(' · ')}` : `${n}-${pp}-${k}`;
+  return `<div class="prod-sug-box">
+    <div class="prod-sug-head">
+      <div style="flex:1;min-width:0;">
+        <div class="prod-sug-tit">${escHtml(titulo)}</div>
+        <div class="prod-sug-nome">${escHtml(p.nome)} <span class="prod-sug-formula">${escHtml(formula)}</span></div>
+      </div>
+      <div style="text-align:right;">
+        <div class="prod-sug-dose">${fmt(item.doseCorrigida,0)}</div>
+        <div class="prod-sug-un">kg/ha</div>
+      </div>
+    </div>
+    <div class="prod-sug-detail">
+      ${item.motivo ? '<div>'+escHtml(item.motivo)+'</div>' : ''}
+      ${item.usaPrnt ? `<div>📊 Dose bruta ${fmt(item.doseBruta,0)} kg/ha · PRNT ${item.prnt}% → corrigida</div>` : ''}
+      ${!item.usaPrnt && produtoEhCalcario(p) ? '<div>⚠️ Sem PRNT cadastrado — assumindo 100%</div>' : ''}
     </div>
   </div>`;
 }
@@ -1250,6 +1383,171 @@ function sugerirCalcarioImpl(ca, mg) {
   return {tipo:'magnesiano', motivo:`Ca/Mg = ${fmt(relCaMg,1)} razoável`};
 }
 
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// EQUILÍBRIO IÔNICO DA CTC
+// Metas (% da CTC efetiva ou ph7 a depender — usaremos CTC pH7 que é padrão):
+//   Ca: 60%, Mg: 15%, K: 5%
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+// Massas molares (g/mol)
+const MM_CA = 40, MM_MG = 24, MM_K = 39;
+
+// Converte K do laudo (em mg/dm³, padrão Fullin/INCAPER) para cmol_c/dm³
+// K (cmolc/dm³) = K(mg/dm³) / (MM_K × 10) = K(mg/dm³) / 390
+function kMgToCmolc(kMg) {
+  if (kMg == null || !isFinite(kMg)) return null;
+  return kMg / (MM_K * 10);
+}
+
+// Calcula déficit de uma base
+// meta% = % da CTC alvo · valorAtual em cmolc/dm³
+// retorna déficit em cmolc/dm³ (>0 se precisa correção; <=0 se já atende)
+function deficitBase(ctc, valorAtualCmolc, metaPct) {
+  if (ctc == null || valorAtualCmolc == null) return null;
+  const meta = ctc * (metaPct / 100);
+  const def = meta - valorAtualCmolc;
+  return {meta, deficit: def, valorAtual: valorAtualCmolc, metaPct};
+}
+
+// Converte déficit de cmolc/dm³ pra kg/ha do elemento
+// 1 dm³ = 1 kg solo · volume na profundidade = 10000 × prof(m) × 1000 dm³/ha
+function cmolcParaKgHa(deficitCmolc, massaMolar, profundidadeCm) {
+  if (deficitCmolc == null || !isFinite(deficitCmolc) || deficitCmolc <= 0) return 0;
+  // déficit (g/dm³) = (cmolc/dm³ / 100) × massa molar
+  const gPorDm3 = (deficitCmolc / 100) * massaMolar;
+  const volumeDm3PorHa = 10000 * (profundidadeCm / 100) * 1000;  // = 2.000.000 dm³/ha para 20 cm
+  // kg/ha = (g/dm³ × dm³/ha) / 1000
+  return gPorDm3 * volumeDm3PorHa / 1000;
+}
+
+// Identifica se um produto é gesso (não aplica PRNT)
+function produtoEhGesso(p) {
+  if (!p) return false;
+  if (p.tipoCorretivo === 'gesso') return true;
+  return /gesso/i.test(p.nome||'');
+}
+
+// Identifica se é calcário (aplica PRNT)
+function produtoEhCalcario(p) {
+  if (!p) return false;
+  if (p.tipoCorretivo === 'calcario_calcitico' || p.tipoCorretivo === 'calcario_dolomitico') return true;
+  return /calc[áa]rio|calcitico|dolomitico|dolom[íi]tico|calc[íi]tico/i.test(p.nome||'');
+}
+
+// Calcula dose do produto pra suprir déficit (kg/ha do nutriente alvo)
+// Retorna {doseBruta, doseCorrigida, usaPrnt}
+function doseProdutoPara(deficitKgHaNutriente, teorElementarPct, produto) {
+  if (!teorElementarPct || teorElementarPct <= 0) return null;
+  const doseBruta = deficitKgHaNutriente / (teorElementarPct / 100);
+  // PRNT só aplica em calcários (gesso, cal virgem, óxido Mg ignoram)
+  let doseCorrigida = doseBruta;
+  let usaPrnt = false;
+  if (produtoEhCalcario(produto) && produto.prnt && produto.prnt > 0 && produto.prnt < 100) {
+    doseCorrigida = doseBruta / (produto.prnt / 100);
+    usaPrnt = true;
+  }
+  return {doseBruta, doseCorrigida, usaPrnt, prnt: produto.prnt || null};
+}
+
+// Lógica de sugestão automática de produtos baseado nos déficits
+// Retorna {ca:{produto, dose, nota}, mg:{...}, ca_complemento:{...}}
+function sugerirProdutosEquilibrio(deficits, profCm, produtosCatalogo) {
+  const out = {ca: null, mg: null, ca_complemento: null, notas: []};
+  if (!produtosCatalogo || !produtosCatalogo.length) return out;
+  const defCaKg = cmolcParaKgHa(deficits.ca?.deficit, MM_CA, profCm);
+  const defMgKg = cmolcParaKgHa(deficits.mg?.deficit, MM_MG, profCm);
+  // Função helper: encontra produto pelo tipo
+  const acharPorTipo = (tipo) => produtosCatalogo.find(p => p.tipoCorretivo === tipo);
+  const acharCalcario = () => acharPorTipo('calcario_dolomitico') || acharPorTipo('calcario_calcitico') || produtosCatalogo.find(p => produtoEhCalcario(p));
+  // CASO 1: Ambos Ca e Mg deficitários → priorizar dolomítico
+  if (defCaKg > 0 && defMgKg > 0) {
+    const dolo = acharPorTipo('calcario_dolomitico') || produtosCatalogo.find(p => /dolom/i.test(p.nome||''));
+    if (dolo && dolo.mg > 0) {
+      // Dose pelo Mg (limitante)
+      const doseDolo = doseProdutoPara(defMgKg, dolo.mg, dolo);
+      if (doseDolo) {
+        // Quanto de Ca o dolomítico já fornece?
+        const caFornecidoBruto = doseDolo.doseBruta * (dolo.ca / 100);
+        const defCaRestante = Math.max(0, defCaKg - caFornecidoBruto);
+        out.mg = {produto: dolo, ...doseDolo, supreCa: caFornecidoBruto, supreMg: defMgKg, motivo:'Dolomítico — fornece Mg + parte do Ca'};
+        // Se ainda falta Ca, sugere complemento (calcítico ou gesso)
+        if (defCaRestante > 5) {  // tolerância
+          const calc = acharPorTipo('calcario_calcitico');
+          const gesso = acharPorTipo('gesso') || produtosCatalogo.find(p => produtoEhGesso(p));
+          const escolhido = calc || gesso;
+          if (escolhido && escolhido.ca > 0) {
+            const doseComp = doseProdutoPara(defCaRestante, escolhido.ca, escolhido);
+            if (doseComp) {
+              out.ca_complemento = {produto: escolhido, ...doseComp, supreCa: defCaRestante,
+                motivo: produtoEhGesso(escolhido) ? '⚠️ Gesso — não eleva pH, complementa Ca' : 'Calcítico — completa o Ca'};
+            }
+          }
+        }
+        return out;
+      }
+    }
+    // Sem dolomítico no catálogo
+    out.notas.push('⚠️ Sem calcário dolomítico no catálogo. Cadastre um em Admin → 🧪 Adubos.');
+  }
+  // CASO 2: Só Ca deficitário
+  if (defCaKg > 0 && defMgKg <= 0) {
+    const calc = acharPorTipo('calcario_calcitico') || produtosCatalogo.find(p => /calc[íi]tico/i.test(p.nome||''));
+    if (calc && calc.ca > 0) {
+      const dose = doseProdutoPara(defCaKg, calc.ca, calc);
+      if (dose) out.ca = {produto: calc, ...dose, supreCa: defCaKg, motivo:'Calcítico — só Ca deficitário'};
+      return out;
+    }
+    out.notas.push('Sem calcário calcítico. Verifique catálogo.');
+  }
+  // CASO 3: Só Mg deficitário
+  if (defMgKg > 0 && defCaKg <= 0) {
+    const dolo = acharPorTipo('calcario_dolomitico');
+    const oxMg = acharPorTipo('oxido_mg');
+    const sulMg = acharPorTipo('sulfato_mg') || produtosCatalogo.find(p => /sulfato.+m[áa]gn/i.test(p.nome||''));
+    const escolhido = dolo || oxMg || sulMg;
+    if (escolhido && escolhido.mg > 0) {
+      const dose = doseProdutoPara(defMgKg, escolhido.mg, escolhido);
+      if (dose) out.mg = {produto: escolhido, ...dose, supreMg: defMgKg, motivo:'Mg — fonte selecionada do catálogo'};
+      return out;
+    }
+    out.notas.push('Sem fonte de Mg no catálogo (dolomítico, óxido de Mg ou sulfato).');
+  }
+  return out;
+}
+
+// Calcula tudo do método Equilíbrio Iônico
+function calcEquilibrioIonicoImpl(params, w, produtosCatalogo) {
+  const ctc = params.ctc_ph7;
+  const ca = params.calcio;
+  const mg = params.magnesio;
+  // K vem em mg/dm³ no laudo (padrão Fullin/INCAPER)
+  const kMg = params.potassio;
+  const kCmolc = kMgToCmolc(kMg);
+  if (ctc == null || ca == null || mg == null) {
+    return {erro: 'CTC pH7, Ca e Mg da análise são obrigatórios pra este método.'};
+  }
+  const deficits = {
+    ca: deficitBase(ctc, ca, w.eqCaPct || 60),
+    mg: deficitBase(ctc, mg, w.eqMgPct || 15),
+    k: (kCmolc !== null) ? deficitBase(ctc, kCmolc, w.eqKPct || 5) : null
+  };
+  // Converter déficits para kg/ha
+  const profCm = w.profundidade || 20;
+  const deficitsKg = {
+    ca: cmolcParaKgHa(deficits.ca?.deficit, MM_CA, profCm),
+    mg: cmolcParaKgHa(deficits.mg?.deficit, MM_MG, profCm),
+    k:  cmolcParaKgHa(deficits.k?.deficit,  MM_K,  profCm)
+  };
+  // Sugerir produtos automaticamente
+  const sugestao = sugerirProdutosEquilibrio(deficits, profCm, produtosCatalogo);
+  return {ctc, ca, mg, kMg, kCmolc, deficits, deficitsKg, sugestao, profCm};
+}
+
+// Filtra do catálogo só produtos úteis pra correção de Ca/Mg
+function produtosCorretivosDoCatalogo() {
+  return (catalogoAdubos || []).filter(p => (p.ca && p.ca > 0) || (p.mg && p.mg > 0));
+}
+
 window.renderLista = function() {
   const cont = document.getElementById('content');
   cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--c);">📋 Lista de recomendações salvas (Bloco 3)</div>';
@@ -1294,17 +1592,37 @@ window.salvarRecomendacao = async function() {
         calagem.dose = valorAplicar('calagem', calagem.dose_sugerida);
       }
       calagem.v2 = w.v2; calagem.prnt = w.prnt; calagem.profundidade = w.profundidade;
-    } else if (w.metodoCalagem === 'cmag') {
-      const r = calcCalagemCaMgImpl(params.calcio, params.magnesio, w.ca2, w.mg2, w.prnt, w.profundidade);
-      if (r && !r.jaCorrigido) {
-        calagem.dose_sugerida = Math.round(r.ncCorrigida * 1000);
+    } else if (w.metodoCalagem === 'equilibrio') {
+      const produtos = produtosCorretivosDoCatalogo();
+      const r = calcEquilibrioIonicoImpl(params, w, produtos);
+      if (!r.erro) {
+        // Dose total de calcário (sem gesso) — vai pro dose-box
+        const doseTotalCalcario =
+          (r.sugestao.mg?.doseCorrigida || 0) +
+          (r.sugestao.ca?.doseCorrigida || 0) +
+          (r.sugestao.ca_complemento && !produtoEhGesso(r.sugestao.ca_complemento.produto) ? r.sugestao.ca_complemento.doseCorrigida : 0);
+        calagem.dose_sugerida = Math.round(doseTotalCalcario);
         calagem.dose = valorAplicar('calagem', calagem.dose_sugerida);
+        // Gesso (separado, não soma)
+        calagem.dose_gesso = (r.sugestao.ca_complemento && produtoEhGesso(r.sugestao.ca_complemento.produto))
+          ? Math.round(r.sugestao.ca_complemento.doseCorrigida) : 0;
+        // Snapshots dos déficits e produtos sugeridos
+        calagem.deficits = {
+          ca: r.deficits.ca,
+          mg: r.deficits.mg,
+          k: r.deficits.k
+        };
+        calagem.deficitsKg = r.deficitsKg;
+        calagem.sugestaoProdutos = {
+          mg: r.sugestao.mg ? {nome:r.sugestao.mg.produto.nome, dose:Math.round(r.sugestao.mg.doseCorrigida), prnt:r.sugestao.mg.prnt} : null,
+          ca: r.sugestao.ca ? {nome:r.sugestao.ca.produto.nome, dose:Math.round(r.sugestao.ca.doseCorrigida), prnt:r.sugestao.ca.prnt} : null,
+          ca_complemento: r.sugestao.ca_complemento ? {nome:r.sugestao.ca_complemento.produto.nome, dose:Math.round(r.sugestao.ca_complemento.doseCorrigida), prnt:r.sugestao.ca_complemento.prnt, ehGesso:produtoEhGesso(r.sugestao.ca_complemento.produto)} : null
+        };
       }
-      calagem.ca2 = w.ca2; calagem.mg2 = w.mg2; calagem.prnt = w.prnt; calagem.profundidade = w.profundidade;
-    } else if (w.metodoCalagem === 'complemento') {
-      const r = calcComplementoCaMgImpl(params.calcio, params.magnesio);
-      calagem.ca_dose = r.ca?.dose || 0;
-      calagem.mg_dose = r.mg?.dose || 0;
+      calagem.eqCaPct = w.eqCaPct || 60;
+      calagem.eqMgPct = w.eqMgPct || 15;
+      calagem.eqKPct = w.eqKPct || 5;
+      calagem.profundidade = w.profundidade;
     }
     const tipoCalc = sugerirCalcarioImpl(params.calcio, params.magnesio);
     if (tipoCalc) calagem.tipo = tipoCalc.tipo;
@@ -1408,17 +1726,19 @@ window.copiarResumo = function() {
       const ajustadoTag = apl !== sug ? ' ⚠️ ajustado (sugerido era '+sug+')' : '';
       calagemTxt = `Calcário: ${fmt(apl, 0)} kg/ha (V%, ${w.profundidade}cm, PRNT ${w.prnt}%)${ajustadoTag}`;
     }
-  } else if (w.metodoCalagem === 'cmag') {
-    const r = calcCalagemCaMgImpl(params.calcio, params.magnesio, w.ca2, w.mg2, w.prnt, w.profundidade);
-    if (r && !r.jaCorrigido) {
-      const sug = Math.round(r.ncCorrigida * 1000);
-      const apl = valorAplicar('calagem', sug);
-      const ajustadoTag = apl !== sug ? ' ⚠️ ajustado (sugerido era '+sug+')' : '';
-      calagemTxt = `Calcário: ${fmt(apl, 0)} kg/ha (Ca+Mg, ${w.profundidade}cm, PRNT ${w.prnt}%)${ajustadoTag}`;
+  } else if (w.metodoCalagem === 'equilibrio') {
+    const produtos = produtosCorretivosDoCatalogo();
+    const r = calcEquilibrioIonicoImpl(params, w, produtos);
+    if (!r.erro) {
+      const linhas = [];
+      if (r.sugestao.mg) linhas.push(`${r.sugestao.mg.produto.nome}: ${fmt(r.sugestao.mg.doseCorrigida,0)} kg/ha`);
+      if (r.sugestao.ca) linhas.push(`${r.sugestao.ca.produto.nome}: ${fmt(r.sugestao.ca.doseCorrigida,0)} kg/ha`);
+      if (r.sugestao.ca_complemento) {
+        const tag = produtoEhGesso(r.sugestao.ca_complemento.produto) ? ' ⚠️ não eleva pH' : '';
+        linhas.push(`${r.sugestao.ca_complemento.produto.nome}: ${fmt(r.sugestao.ca_complemento.doseCorrigida,0)} kg/ha${tag}`);
+      }
+      if (linhas.length) calagemTxt = 'Correção bases (equilíbrio):\n' + linhas.map(l => '  • '+l).join('\n');
     }
-  } else {
-    const r = calcComplementoCaMgImpl(params.calcio, params.magnesio);
-    if ((r.ca?.dose||0) > 0 || (r.mg?.dose||0) > 0) calagemTxt = `Complemento: ${r.ca?.dose||0} kg Ca/ha · ${r.mg?.dose||0} kg Mg/ha`;
   }
   const mapa = {zn:'Zn', b:'B', cu:'Cu', mn:'Mn'};
   const microsTxt = [];
@@ -1564,10 +1884,30 @@ window.verRecomendacao = function(id) {
 function renderCalagemTxt(c) {
   if (!c) return '<div style="color:var(--c);">Sem dados de calagem.</div>';
   if (c.metodo === 'complemento') {
+    // Legado
     const itens = [];
     if (c.ca_dose > 0) itens.push(`Cálcio: <strong>${c.ca_dose} kg/ha</strong> (gesso)`);
     if (c.mg_dose > 0) itens.push(`Magnésio: <strong>${c.mg_dose} kg/ha</strong> (sulfato Mg)`);
     return itens.length ? `<div style="font-size:.82rem;line-height:1.7;">${itens.map(i => '• '+i).join('<br>')}</div>` : '<div style="color:var(--ok);font-size:.85rem;">✓ Sem necessidade de complementação.</div>';
+  }
+  if (c.metodo === 'equilibrio' && c.sugestaoProdutos) {
+    const itens = [];
+    if (c.sugestaoProdutos.mg) itens.push(`<strong>${escHtml(c.sugestaoProdutos.mg.nome)}:</strong> ${fmt(c.sugestaoProdutos.mg.dose,0)} kg/ha${c.sugestaoProdutos.mg.prnt?` (PRNT ${c.sugestaoProdutos.mg.prnt}%)`:''}`);
+    if (c.sugestaoProdutos.ca) itens.push(`<strong>${escHtml(c.sugestaoProdutos.ca.nome)}:</strong> ${fmt(c.sugestaoProdutos.ca.dose,0)} kg/ha${c.sugestaoProdutos.ca.prnt?` (PRNT ${c.sugestaoProdutos.ca.prnt}%)`:''}`);
+    if (c.sugestaoProdutos.ca_complemento) {
+      const ehGesso = c.sugestaoProdutos.ca_complemento.ehGesso;
+      itens.push(`<strong>${escHtml(c.sugestaoProdutos.ca_complemento.nome)}${ehGesso?' ⚠️':''}:</strong> ${fmt(c.sugestaoProdutos.ca_complemento.dose,0)} kg/ha`);
+    }
+    // Déficits resumidos
+    const defs = [];
+    if (c.deficits?.ca && c.deficits.ca.deficit > 0) defs.push(`Ca déf: ${fmt(c.deficits.ca.deficit,2)} cmolc/dm³`);
+    if (c.deficits?.mg && c.deficits.mg.deficit > 0) defs.push(`Mg déf: ${fmt(c.deficits.mg.deficit,2)}`);
+    if (c.deficits?.k && c.deficits.k.deficit > 0) defs.push(`K déf: ${fmt(c.deficits.k.deficit,2)}`);
+    return `<div style="font-size:.82rem;line-height:1.7;">
+      ${itens.length ? itens.map(i => '• '+i).join('<br>') : '<span style="color:var(--ok);">✓ Solo equilibrado, sem correção necessária.</span>'}
+      ${defs.length ? `<br><span style="font-size:.7rem;color:var(--c);">${defs.join(' · ')}</span>` : ''}
+      <br><span style="font-size:.72rem;color:var(--c);">Método: Equilíbrio iônico · Metas: Ca ${c.eqCaPct||60}% · Mg ${c.eqMgPct||15}% · K ${c.eqKPct||5}% · ${c.profundidade||20}cm</span>
+    </div>`;
   }
   if (!c.dose || c.dose === 0) return '<div style="color:var(--ok);font-size:.85rem;">✓ Não precisa calagem.</div>';
   const sug = c.dose_sugerida ?? c.dose;
@@ -1587,17 +1927,25 @@ window.editarRecomendacao = function(id) {
   if (!r) return;
   // Carrega no formulário e troca pra aba Nova
   window.editandoId = id;
+  let metodo = r.calagem?.metodo || 'v';
+  // Compatibilidade: planos antigos com cmag/complemento abrem em equilibrio
+  if (metodo === 'cmag' || metodo === 'complemento') metodo = 'equilibrio';
   window.recWIP = {
     talhaoId: r.talhaoId,
     amostraId: r.amostraId,
     produtividade: r.produtividade,
     manual: r.manual || 'incaper',
-    metodoCalagem: r.calagem?.metodo || 'v',
+    metodoCalagem: metodo,
     v2: r.calagem?.v2 || 60,
     ca2: r.calagem?.ca2 || 3.0,
     mg2: r.calagem?.mg2 || 1.0,
     prnt: r.calagem?.prnt || 80,
     profundidade: r.calagem?.profundidade || 20,
+    eqCaPct: r.calagem?.eqCaPct || 60,
+    eqMgPct: r.calagem?.eqMgPct || 15,
+    eqKPct: r.calagem?.eqKPct || 5,
+    eqProdutoCaId: null,
+    eqProdutoMgId: null,
     ajustes: r.ajustes || {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
     cardsAbertos: {resumo:true, calagem:true, n:true, p:true, k:true, micros:true},
     observacoes: r.observacoes || ''
@@ -1642,6 +1990,7 @@ window.limparRecomendacao = function() {
   window.recWIP = {
     talhaoId:'', amostraId:'', produtividade:null, manual:'incaper',
     metodoCalagem:'v', v2:60, ca2:3.0, mg2:1.0, prnt:80, profundidade:20,
+    eqCaPct:60, eqMgPct:15, eqKPct:5, eqProdutoCaId:null, eqProdutoMgId:null,
     ajustes: {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
     cardsAbertos:{resumo:true, calagem:true, n:true, p:true, k:true, micros:true},
     observacoes:''
