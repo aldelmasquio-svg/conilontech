@@ -331,10 +331,11 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
         <label class="campo-label" style="margin:0;">🌱 Composição (% em massa)</label>
         <div style="position:relative;">
-          <button type="button" class="btn-comp-atalho" onclick="toggleListaAdubos(event)">+ Adubo comum ▾</button>
+          <button type="button" class="btn-comp-atalho" onclick="toggleListaAdubos(event)">📋 Do catálogo ▾</button>
           <div id="listaAdubosComuns" class="lista-adubos" style="display:none;"></div>
         </div>
       </div>
+      <div id="avisoCatalogo" style="display:none;background:#dcfce7;border:1px solid #86efac;color:#15803d;padding:6px 9px;border-radius:6px;font-size:.7rem;margin-bottom:7px;line-height:1.4;"></div>
       <div class="comp-grid">
         <div class="comp-inp-w"><label>N</label><input type="text" inputmode="decimal" id="compN" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
         <div class="comp-inp-w"><label>P₂O₅</label><input type="text" inputmode="decimal" id="compP" placeholder="0" oninput="atualizarPreviewComposicao()"><span>%</span></div>
@@ -386,7 +387,7 @@ enableIndexedDbPersistence(db).catch(()=>{});
 
 // ─── ESTADO ───
 let usuarioAtual=null, perfilAtual={};
-let talhoes=[], produtos=[], movimentacoes=[], pedidos=[];
+let talhoes=[], produtos=[], movimentacoes=[], pedidos=[], catalogoAdubos=[];
 let fazendas=[];        // lista de fazendas detectadas
 let fazendaSel=null;    // fazenda selecionada no seletor
 let tabAtual='saldos';
@@ -490,6 +491,10 @@ onAuthStateChanged(auth, async (user) => {
     if (tabAtual==='pendentes') renderizarPendentes();
     // atualizar badge na aba Pendentes
     atualizarBadgePendentes();
+  });
+  // Catálogo global de adubos
+  onSnapshot(collection(db,'catalogo_adubos'), snap => {
+    catalogoAdubos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
   });
 });
 
@@ -1156,22 +1161,35 @@ window.fecharRenomear = () => document.getElementById('modalRenomear').classList
 const CATEGORIAS_COM_COMPOSICAO = ['adubo_mineral','fertilizante_foliar','calcario_gesso','adubo_organico'];
 
 // Lista pré-cadastrada de adubos comuns (Conilon)
-const ADUBOS_COMUNS = [
+// Lista comum local (fallback caso catálogo esteja vazio E o admin nunca tenha clicado em "Popular")
+const ADUBOS_COMUNS_FALLBACK = [
   {nome:'Ureia',                    n:45,  p2o5:0,  k2o:0,  s:0,  ca:0,  mg:0},
   {nome:'Sulfato de amônio',        n:21,  p2o5:0,  k2o:0,  s:23, ca:0,  mg:0},
   {nome:'Nitrato de amônio',        n:32,  p2o5:0,  k2o:0,  s:0,  ca:0,  mg:0},
   {nome:'Nitrato de cálcio',        n:15.5,p2o5:0,  k2o:0,  s:0,  ca:19, mg:0},
-  {nome:'MAP (mono-amônio fosfato)',n:11,  p2o5:50, k2o:0,  s:0,  ca:0,  mg:0},
-  {nome:'DAP (di-amônio fosfato)',  n:18,  p2o5:46, k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'MAP',                      n:11,  p2o5:50, k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'DAP',                      n:18,  p2o5:46, k2o:0,  s:0,  ca:0,  mg:0},
   {nome:'Super simples',            n:0,   p2o5:18, k2o:0,  s:12, ca:18, mg:0},
   {nome:'Super triplo',             n:0,   p2o5:44, k2o:0,  s:0,  ca:13, mg:0},
-  {nome:'Cloreto de potássio (KCl)',n:0,   p2o5:0,  k2o:60, s:0,  ca:0,  mg:0},
+  {nome:'Cloreto de potássio',      n:0,   p2o5:0,  k2o:60, s:0,  ca:0,  mg:0},
   {nome:'Sulfato de potássio',      n:0,   p2o5:0,  k2o:50, s:18, ca:0,  mg:0},
   {nome:'Sulfato de magnésio',      n:0,   p2o5:0,  k2o:0,  s:13, ca:0,  mg:9},
   {nome:'Gesso agrícola',           n:0,   p2o5:0,  k2o:0,  s:15, ca:17, mg:0},
   {nome:'Calcário dolomítico',      n:0,   p2o5:0,  k2o:0,  s:0,  ca:21, mg:7},
   {nome:'Calcário calcítico',       n:0,   p2o5:0,  k2o:0,  s:0,  ca:32, mg:1}
 ];
+
+// Fonte de adubos pra dropdown: usa catálogo do Firestore se houver, senão fallback
+function getFonteAdubos() {
+  if (catalogoAdubos && catalogoAdubos.length > 0) {
+    return [...catalogoAdubos].sort((a,b) => String(a.nome||'').localeCompare(String(b.nome||'')));
+  }
+  return ADUBOS_COMUNS_FALLBACK;
+}
+
+function normNome(s) {
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'').trim();
+}
 
 const CAMPOS_COMP = ['n','p2o5','k2o','s','ca','mg','zn','b','cu','mn'];
 
@@ -1232,7 +1250,7 @@ window.atualizarPreviewComposicao = function() {
   el.innerHTML = `${n}-${p}-${k}${extra.length ? ' · ' + extra.join(' · ') : ''}`;
 };
 
-// Lista dropdown de adubos comuns
+// Lista dropdown de adubos do CATÁLOGO (ou fallback)
 window.toggleListaAdubos = function(e) {
   e.stopPropagation();
   const lista = document.getElementById('listaAdubosComuns');
@@ -1240,19 +1258,24 @@ window.toggleListaAdubos = function(e) {
     lista.style.display = 'none';
     return;
   }
+  const fonte = getFonteAdubos();
+  const ehCatalogo = catalogoAdubos && catalogoAdubos.length > 0;
+  // Cabeçalho informativo
+  let html = `<div style="padding:7px 11px;font-size:.66rem;color:var(--c);background:#fafafa;border-bottom:1px solid var(--cl);font-weight:600;">
+    ${ehCatalogo ? `📋 Catálogo global (${fonte.length})` : '⚠️ Catálogo vazio — usando lista padrão. Cadastre adubos em Admin → 🧪 Adubos'}
+  </div>`;
   // Popular lista
-  lista.innerHTML = ADUBOS_COMUNS.map((a, i) => {
+  html += fonte.map((a, i) => {
     const extras = [];
-    if (a.s)  extras.push(`S:${a.s}`);
-    if (a.ca) extras.push(`Ca:${a.ca}`);
-    if (a.mg) extras.push(`Mg:${a.mg}`);
+    ['s','ca','mg','zn','b','cu','mn'].forEach(k => { if (a[k]) extras.push(`${k.toUpperCase()}:${a[k]}`); });
+    const n = a.n||0, p = a.p2o5||0, k = a.k2o||0;
     return `<div class="lista-adubos-item" onclick="aplicarAduboComum(${i})">
       <div class="lista-adubos-item-nome">${sanitizar(a.nome)}</div>
-      <div class="lista-adubos-item-comp">${a.n}-${a.p2o5}-${a.k2o}${extras.length?' · '+extras.join(' · '):''}</div>
+      <div class="lista-adubos-item-comp">${n}-${p}-${k}${extras.length?' · '+extras.join(' · '):''}</div>
     </div>`;
   }).join('');
+  lista.innerHTML = html;
   lista.style.display = 'block';
-  // Fechar ao clicar fora
   setTimeout(() => {
     document.addEventListener('click', fecharListaAdubosUmaVez, {once:true});
   }, 0);
@@ -1262,7 +1285,8 @@ function fecharListaAdubosUmaVez() {
   if (lista) lista.style.display = 'none';
 }
 window.aplicarAduboComum = function(idx) {
-  const a = ADUBOS_COMUNS[idx];
+  const fonte = getFonteAdubos();
+  const a = fonte[idx];
   if (!a) return;
   preencherComposicaoForm(a);
   document.getElementById('listaAdubosComuns').style.display = 'none';
@@ -1294,9 +1318,30 @@ window.abrirClassificar = function(prodId) {
       document.getElementById('inpSubcatLivre').value = p.subcategoria;
     }
   }
-  // Composição: pré-preencher se existe; mostrar/esconder bloco
-  preencherComposicaoForm(p.composicao || null);
+  // Composição: prioridade = local > catálogo (auto-busca) > vazio
+  let compInicial = p.composicao;
+  let avisoCatalogo = '';
+  if (!compInicial && catalogoAdubos && catalogoAdubos.length > 0) {
+    // Auto-busca pelo nome no catálogo
+    const nomeN = normNome(p.nome);
+    const achou = catalogoAdubos.find(a => normNome(a.nome) === nomeN);
+    if (achou) {
+      compInicial = achou;
+      avisoCatalogo = `✓ Composição puxada do catálogo: <strong>${sanitizar(achou.nome)}</strong>`;
+    }
+  }
+  preencherComposicaoForm(compInicial || null);
   atualizarComposicao();
+  // Mostrar aviso se veio do catálogo
+  const aviso = document.getElementById('avisoCatalogo');
+  if (aviso) {
+    if (avisoCatalogo) {
+      aviso.innerHTML = avisoCatalogo;
+      aviso.style.display = 'block';
+    } else {
+      aviso.style.display = 'none';
+    }
+  }
   document.getElementById('modalClassificar').classList.add('aberto');
 };
 window.fecharClassificar = () => document.getElementById('modalClassificar').classList.remove('aberto');

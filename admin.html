@@ -9,7 +9,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, updateDoc, collection, getDocs, onSnapshot, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, deleteDoc, updateDoc, collection, getDocs, onSnapshot, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -48,6 +48,7 @@ onAuthStateChanged(auth, async (user) => {
   carregarUsuarios();
   carregarLogs();
   carregarConfig();
+  carregarCatalogo();
   // Carregar fazendas a partir dos talhões
   onSnapshot(collection(db,'talhoes'), snap => {
     const set = new Set();
@@ -337,6 +338,188 @@ window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('
 window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
 window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
 window.filtrarLogs=()=>{carregarLogs();};
+
+// ─── CATÁLOGO DE ADUBOS (Entrega B v2 — catálogo global) ───
+let catalogoAdubos = [];
+
+// Pré-cadastros sugeridos (usado pra popular o catálogo na 1ª vez)
+const ADUBOS_PRE = [
+  {nome:'Ureia',                    n:45,  p2o5:0,  k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'Sulfato de amônio',        n:21,  p2o5:0,  k2o:0,  s:23, ca:0,  mg:0},
+  {nome:'Nitrato de amônio',        n:32,  p2o5:0,  k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'Nitrato de cálcio',        n:15.5,p2o5:0,  k2o:0,  s:0,  ca:19, mg:0},
+  {nome:'MAP',                      n:11,  p2o5:50, k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'DAP',                      n:18,  p2o5:46, k2o:0,  s:0,  ca:0,  mg:0},
+  {nome:'Super simples',            n:0,   p2o5:18, k2o:0,  s:12, ca:18, mg:0},
+  {nome:'Super triplo',             n:0,   p2o5:44, k2o:0,  s:0,  ca:13, mg:0},
+  {nome:'Cloreto de potássio',      n:0,   p2o5:0,  k2o:60, s:0,  ca:0,  mg:0},
+  {nome:'Sulfato de potássio',      n:0,   p2o5:0,  k2o:50, s:18, ca:0,  mg:0},
+  {nome:'Sulfato de magnésio',      n:0,   p2o5:0,  k2o:0,  s:13, ca:0,  mg:9},
+  {nome:'Gesso agrícola',           n:0,   p2o5:0,  k2o:0,  s:15, ca:17, mg:0},
+  {nome:'Calcário dolomítico',      n:0,   p2o5:0,  k2o:0,  s:0,  ca:21, mg:7},
+  {nome:'Calcário calcítico',       n:0,   p2o5:0,  k2o:0,  s:0,  ca:32, mg:1}
+];
+
+const CAMPOS_NUT = ['n','p2o5','k2o','s','ca','mg','zn','b','cu','mn'];
+
+function carregarCatalogo() {
+  onSnapshot(collection(db,'catalogo_adubos'), snap => {
+    catalogoAdubos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    renderCatalogo();
+  });
+}
+
+window.renderCatalogo = function() {
+  const lista = document.getElementById('listaCatalogo');
+  if (!lista) return;
+  const busca = (document.getElementById('buscaCat')?.value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const itens = [...catalogoAdubos]
+    .filter(a => {
+      if (!busca) return true;
+      const n = String(a.nome||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      return n.includes(busca);
+    })
+    .sort((a,b) => String(a.nome||'').localeCompare(String(b.nome||'')));
+  // Esconde botão "popular" se já tem adubos
+  const btnPop = document.getElementById('btnPopComuns');
+  if (btnPop) btnPop.style.display = catalogoAdubos.length === 0 ? '' : 'none';
+  if (!itens.length) {
+    if (busca) {
+      lista.innerHTML = `<div class="cat-vazio">Nenhum adubo encontrado pra "${sanitizar(busca)}".</div>`;
+    } else {
+      lista.innerHTML = `<div class="cat-vazio">📭 Catálogo vazio.<br><strong>Toque em "⚡ Popular com 14 comuns"</strong> ou cadastre manualmente em "＋ Novo adubo".</div>`;
+    }
+    return;
+  }
+  lista.innerHTML = itens.map(a => {
+    const n = a.n||0, p=a.p2o5||0, k=a.k2o||0;
+    const extras = [];
+    ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (a[kk]) extras.push(`${kk.toUpperCase()}:${a[kk]}`); });
+    return `<div class="cat-row" onclick="abrirAduboCat('${a._docId}')">
+      <div class="cat-row-info">
+        <div class="cat-row-nome">${sanitizar(a.nome)}</div>
+        <div class="cat-row-formula">${n}-${p}-${k}${extras.length?' · '+extras.join(' · '):''}</div>
+      </div>
+      <span class="cat-row-chip">${n}-${p}-${k}${extras.length?'+':''}</span>
+    </div>`;
+  }).join('');
+};
+
+window.popularComunsCat = async function() {
+  if (catalogoAdubos.length > 0) {
+    if (!confirm(`Já existem ${catalogoAdubos.length} adubos no catálogo. Adicionar os 14 comuns mesmo assim? (vai pular nomes duplicados)`)) return;
+  }
+  try {
+    let criados = 0, pulados = 0;
+    for (const a of ADUBOS_PRE) {
+      // Verifica se já existe pelo nome
+      const jaExiste = catalogoAdubos.find(x => normNome(x.nome) === normNome(a.nome));
+      if (jaExiste) { pulados++; continue; }
+      const dados = {nome: a.nome, nomeNormalizado: normNome(a.nome)};
+      CAMPOS_NUT.forEach(k => { if (a[k]) dados[k] = a[k]; });
+      dados.criadoEm = new Date().toISOString();
+      await addDoc(collection(db,'catalogo_adubos'), dados);
+      criados++;
+    }
+    toast(`✅ ${criados} adubo(s) cadastrados${pulados?' · '+pulados+' já existiam':''}`);
+    try {
+      await addDoc(collection(db,'logs'), {tipo:'catalogo', mensagem:`${usuarioAtual.email} populou catálogo com ${criados} adubos comuns`, criadoEm: new Date().toISOString(), uid: usuarioAtual.uid});
+    } catch(e) {}
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+function normNome(s) {
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'').trim();
+}
+
+let _aduboCatEditando = null;
+
+window.abrirAduboCat = function(id) {
+  _aduboCatEditando = id || null;
+  const a = id ? catalogoAdubos.find(x => x._docId === id) : null;
+  document.getElementById('aduboCatTit').textContent = a ? `Editar: ${a.nome}` : 'Novo adubo';
+  document.getElementById('aduboCatNome').value = a ? (a.nome || '') : '';
+  CAMPOS_NUT.forEach(k => {
+    const id2 = 'cat' + k.charAt(0).toUpperCase() + k.slice(1);
+    const el = document.getElementById(id2);
+    if (!el) return;
+    const v = a && a[k] != null ? a[k] : '';
+    el.value = v === '' ? '' : String(v).replace('.',',');
+  });
+  document.getElementById('btnDelAduboCat').style.display = a ? '' : 'none';
+  atualizarPreviewCat();
+  document.getElementById('modalAduboCat').classList.add('aberto');
+};
+
+window.fecharAduboCat = function() {
+  document.getElementById('modalAduboCat').classList.remove('aberto');
+  _aduboCatEditando = null;
+};
+
+window.atualizarPreviewCat = function() {
+  const c = {};
+  CAMPOS_NUT.forEach(k => {
+    const id2 = 'cat' + k.charAt(0).toUpperCase() + k.slice(1);
+    const el = document.getElementById(id2);
+    if (!el) return;
+    const v = parseFloat((el.value||'').replace(',','.'));
+    if (isFinite(v) && v > 0) c[k] = v;
+  });
+  const n = c.n||0, p = c.p2o5||0, k = c.k2o||0;
+  const extras = [];
+  ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (c[kk]) extras.push(`${kk.toUpperCase()}:${c[kk]}`); });
+  const el = document.getElementById('aduboCatPreview');
+  if (n === 0 && p === 0 && k === 0 && extras.length === 0) {
+    el.style.display = 'none';
+    return;
+  }
+  el.style.display = '';
+  el.textContent = `${n}-${p}-${k}${extras.length?' · '+extras.join(' · '):''}`;
+};
+
+window.salvarAduboCat = async function() {
+  const nome = (document.getElementById('aduboCatNome').value || '').trim();
+  if (!nome) { toast('⚠️ Informe o nome'); return; }
+  const dados = {nome, nomeNormalizado: normNome(nome)};
+  let temAlgo = false;
+  CAMPOS_NUT.forEach(k => {
+    const id2 = 'cat' + k.charAt(0).toUpperCase() + k.slice(1);
+    const el = document.getElementById(id2);
+    if (!el) return;
+    const v = parseFloat((el.value||'').replace(',','.'));
+    if (isFinite(v) && v > 0) { dados[k] = v; temAlgo = true; }
+  });
+  if (!temAlgo) { toast('⚠️ Preencha pelo menos um nutriente'); return; }
+  // Verificar duplicado por nome (caso novo)
+  if (!_aduboCatEditando) {
+    const dup = catalogoAdubos.find(x => normNome(x.nome) === dados.nomeNormalizado);
+    if (dup) { toast(`⚠️ Já existe "${dup.nome}" no catálogo`); return; }
+  }
+  try {
+    if (_aduboCatEditando) {
+      // Atualizar
+      await setDoc(doc(db,'catalogo_adubos',_aduboCatEditando), {...dados, atualizadoEm: new Date().toISOString()}, {merge:false});
+      toast(`✅ ${nome} atualizado`);
+    } else {
+      dados.criadoEm = new Date().toISOString();
+      await addDoc(collection(db,'catalogo_adubos'), dados);
+      toast(`✅ ${nome} cadastrado`);
+    }
+    fecharAduboCat();
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+window.excluirAduboCat = async function() {
+  if (!_aduboCatEditando) return;
+  const a = catalogoAdubos.find(x => x._docId === _aduboCatEditando);
+  if (!a) return;
+  if (!confirm(`Excluir "${a.nome}" do catálogo?\n\nIsso NÃO remove produtos do estoque, apenas o adubo do catálogo global.`)) return;
+  try {
+    await deleteDoc(doc(db,'catalogo_adubos',_aduboCatEditando));
+    toast('🗑 Removido do catálogo');
+    fecharAduboCat();
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
 </script>
 
 <style>
@@ -437,6 +620,22 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .atv-config-row{display:flex;gap:8px;margin-bottom:7px;}
 .atv-input{flex:1;border:1.5px solid var(--cb);border-radius:6px;padding:8px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;}
 .btn-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:1.1rem;padding:4px;}
+
+/* CATÁLOGO DE ADUBOS */
+.cat-row{background:#fafafa;border:1px solid var(--cl);border-radius:8px;padding:9px 11px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;}
+.cat-row:hover{background:var(--vb);border-color:var(--v);}
+.cat-row-info{flex:1;min-width:0;}
+.cat-row-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;color:var(--ve);}
+.cat-row-formula{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--c);margin-top:2px;}
+.cat-row-chip{font-family:'DM Mono',monospace;font-size:.66rem;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;}
+.cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px;margin:8px 0;}
+.cat-inp{display:flex;align-items:center;gap:3px;background:#fafafa;border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;}
+.cat-inp label{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.74rem;color:var(--ve);min-width:30px;}
+.cat-inp input{width:100%;border:none;background:transparent;outline:none;font-family:'DM Mono',monospace;font-weight:700;font-size:.88rem;text-align:right;color:var(--ve);min-width:0;}
+.cat-inp span{font-size:.68rem;color:var(--c);}
+.btn-link-danger{background:none;border:none;color:var(--danger);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;padding:6px;text-decoration:underline;}
+.cat-vazio{text-align:center;padding:30px 15px;color:var(--c);font-size:.85rem;}
+
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:9px 18px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
@@ -470,6 +669,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
     <div class="tabs">
       <button class="tab ativo" onclick="abrirTab('usuarios',this)">👥 Usuários</button>
       <button class="tab" onclick="abrirTab('logs',this)">📋 Logs</button>
+      <button class="tab" onclick="abrirTab('catalogo',this)">🧪 Adubos</button>
       <button class="tab" onclick="abrirTab('config',this)">⚙️ Config</button>
     </div>
 
@@ -497,6 +697,20 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <div id="listaLogs"></div>
     </div>
 
+    <!-- CATÁLOGO DE ADUBOS -->
+    <div class="tab-content" id="tab-catalogo">
+      <div class="config-card">
+        <div class="config-tit">🧪 Catálogo Global de Adubos</div>
+        <p style="font-size:.75rem;color:var(--c);margin-bottom:8px;line-height:1.5;">Composição NPK dos adubos. Cadastre <strong>uma vez aqui</strong> e use em todas as fazendas. Quando você classificar um produto como adubo no estoque, o sistema busca pelo nome e preenche a composição automaticamente.</p>
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;">
+          <button class="btn-v" onclick="abrirAduboCat(null)">＋ Novo adubo</button>
+          <button class="btn-c" onclick="popularComunsCat()" id="btnPopComuns">⚡ Popular com 14 comuns</button>
+        </div>
+        <input type="text" class="inp-base" id="buscaCat" placeholder="🔍 Buscar adubo..." oninput="renderCatalogo()" style="margin-bottom:9px;">
+        <div id="listaCatalogo"></div>
+      </div>
+    </div>
+
     <!-- CONFIG -->
     <div class="tab-content" id="tab-config">
       <div class="config-card">
@@ -511,6 +725,37 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
         <button class="btn-c" onclick="addAtividade()">＋ Adicionar atividade</button>
         <button class="btn-v" onclick="salvarAtividades()">💾 Salvar Atividades</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CADASTRAR/EDITAR ADUBO -->
+<div class="modal-overlay" id="modalAduboCat" onclick="fecharAduboCat()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo" id="aduboCatTit">Novo adubo</div>
+    <div class="modal-sub">Composição em % (massa). Deixe em branco o que não tiver.</div>
+    <div class="campo">
+      <label class="campo-label">Nome</label>
+      <input type="text" class="campo-inp" id="aduboCatNome" placeholder="Ex: Ureia, MAP, NPK 20-05-20">
+    </div>
+    <div id="aduboCatPreview" style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--ve);background:var(--vb);padding:6px;border-radius:6px;margin:7px 0;display:none;font-size:1rem;"></div>
+    <div class="cat-grid">
+      <div class="cat-inp"><label>N</label><input type="text" inputmode="decimal" id="catN" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>P₂O₅</label><input type="text" inputmode="decimal" id="catP" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>K₂O</label><input type="text" inputmode="decimal" id="catK" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>S</label><input type="text" inputmode="decimal" id="catS" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>Ca</label><input type="text" inputmode="decimal" id="catCa" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>Mg</label><input type="text" inputmode="decimal" id="catMg" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>Zn</label><input type="text" inputmode="decimal" id="catZn" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>B</label><input type="text" inputmode="decimal" id="catB" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>Cu</label><input type="text" inputmode="decimal" id="catCu" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+      <div class="cat-inp"><label>Mn</label><input type="text" inputmode="decimal" id="catMn" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
+    </div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" onclick="salvarAduboCat()">💾 Salvar</button>
+      <button class="btn btn-c btn-full" onclick="fecharAduboCat()">Cancelar</button>
+      <button class="btn-link-danger" id="btnDelAduboCat" onclick="excluirAduboCat()" style="display:none;">🗑 Excluir</button>
     </div>
   </div>
 </div>
