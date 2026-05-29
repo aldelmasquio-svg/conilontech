@@ -172,6 +172,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .inp-linha-mini label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}
 .inp-linha-mini input, .inp-linha-mini select{border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;font-family:'DM Mono',monospace;font-weight:700;font-size:.82rem;color:var(--ve);outline:none;background:white;width:100%;}
 .inp-linha-mini input:focus, .inp-linha-mini select:focus{border-color:var(--v);}
+.sel-fonte{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-family:'Barlow',sans-serif;font-size:.78rem;color:var(--ve);outline:none;background:white;font-weight:600;}
+.sel-fonte:focus{border-color:var(--v);box-shadow:0 0 0 2px var(--vb);}
 
 /* FONTE DE INFORMAÇÃO */
 .fonte{font-size:.66rem;color:var(--c);font-style:italic;margin-top:7px;text-align:right;}
@@ -826,20 +828,16 @@ function renderCardCalagem(params) {
 
 // PAINEL V% (mantido como estava, simplificado)
 function renderPainelV(resV, v1, ctc, w) {
-  const txtCalc = resV
-    ? (resV.jaCorrigido
-        ? `<span style="color:var(--ok);">✓ V% atual (${fmt(v1,1)}%) já está ≥ alvo (${w.v2}%). Não precisa calagem.</span>`
-        : `Cálculo: ${escHtml(resV.formulaTxt)}<br>NC (20cm) = <strong>${fmt(resV.nc,2)}</strong> t/ha<br>Fator profundidade (${w.profundidade}cm) = × ${fmt(resV.fatorProf,2)}<br>NC final = <strong>${fmt(resV.ncCorrigida,2)} t/ha</strong>`)
-    : '<span style="color:var(--danger);">Dados insuficientes (V%, CTC pH7, PRNT)</span>';
+  // Inputs editáveis (PRNT, V2, profundidade) — usa onchange para não interromper digitação
   const inputsBase = `
     <div class="inp-linha">
       <label>V₂ (saturação alvo)</label>
-      <input type="text" inputmode="decimal" value="${w.v2}" oninput="window.recWIP.v2=parseDose(this.value)||0;onRecalcular()">
+      <input type="text" inputmode="decimal" value="${w.v2}" onchange="window.recWIP.v2=parseDose(this.value)||0;onRecalcular()">
       <span class="inp-linha-un">%</span>
     </div>
     <div class="inp-linha">
       <label>PRNT do calcário</label>
-      <input type="text" inputmode="decimal" value="${w.prnt}" oninput="window.recWIP.prnt=parseDose(this.value)||0;onRecalcular()">
+      <input type="text" inputmode="decimal" value="${w.prnt}" onchange="window.recWIP.prnt=parseDose(this.value)||0;onRecalcular()">
       <span class="inp-linha-un">%</span>
     </div>
     <div class="inp-linha">
@@ -850,14 +848,30 @@ function renderPainelV(resV, v1, ctc, w) {
         <option value="40" ${w.profundidade==40?'selected':''}>40 cm (profundo)</option>
       </select>
     </div>`;
-  let resultado = '';
-  if (resV && !resV.jaCorrigido) {
-    const doseKg = Math.round(resV.ncCorrigida * 1000);
-    const tipoCalc = sugerirCalcarioImpl(window.recWIP._caTmp, window.recWIP._mgTmp);
-    resultado = `${renderDoseBox('calagem', doseKg, 'kg/ha de calcário')}
-      ${tipoCalc ? `<div style="text-align:center;font-size:.78rem;color:var(--ve);margin-top:-4px;margin-bottom:7px;"><strong>${tipoCalc.tipo === 'dolomitico' ? '🟫 Dolomítico' : tipoCalc.tipo === 'calcitico' ? '⚪ Calcítico' : '🟧 Magnesiano'}</strong> — ${escHtml(tipoCalc.motivo)}</div>` : ''}`;
+  // CASO 1: dados insuficientes
+  if (!resV) {
+    return `<div class="alerta-warn">⚠️ Dados insuficientes para calcular V%. Conferir V%, CTC pH7 e PRNT na análise.</div>
+    ${inputsBase}`;
   }
-  return `<div class="formula-box"><strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ (PRNT × 10)<br>${txtCalc}</div>${inputsBase}${resultado}`;
+  // CASO 2: V% já está OK — mostra só aviso verde limpo + controles
+  if (resV.jaCorrigido) {
+    return `<div class="alerta-ok" style="font-size:.88rem;">
+      ✓ <strong>V% atual (${fmt(v1,1)}%) já está ≥ alvo (${w.v2}%)</strong> — não precisa calagem.
+    </div>
+    ${inputsBase}`;
+  }
+  // CASO 3: precisa calagem — mostra fórmula + dose
+  const doseKg = Math.round(resV.ncCorrigida * 1000);
+  const tipoCalc = sugerirCalcarioImpl(window.recWIP._caTmp, window.recWIP._mgTmp);
+  return `<div class="formula-box">
+    <strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ (PRNT × 10)<br>
+    Cálculo: ${escHtml(resV.formulaTxt)}<br>
+    NC (20cm) = <strong>${fmt(resV.nc,2)}</strong> t/ha · Fator profundidade (${w.profundidade}cm) = × ${fmt(resV.fatorProf,2)}<br>
+    NC final = <strong>${fmt(resV.ncCorrigida,2)} t/ha</strong>
+  </div>
+  ${inputsBase}
+  ${renderDoseBox('calagem', doseKg, 'kg/ha de calcário')}
+  ${tipoCalc ? `<div style="text-align:center;font-size:.78rem;color:var(--ve);margin-top:-4px;margin-bottom:7px;"><strong>${tipoCalc.tipo === 'dolomitico' ? '🟫 Dolomítico' : tipoCalc.tipo === 'calcitico' ? '⚪ Calcítico' : '🟧 Magnesiano'}</strong> — ${escHtml(tipoCalc.motivo)}</div>` : ''}`;
 }
 
 // PAINEL EQUILÍBRIO IÔNICO
@@ -867,13 +881,6 @@ function renderPainelEquilibrio(params, w) {
   if (res.erro) {
     return `<div class="alerta-info" style="background:#fee2e2;border-color:#fca5a5;color:#991b1b;border-left-color:#dc2626;">⚠️ ${escHtml(res.erro)}</div>`;
   }
-  // guardar pra dose-box (calagem) — não há "dose única" aqui, dose vem da sugestão
-  // Vamos calcular um total agregado pra dose-box (calcário sugerido principal)
-  const doseTotalCalcario =
-    (res.sugestao.mg?.doseCorrigida || 0) +
-    (res.sugestao.ca?.doseCorrigida || 0) +
-    (res.sugestao.ca_complemento && !produtoEhGesso(res.sugestao.ca_complemento.produto) ? res.sugestao.ca_complemento.doseCorrigida : 0);
-  const doseGesso = (res.sugestao.ca_complemento && produtoEhGesso(res.sugestao.ca_complemento.produto)) ? res.sugestao.ca_complemento.doseCorrigida : 0;
   // Cards por nutriente
   const cardCa = renderEqLinha('Cálcio (Ca)', '🟫', res.deficits.ca, res.deficitsKg.ca, 'cmolc/dm³');
   const cardMg = renderEqLinha('Magnésio (Mg)', '🟩', res.deficits.mg, res.deficitsKg.mg, 'cmolc/dm³');
@@ -887,16 +894,16 @@ function renderPainelEquilibrio(params, w) {
       📭 <strong>Catálogo de adubos vazio.</strong> Cadastre os corretivos em <strong>Admin → 🧪 Adubos</strong> (PRNT, tipo).
     </div>`;
   } else {
-    blocoProdutos = renderSugestaoProdutos(res.sugestao);
+    blocoProdutos = renderSugestaoProdutos(res.sugestao, produtos, w, res);
   }
   // Inputs editáveis: metas e profundidade
   const inputsBase = `
     <details style="margin-top:9px;background:#fafafa;border-radius:7px;padding:8px 11px;">
       <summary style="cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--ve);">⚙️ Ajustar metas e profundidade</summary>
       <div style="margin-top:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px;">
-        <div class="inp-linha-mini"><label>Ca (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqCaPct||60}" oninput="window.recWIP.eqCaPct=parseDose(this.value)||60;onRecalcular()"></div>
-        <div class="inp-linha-mini"><label>Mg (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqMgPct||15}" oninput="window.recWIP.eqMgPct=parseDose(this.value)||15;onRecalcular()"></div>
-        <div class="inp-linha-mini"><label>K (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqKPct||5}" oninput="window.recWIP.eqKPct=parseDose(this.value)||5;onRecalcular()"></div>
+        <div class="inp-linha-mini"><label>Ca (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqCaPct||60}" onchange="window.recWIP.eqCaPct=parseDose(this.value)||60;onRecalcular()"></div>
+        <div class="inp-linha-mini"><label>Mg (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqMgPct||15}" onchange="window.recWIP.eqMgPct=parseDose(this.value)||15;onRecalcular()"></div>
+        <div class="inp-linha-mini"><label>K (%CTC)</label><input type="text" inputmode="decimal" value="${w.eqKPct||5}" onchange="window.recWIP.eqKPct=parseDose(this.value)||5;onRecalcular()"></div>
         <div class="inp-linha-mini"><label>Prof (cm)</label>
           <select onchange="window.recWIP.profundidade=parseInt(this.value);onRecalcular()">
             <option value="10" ${w.profundidade==10?'selected':''}>10</option>
@@ -906,18 +913,44 @@ function renderPainelEquilibrio(params, w) {
         </div>
       </div>
     </details>`;
-  // Dose-box principal: total de calcário agregado (sem gesso)
+  // Dose-box principal — agrega só os produtos COM PRNT (calcários e similares); produtos sem PRNT vão separados
+  // E rótulo é dinâmico baseado nos produtos sugeridos
   let resultado = '';
-  if (doseTotalCalcario > 0) {
-    resultado = renderDoseBox('calagem', Math.round(doseTotalCalcario), 'kg/ha de calcário (total)');
+  // Agrupar produtos sugeridos pra dose-box:
+  // - Se há múltiplos calcários (ex: dolomítico + calcítico complemento): dose-box mostra TOTAL com rótulo "calcário (total)"
+  // - Se há apenas 1 produto: dose-box mostra o nome dele
+  // - Gesso e sulfato de Mg sempre vão em blocos separados
+  const itensPrincipais = [];  // produtos que somam no dose-box principal
+  const itensSeparados = [];   // gesso, sulfato Mg etc
+  for (const item of [res.sugestao.mg, res.sugestao.ca, res.sugestao.ca_complemento]) {
+    if (!item) continue;
+    if (produtoEhCalcario(item.produto)) {
+      itensPrincipais.push(item);
+    } else {
+      itensSeparados.push(item);
+    }
   }
-  if (doseGesso > 0) {
+  if (itensPrincipais.length > 0) {
+    const total = itensPrincipais.reduce((s, it) => s + (it.doseCorrigida || 0), 0);
+    const rotulo = itensPrincipais.length === 1
+      ? `kg/ha de ${itensPrincipais[0].produto.nome.toLowerCase()}`
+      : `kg/ha de calcário (total)`;
+    resultado = renderDoseBox('calagem', Math.round(total), rotulo);
+  } else if (itensSeparados.length === 1) {
+    // Caso só haja uma fonte (sulfato Mg ou gesso) → vira o dose-box principal
+    const it = itensSeparados[0];
+    const rotulo = `kg/ha de ${it.produto.nome.toLowerCase()}`;
+    resultado = renderDoseBox('calagem', Math.round(it.doseCorrigida), rotulo);
+    itensSeparados.shift();  // já incluído, não mostra de novo
+  }
+  // Blocos separados pra produtos que não somam no dose-box principal
+  for (const it of itensSeparados) {
+    const ehGesso = produtoEhGesso(it.produto);
     resultado += `<div style="background:#fef3c7;border:1px solid #fcd34d;border-left:4px solid #f59e0b;border-radius:7px;padding:8px 11px;margin-top:7px;font-size:.78rem;color:#92400e;">
-      <strong>+ Gesso agrícola:</strong> ${fmt(doseGesso,0)} kg/ha
-      <div style="font-size:.66rem;margin-top:3px;">⚠️ Aplicar separado do calcário. Não eleva pH, atua em profundidade.</div>
+      <strong>+ ${escHtml(it.produto.nome)}:</strong> ${fmt(it.doseCorrigida,0)} kg/ha
+      ${ehGesso ? '<div style="font-size:.66rem;margin-top:3px;">⚠️ Aplicar separado do calcário. Não eleva pH, atua em profundidade.</div>' : ''}
     </div>`;
   }
-  // Resumo de déficits + sugestões
   return `<div class="alerta-info" style="margin-bottom:9px;">
     📐 <strong>CTC pH7:</strong> ${fmt(res.ctc,2)} cmolc/dm³ · Profundidade: ${res.profCm} cm · Metas: Ca ${w.eqCaPct||60}% · Mg ${w.eqMgPct||15}% · K ${w.eqKPct||5}%
   </div>
@@ -961,18 +994,27 @@ function renderEqLinhaK(deficit, deficitKg, kMg) {
   </div>`;
 }
 
-// Render das sugestões de produto
-function renderSugestaoProdutos(sug) {
+// Render das sugestões de produto + dropdowns pra trocar a fonte
+function renderSugestaoProdutos(sug, produtos, w, res) {
   const blocos = [];
-  if (sug.mg) {
-    blocos.push(renderProdutoBlock('🟫 Fonte Mg+Ca', sug.mg));
+  // Identificar quais nutrientes precisam de correção
+  const precisaMg = (res?.deficitsKg?.mg || 0) > 0;
+  const precisaCa = (res?.deficitsKg?.ca || 0) > 0;
+  // Filtrar produtos por capacidade
+  const fontesMg = produtos.filter(p => p.mg && p.mg > 0).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  const fontesCa = produtos.filter(p => p.ca && p.ca > 0).sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
+  // Bloco Mg: se há déficit de Mg, mostra produto sugerido + dropdown pra trocar
+  if (precisaMg && sug.mg) {
+    blocos.push(renderProdutoBlockSelect('🟫 Fonte de Mg', sug.mg, fontesMg, w.eqProdutoMgId, 'eqProdutoMgId'));
   }
-  if (sug.ca) {
-    blocos.push(renderProdutoBlock('⚪ Fonte Ca', sug.ca));
+  // Bloco Ca principal (caso 2: só Ca deficitário)
+  if (precisaCa && !precisaMg && sug.ca) {
+    blocos.push(renderProdutoBlockSelect('⚪ Fonte de Ca', sug.ca, fontesCa, w.eqProdutoCaId, 'eqProdutoCaId'));
   }
+  // Bloco Ca complemento (caso 1: dolomítico + complemento de Ca)
   if (sug.ca_complemento) {
-    const tit = produtoEhGesso(sug.ca_complemento.produto) ? '🟧 Complemento Ca (gesso)' : '⚪ Complemento Ca (calcítico)';
-    blocos.push(renderProdutoBlock(tit, sug.ca_complemento));
+    const tit = produtoEhGesso(sug.ca_complemento.produto) ? '🟧 Complemento Ca (gesso)' : '⚪ Complemento Ca';
+    blocos.push(renderProdutoBlockSelect(tit, sug.ca_complemento, fontesCa, w.eqProdutoCaId, 'eqProdutoCaId'));
   }
   if (sug.notas && sug.notas.length) {
     blocos.push(`<div class="alerta-warn" style="margin-top:5px;font-size:.74rem;">${sug.notas.map(n => '• '+escHtml(n)).join('<br>')}</div>`);
@@ -986,12 +1028,24 @@ function renderSugestaoProdutos(sug) {
   </div>`;
 }
 
-function renderProdutoBlock(titulo, item) {
+// Bloco de produto sugerido com dropdown pra trocar a fonte
+function renderProdutoBlockSelect(titulo, item, fontesDisponiveis, idEscolhido, campoEscolha) {
   const p = item.produto;
   const n = p.n||0, pp=p.p2o5||0, k=p.k2o||0;
   const extras = [];
   ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (p[kk]) extras.push(`${kk.toUpperCase()}:${p[kk]}`); });
   const formula = extras.length ? `${n}-${pp}-${k} · ${extras.join(' · ')}` : `${n}-${pp}-${k}`;
+  // Dropdown com opções
+  const opcoesHtml = fontesDisponiveis.map(f => {
+    const eh = f._docId === p._docId;
+    const formulaF = (function() {
+      const exs = [];
+      ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (f[kk]) exs.push(`${kk.toUpperCase()}:${f[kk]}`); });
+      return exs.length ? `${f.n||0}-${f.p2o5||0}-${f.k2o||0} · ${exs.join(' · ')}` : `${f.n||0}-${f.p2o5||0}-${f.k2o||0}`;
+    })();
+    return `<option value="${escAttr(f._docId)}" ${eh?'selected':''}>${escHtml(f.nome)} — ${escHtml(formulaF)}</option>`;
+  }).join('');
+  const labelAlt = '— deixar sistema decidir —';
   return `<div class="prod-sug-box">
     <div class="prod-sug-head">
       <div style="flex:1;min-width:0;">
@@ -1002,6 +1056,13 @@ function renderProdutoBlock(titulo, item) {
         <div class="prod-sug-dose">${fmt(item.doseCorrigida,0)}</div>
         <div class="prod-sug-un">kg/ha</div>
       </div>
+    </div>
+    <div style="margin-top:8px;">
+      <label style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">🔄 Trocar fonte</label>
+      <select class="sel-fonte" onchange="window.recWIP.${campoEscolha}=this.value||null;onRecalcular()">
+        <option value="">${escHtml(labelAlt)}</option>
+        ${opcoesHtml}
+      </select>
     </div>
     <div class="prod-sug-detail">
       ${item.motivo ? '<div>'+escHtml(item.motivo)+'</div>' : ''}
@@ -1450,67 +1511,84 @@ function doseProdutoPara(deficitKgHaNutriente, teorElementarPct, produto) {
 }
 
 // Lógica de sugestão automática de produtos baseado nos déficits
+// Aceita escolhas manuais: produtoMgId e produtoCaId (override do automático)
 // Retorna {ca:{produto, dose, nota}, mg:{...}, ca_complemento:{...}}
-function sugerirProdutosEquilibrio(deficits, profCm, produtosCatalogo) {
+function sugerirProdutosEquilibrio(deficits, profCm, produtosCatalogo, escolhas) {
+  escolhas = escolhas || {};
   const out = {ca: null, mg: null, ca_complemento: null, notas: []};
   if (!produtosCatalogo || !produtosCatalogo.length) return out;
   const defCaKg = cmolcParaKgHa(deficits.ca?.deficit, MM_CA, profCm);
   const defMgKg = cmolcParaKgHa(deficits.mg?.deficit, MM_MG, profCm);
   // Função helper: encontra produto pelo tipo
   const acharPorTipo = (tipo) => produtosCatalogo.find(p => p.tipoCorretivo === tipo);
-  const acharCalcario = () => acharPorTipo('calcario_dolomitico') || acharPorTipo('calcario_calcitico') || produtosCatalogo.find(p => produtoEhCalcario(p));
-  // CASO 1: Ambos Ca e Mg deficitários → priorizar dolomítico
+  const acharPorId = (id) => produtosCatalogo.find(p => p._docId === id);
+  // ESCOLHAS MANUAIS — se o usuário escolheu um produto pra Mg, força usar ele
+  let produtoMgEscolhido = escolhas.produtoMgId ? acharPorId(escolhas.produtoMgId) : null;
+  let produtoCaEscolhido = escolhas.produtoCaId ? acharPorId(escolhas.produtoCaId) : null;
+  // CASO 1: Ambos Ca e Mg deficitários
   if (defCaKg > 0 && defMgKg > 0) {
-    const dolo = acharPorTipo('calcario_dolomitico') || produtosCatalogo.find(p => /dolom/i.test(p.nome||''));
-    if (dolo && dolo.mg > 0) {
-      // Dose pelo Mg (limitante)
-      const doseDolo = doseProdutoPara(defMgKg, dolo.mg, dolo);
-      if (doseDolo) {
-        // Quanto de Ca o dolomítico já fornece?
-        const caFornecidoBruto = doseDolo.doseBruta * (dolo.ca / 100);
+    // Determinar a fonte de Mg
+    let fonteMg = produtoMgEscolhido;
+    if (!fonteMg) {
+      fonteMg = acharPorTipo('calcario_dolomitico') || produtosCatalogo.find(p => /dolom/i.test(p.nome||''));
+    }
+    if (fonteMg && fonteMg.mg > 0) {
+      // Dose pelo Mg (limitante quando produto fornece Mg)
+      const doseFonteMg = doseProdutoPara(defMgKg, fonteMg.mg, fonteMg);
+      if (doseFonteMg) {
+        const caFornecidoBruto = doseFonteMg.doseBruta * ((fonteMg.ca || 0) / 100);
         const defCaRestante = Math.max(0, defCaKg - caFornecidoBruto);
-        out.mg = {produto: dolo, ...doseDolo, supreCa: caFornecidoBruto, supreMg: defMgKg, motivo:'Dolomítico — fornece Mg + parte do Ca'};
-        // Se ainda falta Ca, sugere complemento (calcítico ou gesso)
-        if (defCaRestante > 5) {  // tolerância
-          const calc = acharPorTipo('calcario_calcitico');
-          const gesso = acharPorTipo('gesso') || produtosCatalogo.find(p => produtoEhGesso(p));
-          const escolhido = calc || gesso;
-          if (escolhido && escolhido.ca > 0) {
-            const doseComp = doseProdutoPara(defCaRestante, escolhido.ca, escolhido);
+        out.mg = {produto: fonteMg, ...doseFonteMg, supreCa: caFornecidoBruto, supreMg: defMgKg,
+          motivo: produtoEhCalcario(fonteMg) ? 'Fornece Mg + parte do Ca' : 'Fonte exclusiva de Mg'};
+        // Complemento de Ca se ainda falta
+        if (defCaRestante > 5) {
+          let comp = produtoCaEscolhido;
+          if (!comp) {
+            comp = acharPorTipo('calcario_calcitico') || acharPorTipo('gesso') || produtosCatalogo.find(p => produtoEhGesso(p));
+          }
+          if (comp && comp.ca > 0) {
+            const doseComp = doseProdutoPara(defCaRestante, comp.ca, comp);
             if (doseComp) {
-              out.ca_complemento = {produto: escolhido, ...doseComp, supreCa: defCaRestante,
-                motivo: produtoEhGesso(escolhido) ? '⚠️ Gesso — não eleva pH, complementa Ca' : 'Calcítico — completa o Ca'};
+              out.ca_complemento = {produto: comp, ...doseComp, supreCa: defCaRestante,
+                motivo: produtoEhGesso(comp) ? '⚠️ Gesso — não eleva pH, complementa Ca' : 'Completa o Ca'};
             }
           }
         }
         return out;
       }
     }
-    // Sem dolomítico no catálogo
-    out.notas.push('⚠️ Sem calcário dolomítico no catálogo. Cadastre um em Admin → 🧪 Adubos.');
+    out.notas.push('⚠️ Sem fonte de Mg disponível no catálogo.');
   }
   // CASO 2: Só Ca deficitário
   if (defCaKg > 0 && defMgKg <= 0) {
-    const calc = acharPorTipo('calcario_calcitico') || produtosCatalogo.find(p => /calc[íi]tico/i.test(p.nome||''));
-    if (calc && calc.ca > 0) {
-      const dose = doseProdutoPara(defCaKg, calc.ca, calc);
-      if (dose) out.ca = {produto: calc, ...dose, supreCa: defCaKg, motivo:'Calcítico — só Ca deficitário'};
+    let fonteCa = produtoCaEscolhido;
+    if (!fonteCa) {
+      fonteCa = acharPorTipo('calcario_calcitico') || produtosCatalogo.find(p => /calc[íi]tico/i.test(p.nome||'') || produtoEhGesso(p));
+    }
+    if (fonteCa && fonteCa.ca > 0) {
+      const dose = doseProdutoPara(defCaKg, fonteCa.ca, fonteCa);
+      if (dose) out.ca = {produto: fonteCa, ...dose, supreCa: defCaKg,
+        motivo: produtoEhGesso(fonteCa) ? '⚠️ Gesso — não eleva pH' : 'Fonte de Ca'};
       return out;
     }
-    out.notas.push('Sem calcário calcítico. Verifique catálogo.');
+    out.notas.push('Sem fonte de Ca no catálogo.');
   }
   // CASO 3: Só Mg deficitário
   if (defMgKg > 0 && defCaKg <= 0) {
-    const dolo = acharPorTipo('calcario_dolomitico');
-    const oxMg = acharPorTipo('oxido_mg');
-    const sulMg = acharPorTipo('sulfato_mg') || produtosCatalogo.find(p => /sulfato.+m[áa]gn/i.test(p.nome||''));
-    const escolhido = dolo || oxMg || sulMg;
-    if (escolhido && escolhido.mg > 0) {
-      const dose = doseProdutoPara(defMgKg, escolhido.mg, escolhido);
-      if (dose) out.mg = {produto: escolhido, ...dose, supreMg: defMgKg, motivo:'Mg — fonte selecionada do catálogo'};
+    let fonteMg = produtoMgEscolhido;
+    if (!fonteMg) {
+      fonteMg = acharPorTipo('sulfato_mg') ||
+                acharPorTipo('oxido_mg') ||
+                acharPorTipo('calcario_dolomitico') ||
+                produtosCatalogo.find(p => /sulfato.+m[áa]gn/i.test(p.nome||''));
+    }
+    if (fonteMg && fonteMg.mg > 0) {
+      const dose = doseProdutoPara(defMgKg, fonteMg.mg, fonteMg);
+      if (dose) out.mg = {produto: fonteMg, ...dose, supreMg: defMgKg,
+        motivo: 'Fonte de Mg selecionada'};
       return out;
     }
-    out.notas.push('Sem fonte de Mg no catálogo (dolomítico, óxido de Mg ou sulfato).');
+    out.notas.push('Sem fonte de Mg no catálogo.');
   }
   return out;
 }
@@ -1538,8 +1616,11 @@ function calcEquilibrioIonicoImpl(params, w, produtosCatalogo) {
     mg: cmolcParaKgHa(deficits.mg?.deficit, MM_MG, profCm),
     k:  cmolcParaKgHa(deficits.k?.deficit,  MM_K,  profCm)
   };
-  // Sugerir produtos automaticamente
-  const sugestao = sugerirProdutosEquilibrio(deficits, profCm, produtosCatalogo);
+  // Sugerir produtos automaticamente (respeitando escolhas manuais do usuário)
+  const sugestao = sugerirProdutosEquilibrio(deficits, profCm, produtosCatalogo, {
+    produtoMgId: w.eqProdutoMgId,
+    produtoCaId: w.eqProdutoCaId
+  });
   return {ctc, ca, mg, kMg, kCmolc, deficits, deficitsKg, sugestao, profCm};
 }
 
