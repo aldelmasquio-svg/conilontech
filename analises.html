@@ -60,7 +60,10 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .filtro-sel:focus{border-color:var(--v);}
 
 /* CONTEÚDO */
-.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;padding:12px 14px 80px;display:flex;flex-direction:column;gap:10px;}
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;min-height:0;padding:12px 14px 100px;}
+.content > *{margin-bottom:10px;}
+.content > *:last-child{margin-bottom:0;}
+.an-card{flex-shrink:0;}
 
 /* CARDS DE ANÁLISES (lista) */
 .an-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;border-left:5px solid var(--cb);}
@@ -772,7 +775,7 @@ window.renderLista = function() {
   cont.innerHTML = lista.map(a => {
     const amos = amostras.filter(x => x.analiseId === a._docId);
     const isSolo = a.tipo === 'solo';
-    return `<div class="an-card ${a.tipo}">
+    return `<div class="an-card ${a.tipo}" onclick="verAnalise('${a._docId}')" style="cursor:pointer;">
       <div class="an-card-header">
         <div style="flex:1;min-width:0;">
           <div class="an-titulo">${isSolo?'🧪':'🍃'} ${escHtml(a.fazendaVinculada || a.propriedade || '—')}</div>
@@ -781,7 +784,7 @@ window.renderLista = function() {
         <div class="an-badge ${isSolo?'badge-solo':'badge-folha'}">${isSolo?'Solo':'Folha'}</div>
       </div>
       <div class="an-card-amostras">📦 <strong>${amos.length}</strong> amostra${amos.length>1?'s':''}${amos.length?': '+amos.slice(0,3).map(x=>escHtml(x.nome+(x.profundidade?' ('+x.profundidade+')':''))).join(', ')+(amos.length>3?' …':''):''}</div>
-      <div class="an-card-acoes">
+      <div class="an-card-acoes" onclick="event.stopPropagation()">
         <button class="btn-acao primary" onclick="verAnalise('${a._docId}')">👁️ Ver detalhes</button>
         ${podeEditar()?`<button class="btn-acao" onclick="editarAnalise('${a._docId}')">✏️ Editar</button>`:''}
         ${isAdmin()?`<button class="btn-acao danger" onclick="excluirAnalise('${a._docId}')">🗑</button>`:''}
