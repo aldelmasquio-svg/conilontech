@@ -166,6 +166,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .prod-zerado-meta{font-size:.7rem;color:var(--c);margin-top:1px;}
 .prod-zerado-und{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);font-weight:700;flex-shrink:0;}
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -218,6 +219,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       </select>
     </div>
     <button class="btn-pdf-aba" onclick="exportarPDF()">📄 PDF</button>
+    <button class="btn-pdf-aba" style="background:#217346;" onclick="exportarExcel()">📊 Excel</button>
   </div>
 
   <!-- TABS -->
@@ -1357,6 +1359,39 @@ window.exportarPDF = function() {
   </div>`;
   document.getElementById('area-impressao').innerHTML = html;
   setTimeout(() => window.print(), 120);
+};
+
+window.exportarExcel = function() {
+  const cont = document.getElementById('tabContent');
+  const wb = XLSX.utils.book_new();
+  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao'}[tabAtual] || tabAtual;
+  const tables = cont.querySelectorAll('table');
+  tables.forEach((tbl, i) => {
+    const ws = XLSX.utils.table_to_sheet(tbl);
+    const nome = (tables.length > 1 ? `Tabela_${i+1}` : labelTab).slice(0,31);
+    XLSX.utils.book_append_sheet(wb, ws, nome);
+  });
+  if (!tables.length) {
+    const secoes = cont.querySelectorAll('.secao');
+    let idx = 1;
+    secoes.forEach(sec => {
+      const rankItems = sec.querySelectorAll('.rank-item');
+      if (!rankItems.length) return;
+      const titulo = (sec.querySelector('.secao-tit')?.textContent?.replace(/[^\w\s]/g,'').trim() || `Secao_${idx}`).slice(0,31);
+      const rows = [['#','Nome','Info','Valor']];
+      rankItems.forEach(item => rows.push([
+        item.querySelector('.rank-num')?.textContent?.trim() || '',
+        item.querySelector('.rank-nome')?.textContent?.trim() || '',
+        item.querySelector('.rank-meta')?.textContent?.trim() || '',
+        item.querySelector('.rank-valor')?.textContent?.trim() || ''
+      ]));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), titulo);
+      idx++;
+    });
+  }
+  if (!wb.SheetNames.length) { toast('⚠️ Nenhum dado exportável nesta aba.'); return; }
+  XLSX.writeFile(wb, `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('📊 Excel exportado!');
 };
 </script>
 </body>
