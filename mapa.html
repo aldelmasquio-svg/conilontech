@@ -33,6 +33,7 @@ let usuarioAtual=null, perfilAtual={};
 let talhoes=[], polMap={}, talhaoSel=null, editandoId=null;
 let map, drawnItems, drawControl, mapaIniciado=false, modoDesenho=false, talhaoDesenhando=null;
 let filtroAtual='todos', sidebarAberta=true;
+let locWatchId=null, locMarker=null, locAccCircle=null;
 
 const COR={ativo:{fill:'rgba(74,140,63,.35)',border:'rgba(123,198,126,.85)'},reforma:{fill:'rgba(201,168,76,.35)',border:'rgba(220,190,90,.85)'},colhido:{fill:'rgba(139,94,60,.35)',border:'rgba(196,133,90,.85)'}};
 const STATUS_LABEL={ativo:'Ativo',reforma:'Em Reforma',colhido:'Colhido'};
@@ -251,6 +252,48 @@ window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('
 window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
 window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
 window.fecharPainel=fecharPainel;
+
+function iniciarLocalizacao(){
+  if(!navigator.geolocation){toast('❌ Geolocalização não suportada neste navegador.');return;}
+  const btn=document.getElementById('btnLocalizacao');
+  btn.classList.add('ativo');
+  btn.title='Desativar localização';
+  locWatchId=navigator.geolocation.watchPosition(
+    pos=>{
+      const{latitude:lat,longitude:lng,accuracy}=pos.coords;
+      const latlng=[lat,lng];
+      if(!locMarker){
+        const icon=L.divIcon({className:'',html:'<div class="loc-pulse"><div class="loc-dot"></div></div>',iconSize:[20,20],iconAnchor:[10,10]});
+        locMarker=L.marker(latlng,{icon,zIndexOffset:1000}).addTo(map);
+        locAccCircle=L.circle(latlng,{radius:accuracy,color:'#4285f4',fillColor:'#4285f4',fillOpacity:.1,weight:1}).addTo(map);
+        map.setView(latlng,16);
+        toast('📍 Localização ativa!');
+      }else{
+        locMarker.setLatLng(latlng);
+        locAccCircle.setLatLng(latlng);
+        locAccCircle.setRadius(accuracy);
+      }
+    },
+    err=>{
+      pararLocalizacao();
+      if(err.code===1)toast('❌ Permissão de localização negada.');
+      else toast('❌ Não foi possível obter a localização.');
+    },
+    {enableHighAccuracy:true,maximumAge:5000,timeout:15000}
+  );
+}
+
+function pararLocalizacao(){
+  if(locWatchId!==null){navigator.geolocation.clearWatch(locWatchId);locWatchId=null;}
+  if(locMarker){map.removeLayer(locMarker);locMarker=null;}
+  if(locAccCircle){map.removeLayer(locAccCircle);locAccCircle=null;}
+  const btn=document.getElementById('btnLocalizacao');
+  btn.classList.remove('ativo');
+  btn.title='Minha localização';
+  toast('📍 Localização desativada.');
+}
+
+window.toggleLocalizacao=function(){if(locWatchId!==null)pararLocalizacao();else iniciarLocalizacao();};
 </script>
 
 <style>
@@ -351,6 +394,11 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:9px 18px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
+#btnLocalizacao{position:absolute;bottom:68px;right:16px;width:44px;height:44px;background:white;border:none;border-radius:50%;cursor:pointer;box-shadow:var(--sf);z-index:1000;display:flex;align-items:center;justify-content:center;font-size:20px;transition:background .2s;}
+#btnLocalizacao.ativo{background:#e8f0fe;}
+.loc-pulse{width:20px;height:20px;display:flex;align-items:center;justify-content:center;position:relative;}
+.loc-dot{width:14px;height:14px;background:#4285f4;border:2.5px solid white;border-radius:50%;box-shadow:0 0 0 0 rgba(66,133,244,.4);animation:locpulse 2s infinite;}
+@keyframes locpulse{0%{box-shadow:0 0 0 0 rgba(66,133,244,.4);}70%{box-shadow:0 0 0 12px rgba(66,133,244,0);}100%{box-shadow:0 0 0 0 rgba(66,133,244,0);}}
 </style>
 </head>
 <body>
@@ -408,6 +456,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
     </div>
     <div class="hint" id="hintBar">Clique em um talhão para ver detalhes</div>
     <div id="emptyState"><div style="font-size:48px;opacity:.3;">🗺️</div><div style="font-size:1rem;color:var(--c);margin-top:8px;">Nenhum talhão cadastrado</div></div>
+    <button id="btnLocalizacao" onclick="toggleLocalizacao()" title="Minha localização">📍</button>
     <button id="btnNovoTalhao" onclick="abrirModal()">＋ Novo Talhão</button>
   </div>
 </div>
