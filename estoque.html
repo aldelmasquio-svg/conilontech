@@ -180,6 +180,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 
 /* AVISO SALDO NEGATIVO */
 .aviso-saldo{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 12px;font-size:.82rem;color:#92400e;margin-bottom:10px;display:flex;gap:8px;align-items:center;}
+.prod-card.min-critico{border:2px solid var(--warn);}
+.badge-min{display:inline-block;background:#fef9c3;border:1px solid #fde68a;color:#854d0e;border-radius:99px;font-size:.6rem;font-weight:700;padding:2px 7px;margin-left:6px;}
 
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ve);color:white;padding:11px 18px;border-radius:8px;font-size:.85rem;font-weight:600;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.3);}
@@ -252,7 +254,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 
   <!-- TABS -->
   <div class="tabs-bar">
-    <button class="tab ativa" id="tabSaldos" onclick="abrirTab('saldos')">📦 Saldos</button>
+    <button class="tab ativa" id="tabSaldos" onclick="abrirTab('saldos')">📦 Saldos <span id="badgeMinEstoque" class="tab-badge" style="display:none;background:#f59e0b;"></span></button>
     <button class="tab" id="tabPendentes" onclick="abrirTab('pendentes')">📥 Pendentes</button>
     <button class="tab" id="tabHistorico" onclick="abrirTab('historico')">📜 Histórico</button>
     <button class="tab" id="tabCatalogo" onclick="abrirTab('catalogo')" style="display:none;">📋 Catálogo</button>
@@ -369,6 +371,24 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
     <div class="modal-acoes">
       <button class="btn btn-v btn-full" onclick="confirmarRecebimento()" id="btnConfirmarRec">✅ Confirmar Recebimento</button>
       <button class="btn btn-c btn-full" onclick="fecharRecebimento()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ESTOQUE MÍNIMO -->
+<div class="modal-overlay" id="modalMinEstoque" onclick="fecharMinEstoque()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo">Estoque Mínimo</div>
+    <div class="modal-sub" id="minEstoqueSub"></div>
+    <div class="campo">
+      <label class="campo-label">Quantidade mínima</label>
+      <input type="number" inputmode="decimal" step="0.01" min="0" class="campo-inp" id="inpMinEstoque" placeholder="0">
+    </div>
+    <div style="font-size:.78rem;color:var(--c);margin-bottom:12px;line-height:1.4;">Sistema alertará quando o saldo cair abaixo deste valor. Use 0 para remover o alerta.</div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" onclick="salvarMinEstoque()">💾 Salvar</button>
+      <button class="btn btn-c btn-full" onclick="fecharMinEstoque()">Cancelar</button>
     </div>
   </div>
 </div>
@@ -656,7 +676,9 @@ function renderizarSaldos() {
         ? `<span class="prod-cat-tag">${labelCategoria(p.categoria)}${p.subcategoria?' · '+sanitizar(p.subcategoria):''}</span>`
         : `<span class="prod-cat-tag prod-cat-vazia">⚠️ Sem classificação</span>`;
       const compTxt = formatarChipComposicao(p.composicao);
-      html += `<div class="prod-card" data-nome="${normalizar(p.nome)}" onclick="abrirAcoesProduto('${p._docId}')">
+      const abaixoMin = (p.estoqueMinimo||0) > 0 && saldo < Number(p.estoqueMinimo);
+      const minTxt = abaixoMin ? `<span class="badge-min">⚠️ Abaixo do mínimo (min: ${fmt(p.estoqueMinimo)} ${sanitizar(p.unidade)})</span>` : '';
+      html += `<div class="prod-card ${abaixoMin?'min-critico':''}" data-nome="${normalizar(p.nome)}" onclick="abrirAcoesProduto('${p._docId}')">
         <div class="prod-card-top">
           <div style="flex:1;min-width:0;">
             <div class="prod-nome">${sanitizar(p.nome)}</div>
@@ -668,7 +690,7 @@ function renderizarSaldos() {
           </div>
         </div>
         <div class="prod-card-meta">
-          <span>${ultMovTxt}</span>
+          <span>${ultMovTxt}</span>${minTxt}
         </div>
         <div class="prod-tap-hint">👆 Toque para ações</div>
       </div>`;
@@ -676,6 +698,7 @@ function renderizarSaldos() {
     html += '</div>';
   }
   cont.innerHTML = html;
+  atualizarBadgeMinEstoque();
   // FAB para nova movimentação
   let fab = document.getElementById('fabEstoque');
   if (!fab && podeMovimentar()) {
@@ -712,6 +735,7 @@ window.abrirAcoesProduto = function(prodId) {
     const semClasse = !p.categoria;
     acs.push({ico:semClasse?'⚠️':'🏷️',lab:semClasse?'Classificar (sem categoria)':'Editar categoria',cls:semClasse?'':'',fn:`abrirClassificar('${prodId}')`});
     acs.push({ico:'✏️',lab:'Renomear produto',cls:'',fn:`abrirRenomear('${prodId}')`});
+    acs.push({ico:'🎯',lab:`Estoque mínimo${(p.estoqueMinimo||0)>0?' · atual: '+fmt(p.estoqueMinimo)+' '+sanitizar(p.unidade):''}`,cls:'',fn:`abrirMinEstoque('${prodId}')`});
   }
   if (isAdmin() && (Number(p.saldo)||0)===0) {
     acs.push({ico:'🗑',lab:'Excluir produto (saldo zero)',cls:'d',fn:`excluirProduto('${prodId}')`});
@@ -1949,6 +1973,30 @@ function renderizarCatalogo() {
   });
   html += '</div>';
   cont.innerHTML = html;
+}
+
+// ─── ESTOQUE MÍNIMO ───
+let prodMinAlvo = null;
+window.abrirMinEstoque = function(prodId) {
+  const p = produtos.find(x => x._docId===prodId); if(!p) return;
+  prodMinAlvo = p;
+  document.getElementById('minEstoqueSub').textContent = `${p.nome} · saldo atual: ${fmt(p.saldo||0)} ${p.unidade}`;
+  document.getElementById('inpMinEstoque').value = p.estoqueMinimo || '';
+  document.getElementById('modalMinEstoque').classList.add('aberto');
+};
+window.fecharMinEstoque = () => { document.getElementById('modalMinEstoque').classList.remove('aberto'); prodMinAlvo = null; };
+window.salvarMinEstoque = async function() {
+  if (!prodMinAlvo) return;
+  const val = parseFloat(document.getElementById('inpMinEstoque').value) || 0;
+  await updateDoc(doc(db,'estoque_produtos',prodMinAlvo._docId), {estoqueMinimo: val});
+  fecharMinEstoque();
+  toast(val > 0 ? `✅ Estoque mínimo definido: ${fmt(val)} ${prodMinAlvo.unidade}` : '✅ Alerta de estoque mínimo removido.');
+};
+
+function atualizarBadgeMinEstoque() {
+  const count = produtos.filter(p => p.fazenda===fazendaSel && (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).length;
+  const el = document.getElementById('badgeMinEstoque');
+  if (el) { el.textContent = count; el.style.display = count > 0 ? 'inline-block' : 'none'; }
 }
 
 </script>

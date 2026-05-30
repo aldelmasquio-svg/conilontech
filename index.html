@@ -80,6 +80,7 @@ function gerarMenu() {
 }
 
 function iniciarListeners() {
+  document.querySelectorAll('.kpi-val').forEach(el => el.classList.add('loading'));
   onSnapshot(collection(db,'talhoes'), snap => {
     talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
@@ -104,9 +105,11 @@ function atualizarDashboard() {
   atualizarGraficoStatus();
   atualizarAtividadesRecentes();
   atualizarProximasOps();
+  atualizarProducaoPorSafra();
 }
 
 function atualizarKPIs() {
+  document.querySelectorAll('.kpi-val').forEach(el => el.classList.remove('loading'));
   document.getElementById('kpiTalhoes').textContent = talhoes.length;
   document.getElementById('kpiAtivos').textContent = talhoes.filter(t => t.status === 'ativo').length;
   const totalAps = planosAdubacao.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
@@ -185,6 +188,51 @@ function atualizarProximasOps() {
       <div class="op-info"><div class="op-nome">${op.label}</div><div class="op-sub">${op.sub||'—'}</div></div>
       <span class="op-seta">›</span>
     </a>`).join('');
+}
+
+function atualizarProducaoPorSafra() {
+  if (!talhoes.length) return;
+  const safrasAll = [...new Set(talhoes.flatMap(t => (t.historico||[]).map(h => h.safra)).filter(Boolean))].sort().reverse();
+  const safraBar = document.getElementById('safraBarDash');
+  const secProd = document.getElementById('secProdSafra');
+  if (!safrasAll.length) {
+    if (safraBar) safraBar.style.display = 'none';
+    if (secProd) secProd.style.display = 'none';
+    return;
+  }
+  if (safraBar) safraBar.style.display = 'flex';
+  if (secProd) secProd.style.display = 'block';
+  const sel = document.getElementById('selSafra');
+  const currentVal = sel ? sel.value : '';
+  if (sel) {
+    sel.innerHTML = '<option value="">Última cadastrada</option>' + safrasAll.map(s => `<option value="${s}">${s}</option>`).join('');
+    if (currentVal && safrasAll.includes(currentVal)) sel.value = currentVal;
+  }
+  const safraEscolhida = sel ? sel.value : '';
+  let totalSacas = 0, totalArea = 0;
+  talhoes.forEach(t => {
+    const area = parseFloat(t.area) || 0;
+    if (area <= 0 || !t.historico || !t.historico.length) return;
+    let hist;
+    if (safraEscolhida) {
+      hist = t.historico.find(h => h.safra === safraEscolhida);
+    } else {
+      hist = [...t.historico].sort((a,b) => (b.safra||'').localeCompare(a.safra||''))[0];
+    }
+    if (!hist) return;
+    const m = String(hist.valor||'').replace(',','.').match(/([\d.]+)/);
+    const scHa = m ? parseFloat(m[1]) : 0;
+    if (scHa <= 0) return;
+    totalSacas += scHa * area;
+    totalArea += area;
+  });
+  const mediaScHa = totalArea > 0 ? totalSacas / totalArea : 0;
+  const kpiTotal = document.getElementById('kpiProdTotal');
+  const kpiMedia = document.getElementById('kpiProdMedia');
+  const lblSafra = document.getElementById('lblSafraSel');
+  if (kpiTotal) kpiTotal.textContent = totalSacas > 0 ? Math.round(totalSacas).toLocaleString('pt-BR') : '—';
+  if (kpiMedia) kpiMedia.textContent = mediaScHa > 0 ? mediaScHa.toFixed(1).replace('.',',') : '—';
+  if (lblSafra) lblSafra.textContent = safraEscolhida || (safrasAll[0] ? '· '+safrasAll[0] : '');
 }
 
 function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return`${dd}/${m}/${a}`; }
@@ -266,6 +314,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .atalho-label{font-size:.68rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.05em;}
 /* OFFLINE BADGE */
 .offline-badge{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;border-radius:20px;padding:5px 14px;font-size:.72rem;font-weight:700;z-index:500;display:none;}
+.kpi-val.loading{color:transparent!important;background:linear-gradient(90deg,var(--cl) 25%,var(--cb) 50%,var(--cl) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;display:inline-block;min-width:50px;}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:9px 18px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
@@ -322,6 +372,12 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <a href="admin.html" class="atalho-btn"><span class="atalho-ico">⚙️</span><span class="atalho-label">Admin</span></a>
     </div>
 
+    <!-- Filtro por safra (mostrado quando há histórico de produção) -->
+    <div id="safraBarDash" style="display:none;background:white;border-radius:var(--rad);box-shadow:var(--s);padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;">
+      <span style="font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--c);letter-spacing:.08em;flex-shrink:0;">🌾 Safra</span>
+      <select id="selSafra" onchange="atualizarDashboard()" style="flex:1;border:1.5px solid var(--cb);border-radius:7px;padding:7px 10px;font-size:.88rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;"></select>
+    </div>
+
     <!-- KPIs -->
     <div class="kpi-grid">
       <div class="kpi-card">
@@ -349,6 +405,23 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <div class="kpi-card" style="flex-direction:row;align-items:center;gap:12px;">
         <span class="kpi-ico">🌱</span>
         <div><span class="kpi-val" id="kpiCarreiras">—</span><span class="kpi-label" style="display:block;">Carreiras conferidas</span></div>
+      </div>
+    </div>
+
+    <!-- Produção por safra (aparece quando há dados) -->
+    <div id="secProdSafra" style="display:none;">
+      <div class="sec-title">📦 Produção da Safra<span id="lblSafraSel" style="font-size:.72rem;font-weight:500;color:var(--c);margin-left:8px;"></span></div>
+      <div class="kpi-grid" style="margin-bottom:16px;">
+        <div class="kpi-card">
+          <span class="kpi-ico">📦</span>
+          <span class="kpi-val" id="kpiProdTotal">—</span>
+          <span class="kpi-label">Sacas totais</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-ico">📏</span>
+          <span class="kpi-val" id="kpiProdMedia">—</span>
+          <span class="kpi-label">sc/ha média</span>
+        </div>
       </div>
     </div>
 
