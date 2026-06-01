@@ -1222,44 +1222,33 @@ window.fecharModalAdubo = function() {
 };
 
 function renderModalAdubo(busca) {
-  // Lista produtos do estoque que TÊM composição (local OU via catálogo por nome)
-  const talhao = talhoes.find(t => t._docId === window.planWIP.talhaoId);
-  const fazendaSel = talhao?.fazenda || '';
-  const buscaNorm = (busca||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-  // Mapa: produto -> composição efetiva
-  const produtosComComp = produtosEstoque
-    .map(p => ({...p, _compEf: composicaoDoProduto(p)}))
-    .filter(p => p._compEf)  // tem composição (local ou via catálogo)
-    .filter(p => !fazendaSel || p.fazenda === fazendaSel || !p.fazenda)
-    .filter(p => {
+  const buscaNorm = (busca||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const adubosDisp = catalogoAdubos
+    .filter(a => {
       if (!buscaNorm) return true;
-      const nomeN = String(p.nome||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+      const nomeN = String(a.nome||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
       return nomeN.includes(buscaNorm);
     })
     .sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
   const body = document.getElementById('modalAduboBody');
   let html = `<input class="adubo-busca" type="search" placeholder="🔍 Buscar adubo..." oninput="renderModalAdubo(this.value)" value="${escAttr(busca||'')}">`;
-  if (!produtosComComp.length) {
+  if (!adubosDisp.length) {
     html += `<div class="alerta-warn">
-      ${fazendaSel ? `Nenhum adubo da fazenda <strong>${escHtml(fazendaSel)}</strong> com composição reconhecível.` : 'Nenhum adubo cadastrado com composição.'}<br>
-      <span style="font-size:.74rem;">Cadastre os adubos em <strong>Admin → 🧪 Adubos</strong>, ou abra um produto no Estoque, classifique como adubo e defina a composição NPK manualmente.</span>
+      ${catalogoAdubos.length === 0
+        ? 'Nenhum adubo cadastrado no catálogo global.'
+        : 'Nenhum adubo encontrado para essa busca.'}<br>
+      <span style="font-size:.74rem;">Acesse <strong>Admin → 🧪 Adubos</strong> para cadastrar os adubos que serão usados no planejamento.</span>
     </div>`;
   } else {
-    html += produtosComComp.map(p => {
-      const c = p._compEf || {};
-      const n = c.n || 0, pp = c.p2o5 || 0, k = c.k2o || 0;
+    html += adubosDisp.map(a => {
+      const n = a.n||0, pp = a.p2o5||0, k = a.k2o||0;
       const extras = [];
-      ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (c[kk]) extras.push(`${kk.toUpperCase()}:${c[kk]}`); });
+      ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (a[kk]) extras.push(`${kk.toUpperCase()}:${a[kk]}`); });
       const formula = `${n}-${pp}-${k}${extras.length?' · '+extras.join(' · '):''}`;
-      const saldo = Number(p.saldo) || 0;
-      const viaCatalogo = !p.composicao;  // tem composição efetiva mas não local
-      return `<div class="adubo-opt" onclick="adicionarAduboAoMes('${escAttr(p._docId)}')">
+      return `<div class="adubo-opt" onclick="adicionarAduboAoMes('${escAttr(a._docId)}')">
         <div class="adubo-opt-info">
-          <div class="adubo-opt-nome">${escHtml(p.nome)} ${viaCatalogo?'<span style="font-size:.6rem;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:99px;font-weight:700;">📋 catálogo</span>':''}</div>
-          <div class="adubo-opt-sub">${escHtml(formula)} · ${escHtml(p.fazenda||'todas')}</div>
-        </div>
-        <div class="adubo-opt-saldo">
-          Saldo<br><span class="adubo-opt-saldo-val">${fmt(saldo,0)} ${escHtml(p.unidade||'')}</span>
+          <div class="adubo-opt-nome">${escHtml(a.nome)}</div>
+          <div class="adubo-opt-sub">${escHtml(formula)}</div>
         </div>
       </div>`;
     }).join('');
@@ -1269,29 +1258,32 @@ function renderModalAdubo(busca) {
 
 window.renderModalAdubo = renderModalAdubo;
 
-window.adicionarAduboAoMes = function(produtoId) {
+window.adicionarAduboAoMes = function(catalogoId) {
   if (modalAduboMesIdx === null) return;
-  const p = produtosEstoque.find(x => x._docId === produtoId);
-  if (!p) { toast('❌ Produto não encontrado'); return; }
-  const compEf = composicaoDoProduto(p);
-  if (!compEf) { toast('⚠️ Produto sem composição. Cadastre no Catálogo (Admin)'); return; }
+  const a = catalogoAdubos.find(x => x._docId === catalogoId);
+  if (!a) { toast('❌ Adubo não encontrado no catálogo'); return; }
+  const compEf = {};
+  ['n','p2o5','k2o','s','ca','mg','zn','b','cu','mn'].forEach(k => {
+    const v = parseFloat(a[k])||0;
+    if (v > 0) compEf[k] = v;
+  });
+  if (!Object.keys(compEf).length) { toast('⚠️ Adubo sem composição NPK cadastrada'); return; }
   const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
   const m = meses[modalAduboMesIdx];
   if (!m) return;
   if (!m.adubos) m.adubos = [];
-  // Verifica duplicado
-  if (m.adubos.find(a => a.produtoId === produtoId)) {
+  if (m.adubos.find(x => x.produtoId === catalogoId)) {
     toast('⚠️ Adubo já adicionado nesse mês');
     return;
   }
   m.adubos.push({
-    produtoId,
-    nome: p.nome,
+    produtoId: catalogoId,
+    nome: a.nome,
     composicao: compEf,
-    dose: 0,            // será calculada pelo recalcularDosesMes
+    dose: 0,
     travado: false
   });
-  toast(`✅ ${p.nome} adicionado`);
+  toast(`✅ ${a.nome} adicionado`);
   fecharModalAdubo();
   renderNovo();
 };
