@@ -186,6 +186,10 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .mes-opt{background:#fafafa;border:1.5px solid var(--cb);border-radius:7px;padding:9px 4px;text-align:center;cursor:pointer;font-family:'Barlow',sans-serif;font-size:.74rem;color:var(--ve);font-weight:600;}
 .mes-opt:hover{border-color:var(--v);background:var(--vb);}
 .mes-opt.ja-usado{opacity:.35;cursor:not-allowed;}
+.mes-opt.selecionado{background:var(--v);border-color:var(--v);color:#fff;}
+.mes-opt.selecionado .mes-opt-ano{color:rgba(255,255,255,.8);}
+.btn-add-selecionados{width:100%;margin-top:10px;padding:12px;background:var(--v);color:#fff;border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.05rem;letter-spacing:.03em;cursor:pointer;transition:opacity .15s;}
+.btn-add-selecionados:disabled{opacity:.35;cursor:not-allowed;}
 .mes-opt-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
 .mes-opt-ano{font-size:.62rem;color:var(--c);margin-top:2px;}
 .ano-selector{display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:9px;}
@@ -693,6 +697,42 @@ const TEMPLATES_CONILON = [
       {mesIdx:1,  anoOffset:1, distrib:{n:40, p2o5:0,   k2o:35, s:35, ca:50, mg:50, zn:0,   b:50, cu:0,   mn:0}},
       {mesIdx:3,  anoOffset:1, distrib:{n:30, p2o5:0,   k2o:30, s:30, ca:0,  mg:0,  zn:0,   b:0,  cu:0,   mn:0}}
     ]
+  },
+  {
+    id: 'cobertura_jun_mar',
+    nome: 'Cobertura Jun→Mar',
+    sub: 'Jun · Jul · Ago · Set · Out · Nov · Dez · Jan · Fev · Mar — 10 meses, 10% cada',
+    meses: [
+      {mesIdx:6,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:7,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:8,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:9,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:10, anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:11, anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:12, anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}}
+    ]
+  },
+  {
+    id: 'fertiirrigacao_jun_mai',
+    nome: 'Fertirrigação Jun→Mai',
+    sub: 'Jun a Mai — 12 meses, distribuição mensal',
+    meses: [
+      {mesIdx:6,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:7,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:8,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:9,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:10, anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:11, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:12, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:4,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:5,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}}
+    ]
   }
 ];
 
@@ -863,12 +903,14 @@ window.removerMes = function(idxMes) {
 // ━━━ MODAL DE SELEÇÃO DE MÊS ━━━
 
 let modalMesAnoBase = null;
+let mesesSelecionados = new Set();
 
 window.abrirModalMes = function() {
   // Ano base = primeiro ano da safra (ex: "2026/2027" → 2026)
   const safra = window.planWIP.safra || '';
   const matchAno = String(safra).match(/(\d{4})/);
   modalMesAnoBase = matchAno ? parseInt(matchAno[1], 10) : new Date().getFullYear();
+  mesesSelecionados = new Set();
   renderModalMes();
   document.getElementById('overlayMes').classList.add('aberto');
 };
@@ -896,7 +938,8 @@ function renderModalMes() {
     </div>
     <div class="modal-mes-divisor">ou adicione manualmente</div>`;
   }
-  // Seletor de ano + grid de meses
+  // Seletor de ano + grid de meses com multi-seleção
+  const selCount = mesesSelecionados.size;
   html += `<div class="ano-selector">
     <button type="button" onclick="mudarAnoModalMes(-1)">−</button>
     <div class="ano-val" id="anoSelVal">${modalMesAnoBase}</div>
@@ -906,18 +949,50 @@ function renderModalMes() {
     ${MES_LABELS.map((lab, i) => {
       const mesYM = `${modalMesAnoBase}-${String(i+1).padStart(2,'0')}`;
       const usado = mesesUsados.includes(mesYM);
-      return `<div class="mes-opt ${usado?'ja-usado':''}" onclick="${usado?'':`adicionarMes('${mesYM}')`}">
+      const sel = mesesSelecionados.has(mesYM);
+      return `<div class="mes-opt ${usado?'ja-usado':sel?'selecionado':''}" onclick="${usado?'':`toggleMes('${mesYM}')`}">
         <div class="mes-opt-nome">${lab}</div>
         <div class="mes-opt-ano">${modalMesAnoBase}</div>
       </div>`;
     }).join('')}
-  </div>`;
+  </div>
+  <button class="btn-add-selecionados" ${selCount===0?'disabled':''} onclick="adicionarSelecionados()">
+    ${selCount > 0 ? `✅ Adicionar ${selCount} mês${selCount>1?'es':''} selecionado${selCount>1?'s':''}` : 'Selecione os meses acima'}
+  </button>`;
   body.innerHTML = html;
 }
 
 window.mudarAnoModalMes = function(delta) {
   modalMesAnoBase += delta;
   renderModalMes();
+};
+
+window.toggleMes = function(mesYM) {
+  if (mesesSelecionados.has(mesYM)) {
+    mesesSelecionados.delete(mesYM);
+  } else {
+    mesesSelecionados.add(mesYM);
+  }
+  renderModalMes();
+};
+
+window.adicionarSelecionados = function() {
+  const meses = window.planWIP.meses || [];
+  let count = 0;
+  [...mesesSelecionados].sort().forEach(mesYM => {
+    if (!meses.find(m => m.mes === mesYM)) {
+      const distribuicao = {};
+      NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
+      meses.push({mes: mesYM, distribuicao});
+      count++;
+    }
+  });
+  meses.sort((a, b) => a.mes.localeCompare(b.mes));
+  window.planWIP.meses = meses;
+  mesesSelecionados = new Set();
+  fecharModalMes();
+  renderNovo();
+  toast(`✅ ${count} mês${count>1?'es':''} adicionado${count>1?'s':''}`);
 };
 
 window.adicionarMes = function(mesYM) {
