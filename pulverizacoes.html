@@ -113,8 +113,8 @@ function renderizarCalendario() {
   const hoje = new Date();
   const pulsDoMes = pulverizacoes.filter(p => {
     if (!p.data) return false;
-    const d = new Date(p.data);
-    return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+    const [anoD, mesD] = p.data.split('-').map(Number);
+    return mesD - 1 === mesAtual && anoD === anoAtual;
   });
 
   // Agrupar por dia
