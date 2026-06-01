@@ -191,6 +191,13 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .ano-selector{display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:9px;}
 .ano-selector button{background:var(--vb);border:1px solid var(--v);color:var(--ve);width:30px;height:30px;border-radius:6px;cursor:pointer;font-weight:800;font-size:1rem;}
 .ano-selector .ano-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--ve);min-width:60px;text-align:center;}
+.intervalo-sel{background:var(--cl);border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;}
+.intervalo-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;}
+.intervalo-grupo{display:flex;flex-direction:column;gap:4px;flex:1;min-width:110px;}
+.intervalo-grupo label{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.intervalo-grupo select{border:1.5px solid var(--cb);border-radius:7px;padding:7px 8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);}
+.intervalo-grupo select:focus{border-color:var(--v);}
+.btn-add-intervalo{width:100%;background:var(--v);color:white;border:none;border-radius:7px;padding:9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;letter-spacing:.03em;}
 
 /* CARD 4 — ADUBOS POR MÊS */
 .mes-bloco{background:#fafafa;border:1.5px solid var(--cb);border-radius:9px;padding:11px;margin-bottom:11px;}
@@ -693,6 +700,42 @@ const TEMPLATES_CONILON = [
       {mesIdx:1,  anoOffset:1, distrib:{n:40, p2o5:0,   k2o:35, s:35, ca:50, mg:50, zn:0,   b:50, cu:0,   mn:0}},
       {mesIdx:3,  anoOffset:1, distrib:{n:30, p2o5:0,   k2o:30, s:30, ca:0,  mg:0,  zn:0,   b:0,  cu:0,   mn:0}}
     ]
+  },
+  {
+    id: 'cobertura_jun_mar',
+    nome: 'Cobertura Jun → Mar (10 meses)',
+    sub: 'Jun · Jul · Ago · Set · Out · Nov · Dez · Jan · Fev · Mar',
+    meses: [
+      {mesIdx:6,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:7,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:8,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:9,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:10, anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:11, anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:12, anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}}
+    ]
+  },
+  {
+    id: 'fertiirrigacao_jun_mai',
+    nome: 'Fertirrigação Jun → Mai (12 meses)',
+    sub: 'Jun · Jul · Ago · Set · Out · Nov · Dez · Jan · Fev · Mar · Abr · Mai',
+    meses: [
+      {mesIdx:6,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:7,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:8,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:9,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:10, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:11, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:12, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:4,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:5,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}}
+    ]
   }
 ];
 
@@ -883,8 +926,8 @@ function renderModalMes() {
   const matchAno = String(safra).match(/(\d{4})/);
   const anoBase = matchAno ? parseInt(matchAno[1], 10) : new Date().getFullYear();
   const mesesUsados = (window.planWIP.meses || []).map(m => m.mes);
-  // Templates só se ainda não tem nenhum mês
   const mostrarTpl = !(window.planWIP.meses || []).length;
+  const anos = [anoBase - 1, anoBase, anoBase + 1, anoBase + 2];
   let html = '';
   if (mostrarTpl) {
     html += `<div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--c);margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em;">⚡ Templates prontos</div>
@@ -893,9 +936,34 @@ function renderModalMes() {
         <div class="tpl-btn-tit">${escHtml(t.nome)}</div>
         <div class="tpl-btn-sub">${escHtml(t.sub)}</div>
       </button>`).join('')}
-    </div>
-    <div class="modal-mes-divisor">ou adicione manualmente</div>`;
+    </div>`;
   }
+  // Seletor de intervalo (sempre visível)
+  const mesOptions = MES_LABELS.map((lab, i) => `<option value="${i+1}">${lab}</option>`).join('');
+  const anoOptions = anos.map(a => `<option value="${a}">${a}</option>`).join('');
+  html += `<div class="modal-mes-divisor">intervalo de meses</div>
+  <div class="intervalo-sel">
+    <div class="intervalo-row">
+      <div class="intervalo-grupo">
+        <label>De</label>
+        <select id="rangeIniMes">${mesOptions}</select>
+      </div>
+      <div class="intervalo-grupo">
+        <label>Ano</label>
+        <select id="rangeIniAno">${anoOptions}</select>
+      </div>
+      <div class="intervalo-grupo">
+        <label>Até</label>
+        <select id="rangeFimMes">${mesOptions}</select>
+      </div>
+      <div class="intervalo-grupo">
+        <label>Ano</label>
+        <select id="rangeFimAno">${anoOptions}</select>
+      </div>
+    </div>
+    <button class="btn-add-intervalo" type="button" onclick="adicionarIntervalo()">➕ Adicionar intervalo</button>
+  </div>
+  <div class="modal-mes-divisor">ou adicione mês a mês</div>`;
   // Seletor de ano + grid de meses
   html += `<div class="ano-selector">
     <button type="button" onclick="mudarAnoModalMes(-1)">−</button>
@@ -913,6 +981,15 @@ function renderModalMes() {
     }).join('')}
   </div>`;
   body.innerHTML = html;
+  // Pré-selecionar valores sensatos (Jun ano base → Mar ano+1)
+  const selIniMes = document.getElementById('rangeIniMes');
+  const selIniAno = document.getElementById('rangeIniAno');
+  const selFimMes = document.getElementById('rangeFimMes');
+  const selFimAno = document.getElementById('rangeFimAno');
+  if (selIniMes) selIniMes.value = '6';
+  if (selIniAno) selIniAno.value = String(anoBase);
+  if (selFimMes) selFimMes.value = '3';
+  if (selFimAno) selFimAno.value = String(anoBase + 1);
 }
 
 window.mudarAnoModalMes = function(delta) {
@@ -934,6 +1011,35 @@ window.adicionarMes = function(mesYM) {
   fecharModalMes();
   renderNovo();
   toast(`✅ ${labelMes(mesYM)} adicionado`);
+};
+
+window.adicionarIntervalo = function() {
+  const iniMes = parseInt(document.getElementById('rangeIniMes').value);
+  const iniAno = parseInt(document.getElementById('rangeIniAno').value);
+  const fimMes = parseInt(document.getElementById('rangeFimMes').value);
+  const fimAno = parseInt(document.getElementById('rangeFimAno').value);
+  if (iniAno > fimAno || (iniAno === fimAno && iniMes > fimMes)) {
+    toast('⚠️ Mês inicial deve ser anterior ao final'); return;
+  }
+  const mesesExist = window.planWIP.meses || [];
+  let mes = iniMes, ano = iniAno, adicionados = 0;
+  const maxIter = 36;
+  let iter = 0;
+  while ((ano < fimAno || (ano === fimAno && mes <= fimMes)) && iter < maxIter) {
+    const mesYM = `${ano}-${String(mes).padStart(2,'0')}`;
+    if (!mesesExist.find(m => m.mes === mesYM)) {
+      const distribuicao = {};
+      NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
+      mesesExist.push({mes: mesYM, distribuicao});
+      adicionados++;
+    }
+    mes++; if (mes > 12) { mes = 1; ano++; }
+    iter++;
+  }
+  window.planWIP.meses = mesesExist;
+  fecharModalMes();
+  renderNovo();
+  toast(`✅ ${adicionados} mês(es) adicionado(s)`);
 };
 
 window.aplicarTemplate = function(tplId) {
