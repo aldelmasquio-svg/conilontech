@@ -677,6 +677,23 @@ const MES_LABELS = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT',
 // Cada template tem nomes "relativos à safra": out0/dez0 são do ano atual; jan1/fev1/mar1/abr1/mai1/jun1 do ano seguinte
 const TEMPLATES_CONILON = [
   {
+    id: 'cobertura_principal',
+    nome: 'Cobertura Principal',
+    sub: 'Jun→Mar — 10 meses · N · P₂O₅ · K₂O · Zn · B',
+    meses: [
+      {mesIdx:6,  anoOffset:0, distrib:{n:3,  k2o:3}},
+      {mesIdx:7,  anoOffset:0, distrib:{n:4,  p2o5:50, k2o:5}},
+      {mesIdx:8,  anoOffset:0, distrib:{n:6,  k2o:6,  b:35}},
+      {mesIdx:9,  anoOffset:0, distrib:{n:12, k2o:9,  zn:35}},
+      {mesIdx:10, anoOffset:0, distrib:{n:12, p2o5:50, k2o:11, b:65}},
+      {mesIdx:11, anoOffset:0, distrib:{n:14, k2o:13, zn:65}},
+      {mesIdx:12, anoOffset:0, distrib:{n:17, k2o:15}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:15, k2o:17}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:10, k2o:12}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:7,  k2o:9}}
+    ]
+  },
+  {
     id: 'conilon4',
     nome: 'Conilon padrão (4 aplicações)',
     sub: 'Out · Dez · Fev · Abr — distribuição clássica',
