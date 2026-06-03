@@ -88,6 +88,12 @@ function nivelAcesso(mod) {
 }
 function isAdmin() { return nivelAcesso('adubacao') === 'admin'; }
 function podeMarcar() { return ['admin','gerente','operador','encarregado'].includes(nivelAcesso('adubacao')); }
+function fazendaPermitida(nomeFazenda) {
+  if (isAdmin()) return true;
+  const permitidas = perfilAtual.fazendasModulo?.adubacao;
+  if (!permitidas || permitidas.length === 0) return true;
+  return permitidas.includes(nomeFazenda);
+}
 
 function gerarMenu() {
   const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
@@ -140,7 +146,11 @@ function renderizarTela() {
 }
 
 window.irLista = () => { telaAtual='lista'; talhaoSel=null; mesSel=null; renderizarTela(); };
-window.irTalhao = (id) => { talhaoSel = talhoes.find(t=>t.id===id); telaAtual='talhao'; renderizarTela(); };
+window.irTalhao = (id) => {
+  const t = talhoes.find(t=>t.id===id);
+  if (!t || !fazendaPermitida(t.fazenda || 'Sem fazenda')) return;
+  talhaoSel = t; telaAtual='talhao'; renderizarTela();
+};
 window.irSafra = () => { telaAtual='safra'; renderizarTela(); };
 window.voltarParaTalhao = () => { telaAtual='talhao'; mesSel=null; renderizarTela(); };
 window.voltarParaMes = () => { telaAtual='mes'; renderizarTela(); };
@@ -159,7 +169,12 @@ window.voltarWizard = () => { telaAtual='mes'; renderizarTela(); };
 // ─── LISTA ───
 function renderizarLista() {
   const fazendas = {};
-  talhoes.forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
+  talhoes.forEach(t => {
+    const f = t.fazenda || 'Sem fazenda';
+    if (!fazendaPermitida(f)) return;
+    if (!fazendas[f]) fazendas[f] = [];
+    fazendas[f].push(t);
+  });
   const lista = document.getElementById('listaTalhoes');
   const adm = isAdmin();
 
