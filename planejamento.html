@@ -403,6 +403,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appHeader').style.display = 'flex';
   document.getElementById('appContent').style.display = 'flex';
+  abrirTab('novo');
   gerarMenu();
   // Safra default: ano corrente / próximo (Conilon florada outubro)
   const hoje = new Date();
