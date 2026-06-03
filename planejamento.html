@@ -186,6 +186,10 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .mes-opt{background:#fafafa;border:1.5px solid var(--cb);border-radius:7px;padding:9px 4px;text-align:center;cursor:pointer;font-family:'Barlow',sans-serif;font-size:.74rem;color:var(--ve);font-weight:600;}
 .mes-opt:hover{border-color:var(--v);background:var(--vb);}
 .mes-opt.ja-usado{opacity:.35;cursor:not-allowed;}
+.mes-opt.selecionado{background:var(--v);border-color:var(--v);color:#fff;}
+.mes-opt.selecionado .mes-opt-ano{color:rgba(255,255,255,.8);}
+.btn-add-selecionados{width:100%;margin-top:10px;padding:12px;background:var(--v);color:#fff;border:none;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1.05rem;letter-spacing:.03em;cursor:pointer;transition:opacity .15s;}
+.btn-add-selecionados:disabled{opacity:.35;cursor:not-allowed;}
 .mes-opt-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;}
 .mes-opt-ano{font-size:.62rem;color:var(--c);margin-top:2px;}
 .ano-selector{display:flex;gap:6px;align-items:center;justify-content:center;margin-bottom:9px;}
@@ -223,6 +227,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .adubo-dose-inp:focus{border-color:var(--v);background:white;box-shadow:0 0 0 3px var(--vb);}
 .adubo-dose-inp.travada{border-color:var(--warn);background:#fffbeb;}
 .adubo-dose-un{font-size:.74rem;color:var(--c);}
+.btn-un{background:var(--cl);border:1.5px solid var(--cb);border-radius:5px;padding:3px 7px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);white-space:nowrap;transition:background .12s;}
+.btn-un:active{background:var(--cb);}
 .adubo-entrega{font-size:.7rem;color:var(--c);flex:1;font-family:'DM Mono',monospace;line-height:1.3;}
 .adubo-entrega strong{color:var(--ve);}
 
@@ -406,6 +412,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appHeader').style.display = 'flex';
   document.getElementById('appContent').style.display = 'flex';
+  abrirTab('novo');
   gerarMenu();
   // Safra default: ano corrente / próximo (Conilon florada outubro)
   const hoje = new Date();
@@ -680,6 +687,23 @@ const MES_LABELS = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT',
 // Cada template tem nomes "relativos à safra": out0/dez0 são do ano atual; jan1/fev1/mar1/abr1/mai1/jun1 do ano seguinte
 const TEMPLATES_CONILON = [
   {
+    id: 'cobertura_principal',
+    nome: 'Cobertura Principal',
+    sub: 'Jun→Mar — 10 meses · N · P₂O₅ · K₂O · Zn · B',
+    meses: [
+      {mesIdx:6,  anoOffset:0, distrib:{n:3,  k2o:3}},
+      {mesIdx:7,  anoOffset:0, distrib:{n:4,  p2o5:50, k2o:5}},
+      {mesIdx:8,  anoOffset:0, distrib:{n:6,  k2o:6,  b:35}},
+      {mesIdx:9,  anoOffset:0, distrib:{n:12, k2o:9,  zn:35}},
+      {mesIdx:10, anoOffset:0, distrib:{n:12, p2o5:50, k2o:11, b:65}},
+      {mesIdx:11, anoOffset:0, distrib:{n:14, k2o:13, zn:65}},
+      {mesIdx:12, anoOffset:0, distrib:{n:17, k2o:15}},
+      {mesIdx:1,  anoOffset:1, distrib:{n:15, k2o:17}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:10, k2o:12}},
+      {mesIdx:3,  anoOffset:1, distrib:{n:7,  k2o:9}}
+    ]
+  },
+  {
     id: 'conilon4',
     nome: 'Conilon padrão (4 aplicações)',
     sub: 'Out · Dez · Fev · Abr — distribuição clássica',
@@ -703,8 +727,8 @@ const TEMPLATES_CONILON = [
   },
   {
     id: 'cobertura_jun_mar',
-    nome: 'Cobertura Jun → Mar (10 meses)',
-    sub: 'Jun · Jul · Ago · Set · Out · Nov · Dez · Jan · Fev · Mar',
+    nome: 'Cobertura Jun→Mar',
+    sub: 'Jun · Jul · Ago · Set · Out · Nov · Dez · Jan · Fev · Mar — 10 meses, 10% cada',
     meses: [
       {mesIdx:6,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
       {mesIdx:7,  anoOffset:0, distrib:{n:10,p2o5:10,k2o:10,s:10,ca:10,mg:10,zn:10,b:10,cu:10,mn:10}},
@@ -720,18 +744,18 @@ const TEMPLATES_CONILON = [
   },
   {
     id: 'fertiirrigacao_jun_mai',
-    nome: 'Fertirrigação Jun → Mai (12 meses)',
-    sub: 'Jun · Jul · Ago · Set · Out · Nov · Dez · Jan · Fev · Mar · Abr · Mai',
+    nome: 'Fertirrigação Jun→Mai',
+    sub: 'Jun a Mai — 12 meses, distribuição mensal',
     meses: [
       {mesIdx:6,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
       {mesIdx:7,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
       {mesIdx:8,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
       {mesIdx:9,  anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
-      {mesIdx:10, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
+      {mesIdx:10, anoOffset:0, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
       {mesIdx:11, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
       {mesIdx:12, anoOffset:0, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
       {mesIdx:1,  anoOffset:1, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
-      {mesIdx:2,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
+      {mesIdx:2,  anoOffset:1, distrib:{n:9,p2o5:9,k2o:9,s:9,ca:9,mg:9,zn:9,b:9,cu:9,mn:9}},
       {mesIdx:3,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
       {mesIdx:4,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}},
       {mesIdx:5,  anoOffset:1, distrib:{n:8,p2o5:8,k2o:8,s:8,ca:8,mg:8,zn:8,b:8,cu:8,mn:8}}
@@ -906,12 +930,14 @@ window.removerMes = function(idxMes) {
 // ━━━ MODAL DE SELEÇÃO DE MÊS ━━━
 
 let modalMesAnoBase = null;
+let mesesSelecionados = new Set();
 
 window.abrirModalMes = function() {
   // Ano base = primeiro ano da safra (ex: "2026/2027" → 2026)
   const safra = window.planWIP.safra || '';
   const matchAno = String(safra).match(/(\d{4})/);
   modalMesAnoBase = matchAno ? parseInt(matchAno[1], 10) : new Date().getFullYear();
+  mesesSelecionados = new Set();
   renderModalMes();
   document.getElementById('overlayMes').classList.add('aberto');
 };
@@ -938,33 +964,8 @@ function renderModalMes() {
       </button>`).join('')}
     </div>`;
   }
-  // Seletor de intervalo (sempre visível)
-  const mesOptions = MES_LABELS.map((lab, i) => `<option value="${i+1}">${lab}</option>`).join('');
-  const anoOptions = anos.map(a => `<option value="${a}">${a}</option>`).join('');
-  html += `<div class="modal-mes-divisor">intervalo de meses</div>
-  <div class="intervalo-sel">
-    <div class="intervalo-row">
-      <div class="intervalo-grupo">
-        <label>De</label>
-        <select id="rangeIniMes">${mesOptions}</select>
-      </div>
-      <div class="intervalo-grupo">
-        <label>Ano</label>
-        <select id="rangeIniAno">${anoOptions}</select>
-      </div>
-      <div class="intervalo-grupo">
-        <label>Até</label>
-        <select id="rangeFimMes">${mesOptions}</select>
-      </div>
-      <div class="intervalo-grupo">
-        <label>Ano</label>
-        <select id="rangeFimAno">${anoOptions}</select>
-      </div>
-    </div>
-    <button class="btn-add-intervalo" type="button" onclick="adicionarIntervalo()">➕ Adicionar intervalo</button>
-  </div>
-  <div class="modal-mes-divisor">ou adicione mês a mês</div>`;
-  // Seletor de ano + grid de meses
+  // Seletor de ano + grid de meses com multi-seleção
+  const selCount = mesesSelecionados.size;
   html += `<div class="ano-selector">
     <button type="button" onclick="mudarAnoModalMes(-1)">−</button>
     <div class="ano-val" id="anoSelVal">${modalMesAnoBase}</div>
@@ -974,12 +975,16 @@ function renderModalMes() {
     ${MES_LABELS.map((lab, i) => {
       const mesYM = `${modalMesAnoBase}-${String(i+1).padStart(2,'0')}`;
       const usado = mesesUsados.includes(mesYM);
-      return `<div class="mes-opt ${usado?'ja-usado':''}" onclick="${usado?'':`adicionarMes('${mesYM}')`}">
+      const sel = mesesSelecionados.has(mesYM);
+      return `<div class="mes-opt ${usado?'ja-usado':sel?'selecionado':''}" onclick="${usado?'':`toggleMes('${mesYM}')`}">
         <div class="mes-opt-nome">${lab}</div>
         <div class="mes-opt-ano">${modalMesAnoBase}</div>
       </div>`;
     }).join('')}
-  </div>`;
+  </div>
+  <button class="btn-add-selecionados" ${selCount===0?'disabled':''} onclick="adicionarSelecionados()">
+    ${selCount > 0 ? `✅ Adicionar ${selCount} mês${selCount>1?'es':''} selecionado${selCount>1?'s':''}` : 'Selecione os meses acima'}
+  </button>`;
   body.innerHTML = html;
   // Pré-selecionar valores sensatos (Jun ano base → Mar ano+1)
   const selIniMes = document.getElementById('rangeIniMes');
@@ -995,6 +1000,34 @@ function renderModalMes() {
 window.mudarAnoModalMes = function(delta) {
   modalMesAnoBase += delta;
   renderModalMes();
+};
+
+window.toggleMes = function(mesYM) {
+  if (mesesSelecionados.has(mesYM)) {
+    mesesSelecionados.delete(mesYM);
+  } else {
+    mesesSelecionados.add(mesYM);
+  }
+  renderModalMes();
+};
+
+window.adicionarSelecionados = function() {
+  const meses = window.planWIP.meses || [];
+  let count = 0;
+  [...mesesSelecionados].sort().forEach(mesYM => {
+    if (!meses.find(m => m.mes === mesYM)) {
+      const distribuicao = {};
+      NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
+      meses.push({mes: mesYM, distribuicao});
+      count++;
+    }
+  });
+  meses.sort((a, b) => a.mes.localeCompare(b.mes));
+  window.planWIP.meses = meses;
+  mesesSelecionados = new Set();
+  fecharModalMes();
+  renderNovo();
+  toast(`✅ ${count} mês${count>1?'es':''} adicionado${count>1?'s':''}`);
 };
 
 window.adicionarMes = function(mesYM) {
@@ -1269,13 +1302,22 @@ function renderAduboLinha(a, idxMes, idxA, metas) {
     </div>
     <div class="adubo-dose-row">
       <input class="adubo-dose-inp ${a.travado?'travada':''}" type="text" inputmode="decimal" value="${fmt(dose,1).replace(/\\./g,'')}" oninput="setDoseAdubo(${idxMes},${idxA},this.value)" onblur="onBlurDoseAdubo()">
-      <span class="adubo-dose-un">kg/ha</span>
+      <button class="adubo-dose-un btn-un" type="button" onclick="toggleUnidadeAdubo(${idxMes},${idxA})" title="Clique para trocar unidade">${escHtml(a.unidade||'kg/ha')}</button>
       <div class="adubo-entrega">→ <strong>${entregaParts.join(' · ') || '—'}</strong></div>
     </div>
   </div>`;
 }
 
 // ━━━ HANDLERS DO CARD 4 ━━━
+
+window.toggleUnidadeAdubo = function(idxMes, idxA) {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[idxMes];
+  if (!m || !m.adubos || !m.adubos[idxA]) return;
+  const atual = m.adubos[idxA].unidade || 'kg/ha';
+  m.adubos[idxA].unidade = atual === 'kg/ha' ? 'L/ha' : 'kg/ha';
+  renderNovo();
+};
 
 window.toggleTravaAdubo = function(idxMes, idxA) {
   const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
@@ -1387,7 +1429,8 @@ window.adicionarAduboAoMes = function(catalogoId) {
     nome: a.nome,
     composicao: compEf,
     dose: 0,
-    travado: false
+    travado: false,
+    unidade: a.unidadePadrao || 'kg/ha'
   });
   toast(`✅ ${a.nome} adicionado`);
   fecharModalAdubo();
