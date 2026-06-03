@@ -220,6 +220,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
 .adubo-dose-inp:focus{border-color:var(--v);background:white;box-shadow:0 0 0 3px var(--vb);}
 .adubo-dose-inp.travada{border-color:var(--warn);background:#fffbeb;}
 .adubo-dose-un{font-size:.74rem;color:var(--c);}
+.btn-un{background:var(--cl);border:1.5px solid var(--cb);border-radius:5px;padding:3px 7px;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);white-space:nowrap;transition:background .12s;}
+.btn-un:active{background:var(--cb);}
 .adubo-entrega{font-size:.7rem;color:var(--c);flex:1;font-family:'DM Mono',monospace;line-height:1.3;}
 .adubo-entrega strong{color:var(--ve);}
 
@@ -1256,13 +1258,22 @@ function renderAduboLinha(a, idxMes, idxA, metas) {
     </div>
     <div class="adubo-dose-row">
       <input class="adubo-dose-inp ${a.travado?'travada':''}" type="text" inputmode="decimal" value="${fmt(dose,1).replace(/\\./g,'')}" oninput="setDoseAdubo(${idxMes},${idxA},this.value)" onblur="onBlurDoseAdubo()">
-      <span class="adubo-dose-un">kg/ha</span>
+      <button class="adubo-dose-un btn-un" type="button" onclick="toggleUnidadeAdubo(${idxMes},${idxA})" title="Clique para trocar unidade">${escHtml(a.unidade||'kg/ha')}</button>
       <div class="adubo-entrega">→ <strong>${entregaParts.join(' · ') || '—'}</strong></div>
     </div>
   </div>`;
 }
 
 // ━━━ HANDLERS DO CARD 4 ━━━
+
+window.toggleUnidadeAdubo = function(idxMes, idxA) {
+  const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
+  const m = meses[idxMes];
+  if (!m || !m.adubos || !m.adubos[idxA]) return;
+  const atual = m.adubos[idxA].unidade || 'kg/ha';
+  m.adubos[idxA].unidade = atual === 'kg/ha' ? 'L/ha' : 'kg/ha';
+  renderNovo();
+};
 
 window.toggleTravaAdubo = function(idxMes, idxA) {
   const meses = [...(window.planWIP.meses || [])].sort((a,b) => (a.mes||'').localeCompare(b.mes||''));
@@ -1374,7 +1385,8 @@ window.adicionarAduboAoMes = function(catalogoId) {
     nome: a.nome,
     composicao: compEf,
     dose: 0,
-    travado: false
+    travado: false,
+    unidade: a.unidadePadrao || 'kg/ha'
   });
   toast(`✅ ${a.nome} adicionado`);
   fecharModalAdubo();
