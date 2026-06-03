@@ -536,7 +536,7 @@ function renderizarSemanaAtiva() {
       <div class="slot-hdr"><div class="slot-sem">📅 ${s.label}</div><div class="slot-sub">Marque os produtos desta aplicação</div></div>
       <div class="slot-modo-row">
         <div class="ci"><label>Modo de Aplicação</label>
-          <select onchange="planoWIP.semanas[${semanaAtiva}].modo=this.value; atualizarTabsEBotao(); renderizarSemanaAtiva();">
+          <select onchange="window._modoChange(${semanaAtiva}, this.value);">
             <option value="">Selecione...</option>
             ${['Lanço','Fertirrigação','Fertinox','Incorporado','Foliar','Drench'].map(m=>`<option value="${m}" ${s.modo===m?'selected':''}>${m}</option>`).join('')}
           </select>
@@ -571,6 +571,13 @@ function renderizarSemanaAtiva() {
       </div>
     </div>`;
 }
+
+window._modoChange = function(idx, val) {
+  planoWIP.semanas[idx].modo = val;
+  atualizarTabsEBotao();
+  const w = document.getElementById('fertinoxDoseWrap');
+  if (w) w.style.display = val === 'Fertinox' ? 'block' : 'none';
+};
 
 window.toggleSlotProd = function(si,pi){
   const s=planoWIP.semanas[si];
