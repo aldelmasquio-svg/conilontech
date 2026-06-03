@@ -317,7 +317,7 @@ function renderCardAp(ap, planoDocId) {
   return `<div class="aplic-card ${feito?'feita':''}">
     <div class="aplic-top">
       <div style="flex:1;">
-        ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}</div>`:''}
+        ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}${ap.doseFertinox?' · <strong>'+ap.doseFertinox+' g/m</strong>':''}</div>`:''}
         <div class="prods-lista">${prods}</div>
         ${ap.obs?`<div class="aplic-obs">💬 ${ap.obs}</div>`:''}
       </div>
@@ -536,13 +536,18 @@ function renderizarSemanaAtiva() {
       <div class="slot-hdr"><div class="slot-sem">📅 ${s.label}</div><div class="slot-sub">Marque os produtos desta aplicação</div></div>
       <div class="slot-modo-row">
         <div class="ci"><label>Modo de Aplicação</label>
-          <select onchange="planoWIP.semanas[${semanaAtiva}].modo=this.value; atualizarTabsEBotao();">
+          <select onchange="planoWIP.semanas[${semanaAtiva}].modo=this.value; atualizarTabsEBotao(); _toggleFertinox(this.value);">
             <option value="">Selecione...</option>
-            ${['Lanço','Fertirrigação','Incorporado','Foliar','Drench'].map(m=>`<option value="${m}" ${s.modo===m?'selected':''}>${m}</option>`).join('')}
+            ${['Lanço','Fertirrigação','Fertinox','Incorporado','Foliar','Drench'].map(m=>`<option value="${m}" ${s.modo===m?'selected':''}>${m}</option>`).join('')}
           </select>
         </div>
         <div class="ci"><label>Observação</label>
           <input type="text" placeholder="Opcional..." value="${s.obs||''}" onchange="planoWIP.semanas[${semanaAtiva}].obs=this.value">
+        </div>
+      </div>
+      <div id="fertinoxDoseWrap" style="display:${s.modo==='Fertinox'?'block':'none'};margin-bottom:14px;">
+        <div class="ci"><label>Dose Fertinox (g/m linear de fileira)</label>
+          <input type="number" id="fertinoxDoseInp" step="0.1" min="0" placeholder="Ex: 5.0" value="${s.doseFertinox||''}" onchange="planoWIP.semanas[${semanaAtiva}].doseFertinox=this.value" style="border-color:var(--v);">
         </div>
       </div>
       <div class="slot-prods-label">Selecione os produtos:</div>
@@ -567,6 +572,11 @@ function renderizarSemanaAtiva() {
     </div>`;
 }
 
+window._toggleFertinox = function(modo) {
+  const w = document.getElementById('fertinoxDoseWrap');
+  if (w) w.style.display = modo === 'Fertinox' ? 'block' : 'none';
+};
+
 window.toggleSlotProd = function(si,pi){
   const s=planoWIP.semanas[si];
   if(!s.produtos[pi]) s.produtos[pi]={...planoWIP.produtos[pi],sel:true};
@@ -586,6 +596,7 @@ window.salvarPlano = async function() {
     return {
       id:'ap'+Date.now()+Math.random().toString(36).slice(2,5),
       semana:s.label, modo:s.modo||'', obs:s.obs||'',
+      ...(s.modo==='Fertinox'&&s.doseFertinox?{doseFertinox:s.doseFertinox}:{}),
       fase:planoWIP.produtos[0]?.fase||'', produtos, feito:false
     };
   }).filter(Boolean);
@@ -1185,7 +1196,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
         </div>
         <div class="campo-row">
           <div class="campo"><label>Modo padrão</label>
-            <select id="wpModo"><option value="">Selecione...</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
+            <select id="wpModo"><option value="">Selecione...</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Fertinox">Fertinox</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
           </div>
           <div class="campo"><label>Fase</label>
             <select id="wpFase"><option value="Produção">Produção</option><option value="Formação">Formação</option><option value="Implantação">Implantação</option><option value="Reforma">Reforma</option></select>
@@ -1291,7 +1302,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
       <div class="campo" style="margin-bottom:10px;"><label>Semana</label><input type="text" id="eSemana"></div>
       <div class="campo-row" style="margin-bottom:10px;">
         <div class="campo"><label>Modo</label>
-          <select id="eModo"><option value="">—</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
+          <select id="eModo"><option value="">—</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Fertinox">Fertinox</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
         </div>
         <div class="campo"><label>Obs.</label><input type="text" id="eObs" placeholder="Opcional..."></div>
       </div>
