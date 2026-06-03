@@ -398,11 +398,7 @@ function _confirmarSaida() { history.go(-2); }
 function _usuarioEmCampo() {
   const el = document.activeElement;
   if (!el) return false;
-  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
-    const content = document.getElementById('content');
-    return content ? content.contains(el) : false;
-  }
-  return false;
+  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable;
 }
 
 // Re-renderiza se o usuário não estiver digitando; senão agenda para o próximo blur
@@ -1417,8 +1413,15 @@ window.abrirModalAdubo = function(idxMes) {
   const m = meses[idxMes];
   if (!m) return;
   document.getElementById('modalAduboSub').textContent = `Adicionar ao mês ${labelMes(m.mes)}`;
-  renderModalAdubo('');
+  // Monta o modal com o campo de busca fixo + div de resultados separada
+  // (nunca substituímos o input pelo innerHTML para preservar o foco)
+  const body = document.getElementById('modalAduboBody');
+  body.innerHTML = '<input class="adubo-busca" id="modalAduboBusca" type="search" placeholder="🔍 Buscar adubo..." autocomplete="off"><div id="modalAduboLista"></div>';
+  const inp = document.getElementById('modalAduboBusca');
+  inp.addEventListener('input', function() { _filtrarAdubos(this.value); });
+  _filtrarAdubos('');
   document.getElementById('overlayAdubo').classList.add('aberto');
+  setTimeout(() => inp.focus(), 80);
 };
 
 window.fecharModalAdubo = function() {
@@ -1426,7 +1429,7 @@ window.fecharModalAdubo = function() {
   modalAduboMesIdx = null;
 };
 
-function renderModalAdubo(busca) {
+function _filtrarAdubos(busca) {
   const buscaNorm = (busca||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
   const adubosDisp = catalogoAdubos
     .filter(a => {
@@ -1435,17 +1438,17 @@ function renderModalAdubo(busca) {
       return nomeN.includes(buscaNorm);
     })
     .sort((a,b) => (a.nome||'').localeCompare(b.nome||''));
-  const body = document.getElementById('modalAduboBody');
-  let html = `<input class="adubo-busca" type="search" placeholder="🔍 Buscar adubo..." oninput="renderModalAdubo(this.value)" value="${escAttr(busca||'')}">`;
+  const lista = document.getElementById('modalAduboLista');
+  if (!lista) return;
   if (!adubosDisp.length) {
-    html += `<div class="alerta-warn">
+    lista.innerHTML = `<div class="alerta-warn">
       ${catalogoAdubos.length === 0
         ? 'Nenhum adubo cadastrado no catálogo global.'
         : 'Nenhum adubo encontrado para essa busca.'}<br>
       <span style="font-size:.74rem;">Acesse <strong>Admin → 🧪 Adubos</strong> para cadastrar os adubos que serão usados no planejamento.</span>
     </div>`;
   } else {
-    html += adubosDisp.map(a => {
+    lista.innerHTML = adubosDisp.map(a => {
       const n = a.n||0, pp = a.p2o5||0, k = a.k2o||0;
       const extras = [];
       ['s','ca','mg','zn','b','cu','mn'].forEach(kk => { if (a[kk]) extras.push(`${kk.toUpperCase()}:${a[kk]}`); });
@@ -1458,10 +1461,7 @@ function renderModalAdubo(busca) {
       </div>`;
     }).join('');
   }
-  body.innerHTML = html;
 }
-
-window.renderModalAdubo = renderModalAdubo;
 
 window.adicionarAduboAoMes = function(catalogoId) {
   if (modalAduboMesIdx === null) return;
