@@ -313,6 +313,7 @@ function renderCardAp(ap, planoDocId) {
       <span class="prod-linha-icone">🧪</span>
       <span class="prod-nome">${p.produto}</span>
       <span class="prod-dose">${p.dose} ${p.unidade}/ha</span>
+      ${p.doseFertinox?`<span class="prod-dose" style="background:#2d6a4f;">📍 ${p.doseFertinox} g/m</span>`:''}
     </div>`).join('');
   return `<div class="aplic-card ${feito?'feita':''}">
     <div class="aplic-top">
@@ -545,11 +546,6 @@ function renderizarSemanaAtiva() {
           <input type="text" placeholder="Opcional..." value="${s.obs||''}" onchange="planoWIP.semanas[${semanaAtiva}].obs=this.value">
         </div>
       </div>
-      <div id="fertinoxDoseWrap" style="display:${s.modo==='Fertinox'?'block':'none'};margin-bottom:14px;">
-        <div class="ci"><label>Dose Fertinox (g/m linear de fileira)</label>
-          <input type="number" id="fertinoxDoseInp" step="0.1" min="0" placeholder="Ex: 5.0" value="${s.doseFertinox||''}" onchange="planoWIP.semanas[${semanaAtiva}].doseFertinox=this.value" style="border-color:var(--v);">
-        </div>
-      </div>
       <div class="slot-prods-label">Selecione os produtos:</div>
       <div class="prods-slot">
         ${planoWIP.produtos.map((p,pi) => {
@@ -565,6 +561,11 @@ function renderizarSemanaAtiva() {
               <span class="dose-total-label">Total: ${p.dose} ${p.unidade}/ha</span>
               <span class="dose-calc-label">Esta aplicação: <strong>${doseCalc} ${p.unidade}/ha</strong></span>
               <span class="dose-sem-label">(÷ ${nSem} aplicação(ões) com este produto)</span>
+              ${s.modo==='Fertinox'?`<div class="fertinox-dose-row" onclick="event.stopPropagation()">
+                <span class="fertinox-dose-label">Dose Fertinox:</span>
+                <input type="number" class="fertinox-dose-inp" step="0.1" min="0" placeholder="g/m" value="${sp.doseFertinox||''}" onchange="event.stopPropagation(); window._fertinoxDose(${semanaAtiva},${pi},this.value)" onclick="event.stopPropagation()">
+                <span class="fertinox-dose-unit">g/m</span>
+              </div>`:''}
             </div>`:''}
           </div>`;
         }).join('')}
@@ -575,8 +576,11 @@ function renderizarSemanaAtiva() {
 window._modoChange = function(idx, val) {
   planoWIP.semanas[idx].modo = val;
   atualizarTabsEBotao();
-  const w = document.getElementById('fertinoxDoseWrap');
-  if (w) w.style.display = val === 'Fertinox' ? 'block' : 'none';
+  renderizarSemanaAtiva();
+};
+window._fertinoxDose = function(si, pi, val) {
+  if (!planoWIP.semanas[si].produtos[pi]) planoWIP.semanas[si].produtos[pi] = {...planoWIP.produtos[pi], sel:true};
+  planoWIP.semanas[si].produtos[pi].doseFertinox = val;
 };
 
 window.toggleSlotProd = function(si,pi){
@@ -592,13 +596,13 @@ window.salvarPlano = async function() {
   calcularDosesSemana();
   const aplicacoes = planoWIP.semanas.map(s => {
     const produtos = s.produtos.filter(p=>p.sel).map(p=>({
-      produto:p.produto, dose:p.doseCalculada, unidade:p.unidade
+      produto:p.produto, dose:p.doseCalculada, unidade:p.unidade,
+      ...(s.modo==='Fertinox'&&p.doseFertinox?{doseFertinox:p.doseFertinox}:{})
     }));
     if(!produtos.length) return null;
     return {
       id:'ap'+Date.now()+Math.random().toString(36).slice(2,5),
       semana:s.label, modo:s.modo||'', obs:s.obs||'',
-      ...(s.modo==='Fertinox'&&s.doseFertinox?{doseFertinox:s.doseFertinox}:{}),
       fase:planoWIP.produtos[0]?.fase||'', produtos, feito:false
     };
   }).filter(Boolean);
@@ -1061,6 +1065,10 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .dose-calc-label{font-size:.82rem;color:var(--v);}
 .dose-calc-label strong{font-family:'DM Mono',monospace;}
 .dose-sem-label{font-size:.68rem;color:var(--c);font-style:italic;}
+.fertinox-dose-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1.5px dashed #a7d7a7;}
+.fertinox-dose-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.08em;color:var(--v);font-weight:700;flex-shrink:0;}
+.fertinox-dose-inp{flex:1;border:1.5px solid var(--v);border-radius:6px;padding:7px 10px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;background:#f9fff9;min-width:0;}
+.fertinox-dose-unit{font-size:.75rem;font-weight:700;color:var(--v);flex-shrink:0;}
 /* SAFRA */
 .safra-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:14px;}
 .safra-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;color:var(--v);letter-spacing:.05em;margin-bottom:12px;}
