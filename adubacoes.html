@@ -383,8 +383,9 @@ function renderizarWizard() {
 function _adubosDoPlanoSafra() {
   if (!talhaoSel || !mesSel) return [];
   const mesYM = `${mesSel.ano}-${String(mesSel.mes + 1).padStart(2,'0')}`;
+  // talhaoId pode ser o _docId (rascunho) ou o campo id customizado (aprovado)
   const plan = planejamentosSafra.find(p =>
-    p.talhaoId === talhaoSel.id &&
+    (p.talhaoId === talhaoSel.id || p.talhaoId === talhaoSel._docId) &&
     (p.meses||[]).some(m => m.mes === mesYM)
   );
   return plan?.meses?.find(m => m.mes === mesYM)?.adubos || [];
