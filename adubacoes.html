@@ -25,6 +25,15 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 enableIndexedDbPersistence(db).catch(() => {});
 
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Backspace') {
+    const el = document.activeElement;
+    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {
+      e.preventDefault();
+    }
+  }
+}, true);
+
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const SEMANAS = ['1ª Semana','2ª Semana','3ª Semana','4ª Semana'];
 
