@@ -361,6 +361,38 @@ enableIndexedDbPersistence(db).catch(()=>{});
 let usuarioAtual=null, perfilAtual={};
 let talhoes=[], recomendacoes=[], planejamentos=[], produtosEstoque=[], catalogoAdubos=[];
 let tabAtual='novo';
+let _renderPendente = false;
+
+// Impede Backspace de navegar para a página anterior quando foco não está num campo
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Backspace') {
+    const el = document.activeElement;
+    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {
+      e.preventDefault();
+    }
+  }
+}, true);
+
+// Retorna true se o usuário está com o cursor dentro de um campo do conteúdo principal
+function _usuarioEmCampo() {
+  const el = document.activeElement;
+  if (!el) return false;
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+    const content = document.getElementById('content');
+    return content ? content.contains(el) : false;
+  }
+  return false;
+}
+
+// Re-renderiza se o usuário não estiver digitando; senão agenda para o próximo blur
+function renderNovoSeguro() {
+  if (_usuarioEmCampo()) {
+    _renderPendente = true;
+    return;
+  }
+  _renderPendente = false;
+  renderNovo();
+}
 
 // Working state do plano sendo criado/editado
 window.planWIP = {
@@ -418,14 +450,18 @@ onAuthStateChanged(auth, async (user) => {
   const hoje = new Date();
   const ano = hoje.getMonth() >= 6 ? hoje.getFullYear() : hoje.getFullYear() - 1;
   window.planWIP.safra = `${ano}/${ano+1}`;
-  // Listeners
+  // Quando o usuário sai de qualquer campo, verifica se há um render pendente
+  document.getElementById('content').addEventListener('focusout', () => {
+    if (_renderPendente && tabAtual === 'novo') renderNovoSeguro();
+  });
+  // Listeners — usam renderNovoSeguro para não destruir campos ativos
   onSnapshot(collection(db,'talhoes'), snap => {
     talhoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
-    if (tabAtual === 'novo') renderNovo();
+    if (tabAtual === 'novo') renderNovoSeguro();
   });
   onSnapshot(collection(db,'recomendacoes'), snap => {
     recomendacoes = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
-    if (tabAtual === 'novo') renderNovo();
+    if (tabAtual === 'novo') renderNovoSeguro();
   });
   onSnapshot(collection(db,'planejamentos_safra'), snap => {
     planejamentos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
@@ -433,11 +469,11 @@ onAuthStateChanged(auth, async (user) => {
   });
   onSnapshot(collection(db,'estoque_produtos'), snap => {
     produtosEstoque = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
-    if (tabAtual === 'novo') renderNovo();
+    if (tabAtual === 'novo') renderNovoSeguro();
   });
   onSnapshot(collection(db,'catalogo_adubos'), snap => {
     catalogoAdubos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
-    if (tabAtual === 'novo') renderNovo();
+    if (tabAtual === 'novo') renderNovoSeguro();
   });
 });
 
