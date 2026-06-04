@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Equipe</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, addDoc, updateDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(() => {});
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Backspace') {
+    const el = document.activeElement;
+    if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) e.preventDefault();
+  }
+}, true);
+
+history.pushState(null, '', location.href);
+window.addEventListener('popstate', function() {
+  history.pushState(null, '', location.href);
+  _mostrarConfirmacaoSaida();
+});
+function _mostrarConfirmacaoSaida() {
+  let m = document.getElementById('_modalSaida');
+  if (!m) {
+    m = document.createElement('div'); m.id = '_modalSaida';
+    m.innerHTML = '<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99999;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)window._fecharConfirmacaoSaida()"><div style="background:#fff;border-radius:14px;padding:28px 22px 22px;max-width:300px;width:88%;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,.3)"><div style="font-size:2.2rem;margin-bottom:6px">⚠️</div><div style="font-weight:700;font-size:1.05rem;margin-bottom:8px;color:#1a1a1a">Sair da página?</div><div style="color:#666;font-size:.88rem;margin-bottom:22px;line-height:1.4">Dados não salvos podem ser perdidos.</div><div style="display:flex;gap:10px;justify-content:center"><button onclick="window._fecharConfirmacaoSaida()" style="flex:1;padding:10px 0;border:1.5px solid #ddd;border-radius:8px;background:#f5f5f5;font-size:.95rem;cursor:pointer;font-weight:600;color:#444">Cancelar</button><button onclick="window._confirmarSaida()" style="flex:1;padding:10px 0;border:none;border-radius:8px;background:#e53935;font-size:.95rem;cursor:pointer;font-weight:600;color:#fff">Sair</button></div></div></div>';
+    document.body.appendChild(m);
+  }
+  m.style.display = 'block';
+}
+window._fecharConfirmacaoSaida = function() { const m=document.getElementById('_modalSaida'); if(m) m.style.display='none'; };
+window._confirmarSaida = function() { history.go(-2); };
+
+const ATIVIDADES_FIXAS = [
+  'Colheita','Poda','Irrigação','Fertirrigação','Adubação',
+  'Aplicação de defensivos','Operação de máquina','Roçagem',
+  'Capina','Plantio','Transplantio','Manutenção geral',
+  'Manutenção de equipamentos','Transporte interno',
+  'Supervisão','Limpeza e organização'
+];
+
+let usuarioAtual = null, perfilAtual = {};
+let todosEmpregados = [], maquinas = [], registros = [];
+let telaAtual = 'lista', empregadoSel = null;
+let wip = null, cadastroTab = 'empregados';
+
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual = user;
+  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual = snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin')
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',equipe:'admin'};
+  document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
+  document.getElementById('menuUserEmail').textContent = user.email;
+  document.getElementById('loadingScreen').style.display = 'none';
+  document.getElementById('appContent').style.display = 'flex';
+  gerarMenu(); iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
+  if (perfilAtual.perfil==='admin') return 'admin';
+  return 'nenhum';
+}
+function isAdmin() { return nivelAcesso('equipe')==='admin' || perfilAtual.perfil==='admin'; }
+function podeRegistrar() { return ['admin','gerente','encarregado','operador'].includes(nivelAcesso('equipe')) || isAdmin(); }
+function empregadosAtivos() { return todosEmpregados.filter(e=>e.ativo!==false); }
+
+function gerarMenu() {
+  const isAdm = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin';
+  const items = [
+    {href:'index.html',ico:'📊',label:'Dashboard'},
+    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
+    {href:'atividades.html',ico:'🌾',label:'Atividades de Campo'},
+    {href:'equipe.html',ico:'👥',label:'Equipe'},
+    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
+    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
+    {href:'pedidos.html',ico:'📦',label:'Pedidos de Insumos'},
+    {href:'estoque.html',ico:'🏬',label:'Estoque'},
+    {href:'gestao.html',ico:'📊',label:'Gestão'},
+    {href:'analises.html',ico:'🔬',label:'Análises'},
+    {href:'recomendacoes.html',ico:'💊',label:'Recomendações'},
+    {href:'planejamento.html',ico:'🗓️',label:'Planejamento'},
+  ];
+  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
+  document.getElementById('menuModulos').innerHTML = items.map(m=>
+    `<a class="menu-item ${m.href==='equipe.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
+  ).join('');
+}
+
+function iniciarListeners() {
+  onSnapshot(collection(db,'equipeEmpregados'), snap => {
+    todosEmpregados = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    renderizarTela();
+  });
+  onSnapshot(collection(db,'equipeMaquinas'), snap => {
+    maquinas = snap.docs.map(d=>({_docId:d.id,...d.data()})).filter(m=>m.ativa!==false);
+  });
+  onSnapshot(collection(db,'equipeRegistros'), snap => {
+    registros = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    renderizarTela();
+  });
+}
+
+// ─── NAVEGAÇÃO ───
+function renderizarTela() {
+  ['lista','perfil','nova-atividade','cadastro','historico'].forEach(t=>{
+    const el=document.getElementById('tela-'+t); if(el) el.style.display='none';
+  });
+  const el = document.getElementById('tela-'+telaAtual);
+  if (el) el.style.display='flex';
+  if (telaAtual==='lista') renderizarLista();
+  if (telaAtual==='perfil') renderizarPerfil();
+  if (telaAtual==='nova-atividade') renderizarNovaAtividade();
+  if (telaAtual==='cadastro') renderizarCadastro();
+  if (telaAtual==='historico') renderizarHistorico();
+}
+
+window.irLista = () => { telaAtual='lista'; empregadoSel=null; renderizarTela(); };
+window.irPerfil = (id) => {
+  empregadoSel = todosEmpregados.find(e=>e._docId===id)||null;
+  if (!empregadoSel) return;
+  telaAtual='perfil'; renderizarTela();
+};
+window.irNovaAtividade = (empId) => {
+  empregadoSel = todosEmpregados.find(e=>e._docId===empId)||null;
+  wip = { empregadoId:empId, empregadoNome:empregadoSel?.nome||'', data:hoje(), atividade:'', maquinaId:'', fazenda:'', talhao:'', inicio:agora(), fim:'', obs:'' };
+  telaAtual='nova-atividade'; renderizarTela();
+};
+window.irCadastro = () => { telaAtual='cadastro'; renderizarTela(); };
+window.irHistorico = () => { telaAtual='historico'; renderizarTela(); };
+
+// ─── UTILS ───
+function hoje() { return new Date().toISOString().slice(0,10); }
+function agora() { return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function formatarDataBR(iso) {
+  if (!iso) return '—';
+  const [a,m,d]=iso.split('-');
+  const meses=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  return `${d} ${meses[parseInt(m)-1]} ${a}`;
+}
+function registroDeHoje(empId) { return registros.find(r=>r.empregadoId===empId&&r.data===hoje()); }
+function statusEmpregado(empId) {
+  const r = registroDeHoje(empId);
+  if (!r) return {tipo:'ausente'};
+  const atv = (r.atividades||[]).find(a=>!a.fim);
+  if (atv) return {tipo:'em-atividade', atividade:atv};
+  if (r.entrada&&!r.saida) return {tipo:'disponivel', entrada:r.entrada};
+  if (r.saida) return {tipo:'saiu', entrada:r.entrada, saida:r.saida};
+  return {tipo:'sem-jornada'};
+}
+function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
+window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
+window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
+window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
+
+// ─── LISTA ───
+function renderizarLista() {
+  const adm = isAdmin(), podeReg = podeRegistrar();
+  const ativos = empregadosAtivos();
+
+  const headerHtml = `<div class="equipe-header">
+    <div>
+      <div class="equipe-title">Equipe Fixa</div>
+      <div class="equipe-data">${formatarDataBR(hoje())}</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button onclick="irHistorico()" class="btn-hdr-sec">📋 Histórico</button>
+      ${adm?`<button onclick="irCadastro()" class="btn-hdr-sec">⚙️ Cadastros</button>`:''}
+    </div>
+  </div>`;
+
+  if (!ativos.length) {
+    document.getElementById('listaEquipe').innerHTML = headerHtml + `<div class="vazio"><div class="ico">👥</div><p>Nenhum empregado cadastrado.<br>${adm?'Clique em <strong>⚙️ Cadastros</strong> para adicionar.':''}</p></div>`;
+    return;
+  }
+
+  const grupos = {'em-atividade':[],'disponivel':[],'saiu':[],'ausente':[]};
+  ativos.forEach(e => {
+    const st = statusEmpregado(e._docId);
+    (grupos[st.tipo]||grupos['ausente']).push({emp:e,status:st});
+  });
+
+  const renderGrupo = (tit,icone,cor,items) => {
+    if (!items.length) return '';
+    return `<div class="equipe-grupo">
+      <div class="grupo-tit"><span style="color:${cor}">${icone}</span> ${tit} <span class="grupo-count">${items.length}</span></div>
+      ${items.map(({emp,status})=>renderCardEmp(emp,status,podeReg)).join('')}
+    </div>`;
+  };
+
+  document.getElementById('listaEquipe').innerHTML = headerHtml
+    + renderGrupo('Em atividade','🟢','#16a34a',grupos['em-atividade'])
+    + renderGrupo('Disponível','🟡','#d97706',grupos['disponivel'])
+    + renderGrupo('Encerrou jornada','⚫','#6b7280',grupos['saiu'])
+    + renderGrupo('Não registrado hoje','🔴','#ef4444',grupos['ausente']);
+}
+
+function renderCardEmp(emp, status, podeReg) {
+  const r = registroDeHoje(emp._docId);
+  let statusHtml = '';
+  if (status.tipo==='em-atividade') {
+    statusHtml = `<div class="status-chip chip-verde">🟢 ${status.atividade.atividade}</div>`
+      + (status.atividade.maquinaNome?`<div class="status-sub">🚜 ${status.atividade.maquinaNome}</div>`:'')
+      + `<div class="status-sub">Desde ${status.atividade.inicio}</div>`;
+  } else if (status.tipo==='disponivel') {
+    statusHtml = `<div class="status-chip chip-amarelo">🟡 Disponível · Entrada ${status.entrada}</div>`;
+  } else if (status.tipo==='saiu') {
+    statusHtml = `<div class="status-chip chip-cinza">⚫ Encerrou · ${status.entrada} → ${status.saida}</div>`;
+  } else {
+    statusHtml = `<div class="status-chip chip-vermelho">🔴 Não registrado</div>`;
+  }
+
+  let btns = '';
+  if (podeReg) {
+    if (!r?.entrada) btns += `<button onclick="event.stopPropagation();window.abrirJornada('${emp._docId}','entrada')" class="btn-j btn-j-entrada">✅ Entrada</button>`;
+    if (r?.entrada && !r?.saida) btns += `<button onclick="event.stopPropagation();window.abrirJornada('${emp._docId}','saida')" class="btn-j btn-j-saida">🔚 Saída</button>`;
+    btns += `<button onclick="event.stopPropagation();irNovaAtividade('${emp._docId}')" class="btn-j btn-j-ativ">＋ Atividade</button>`;
+    if (status.tipo==='em-atividade') btns += `<button onclick="event.stopPropagation();window.encerrarAtividade('${emp._docId}')" class="btn-j btn-j-enc">⏹ Encerrar</button>`;
+  }
+
+  return `<div class="emp-card" onclick="irPerfil('${emp._docId}')">
+    <div class="emp-card-main">
+      <div class="emp-avatar">${(emp.nome||'?')[0].toUpperCase()}</div>
+      <div class="emp-info">
+        <div class="emp-nome">${emp.nome}</div>
+        <div class="emp-cargo">${emp.cargo||'—'}</div>
+        ${statusHtml}
+      </div>
+      <span class="seta">›</span>
+    </div>
+    ${btns?`<div class="emp-btns" onclick="event.stopPropagation()">${btns}</div>`:''}
+  </div>`;
+}
+
+// ─── PERFIL ───
+function renderizarPerfil() {
+  if (!empregadoSel) return;
+  const emp = empregadoSel;
+  const podeReg = podeRegistrar(), adm = isAdmin();
+  document.getElementById('perfilNome').textContent = emp.nome;
+  document.getElementById('perfilCargo').textContent = emp.cargo || '—';
+  document.getElementById('perfilTelefone').textContent = emp.telefone ? '📞 '+emp.telefone : '';
+  document.getElementById('btnNovaAtivPerfil').style.display = podeReg ? 'flex' : 'none';
+
+  const r = registroDeHoje(emp._docId);
+  let hojeHtml = '';
+  if (!r?.entrada && podeReg) {
+    hojeHtml += `<button onclick="window.abrirJornada('${emp._docId}','entrada')" class="btn-entrada-grande">✅ Registrar Entrada de hoje</button>`;
+  }
+  if (r) {
+    const jornadaStr = r.entrada ? (r.saida ? `${r.entrada} → ${r.saida}` : `Entrada: ${r.entrada} · Em jornada`) : 'Jornada não registrada';
+    hojeHtml += `<div class="perfil-jornada">
+      <span class="pj-ico">🕐</span>
+      <span class="pj-val">${jornadaStr}</span>
+      ${r.entrada&&!r.saida&&podeReg?`<button onclick="window.abrirJornada('${emp._docId}','saida')" class="btn-pj-saida">Registrar Saída</button>`:''}
+    </div>`;
+    const ativs = r.atividades||[];
+    hojeHtml += ativs.length
+      ? ativs.map(a=>renderAtvCard(a)).join('')
+      : `<div class="vazio-sm">Nenhuma atividade registrada hoje.</div>`;
+  } else {
+    hojeHtml += `<div class="vazio-sm">Sem registro para hoje.</div>`;
+  }
+  document.getElementById('perfilHoje').innerHTML = hojeHtml;
+
+  const hist = registros.filter(r=>r.empregadoId===emp._docId&&r.data<hoje()).sort((a,b)=>b.data.localeCompare(a.data)).slice(0,60);
+  document.getElementById('perfilHistorico').innerHTML = hist.length
+    ? hist.map(r=>`<div class="hist-item">
+        <div class="hist-item-header">
+          <span class="hist-data">${formatarDataBR(r.data)}</span>
+          <span class="hist-jornada">${r.entrada||(r.atividades?.length?'':'—')} ${r.saida?'→ '+r.saida:r.entrada?'':''}`.trimEnd()+`</span>
+        </div>
+        <div class="hist-ativs">${(r.atividades||[]).map(a=>`<span class="hist-chip">${a.atividade}${a.maquinaNome?' · 🚜':''}</span>`).join('')||'<span style="color:#9ca3af;font-size:.72rem;">Sem atividades</span>'}</div>
+      </div>`).join('')
+    : `<div class="vazio-sm">Sem histórico anterior.</div>`;
+}
+
+function renderAtvCard(a) {
+  const aberta = !a.fim;
+  return `<div class="atv-card ${aberta?'atv-aberta':'atv-encerrada'}">
+    <div class="atv-card-row">
+      <div>
+        <div class="atv-nome">${a.atividade}</div>
+        ${a.maquinaNome?`<div class="atv-detail">🚜 ${a.maquinaNome}</div>`:''}
+        ${a.fazenda?`<div class="atv-detail">📍 ${a.fazenda}${a.talhao?' · '+a.talhao:''}</div>`:''}
+        ${a.obs?`<div class="atv-detail">💬 ${a.obs}</div>`:''}
+      </div>
+      <div class="atv-right">
+        <div class="atv-hora">${a.inicio}${a.fim?' → '+a.fim:''}</div>
+        <div class="atv-badge ${aberta?'badge-aberta':'badge-enc'}">${aberta?'Em andamento':'Encerrada'}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ─── NOVA ATIVIDADE ───
+function renderizarNovaAtividade() {
+  document.getElementById('novaAtvEmpNome').textContent = wip?.empregadoNome||'';
+  document.getElementById('novaAtvData').value = wip?.data||hoje();
+  document.getElementById('novaAtvAtividade').value = wip?.atividade||'';
+  const maqOpts = `<option value="">— Sem máquina —</option>`
+    + maquinas.map(m=>`<option value="${m._docId}">${m.nome}${m.tipo?' ('+m.tipo+')':''}</option>`).join('');
+  document.getElementById('novaAtvMaquina').innerHTML = maqOpts;
+  document.getElementById('novaAtvMaquina').value = wip?.maquinaId||'';
+  document.getElementById('novaAtvFazenda').value = wip?.fazenda||'';
+  document.getElementById('novaAtvTalhao').value = wip?.talhao||'';
+  document.getElementById('novaAtvInicio').value = wip?.inicio||agora();
+  document.getElementById('novaAtvFim').value = wip?.fim||'';
+  document.getElementById('novaAtvObs').value = wip?.obs||'';
+  document.getElementById('atividadesSug').innerHTML = ATIVIDADES_FIXAS.map(a=>`<option value="${a}">`).join('');
+}
+
+window.salvarNovaAtividade = async function() {
+  const atv   = document.getElementById('novaAtvAtividade').value.trim();
+  const data  = document.getElementById('novaAtvData').value;
+  const mqId  = document.getElementById('novaAtvMaquina').value;
+  const mqNome= mqId ? (maquinas.find(m=>m._docId===mqId)?.nome||'') : '';
+  const inicio= document.getElementById('novaAtvInicio').value;
+  const fim   = document.getElementById('novaAtvFim').value;
+  const faz   = document.getElementById('novaAtvFazenda').value.trim();
+  const tal   = document.getElementById('novaAtvTalhao').value.trim();
+  const obs   = document.getElementById('novaAtvObs').value.trim();
+  if (!atv)   { toast('⚠️ Informe a atividade.'); return; }
+  if (!inicio){ toast('⚠️ Informe o horário de início.'); return; }
+  const novaAtv = {id:'atv'+Date.now(),atividade:atv,maquinaId:mqId,maquinaNome:mqNome,fazenda:faz,talhao:tal,inicio,fim,obs};
+  const regExist = registros.find(r=>r.empregadoId===wip.empregadoId&&r.data===data);
+  try {
+    if (regExist) {
+      await updateDoc(doc(db,'equipeRegistros',regExist._docId),{atividades:[...(regExist.atividades||[]),novaAtv]});
+    } else {
+      await addDoc(collection(db,'equipeRegistros'),{empregadoId:wip.empregadoId,empregadoNome:wip.empregadoNome,data,entrada:'',saida:'',atividades:[novaAtv],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
+    }
+    toast('✅ Atividade registrada!');
+    telaAtual='perfil'; renderizarTela();
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+// ─── JORNADA ───
+window.abrirJornada = function(empId, tipo) {
+  const emp = todosEmpregados.find(e=>e._docId===empId);
+  let m = document.getElementById('_modalJornada');
+  if (!m) { m=document.createElement('div'); m.id='_modalJornada'; document.body.appendChild(m); }
+  m.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9990;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)document.getElementById('_modalJornada').style.display='none'">
+    <div style="background:white;border-radius:16px;padding:24px 20px 20px;max-width:320px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+      <div style="font-weight:800;font-size:1.15rem;color:#1a3d1a;margin-bottom:4px;">${tipo==='entrada'?'✅ Registrar Entrada':'🔚 Registrar Saída'}</div>
+      <div style="font-size:.85rem;color:#6b7280;margin-bottom:18px;">${emp?.nome||''}</div>
+      <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;font-weight:700;display:block;margin-bottom:6px;">Horário</label>
+      <input id="_jornadaHora" type="time" value="${agora().replace(':',':')}" style="width:100%;border:2px solid #2d6a2d;border-radius:8px;padding:11px;font-size:1.15rem;font-family:'Barlow',sans-serif;outline:none;margin-bottom:18px;">
+      <div style="display:flex;gap:10px;">
+        <button onclick="document.getElementById('_modalJornada').style.display='none'" style="flex:1;padding:12px;border:1.5px solid #d1d5db;border-radius:8px;background:#f5f5f5;font-weight:600;cursor:pointer;font-family:'Barlow',sans-serif;">Cancelar</button>
+        <button onclick="window._salvarJornada('${empId}','${tipo}')" style="flex:2;padding:12px;border:none;border-radius:8px;background:#2d6a2d;color:white;font-weight:800;font-size:.95rem;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;">Confirmar</button>
+      </div>
+    </div>
+  </div>`;
+  m.style.display='block';
+};
+
+window._salvarJornada = async function(empId, tipo) {
+  const hora = document.getElementById('_jornadaHora')?.value;
+  if (!hora) { toast('⚠️ Informe o horário.'); return; }
+  const emp = todosEmpregados.find(e=>e._docId===empId);
+  const data = hoje();
+  const regExist = registros.find(r=>r.empregadoId===empId&&r.data===data);
+  try {
+    if (regExist) {
+      await updateDoc(doc(db,'equipeRegistros',regExist._docId),{[tipo]:hora});
+    } else {
+      await addDoc(collection(db,'equipeRegistros'),{empregadoId:empId,empregadoNome:emp?.nome||'',data,entrada:tipo==='entrada'?hora:'',saida:tipo==='saida'?hora:'',atividades:[],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
+    }
+    document.getElementById('_modalJornada').style.display='none';
+    toast(`✅ ${tipo==='entrada'?'Entrada':'Saída'} registrada: ${hora}`);
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
+
+window.encerrarAtividade = async function(empId) {
+  const r = registroDeHoje(empId);
+  if (!r) return;
+  const atv = (r.atividades||[]).find(a=>!a.fim);
+  if (!atv) { toast('⚠️ Nenhuma atividade em andamento.'); return; }
+  const hora = agora();
+  await updateDoc(doc(db,'equipeRegistros',r._docId),{atividades:r.atividades.map(a=>a.id===atv.id?{...a,fim:hora}:a)});
+  toast(`⏹ Atividade encerrada: ${hora}`);
+};
+
+// ─── CADASTRO ───
+function renderizarCadastro() {
+  document.getElementById('cadastroTabs').innerHTML = `
+    <button class="cad-tab ${cadastroTab==='empregados'?'ativa':''}" onclick="window._setCadTab('empregados')">👤 Empregados</button>
+    <button class="cad-tab ${cadastroTab==='maquinas'?'ativa':''}" onclick="window._setCadTab('maquinas')">🚜 Máquinas</button>`;
+  cadastroTab==='empregados' ? renderCadEmpregados() : renderCadMaquinas();
+}
+window._setCadTab = function(t) { cadastroTab=t; renderizarCadastro(); };
+
+function renderCadEmpregados() {
+  const lista = todosEmpregados.filter(e=>e.ativo!==false);
+  document.getElementById('cadastroConteudo').innerHTML = `
+    <div class="cad-form">
+      <div class="cad-form-tit">➕ Novo Empregado</div>
+      <div class="campo"><label>Nome completo</label><input type="text" id="cadEmpNome" placeholder="Ex: João Silva"></div>
+      <div class="campo"><label>Cargo / Função</label><input type="text" id="cadEmpCargo" placeholder="Ex: Operador de máquina"></div>
+      <div class="campo"><label>Telefone (opcional)</label><input type="tel" id="cadEmpTelefone" placeholder="(99) 99999-9999"></div>
+      <button onclick="window.salvarEmpregado()" class="btn-add">Cadastrar Empregado</button>
+    </div>
+    <div class="lista-tit" style="margin-top:16px;">Empregados ativos (${lista.length})</div>
+    ${lista.length ? lista.map(e=>`
+      <div class="cad-item">
+        <div class="cad-avatar">${(e.nome||'?')[0].toUpperCase()}</div>
+        <div style="flex:1;">
+          <div class="cad-nome">${e.nome}</div>
+          <div class="cad-sub">${e.cargo||'—'}${e.telefone?' · '+e.telefone:''}</div>
+        </div>
+        <button onclick="window.desativarEmpregado('${e._docId}')" class="btn-ico-sm" title="Desativar">🗑</button>
+      </div>`).join('') : '<div class="vazio-sm">Nenhum empregado.</div>'}`;
+}
+window.salvarEmpregado = async function() {
+  const nome = document.getElementById('cadEmpNome').value.trim();
+  if (!nome) { toast('⚠️ Nome obrigatório.'); return; }
+  await addDoc(collection(db,'equipeEmpregados'),{nome,cargo:document.getElementById('cadEmpCargo').value.trim(),telefone:document.getElementById('cadEmpTelefone').value.trim(),ativo:true,criadoEm:new Date().toISOString()});
+  document.getElementById('cadEmpNome').value='';
+  document.getElementById('cadEmpCargo').value='';
+  document.getElementById('cadEmpTelefone').value='';
+  toast('✅ '+nome+' cadastrado!');
+};
+window.desativarEmpregado = async function(id) {
+  if (!confirm('Desativar este empregado?')) return;
+  await updateDoc(doc(db,'equipeEmpregados',id),{ativo:false});
+  toast('✅ Desativado.');
+};
+
+function renderCadMaquinas() {
+  document.getElementById('cadastroConteudo').innerHTML = `
+    <div class="cad-form">
+      <div class="cad-form-tit">➕ Nova Máquina</div>
+      <div class="campo"><label>Nome da máquina</label><input type="text" id="cadMaqNome" placeholder="Ex: Trator Massey 275"></div>
+      <div class="campo"><label>Tipo</label>
+        <select id="cadMaqTipo">
+          <option value="">Selecione...</option>
+          <option>Trator</option><option>Colhedora</option><option>Pulverizador</option>
+          <option>Irrigador</option><option>Roçadeira</option><option>Caminhão</option>
+          <option>Implemento</option><option>Outro</option>
+        </select>
+      </div>
+      <div class="campo"><label>Modelo (opcional)</label><input type="text" id="cadMaqModelo" placeholder="Ex: 4x4 Cabinado"></div>
+      <button onclick="window.salvarMaquina()" class="btn-add">Cadastrar Máquina</button>
+    </div>
+    <div class="lista-tit" style="margin-top:16px;">Máquinas ativas (${maquinas.length})</div>
+    ${maquinas.length ? maquinas.map(m=>`
+      <div class="cad-item">
+        <div class="cad-avatar" style="background:#f3f4f6;color:#374151;">🚜</div>
+        <div style="flex:1;">
+          <div class="cad-nome">${m.nome}</div>
+          <div class="cad-sub">${m.tipo||'—'}${m.modelo?' · '+m.modelo:''}</div>
+        </div>
+        <button onclick="window.desativarMaquina('${m._docId}')" class="btn-ico-sm">🗑</button>
+      </div>`).join('') : '<div class="vazio-sm">Nenhuma máquina.</div>'}`;
+}
+window.salvarMaquina = async function() {
+  const nome = document.getElementById('cadMaqNome').value.trim();
+  if (!nome) { toast('⚠️ Nome obrigatório.'); return; }
+  await addDoc(collection(db,'equipeMaquinas'),{nome,tipo:document.getElementById('cadMaqTipo').value,modelo:document.getElementById('cadMaqModelo').value.trim(),ativa:true,criadoEm:new Date().toISOString()});
+  document.getElementById('cadMaqNome').value='';
+  document.getElementById('cadMaqModelo').value='';
+  toast('✅ '+nome+' cadastrada!');
+};
+window.desativarMaquina = async function(id) {
+  if (!confirm('Remover esta máquina?')) return;
+  await updateDoc(doc(db,'equipeMaquinas',id),{ativa:false});
+  toast('✅ Removida.');
+};
+
+// ─── HISTÓRICO ───
+function renderizarHistorico() {
+  const filtroEmp = document.getElementById('histFiltroEmp')?.value||'';
+  const filtroIni = document.getElementById('histFiltroIni')?.value||'';
+  const filtroFim = document.getElementById('histFiltroFim')?.value||hoje();
+  let hist = [...registros].sort((a,b)=>b.data.localeCompare(a.data));
+  if (filtroEmp) hist = hist.filter(r=>r.empregadoId===filtroEmp);
+  if (filtroIni) hist = hist.filter(r=>r.data>=filtroIni);
+  if (filtroFim) hist = hist.filter(r=>r.data<=filtroFim);
+  const empOpts = empregadosAtivos().map(e=>`<option value="${e._docId}">${e.nome}</option>`).join('');
+  document.getElementById('historicoConteudo').innerHTML = `
+    <div class="hist-filtros">
+      <select id="histFiltroEmp" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex:2;">
+        <option value="">Todos</option>${empOpts}
+      </select>
+      <input type="date" id="histFiltroIni" value="${filtroIni}" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex:1;">
+      <input type="date" id="histFiltroFim" value="${filtroFim}" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex:1;">
+    </div>
+    <div class="hist-resumo">📄 ${hist.length} registro(s) encontrado(s)</div>
+    ${hist.slice(0,80).map(r=>`
+      <div class="hist-reg">
+        <div class="hist-reg-top">
+          <div>
+            <div class="hist-reg-nome">${r.empregadoNome}</div>
+            <div class="hist-reg-data">${formatarDataBR(r.data)}</div>
+          </div>
+          <div class="hist-reg-jornada">${r.entrada||'—'} ${r.saida?'→ '+r.saida:r.entrada?'→ ?':''}</div>
+        </div>
+        ${(r.atividades||[]).length?`<div class="hist-atividades">${(r.atividades||[]).map(a=>`
+          <div class="hist-atv-row">
+            <span class="hist-atv-nome">${a.atividade}</span>
+            ${a.maquinaNome?`<span class="hist-atv-maq">🚜 ${a.maquinaNome}</span>`:''}
+            ${a.fazenda?`<span class="hist-atv-maq">📍 ${a.fazenda}</span>`:''}
+            <span class="hist-atv-hora">${a.inicio}${a.fim?'→'+a.fim:''}</span>
+          </div>`).join('')}</div>`:''}
+      </div>`).join('')||'<div class="vazio-sm">Nenhum registro encontrado.</div>'}`;
+  // Re-apply filter values
+  if (filtroEmp) document.getElementById('histFiltroEmp').value=filtroEmp;
+  if (filtroIni) document.getElementById('histFiltroIni').value=filtroIni;
+  if (filtroFim) document.getElementById('histFiltroFim').value=filtroFim;
+}
+window._filtrarHistorico = function() { renderizarHistorico(); };
+</script>
+
+<style>
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--rad:12px;--rs:8px;--s:0 2px 8px rgba(0,0,0,.1);--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+/* TELAS */
+.tela{display:flex;flex-direction:column;flex:1;min-height:0;}
+.ts{padding:12px 14px 20px;overflow-y:auto;}
+/* HEADER EQUIPE */
+.equipe-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;flex-shrink:0;}
+.equipe-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;}
+.equipe-data{font-size:.75rem;opacity:.85;margin-top:2px;}
+.btn-hdr-sec{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;border-radius:8px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;}
+/* GRUPOS */
+.equipe-grupo{margin-bottom:6px;}
+.grupo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);padding:8px 14px 4px;display:flex;align-items:center;gap:6px;}
+.grupo-count{background:var(--cl);color:var(--c);border-radius:20px;padding:1px 8px;font-size:.7rem;font-weight:700;}
+/* CARD EMPREGADO */
+.emp-card{background:white;border-radius:var(--rad);box-shadow:var(--s);margin:4px 10px 6px;cursor:pointer;transition:.15s;border-left:4px solid var(--v);overflow:hidden;}
+.emp-card:active{transform:scale(.99);}
+.emp-card-main{display:flex;align-items:center;gap:12px;padding:12px 12px 10px 14px;}
+.emp-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--v),#3a7d44);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.emp-info{flex:1;min-width:0;}
+.emp-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;}
+.emp-cargo{font-size:.72rem;color:var(--c);margin-bottom:4px;}
+.status-chip{font-size:.75rem;font-weight:600;border-radius:20px;padding:3px 10px;display:inline-block;margin-bottom:2px;}
+.chip-verde{background:#dcfce7;color:#16a34a;}
+.chip-amarelo{background:#fef3c7;color:#d97706;}
+.chip-cinza{background:var(--cl);color:var(--c);}
+.chip-vermelho{background:#fee2e2;color:#dc2626;}
+.status-sub{font-size:.68rem;color:var(--c);}
+.seta{font-size:1.4rem;color:var(--cb);flex-shrink:0;}
+.emp-btns{display:flex;gap:6px;padding:8px 12px 10px 14px;border-top:1px solid var(--cl);flex-wrap:wrap;}
+.btn-j{border:none;border-radius:20px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;}
+.btn-j-entrada{background:#dcfce7;color:#16a34a;}
+.btn-j-saida{background:var(--cl);color:var(--c);}
+.btn-j-ativ{background:var(--vb);color:var(--v);}
+.btn-j-enc{background:#fee2e2;color:#dc2626;}
+/* PERFIL */
+.hdr-v{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:13px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:sticky;top:54px;z-index:199;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.hdr-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;}
+.hdr-meta{font-size:.68rem;opacity:.85;margin-top:2px;}
+.perfil-section-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.perfil-jornada{background:var(--vb);border-radius:var(--rs);padding:11px 14px;display:flex;align-items:center;gap:10px;margin-bottom:10px;border-left:3px solid var(--v);}
+.pj-ico{font-size:1.1rem;flex-shrink:0;}
+.pj-val{flex:1;font-size:.88rem;font-weight:600;color:var(--ve);}
+.btn-pj-saida{background:var(--cl);border:1.5px solid var(--cb);border-radius:6px;padding:6px 12px;font-size:.75rem;font-weight:600;cursor:pointer;font-family:'Barlow',sans-serif;flex-shrink:0;}
+.btn-entrada-grande{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;margin-bottom:12px;letter-spacing:.03em;}
+/* ATIVIDADE CARD */
+.atv-card{background:white;border-radius:var(--rs);box-shadow:var(--s);padding:12px 14px;margin-bottom:8px;}
+.atv-aberta{border-left:4px solid #d97706;}
+.atv-encerrada{border-left:4px solid #16a34a;}
+.atv-card-row{display:flex;gap:10px;justify-content:space-between;}
+.atv-nome{font-weight:700;font-size:.95rem;margin-bottom:4px;}
+.atv-detail{font-size:.72rem;color:var(--c);margin-top:2px;}
+.atv-right{text-align:right;flex-shrink:0;}
+.atv-hora{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);margin-bottom:4px;}
+.atv-badge{font-size:.65rem;font-weight:700;border-radius:20px;padding:3px 8px;white-space:nowrap;}
+.badge-aberta{background:#fef3c7;color:#d97706;}
+.badge-enc{background:#dcfce7;color:#16a34a;}
+/* HISTÓRICO PERFIL */
+.hist-item{background:white;border-radius:var(--rs);padding:10px 12px;margin-bottom:6px;box-shadow:var(--s);}
+.hist-item-header{display:flex;justify-content:space-between;margin-bottom:6px;}
+.hist-data{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;}
+.hist-jornada{font-size:.72rem;color:var(--c);font-family:'DM Mono',monospace;}
+.hist-ativs{display:flex;flex-wrap:wrap;gap:4px;}
+.hist-chip{background:var(--vb);color:var(--v);border-radius:20px;padding:3px 9px;font-size:.7rem;font-weight:600;}
+/* NOVA ATIVIDADE */
+.nova-atv-hdr{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:14px 16px 16px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2);}
+.nova-atv-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
+.nova-atv-sub{font-size:.78rem;opacity:.88;margin-top:3px;font-weight:500;}
+.campo{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
+.campo label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.campo input,.campo select,.campo textarea{border:1.5px solid var(--cb);border-radius:var(--rs);padding:11px 12px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;transition:border-color .15s;}
+.campo input:focus,.campo select:focus,.campo textarea:focus{border-color:var(--v);box-shadow:0 0 0 3px rgba(45,106,45,.1);}
+.campo-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.btn-add{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;letter-spacing:.03em;}
+.wiz-btns{display:flex;gap:10px;padding-top:14px;border-top:1px solid var(--cb);}
+.btn-back-wiz{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;}
+.btn-next-wiz{flex:2;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+/* CADASTRO */
+.cad-tabs{display:flex;gap:8px;padding:10px 14px;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;}
+.cad-tab{flex:1;background:var(--cl);border:2px solid var(--cb);border-radius:var(--rs);padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;color:var(--c);transition:.15s;}
+.cad-tab.ativa{background:var(--vb);border-color:var(--v);color:var(--v);}
+.cad-form{background:white;border-radius:var(--rad);box-shadow:0 2px 12px rgba(0,0,0,.08);padding:16px;margin-bottom:16px;border-top:3px solid var(--v);}
+.cad-form-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;text-transform:uppercase;letter-spacing:.06em;color:var(--v);margin-bottom:14px;}
+.cad-item{background:white;border-radius:var(--rs);box-shadow:var(--s);padding:11px 12px;display:flex;align-items:center;gap:10px;margin-bottom:8px;border-left:4px solid var(--v);}
+.cad-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--v),#3a7d44);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.cad-nome{font-weight:700;font-size:.92rem;}
+.cad-sub{font-size:.7rem;color:var(--c);margin-top:2px;}
+.lista-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;color:var(--c);letter-spacing:.08em;margin-bottom:10px;}
+.btn-ico-sm{background:none;border:none;cursor:pointer;font-size:1rem;padding:4px 6px;border-radius:6px;}
+/* HISTÓRICO */
+.hist-filtros{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.hist-resumo{font-size:.75rem;color:var(--c);margin-bottom:10px;font-weight:600;}
+.hist-reg{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px 14px;margin-bottom:8px;}
+.hist-reg-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.hist-reg-nome{font-weight:700;font-size:.95rem;}
+.hist-reg-data{font-size:.7rem;color:var(--c);margin-top:2px;}
+.hist-reg-jornada{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--v);font-weight:700;}
+.hist-atividades{display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--cl);padding-top:8px;}
+.hist-atv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.hist-atv-nome{font-weight:700;font-size:.82rem;}
+.hist-atv-maq{font-size:.72rem;color:var(--c);}
+.hist-atv-hora{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--v);margin-left:auto;}
+/* UTILS */
+.vazio{text-align:center;padding:48px 24px;color:var(--c);}
+.vazio .ico{font-size:48px;margin-bottom:12px;opacity:.4;}
+.vazio p{font-size:.88rem;line-height:1.7;}
+.vazio-sm{text-align:center;padding:16px;font-size:.82rem;color:var(--c);font-style:italic;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(40px);background:var(--ve);color:white;padding:10px 20px;border-radius:999px;font-size:.82rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;z-index:9999;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:2px;}
+@media(min-width:600px){.ts{max-width:580px;margin:0 auto;width:100%;}}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Equipe</span></div>
+  </div>
+  <div class="hdr-user" id="userNome"></div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex-direction:column;flex:1;min-height:0;">
+
+  <!-- LISTA -->
+  <div class="tela" id="tela-lista" style="display:flex;">
+    <div class="ts" id="listaEquipe"></div>
+  </div>
+
+  <!-- PERFIL -->
+  <div class="tela" id="tela-perfil" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="irLista()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div style="flex:1;min-width:0;">
+        <div class="hdr-nome" id="perfilNome"></div>
+        <div class="hdr-meta" id="perfilCargo"></div>
+        <div class="hdr-meta" id="perfilTelefone"></div>
+      </div>
+      <button id="btnNovaAtivPerfil" onclick="irNovaAtividade(empregadoSel?._docId)" style="background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.3);color:white;border-radius:8px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;flex-shrink:0;">＋ Atividade</button>
+    </div>
+    <div class="ts" style="overflow-y:auto;flex:1;">
+      <div class="perfil-section-tit">📅 Hoje</div>
+      <div id="perfilHoje"></div>
+      <div class="perfil-section-tit" style="margin-top:18px;">📋 Histórico</div>
+      <div id="perfilHistorico"></div>
+    </div>
+  </div>
+
+  <!-- NOVA ATIVIDADE -->
+  <div class="tela" id="tela-nova-atividade" style="display:none;">
+    <div class="nova-atv-hdr">
+      <button onclick="irPerfil(wip?.empregadoId)" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div>
+        <div class="nova-atv-tit">Registrar Atividade</div>
+        <div class="nova-atv-sub" id="novaAtvEmpNome"></div>
+      </div>
+    </div>
+    <div class="ts" style="overflow-y:auto;flex:1;">
+      <div class="campo"><label>Data</label><input type="date" id="novaAtvData"></div>
+      <div class="campo"><label>Atividade</label>
+        <input type="text" id="novaAtvAtividade" placeholder="Selecione ou digite..." list="atividadesSug" autocomplete="off">
+        <datalist id="atividadesSug"></datalist>
+      </div>
+      <div class="campo"><label>Máquina (opcional)</label><select id="novaAtvMaquina"></select></div>
+      <div class="campo-row">
+        <div class="campo"><label>Fazenda (opcional)</label><input type="text" id="novaAtvFazenda" placeholder="Ex: Aeroporto"></div>
+        <div class="campo"><label>Talhão (opcional)</label><input type="text" id="novaAtvTalhao" placeholder="Ex: T-04"></div>
+      </div>
+      <div class="campo-row">
+        <div class="campo"><label>Início</label><input type="time" id="novaAtvInicio"></div>
+        <div class="campo"><label>Fim (opcional)</label><input type="time" id="novaAtvFim"></div>
+      </div>
+      <div class="campo"><label>Observação (opcional)</label><input type="text" id="novaAtvObs" placeholder="Detalhe se necessário..."></div>
+      <div class="wiz-btns">
+        <button class="btn-back-wiz" onclick="irPerfil(wip?.empregadoId)">Cancelar</button>
+        <button class="btn-next-wiz" onclick="salvarNovaAtividade()">💾 Salvar Atividade</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CADASTRO -->
+  <div class="tela" id="tela-cadastro" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="irLista()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="hdr-nome">⚙️ Cadastros</div><div class="hdr-meta">Empregados e máquinas</div></div>
+    </div>
+    <div class="cad-tabs" id="cadastroTabs"></div>
+    <div class="ts" style="overflow-y:auto;flex:1;" id="cadastroConteudo"></div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="tela" id="tela-historico" style="display:none;">
+    <div class="hdr-v">
+      <button onclick="irLista()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <div><div class="hdr-nome">📋 Histórico de Atividades</div><div class="hdr-meta">Consulta e relatórios</div></div>
+    </div>
+    <div class="ts" style="overflow-y:auto;flex:1;" id="historicoConteudo"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
