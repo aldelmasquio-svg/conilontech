@@ -30,6 +30,7 @@ enableIndexedDbPersistence(db).catch(() => {});
 
 let perfilAtual = {};
 let talhoes = [], registros = [], planosAdubacao = [], pulverizacoes = [];
+let equipeEmpregados = [], equipeRegistros = [];
 let chartStatus = null, chartAtividade = null;
 
 onAuthStateChanged(auth, async (user) => {
@@ -38,7 +39,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = { mapa:'admin', atividades:'admin', adubacao:'admin', config:'admin', pulverizacao:'admin', pedidos:'admin', admin:'admin' };
+    perfilAtual.modulos = { mapa:'admin', atividades:'admin', adubacao:'admin', config:'admin', pulverizacao:'admin', pedidos:'admin', admin:'admin', equipe:'admin' };
   }
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
@@ -61,6 +62,7 @@ function gerarMenu() {
     { href:'index.html', ico:'📊', label:'Dashboard', sempre:true },
     { href:'mapa.html', ico:'🗺️', label:'Mapa de Talhões', acesso:'mapa' },
     { href:'atividades.html', ico:'🌾', label:'Atividades de Campo', acesso:'atividades' },
+    { href:'equipe.html', ico:'👥', label:'Equipe', acesso:'equipe' },
     { href:'adubacoes.html', ico:'🧪', label:'Adubações', acesso:'adubacao' },
     { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações', acesso:'pulverizacao' },
     { href:'pedidos.html', ico:'📦', label:'Pedidos de Insumos', acesso:'pedidos' },
@@ -98,10 +100,19 @@ function iniciarListeners() {
     pulverizacoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
   });
+  onSnapshot(collection(db,'equipeEmpregados'), snap => {
+    equipeEmpregados = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
+  });
+  onSnapshot(collection(db,'equipeRegistros'), snap => {
+    equipeRegistros = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
+  });
 }
 
 function atualizarDashboard() {
   atualizarKPIs();
+  atualizarEquipeKPI();
   atualizarGraficoStatus();
   atualizarAtividadesRecentes();
   atualizarProximasOps();
@@ -119,6 +130,14 @@ function atualizarKPIs() {
   const totalCarreiras = registros.reduce((s,r) => s + Object.keys(r.atribuicoes||{}).length, 0);
   document.getElementById('kpiRegistros').textContent = totalReg;
   document.getElementById('kpiCarreiras').textContent = totalCarreiras.toLocaleString('pt-BR');
+}
+
+function atualizarEquipeKPI() {
+  const el = document.getElementById('kpiEquipe'); if (!el) return;
+  const hj = new Date().toISOString().slice(0,10);
+  const ativos = equipeEmpregados.filter(e => e.ativo !== false).length;
+  const hoje = equipeRegistros.filter(r => r.data === hj && r.entrada).length;
+  el.textContent = ativos ? `${hoje}/${ativos}` : '—';
 }
 
 function atualizarGraficoStatus() {
@@ -361,6 +380,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
     <div class="atalhos-grid">
       <a href="mapa.html" class="atalho-btn"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
       <a href="atividades.html" class="atalho-btn"><span class="atalho-ico">🌾</span><span class="atalho-label">Atividades</span></a>
+      <a href="equipe.html" class="atalho-btn"><span class="atalho-ico">👥</span><span class="atalho-label">Equipe</span></a>
       <a href="adubacoes.html" class="atalho-btn"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
       <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulverizações</span></a>
       <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
@@ -399,6 +419,11 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
         <span class="kpi-ico">🌾</span>
         <span class="kpi-val" id="kpiRegistros">—</span>
         <span class="kpi-label">Atividades</span>
+      </div>
+      <div class="kpi-card" onclick="window.location.href='equipe.html'" style="cursor:pointer;">
+        <span class="kpi-ico">👥</span>
+        <span class="kpi-val loading" id="kpiEquipe">—</span>
+        <span class="kpi-label">Equipe hoje</span>
       </div>
     </div>
     <div class="kpi-grid" style="grid-template-columns:1fr;margin-bottom:16px;">
