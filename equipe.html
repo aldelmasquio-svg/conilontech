@@ -9,8 +9,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, addDoc, updateDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -31,7 +30,6 @@ document.addEventListener('keydown', function(e) {
     if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) e.preventDefault();
   }
 }, true);
-
 history.pushState(null, '', location.href);
 window.addEventListener('popstate', function() {
   history.pushState(null, '', location.href);
@@ -46,8 +44,8 @@ function _mostrarConfirmacaoSaida() {
   }
   m.style.display = 'block';
 }
-window._fecharConfirmacaoSaida = function() { const m=document.getElementById('_modalSaida'); if(m) m.style.display='none'; };
-window._confirmarSaida = function() { history.go(-2); };
+window._fecharConfirmacaoSaida = () => { const m=document.getElementById('_modalSaida'); if(m) m.style.display='none'; };
+window._confirmarSaida = () => { history.go(-2); };
 
 const ATIVIDADES_FIXAS = [
   'Colheita','Poda','Irrigação','Fertirrigação','Adubação',
@@ -58,17 +56,19 @@ const ATIVIDADES_FIXAS = [
 ];
 
 let usuarioAtual = null, perfilAtual = {};
-let todosEmpregados = [], maquinas = [], registros = [];
+let todosEmpregados = [], maquinas = [], registros = [], talhoes = [];
 let telaAtual = 'lista', empregadoSel = null;
 let wip = null, cadastroTab = 'empregados';
+let filtroFazenda = ''; // '' = todas
 
+// ─── AUTH ───
 onAuthStateChanged(auth, async (user) => {
-  if (!user) { window.location.href='login.html'; return; }
+  if (!user) { window.location.href = 'login.html'; return; }
   usuarioAtual = user;
-  const snap = await getDoc(doc(db,'usuarios',user.uid));
+  const snap = await getDoc(doc(db, 'usuarios', user.uid));
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
-  if (!perfilAtual.modulos && perfilAtual.perfil==='admin')
+  if (!perfilAtual.modulos && perfilAtual.perfil === 'admin')
     perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',equipe:'admin'};
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
@@ -78,17 +78,25 @@ onAuthStateChanged(auth, async (user) => {
   gerarMenu(); iniciarListeners();
 });
 
+// ─── ACESSO ───
 function nivelAcesso(mod) {
   if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
-  if (perfilAtual.perfil==='admin') return 'admin';
+  if (perfilAtual.perfil === 'admin') return 'admin';
   return 'nenhum';
 }
-function isAdmin() { return nivelAcesso('equipe')==='admin' || perfilAtual.perfil==='admin'; }
+function isAdmin() { return nivelAcesso('equipe') === 'admin' || perfilAtual.perfil === 'admin'; }
 function podeRegistrar() { return ['admin','gerente','encarregado','operador'].includes(nivelAcesso('equipe')) || isAdmin(); }
-function empregadosAtivos() { return todosEmpregados.filter(e=>e.ativo!==false); }
+function fazendaPermitida(nomeFazenda) {
+  if (isAdmin()) return true;
+  const permitidas = perfilAtual.fazendasModulo?.equipe;
+  if (!permitidas || !permitidas.length) return true;
+  return permitidas.includes(nomeFazenda);
+}
+function empregadosAtivos() { return todosEmpregados.filter(e => e.ativo !== false && fazendaPermitida(e.fazenda || 'Sem fazenda')); }
 
+// ─── MENU ───
 function gerarMenu() {
-  const isAdm = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin';
+  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
   const items = [
     {href:'index.html',ico:'📊',label:'Dashboard'},
     {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
@@ -104,142 +112,190 @@ function gerarMenu() {
     {href:'planejamento.html',ico:'🗓️',label:'Planejamento'},
   ];
   if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
-  document.getElementById('menuModulos').innerHTML = items.map(m=>
+  document.getElementById('menuModulos').innerHTML = items.map(m =>
     `<a class="menu-item ${m.href==='equipe.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
   ).join('');
 }
 
+// ─── LISTENERS ───
 function iniciarListeners() {
-  onSnapshot(collection(db,'equipeEmpregados'), snap => {
-    todosEmpregados = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+  onSnapshot(collection(db, 'equipeEmpregados'), snap => {
+    todosEmpregados = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     renderizarTela();
   });
-  onSnapshot(collection(db,'equipeMaquinas'), snap => {
-    maquinas = snap.docs.map(d=>({_docId:d.id,...d.data()})).filter(m=>m.ativa!==false);
+  onSnapshot(collection(db, 'equipeMaquinas'), snap => {
+    maquinas = snap.docs.map(d => ({_docId:d.id,...d.data()})).filter(m => m.ativa !== false);
   });
-  onSnapshot(collection(db,'equipeRegistros'), snap => {
-    registros = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+  onSnapshot(collection(db, 'equipeRegistros'), snap => {
+    registros = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     renderizarTela();
+  });
+  onSnapshot(collection(db, 'talhoes'), snap => {
+    talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
   });
 }
 
 // ─── NAVEGAÇÃO ───
 function renderizarTela() {
-  ['lista','perfil','nova-atividade','cadastro','historico'].forEach(t=>{
-    const el=document.getElementById('tela-'+t); if(el) el.style.display='none';
+  ['lista','perfil','nova-atividade','cadastro','historico'].forEach(t => {
+    const el = document.getElementById('tela-'+t); if (el) el.style.display = 'none';
   });
   const el = document.getElementById('tela-'+telaAtual);
-  if (el) el.style.display='flex';
-  if (telaAtual==='lista') renderizarLista();
-  if (telaAtual==='perfil') renderizarPerfil();
-  if (telaAtual==='nova-atividade') renderizarNovaAtividade();
-  if (telaAtual==='cadastro') renderizarCadastro();
-  if (telaAtual==='historico') renderizarHistorico();
+  if (el) el.style.display = 'flex';
+  if (telaAtual === 'lista')          renderizarLista();
+  if (telaAtual === 'perfil')         renderizarPerfil();
+  if (telaAtual === 'nova-atividade') renderizarNovaAtividade();
+  if (telaAtual === 'cadastro')       renderizarCadastro();
+  if (telaAtual === 'historico')      renderizarHistorico();
 }
 
 window.irLista = () => { telaAtual='lista'; empregadoSel=null; renderizarTela(); };
 window.irPerfil = (id) => {
-  empregadoSel = todosEmpregados.find(e=>e._docId===id)||null;
+  empregadoSel = todosEmpregados.find(e => e._docId === id) || null;
   if (!empregadoSel) return;
-  telaAtual='perfil'; renderizarTela();
+  telaAtual = 'perfil'; renderizarTela();
 };
 window.irNovaAtividade = (empId) => {
-  empregadoSel = todosEmpregados.find(e=>e._docId===empId)||null;
-  wip = { empregadoId:empId, empregadoNome:empregadoSel?.nome||'', data:hoje(), atividade:'', maquinaId:'', fazenda:'', talhao:'', inicio:agora(), fim:'', obs:'' };
-  telaAtual='nova-atividade'; renderizarTela();
+  empregadoSel = todosEmpregados.find(e => e._docId === empId) || null;
+  wip = {
+    empregadoId: empId,
+    empregadoNome: empregadoSel?.nome || '',
+    empregadoFazenda: empregadoSel?.fazenda || '',
+    data: hoje(),
+    atividade: '', maquinaId: '',
+    talhaoId: '', talhaoNome: '', talhaoFazenda: '',
+    outraFazenda: false, obsLocal: '',
+    inicio: agora(), fim: '', obs: ''
+  };
+  telaAtual = 'nova-atividade'; renderizarTela();
 };
-window.irCadastro = () => { telaAtual='cadastro'; renderizarTela(); };
-window.irHistorico = () => { telaAtual='historico'; renderizarTela(); };
+window.irCadastro = () => { telaAtual = 'cadastro'; renderizarTela(); };
+window.irHistorico = () => { telaAtual = 'historico'; renderizarHistorico(); };
 
 // ─── UTILS ───
-function hoje() { return new Date().toISOString().slice(0,10); }
-function agora() { return new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}); }
+function hoje() { return new Date().toISOString().slice(0, 10); }
+function agora() { return new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}); }
 function formatarDataBR(iso) {
   if (!iso) return '—';
-  const [a,m,d]=iso.split('-');
-  const meses=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-  return `${d} ${meses[parseInt(m)-1]} ${a}`;
+  const [a,m,d] = iso.split('-');
+  const nm = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  return `${d} ${nm[parseInt(m)-1]} ${a}`;
 }
-function registroDeHoje(empId) { return registros.find(r=>r.empregadoId===empId&&r.data===hoje()); }
+function registroDeHoje(empId) { return registros.find(r => r.empregadoId === empId && r.data === hoje()); }
 function statusEmpregado(empId) {
   const r = registroDeHoje(empId);
   if (!r) return {tipo:'ausente'};
-  const atv = (r.atividades||[]).find(a=>!a.fim);
+  const atv = (r.atividades||[]).find(a => !a.fim);
   if (atv) return {tipo:'em-atividade', atividade:atv};
-  if (r.entrada&&!r.saida) return {tipo:'disponivel', entrada:r.entrada};
+  if (r.entrada && !r.saida) return {tipo:'disponivel', entrada:r.entrada};
   if (r.saida) return {tipo:'saiu', entrada:r.entrada, saida:r.saida};
   return {tipo:'sem-jornada'};
 }
-function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
-window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
-window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
-window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
+function fazendas() {
+  return [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort();
+}
+function talhoesDaFazenda(faz) { return talhoes.filter(t => t.fazenda === faz && t.status !== 'inativo').sort((a,b) => (a.nome||'').localeCompare(b.nome||'')); }
+function toast(msg, dur=3000) { const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
+window.toggleMenu = () => { document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu = () => { document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout = async () => { await signOut(auth); window.location.href = 'login.html'; };
 
 // ─── LISTA ───
 function renderizarLista() {
   const adm = isAdmin(), podeReg = podeRegistrar();
   const ativos = empregadosAtivos();
+  const hj = hoje();
+
+  // Fazendas visíveis
+  const fazendasEmp = [...new Set(ativos.map(e => e.fazenda || 'Sem fazenda'))].sort();
+  const fazendasVisiveis = filtroFazenda ? [filtroFazenda] : fazendasEmp;
+
+  const filtroHtml = fazendasEmp.length > 1
+    ? `<div class="filtro-bar">
+        <button class="filtro-chip ${!filtroFazenda?'ativo':''}" onclick="window._setFiltroFazenda('')">Todas</button>
+        ${fazendasEmp.map(f=>`<button class="filtro-chip ${filtroFazenda===f?'ativo':''}" onclick="window._setFiltroFazenda('${f.replace(/'/g,"\\'")}')">${f}</button>`).join('')}
+      </div>` : '';
+
+  let totalEm=0, totalDisp=0, totalAus=0;
+  ativos.forEach(e => {
+    const st=statusEmpregado(e._docId).tipo;
+    if(st==='em-atividade') totalEm++;
+    else if(st==='disponivel') totalDisp++;
+    else totalAus++;
+  });
 
   const headerHtml = `<div class="equipe-header">
     <div>
-      <div class="equipe-title">Equipe Fixa</div>
-      <div class="equipe-data">${formatarDataBR(hoje())}</div>
+      <div class="equipe-title">👥 Equipe</div>
+      <div class="equipe-data">${formatarDataBR(hj)}</div>
     </div>
     <div style="display:flex;gap:8px;flex-shrink:0;">
       <button onclick="irHistorico()" class="btn-hdr-sec">📋 Histórico</button>
       ${adm?`<button onclick="irCadastro()" class="btn-hdr-sec">⚙️ Cadastros</button>`:''}
     </div>
-  </div>`;
+  </div>
+  <div class="resumo-bar">
+    <div class="resumo-item" style="color:#16a34a;"><span class="resumo-n">${totalEm}</span>em atividade</div>
+    <div class="resumo-sep"></div>
+    <div class="resumo-item" style="color:#d97706;"><span class="resumo-n">${totalDisp}</span>disponível</div>
+    <div class="resumo-sep"></div>
+    <div class="resumo-item" style="color:#6b7280;"><span class="resumo-n">${totalAus}</span>sem reg.</div>
+  </div>
+  ${filtroHtml}`;
 
   if (!ativos.length) {
     document.getElementById('listaEquipe').innerHTML = headerHtml + `<div class="vazio"><div class="ico">👥</div><p>Nenhum empregado cadastrado.<br>${adm?'Clique em <strong>⚙️ Cadastros</strong> para adicionar.':''}</p></div>`;
     return;
   }
 
-  const grupos = {'em-atividade':[],'disponivel':[],'saiu':[],'ausente':[]};
-  ativos.forEach(e => {
-    const st = statusEmpregado(e._docId);
-    (grupos[st.tipo]||grupos['ausente']).push({emp:e,status:st});
+  let listaHtml = '';
+  fazendasVisiveis.forEach(faz => {
+    const emps = ativos.filter(e => (e.fazenda||'Sem fazenda') === faz);
+    if (!emps.length) return;
+    const grupos = {'em-atividade':[],'disponivel':[],'saiu':[],'ausente':[]};
+    emps.forEach(e => { const st=statusEmpregado(e._docId); (grupos[st.tipo]||grupos['ausente']).push({emp:e,status:st}); });
+    listaHtml += `<div class="fazenda-secao">
+      <div class="fazenda-tit">🏡 ${faz} <span class="fazenda-count">${emps.length}</span></div>
+      ${renderGrupoStatus('🟢 Em atividade', '#16a34a', grupos['em-atividade'], podeReg)}
+      ${renderGrupoStatus('🟡 Disponível', '#d97706', grupos['disponivel'], podeReg)}
+      ${renderGrupoStatus('⚫ Encerrou', '#6b7280', grupos['saiu'], podeReg)}
+      ${renderGrupoStatus('🔴 Não registrado', '#ef4444', grupos['ausente'], podeReg)}
+    </div>`;
   });
 
-  const renderGrupo = (tit,icone,cor,items) => {
-    if (!items.length) return '';
-    return `<div class="equipe-grupo">
-      <div class="grupo-tit"><span style="color:${cor}">${icone}</span> ${tit} <span class="grupo-count">${items.length}</span></div>
-      ${items.map(({emp,status})=>renderCardEmp(emp,status,podeReg)).join('')}
-    </div>`;
-  };
+  document.getElementById('listaEquipe').innerHTML = headerHtml + (listaHtml || `<div class="vazio-sm">Nenhum empregado nesta fazenda.</div>`);
+}
 
-  document.getElementById('listaEquipe').innerHTML = headerHtml
-    + renderGrupo('Em atividade','🟢','#16a34a',grupos['em-atividade'])
-    + renderGrupo('Disponível','🟡','#d97706',grupos['disponivel'])
-    + renderGrupo('Encerrou jornada','⚫','#6b7280',grupos['saiu'])
-    + renderGrupo('Não registrado hoje','🔴','#ef4444',grupos['ausente']);
+function renderGrupoStatus(tit, cor, items, podeReg) {
+  if (!items.length) return '';
+  return `<div class="status-grupo">
+    <div class="status-grupo-tit" style="color:${cor}">${tit}</div>
+    ${items.map(({emp,status}) => renderCardEmp(emp, status, podeReg)).join('')}
+  </div>`;
 }
 
 function renderCardEmp(emp, status, podeReg) {
   const r = registroDeHoje(emp._docId);
   let statusHtml = '';
-  if (status.tipo==='em-atividade') {
+  if (status.tipo === 'em-atividade') {
     statusHtml = `<div class="status-chip chip-verde">🟢 ${status.atividade.atividade}</div>`
-      + (status.atividade.maquinaNome?`<div class="status-sub">🚜 ${status.atividade.maquinaNome}</div>`:'')
+      + (status.atividade.maquinaNome ? `<div class="status-sub">🚜 ${status.atividade.maquinaNome}</div>` : '')
+      + (status.atividade.talhaoNome  ? `<div class="status-sub">📍 ${status.atividade.talhaoNome}${status.atividade.outraFazenda?' <span class="outra-faz-badge">outra fazenda</span>':''}</div>` : '')
       + `<div class="status-sub">Desde ${status.atividade.inicio}</div>`;
-  } else if (status.tipo==='disponivel') {
+  } else if (status.tipo === 'disponivel') {
     statusHtml = `<div class="status-chip chip-amarelo">🟡 Disponível · Entrada ${status.entrada}</div>`;
-  } else if (status.tipo==='saiu') {
+  } else if (status.tipo === 'saiu') {
     statusHtml = `<div class="status-chip chip-cinza">⚫ Encerrou · ${status.entrada} → ${status.saida}</div>`;
   } else {
     statusHtml = `<div class="status-chip chip-vermelho">🔴 Não registrado</div>`;
   }
-
   let btns = '';
   if (podeReg) {
     if (!r?.entrada) btns += `<button onclick="event.stopPropagation();window.abrirJornada('${emp._docId}','entrada')" class="btn-j btn-j-entrada">✅ Entrada</button>`;
     if (r?.entrada && !r?.saida) btns += `<button onclick="event.stopPropagation();window.abrirJornada('${emp._docId}','saida')" class="btn-j btn-j-saida">🔚 Saída</button>`;
     btns += `<button onclick="event.stopPropagation();irNovaAtividade('${emp._docId}')" class="btn-j btn-j-ativ">＋ Atividade</button>`;
-    if (status.tipo==='em-atividade') btns += `<button onclick="event.stopPropagation();window.encerrarAtividade('${emp._docId}')" class="btn-j btn-j-enc">⏹ Encerrar</button>`;
+    if (status.tipo === 'em-atividade') btns += `<button onclick="event.stopPropagation();window.encerrarAtividade('${emp._docId}')" class="btn-j btn-j-enc">⏹ Encerrar</button>`;
   }
-
   return `<div class="emp-card" onclick="irPerfil('${emp._docId}')">
     <div class="emp-card-main">
       <div class="emp-avatar">${(emp.nome||'?')[0].toUpperCase()}</div>
@@ -250,17 +306,19 @@ function renderCardEmp(emp, status, podeReg) {
       </div>
       <span class="seta">›</span>
     </div>
-    ${btns?`<div class="emp-btns" onclick="event.stopPropagation()">${btns}</div>`:''}
+    ${btns ? `<div class="emp-btns" onclick="event.stopPropagation()">${btns}</div>` : ''}
   </div>`;
 }
+
+window._setFiltroFazenda = (f) => { filtroFazenda = f; renderizarTela(); };
 
 // ─── PERFIL ───
 function renderizarPerfil() {
   if (!empregadoSel) return;
   const emp = empregadoSel;
-  const podeReg = podeRegistrar(), adm = isAdmin();
+  const podeReg = podeRegistrar();
   document.getElementById('perfilNome').textContent = emp.nome;
-  document.getElementById('perfilCargo').textContent = emp.cargo || '—';
+  document.getElementById('perfilCargo').textContent = [emp.cargo, emp.fazenda].filter(Boolean).join(' · ');
   document.getElementById('perfilTelefone').textContent = emp.telefone ? '📞 '+emp.telefone : '';
   document.getElementById('btnNovaAtivPerfil').style.display = podeReg ? 'flex' : 'none';
 
@@ -274,25 +332,30 @@ function renderizarPerfil() {
     hojeHtml += `<div class="perfil-jornada">
       <span class="pj-ico">🕐</span>
       <span class="pj-val">${jornadaStr}</span>
-      ${r.entrada&&!r.saida&&podeReg?`<button onclick="window.abrirJornada('${emp._docId}','saida')" class="btn-pj-saida">Registrar Saída</button>`:''}
+      ${r.entrada && !r.saida && podeReg ? `<button onclick="window.abrirJornada('${emp._docId}','saida')" class="btn-pj-saida">Registrar Saída</button>` : ''}
     </div>`;
-    const ativs = r.atividades||[];
+    const ativs = r.atividades || [];
     hojeHtml += ativs.length
-      ? ativs.map(a=>renderAtvCard(a)).join('')
+      ? ativs.map(a => renderAtvCard(a)).join('')
       : `<div class="vazio-sm">Nenhuma atividade registrada hoje.</div>`;
   } else {
     hojeHtml += `<div class="vazio-sm">Sem registro para hoje.</div>`;
   }
   document.getElementById('perfilHoje').innerHTML = hojeHtml;
 
-  const hist = registros.filter(r=>r.empregadoId===emp._docId&&r.data<hoje()).sort((a,b)=>b.data.localeCompare(a.data)).slice(0,60);
+  const hist = registros
+    .filter(r => r.empregadoId === emp._docId && r.data < hoje())
+    .sort((a,b) => b.data.localeCompare(a.data))
+    .slice(0, 60);
   document.getElementById('perfilHistorico').innerHTML = hist.length
-    ? hist.map(r=>`<div class="hist-item">
+    ? hist.map(r => `<div class="hist-item">
         <div class="hist-item-header">
           <span class="hist-data">${formatarDataBR(r.data)}</span>
-          <span class="hist-jornada">${r.entrada||(r.atividades?.length?'':'—')} ${r.saida?'→ '+r.saida:r.entrada?'':''}`.trimEnd()+`</span>
+          <span class="hist-jornada">${r.entrada||'—'} ${r.saida?'→ '+r.saida:r.entrada?'→ em aberto':''}</span>
         </div>
-        <div class="hist-ativs">${(r.atividades||[]).map(a=>`<span class="hist-chip">${a.atividade}${a.maquinaNome?' · 🚜':''}</span>`).join('')||'<span style="color:#9ca3af;font-size:.72rem;">Sem atividades</span>'}</div>
+        <div class="hist-ativs">${(r.atividades||[]).map(a =>
+          `<span class="hist-chip">${a.atividade}${a.talhaoNome?' · '+a.talhaoNome:''}${a.outraFazenda?' <span style="font-size:.6rem;color:#d97706;">⇄</span>':''}</span>`
+        ).join('')||'<span style="color:#9ca3af;font-size:.72rem;">Sem atividades</span>'}</div>
       </div>`).join('')
     : `<div class="vazio-sm">Sem histórico anterior.</div>`;
 }
@@ -301,11 +364,12 @@ function renderAtvCard(a) {
   const aberta = !a.fim;
   return `<div class="atv-card ${aberta?'atv-aberta':'atv-encerrada'}">
     <div class="atv-card-row">
-      <div>
+      <div style="flex:1;min-width:0;">
         <div class="atv-nome">${a.atividade}</div>
-        ${a.maquinaNome?`<div class="atv-detail">🚜 ${a.maquinaNome}</div>`:''}
-        ${a.fazenda?`<div class="atv-detail">📍 ${a.fazenda}${a.talhao?' · '+a.talhao:''}</div>`:''}
-        ${a.obs?`<div class="atv-detail">💬 ${a.obs}</div>`:''}
+        ${a.maquinaNome ? `<div class="atv-detail">🚜 ${a.maquinaNome}</div>` : ''}
+        ${a.talhaoNome  ? `<div class="atv-detail">📍 ${a.talhaoNome}${a.talhaoFazenda?' · '+a.talhaoFazenda:''}${a.outraFazenda?' <span class="outra-faz-badge">outra fazenda</span>':''}</div>` : ''}
+        ${a.obsLocal    ? `<div class="atv-detail" style="color:#d97706;">📝 ${a.obsLocal}</div>` : ''}
+        ${a.obs         ? `<div class="atv-detail">💬 ${a.obs}</div>` : ''}
       </div>
       <div class="atv-right">
         <div class="atv-hora">${a.inicio}${a.fim?' → '+a.fim:''}</div>
@@ -317,79 +381,161 @@ function renderAtvCard(a) {
 
 // ─── NOVA ATIVIDADE ───
 function renderizarNovaAtividade() {
-  document.getElementById('novaAtvEmpNome').textContent = wip?.empregadoNome||'';
-  document.getElementById('novaAtvData').value = wip?.data||hoje();
-  document.getElementById('novaAtvAtividade').value = wip?.atividade||'';
-  const maqOpts = `<option value="">— Sem máquina —</option>`
-    + maquinas.map(m=>`<option value="${m._docId}">${m.nome}${m.tipo?' ('+m.tipo+')':''}</option>`).join('');
-  document.getElementById('novaAtvMaquina').innerHTML = maqOpts;
-  document.getElementById('novaAtvMaquina').value = wip?.maquinaId||'';
-  document.getElementById('novaAtvFazenda').value = wip?.fazenda||'';
-  document.getElementById('novaAtvTalhao').value = wip?.talhao||'';
-  document.getElementById('novaAtvInicio').value = wip?.inicio||agora();
-  document.getElementById('novaAtvFim').value = wip?.fim||'';
-  document.getElementById('novaAtvObs').value = wip?.obs||'';
-  document.getElementById('atividadesSug').innerHTML = ATIVIDADES_FIXAS.map(a=>`<option value="${a}">`).join('');
+  if (!wip) return;
+  document.getElementById('novaAtvEmpNome').textContent = wip.empregadoNome + (wip.empregadoFazenda ? ' · '+wip.empregadoFazenda : '');
+  document.getElementById('novaAtvData').value = wip.data;
+  document.getElementById('novaAtvAtividade').value = wip.atividade;
+  document.getElementById('novaAtvInicio').value = wip.inicio;
+  document.getElementById('novaAtvFim').value = wip.fim;
+  document.getElementById('novaAtvObs').value = wip.obs;
+  document.getElementById('atividadesSug').innerHTML = ATIVIDADES_FIXAS.map(a => `<option value="${a}">`).join('');
+
+  // Máquinas
+  document.getElementById('novaAtvMaquina').innerHTML =
+    `<option value="">— Sem máquina —</option>`
+    + maquinas.map(m => `<option value="${m._docId}">${m.nome}${m.tipo?' ('+m.tipo+')':''}</option>`).join('');
+  document.getElementById('novaAtvMaquina').value = wip.maquinaId;
+
+  // Talhões agrupados por fazenda
+  _renderTalhaoSelect();
+}
+
+function _renderTalhaoSelect() {
+  const empFaz = wip?.empregadoFazenda || '';
+  const todasFaz = fazendas();
+  let opts = `<option value="">— Sem talhão específico —</option>`;
+
+  if (empFaz) {
+    const ts = talhoesDaFazenda(empFaz);
+    if (ts.length) {
+      opts += `<optgroup label="🏡 ${empFaz}">`;
+      opts += ts.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
+      opts += `</optgroup>`;
+    }
+    const outras = todasFaz.filter(f => f !== empFaz);
+    if (outras.length) {
+      outras.forEach(f => {
+        const ts2 = talhoesDaFazenda(f);
+        if (!ts2.length) return;
+        opts += `<optgroup label="↗ Outra fazenda: ${f}">`;
+        opts += ts2.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
+        opts += `</optgroup>`;
+      });
+    }
+  } else {
+    todasFaz.forEach(f => {
+      const ts = talhoesDaFazenda(f);
+      if (!ts.length) return;
+      opts += `<optgroup label="🏡 ${f}">`;
+      opts += ts.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
+      opts += `</optgroup>`;
+    });
+  }
+
+  const sel = document.getElementById('novaAtvTalhao');
+  sel.innerHTML = opts;
+  sel.value = wip.talhaoId || '';
+  _atualizarObsLocal(sel);
+}
+
+window._onTalhaoChange = function(sel) { _atualizarObsLocal(sel); };
+
+function _atualizarObsLocal(sel) {
+  if (!sel) { sel = document.getElementById('novaAtvTalhao'); if (!sel) return; }
+  const opt = sel.options[sel.selectedIndex];
+  const tFaz = opt?.getAttribute('data-fazenda') || '';
+  const empFaz = wip?.empregadoFazenda || '';
+  const outra = !!tFaz && !!empFaz && tFaz !== empFaz;
+  const wrap = document.getElementById('obsLocalWrap');
+  if (wrap) wrap.style.display = outra ? 'flex' : 'none';
+  if (!outra && document.getElementById('novaAtvObsLocal')) {
+    document.getElementById('novaAtvObsLocal').value = '';
+  }
+  if (wip) {
+    const tid = sel.value;
+    const t = talhoes.find(x => (x.id||x._docId) === tid);
+    wip.talhaoId = tid;
+    wip.talhaoNome = t?.nome || '';
+    wip.talhaoFazenda = tFaz;
+    wip.outraFazenda = outra;
+  }
 }
 
 window.salvarNovaAtividade = async function() {
-  const atv   = document.getElementById('novaAtvAtividade').value.trim();
-  const data  = document.getElementById('novaAtvData').value;
-  const mqId  = document.getElementById('novaAtvMaquina').value;
-  const mqNome= mqId ? (maquinas.find(m=>m._docId===mqId)?.nome||'') : '';
-  const inicio= document.getElementById('novaAtvInicio').value;
-  const fim   = document.getElementById('novaAtvFim').value;
-  const faz   = document.getElementById('novaAtvFazenda').value.trim();
-  const tal   = document.getElementById('novaAtvTalhao').value.trim();
-  const obs   = document.getElementById('novaAtvObs').value.trim();
+  const atv    = document.getElementById('novaAtvAtividade').value.trim();
+  const data   = document.getElementById('novaAtvData').value;
+  const mqId   = document.getElementById('novaAtvMaquina').value;
+  const mqNome = mqId ? (maquinas.find(m => m._docId===mqId)?.nome||'') : '';
+  const inicio = document.getElementById('novaAtvInicio').value;
+  const fim    = document.getElementById('novaAtvFim').value;
+  const obs    = document.getElementById('novaAtvObs').value.trim();
+  const obsLocal = (document.getElementById('novaAtvObsLocal')?.value||'').trim();
+
+  // Talhão info
+  const sel = document.getElementById('novaAtvTalhao');
+  const tid = sel?.value || '';
+  const opt = sel?.options[sel?.selectedIndex];
+  const tFaz = opt?.getAttribute('data-fazenda') || '';
+  const empFaz = wip?.empregadoFazenda || '';
+  const outra = !!tid && !!tFaz && !!empFaz && tFaz !== empFaz;
+  const t = talhoes.find(x => (x.id||x._docId) === tid);
+
   if (!atv)   { toast('⚠️ Informe a atividade.'); return; }
   if (!inicio){ toast('⚠️ Informe o horário de início.'); return; }
-  const novaAtv = {id:'atv'+Date.now(),atividade:atv,maquinaId:mqId,maquinaNome:mqNome,fazenda:faz,talhao:tal,inicio,fim,obs};
-  const regExist = registros.find(r=>r.empregadoId===wip.empregadoId&&r.data===data);
+  if (outra && !obsLocal) { toast('⚠️ Informe o motivo para trabalho em outra fazenda.'); return; }
+
+  const novaAtv = {
+    id: 'atv'+Date.now(),
+    atividade: atv, maquinaId: mqId, maquinaNome: mqNome,
+    talhaoId: tid, talhaoNome: t?.nome||'', talhaoFazenda: tFaz,
+    outraFazenda: outra, obsLocal,
+    inicio, fim, obs
+  };
+  const regExist = registros.find(r => r.empregadoId===wip.empregadoId && r.data===data);
   try {
     if (regExist) {
-      await updateDoc(doc(db,'equipeRegistros',regExist._docId),{atividades:[...(regExist.atividades||[]),novaAtv]});
+      await updateDoc(doc(db,'equipeRegistros',regExist._docId), {atividades:[...(regExist.atividades||[]),novaAtv]});
     } else {
-      await addDoc(collection(db,'equipeRegistros'),{empregadoId:wip.empregadoId,empregadoNome:wip.empregadoNome,data,entrada:'',saida:'',atividades:[novaAtv],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
+      await addDoc(collection(db,'equipeRegistros'), {empregadoId:wip.empregadoId,empregadoNome:wip.empregadoNome,empregadoFazenda:wip.empregadoFazenda,data,entrada:'',saida:'',atividades:[novaAtv],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
     }
     toast('✅ Atividade registrada!');
-    telaAtual='perfil'; renderizarTela();
+    telaAtual = 'perfil'; renderizarTela();
   } catch(e) { toast('❌ Erro: '+e.message); }
 };
 
 // ─── JORNADA ───
 window.abrirJornada = function(empId, tipo) {
-  const emp = todosEmpregados.find(e=>e._docId===empId);
+  const emp = todosEmpregados.find(e => e._docId === empId);
   let m = document.getElementById('_modalJornada');
-  if (!m) { m=document.createElement('div'); m.id='_modalJornada'; document.body.appendChild(m); }
+  if (!m) { m = document.createElement('div'); m.id='_modalJornada'; document.body.appendChild(m); }
   m.innerHTML = `<div style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9990;display:flex;align-items:center;justify-content:center;" onclick="if(event.target===this)document.getElementById('_modalJornada').style.display='none'">
     <div style="background:white;border-radius:16px;padding:24px 20px 20px;max-width:320px;width:92%;box-shadow:0 8px 40px rgba(0,0,0,.3)">
       <div style="font-weight:800;font-size:1.15rem;color:#1a3d1a;margin-bottom:4px;">${tipo==='entrada'?'✅ Registrar Entrada':'🔚 Registrar Saída'}</div>
-      <div style="font-size:.85rem;color:#6b7280;margin-bottom:18px;">${emp?.nome||''}</div>
+      <div style="font-size:.85rem;color:#6b7280;margin-bottom:18px;">${emp?.nome||''}${emp?.fazenda?' · '+emp.fazenda:''}</div>
       <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;font-weight:700;display:block;margin-bottom:6px;">Horário</label>
-      <input id="_jornadaHora" type="time" value="${agora().replace(':',':')}" style="width:100%;border:2px solid #2d6a2d;border-radius:8px;padding:11px;font-size:1.15rem;font-family:'Barlow',sans-serif;outline:none;margin-bottom:18px;">
+      <input id="_jornadaHora" type="time" value="${agora()}" style="width:100%;border:2px solid #2d6a2d;border-radius:8px;padding:11px;font-size:1.15rem;font-family:'Barlow',sans-serif;outline:none;margin-bottom:18px;">
       <div style="display:flex;gap:10px;">
         <button onclick="document.getElementById('_modalJornada').style.display='none'" style="flex:1;padding:12px;border:1.5px solid #d1d5db;border-radius:8px;background:#f5f5f5;font-weight:600;cursor:pointer;font-family:'Barlow',sans-serif;">Cancelar</button>
         <button onclick="window._salvarJornada('${empId}','${tipo}')" style="flex:2;padding:12px;border:none;border-radius:8px;background:#2d6a2d;color:white;font-weight:800;font-size:.95rem;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.04em;">Confirmar</button>
       </div>
     </div>
   </div>`;
-  m.style.display='block';
+  m.style.display = 'block';
 };
 
 window._salvarJornada = async function(empId, tipo) {
   const hora = document.getElementById('_jornadaHora')?.value;
   if (!hora) { toast('⚠️ Informe o horário.'); return; }
-  const emp = todosEmpregados.find(e=>e._docId===empId);
+  const emp = todosEmpregados.find(e => e._docId === empId);
   const data = hoje();
-  const regExist = registros.find(r=>r.empregadoId===empId&&r.data===data);
+  const regExist = registros.find(r => r.empregadoId===empId && r.data===data);
   try {
     if (regExist) {
-      await updateDoc(doc(db,'equipeRegistros',regExist._docId),{[tipo]:hora});
+      await updateDoc(doc(db,'equipeRegistros',regExist._docId), {[tipo]:hora});
     } else {
-      await addDoc(collection(db,'equipeRegistros'),{empregadoId:empId,empregadoNome:emp?.nome||'',data,entrada:tipo==='entrada'?hora:'',saida:tipo==='saida'?hora:'',atividades:[],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
+      await addDoc(collection(db,'equipeRegistros'), {empregadoId:empId,empregadoNome:emp?.nome||'',empregadoFazenda:emp?.fazenda||'',data,entrada:tipo==='entrada'?hora:'',saida:tipo==='saida'?hora:'',atividades:[],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
     }
-    document.getElementById('_modalJornada').style.display='none';
+    document.getElementById('_modalJornada').style.display = 'none';
     toast(`✅ ${tipo==='entrada'?'Entrada':'Saída'} registrada: ${hora}`);
   } catch(e) { toast('❌ Erro: '+e.message); }
 };
@@ -397,10 +543,10 @@ window._salvarJornada = async function(empId, tipo) {
 window.encerrarAtividade = async function(empId) {
   const r = registroDeHoje(empId);
   if (!r) return;
-  const atv = (r.atividades||[]).find(a=>!a.fim);
+  const atv = (r.atividades||[]).find(a => !a.fim);
   if (!atv) { toast('⚠️ Nenhuma atividade em andamento.'); return; }
   const hora = agora();
-  await updateDoc(doc(db,'equipeRegistros',r._docId),{atividades:r.atividades.map(a=>a.id===atv.id?{...a,fim:hora}:a)});
+  await updateDoc(doc(db,'equipeRegistros',r._docId), {atividades:r.atividades.map(a => a.id===atv.id ? {...a,fim:hora} : a)});
   toast(`⏹ Atividade encerrada: ${hora}`);
 };
 
@@ -409,43 +555,57 @@ function renderizarCadastro() {
   document.getElementById('cadastroTabs').innerHTML = `
     <button class="cad-tab ${cadastroTab==='empregados'?'ativa':''}" onclick="window._setCadTab('empregados')">👤 Empregados</button>
     <button class="cad-tab ${cadastroTab==='maquinas'?'ativa':''}" onclick="window._setCadTab('maquinas')">🚜 Máquinas</button>`;
-  cadastroTab==='empregados' ? renderCadEmpregados() : renderCadMaquinas();
+  cadastroTab === 'empregados' ? renderCadEmpregados() : renderCadMaquinas();
 }
-window._setCadTab = function(t) { cadastroTab=t; renderizarCadastro(); };
+window._setCadTab = t => { cadastroTab = t; renderizarCadastro(); };
+
+function _fazSelectHtml(selectedVal) {
+  const faz = fazendas();
+  if (!faz.length) return `<input type="text" id="cadEmpFazenda" placeholder="Ex: Fazenda Boa Vista">`;
+  return `<select id="cadEmpFazenda">
+    <option value="">Selecione a fazenda...</option>
+    ${faz.map(f => `<option value="${f}" ${f===selectedVal?'selected':''}>${f}</option>`).join('')}
+  </select>`;
+}
 
 function renderCadEmpregados() {
-  const lista = todosEmpregados.filter(e=>e.ativo!==false);
+  const lista = todosEmpregados.filter(e => e.ativo !== false);
   document.getElementById('cadastroConteudo').innerHTML = `
     <div class="cad-form">
       <div class="cad-form-tit">➕ Novo Empregado</div>
       <div class="campo"><label>Nome completo</label><input type="text" id="cadEmpNome" placeholder="Ex: João Silva"></div>
       <div class="campo"><label>Cargo / Função</label><input type="text" id="cadEmpCargo" placeholder="Ex: Operador de máquina"></div>
+      <div class="campo"><label>Fazenda</label>${_fazSelectHtml('')}</div>
       <div class="campo"><label>Telefone (opcional)</label><input type="tel" id="cadEmpTelefone" placeholder="(99) 99999-9999"></div>
       <button onclick="window.salvarEmpregado()" class="btn-add">Cadastrar Empregado</button>
     </div>
     <div class="lista-tit" style="margin-top:16px;">Empregados ativos (${lista.length})</div>
-    ${lista.length ? lista.map(e=>`
+    ${lista.length ? lista.map(e => `
       <div class="cad-item">
         <div class="cad-avatar">${(e.nome||'?')[0].toUpperCase()}</div>
-        <div style="flex:1;">
+        <div style="flex:1;min-width:0;">
           <div class="cad-nome">${e.nome}</div>
-          <div class="cad-sub">${e.cargo||'—'}${e.telefone?' · '+e.telefone:''}</div>
+          <div class="cad-sub">${[e.cargo, e.fazenda, e.telefone].filter(Boolean).join(' · ')}</div>
         </div>
         <button onclick="window.desativarEmpregado('${e._docId}')" class="btn-ico-sm" title="Desativar">🗑</button>
       </div>`).join('') : '<div class="vazio-sm">Nenhum empregado.</div>'}`;
 }
+
 window.salvarEmpregado = async function() {
   const nome = document.getElementById('cadEmpNome').value.trim();
   if (!nome) { toast('⚠️ Nome obrigatório.'); return; }
-  await addDoc(collection(db,'equipeEmpregados'),{nome,cargo:document.getElementById('cadEmpCargo').value.trim(),telefone:document.getElementById('cadEmpTelefone').value.trim(),ativo:true,criadoEm:new Date().toISOString()});
-  document.getElementById('cadEmpNome').value='';
-  document.getElementById('cadEmpCargo').value='';
-  document.getElementById('cadEmpTelefone').value='';
+  const fazenda = document.getElementById('cadEmpFazenda')?.value || '';
+  if (!fazenda) { toast('⚠️ Selecione a fazenda.'); return; }
+  await addDoc(collection(db,'equipeEmpregados'), {nome, cargo:document.getElementById('cadEmpCargo').value.trim(), fazenda, telefone:document.getElementById('cadEmpTelefone').value.trim(), ativo:true, criadoEm:new Date().toISOString()});
+  document.getElementById('cadEmpNome').value = '';
+  document.getElementById('cadEmpCargo').value = '';
+  document.getElementById('cadEmpTelefone').value = '';
   toast('✅ '+nome+' cadastrado!');
 };
+
 window.desativarEmpregado = async function(id) {
-  if (!confirm('Desativar este empregado?')) return;
-  await updateDoc(doc(db,'equipeEmpregados',id),{ativo:false});
+  if (!confirm('Desativar este empregado? Ele não aparecerá mais na lista.')) return;
+  await updateDoc(doc(db,'equipeEmpregados',id), {ativo:false});
   toast('✅ Desativado.');
 };
 
@@ -462,80 +622,94 @@ function renderCadMaquinas() {
           <option>Implemento</option><option>Outro</option>
         </select>
       </div>
+      <div class="campo"><label>Fazenda (opcional)</label>${_fazSelectHtml('')}</div>
       <div class="campo"><label>Modelo (opcional)</label><input type="text" id="cadMaqModelo" placeholder="Ex: 4x4 Cabinado"></div>
       <button onclick="window.salvarMaquina()" class="btn-add">Cadastrar Máquina</button>
     </div>
     <div class="lista-tit" style="margin-top:16px;">Máquinas ativas (${maquinas.length})</div>
-    ${maquinas.length ? maquinas.map(m=>`
+    ${maquinas.length ? maquinas.map(m => `
       <div class="cad-item">
         <div class="cad-avatar" style="background:#f3f4f6;color:#374151;">🚜</div>
-        <div style="flex:1;">
+        <div style="flex:1;min-width:0;">
           <div class="cad-nome">${m.nome}</div>
-          <div class="cad-sub">${m.tipo||'—'}${m.modelo?' · '+m.modelo:''}</div>
+          <div class="cad-sub">${[m.tipo, m.fazenda, m.modelo].filter(Boolean).join(' · ')}</div>
         </div>
         <button onclick="window.desativarMaquina('${m._docId}')" class="btn-ico-sm">🗑</button>
       </div>`).join('') : '<div class="vazio-sm">Nenhuma máquina.</div>'}`;
 }
+
 window.salvarMaquina = async function() {
   const nome = document.getElementById('cadMaqNome').value.trim();
   if (!nome) { toast('⚠️ Nome obrigatório.'); return; }
-  await addDoc(collection(db,'equipeMaquinas'),{nome,tipo:document.getElementById('cadMaqTipo').value,modelo:document.getElementById('cadMaqModelo').value.trim(),ativa:true,criadoEm:new Date().toISOString()});
-  document.getElementById('cadMaqNome').value='';
-  document.getElementById('cadMaqModelo').value='';
+  await addDoc(collection(db,'equipeMaquinas'), {nome, tipo:document.getElementById('cadMaqTipo').value, fazenda:document.getElementById('cadEmpFazenda')?.value||'', modelo:document.getElementById('cadMaqModelo').value.trim(), ativa:true, criadoEm:new Date().toISOString()});
+  document.getElementById('cadMaqNome').value = '';
+  document.getElementById('cadMaqModelo').value = '';
   toast('✅ '+nome+' cadastrada!');
 };
+
 window.desativarMaquina = async function(id) {
   if (!confirm('Remover esta máquina?')) return;
-  await updateDoc(doc(db,'equipeMaquinas',id),{ativa:false});
+  await updateDoc(doc(db,'equipeMaquinas',id), {ativa:false});
   toast('✅ Removida.');
 };
 
 // ─── HISTÓRICO ───
 function renderizarHistorico() {
-  const filtroEmp = document.getElementById('histFiltroEmp')?.value||'';
-  const filtroIni = document.getElementById('histFiltroIni')?.value||'';
-  const filtroFim = document.getElementById('histFiltroFim')?.value||hoje();
-  let hist = [...registros].sort((a,b)=>b.data.localeCompare(a.data));
-  if (filtroEmp) hist = hist.filter(r=>r.empregadoId===filtroEmp);
-  if (filtroIni) hist = hist.filter(r=>r.data>=filtroIni);
-  if (filtroFim) hist = hist.filter(r=>r.data<=filtroFim);
-  const empOpts = empregadosAtivos().map(e=>`<option value="${e._docId}">${e.nome}</option>`).join('');
+  const filtroEmp  = document.getElementById('histFiltroEmp')?.value  || '';
+  const filtroFaz  = document.getElementById('histFiltroFaz')?.value  || '';
+  const filtroIni  = document.getElementById('histFiltroIni')?.value  || '';
+  const filtroFimV = document.getElementById('histFiltroFim')?.value  || hoje();
+  let hist = [...registros].sort((a,b) => b.data.localeCompare(a.data));
+  if (filtroEmp)  hist = hist.filter(r => r.empregadoId === filtroEmp);
+  if (filtroFaz)  hist = hist.filter(r => r.empregadoFazenda === filtroFaz);
+  if (filtroIni)  hist = hist.filter(r => r.data >= filtroIni);
+  if (filtroFimV) hist = hist.filter(r => r.data <= filtroFimV);
+
+  const empOpts = empregadosAtivos().map(e => `<option value="${e._docId}">${e.nome}${e.fazenda?' ('+e.fazenda+')':''}</option>`).join('');
+  const fazOpts = fazendas().map(f => `<option value="${f}">${f}</option>`).join('');
+
   document.getElementById('historicoConteudo').innerHTML = `
     <div class="hist-filtros">
-      <select id="histFiltroEmp" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex:2;">
-        <option value="">Todos</option>${empOpts}
+      <select id="histFiltroEmp" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;flex:2;min-width:0;">
+        <option value="">Todos os empregados</option>${empOpts}
       </select>
-      <input type="date" id="histFiltroIni" value="${filtroIni}" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex:1;">
-      <input type="date" id="histFiltroFim" value="${filtroFim}" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex:1;">
+      <select id="histFiltroFaz" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;flex:1;min-width:0;">
+        <option value="">Todas as fazendas</option>${fazOpts}
+      </select>
+    </div>
+    <div class="hist-filtros">
+      <input type="date" id="histFiltroIni" value="${filtroIni}" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;flex:1;">
+      <input type="date" id="histFiltroFim" value="${filtroFimV}" onchange="window._filtrarHistorico()" style="border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;flex:1;">
     </div>
     <div class="hist-resumo">📄 ${hist.length} registro(s) encontrado(s)</div>
-    ${hist.slice(0,80).map(r=>`
+    ${hist.slice(0, 80).map(r => `
       <div class="hist-reg">
         <div class="hist-reg-top">
           <div>
             <div class="hist-reg-nome">${r.empregadoNome}</div>
-            <div class="hist-reg-data">${formatarDataBR(r.data)}</div>
+            <div class="hist-reg-data">${formatarDataBR(r.data)}${r.empregadoFazenda?' · '+r.empregadoFazenda:''}</div>
           </div>
-          <div class="hist-reg-jornada">${r.entrada||'—'} ${r.saida?'→ '+r.saida:r.entrada?'→ ?':''}</div>
+          <div class="hist-reg-jornada">${r.entrada||'—'} ${r.saida?'→ '+r.saida:r.entrada?'→ em ab.':''}</div>
         </div>
-        ${(r.atividades||[]).length?`<div class="hist-atividades">${(r.atividades||[]).map(a=>`
+        ${(r.atividades||[]).length ? `<div class="hist-atividades">${(r.atividades||[]).map(a => `
           <div class="hist-atv-row">
             <span class="hist-atv-nome">${a.atividade}</span>
-            ${a.maquinaNome?`<span class="hist-atv-maq">🚜 ${a.maquinaNome}</span>`:''}
-            ${a.fazenda?`<span class="hist-atv-maq">📍 ${a.fazenda}</span>`:''}
+            ${a.maquinaNome ? `<span class="hist-atv-meta">🚜 ${a.maquinaNome}</span>` : ''}
+            ${a.talhaoNome  ? `<span class="hist-atv-meta">📍 ${a.talhaoNome}${a.outraFazenda?' ⇄':''}</span>` : ''}
             <span class="hist-atv-hora">${a.inicio}${a.fim?'→'+a.fim:''}</span>
-          </div>`).join('')}</div>`:''}
-      </div>`).join('')||'<div class="vazio-sm">Nenhum registro encontrado.</div>'}`;
-  // Re-apply filter values
-  if (filtroEmp) document.getElementById('histFiltroEmp').value=filtroEmp;
-  if (filtroIni) document.getElementById('histFiltroIni').value=filtroIni;
-  if (filtroFim) document.getElementById('histFiltroFim').value=filtroFim;
+          </div>`).join('')}</div>` : ''}
+      </div>`).join('') || '<div class="vazio-sm">Nenhum registro encontrado.</div>'}`;
+
+  if (filtroEmp)  document.getElementById('histFiltroEmp').value = filtroEmp;
+  if (filtroFaz)  document.getElementById('histFiltroFaz').value = filtroFaz;
+  if (filtroIni)  document.getElementById('histFiltroIni').value = filtroIni;
+  if (filtroFimV) document.getElementById('histFiltroFim').value = filtroFimV;
 }
-window._filtrarHistorico = function() { renderizarHistorico(); };
+window._filtrarHistorico = () => { renderizarHistorico(); };
 </script>
 
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--rad:12px;--rs:8px;--s:0 2px 8px rgba(0,0,0,.1);--menu-w:260px;}
+:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--rad:12px;--rs:8px;--s:0 2px 8px rgba(0,0,0,.1);}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
 .loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
@@ -548,7 +722,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
 .menu-overlay.aberto{display:block;}
-.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:260px;background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
 .menu-lateral.aberto{transform:translateX(0);}
 .menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
 .menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
@@ -562,16 +736,27 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
 /* TELAS */
 .tela{display:flex;flex-direction:column;flex:1;min-height:0;}
-.ts{padding:12px 14px 20px;overflow-y:auto;}
-/* HEADER EQUIPE */
-.equipe-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;flex-shrink:0;}
+.ts{padding:12px 14px 24px;overflow-y:auto;}
+/* HEADER */
+.equipe-header{display:flex;align-items:flex-start;justify-content:space-between;padding:13px 14px 11px;background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;flex-shrink:0;}
 .equipe-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;}
-.equipe-data{font-size:.75rem;opacity:.85;margin-top:2px;}
+.equipe-data{font-size:.72rem;opacity:.85;margin-top:2px;}
 .btn-hdr-sec{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:white;border-radius:8px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;}
-/* GRUPOS */
-.equipe-grupo{margin-bottom:6px;}
-.grupo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);padding:8px 14px 4px;display:flex;align-items:center;gap:6px;}
-.grupo-count{background:var(--cl);color:var(--c);border-radius:20px;padding:1px 8px;font-size:.7rem;font-weight:700;}
+/* RESUMO */
+.resumo-bar{background:rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;gap:0;flex-shrink:0;}
+.resumo-item{display:flex;flex-direction:column;align-items:center;padding:8px 20px;font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.8);font-weight:600;}
+.resumo-n{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.35rem;line-height:1;}
+.resumo-sep{width:1px;height:28px;background:rgba(255,255,255,.2);}
+/* FILTRO */
+.filtro-bar{display:flex;gap:6px;padding:10px 12px;overflow-x:auto;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;}
+.filtro-chip{background:var(--cl);border:1.5px solid var(--cb);border-radius:20px;padding:6px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;white-space:nowrap;transition:.15s;color:var(--c);}
+.filtro-chip.ativo{background:var(--vb);border-color:var(--v);color:var(--v);}
+/* FAZENDA SECTION */
+.fazenda-secao{margin-bottom:4px;}
+.fazenda-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.88rem;text-transform:uppercase;letter-spacing:.08em;color:var(--v);padding:10px 14px 4px;display:flex;align-items:center;gap:6px;}
+.fazenda-count{background:var(--vb);color:var(--v);border-radius:20px;padding:1px 8px;font-size:.7rem;}
+.status-grupo{padding:0 0 2px;}
+.status-grupo-tit{font-size:.7rem;font-weight:700;padding:4px 14px 2px;letter-spacing:.04em;opacity:.8;}
 /* CARD EMPREGADO */
 .emp-card{background:white;border-radius:var(--rad);box-shadow:var(--s);margin:4px 10px 6px;cursor:pointer;transition:.15s;border-left:4px solid var(--v);overflow:hidden;}
 .emp-card:active{transform:scale(.99);}
@@ -579,13 +764,14 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .emp-avatar{width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,var(--v),#3a7d44);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .emp-info{flex:1;min-width:0;}
 .emp-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;}
-.emp-cargo{font-size:.72rem;color:var(--c);margin-bottom:4px;}
+.emp-cargo{font-size:.7rem;color:var(--c);margin-bottom:4px;}
 .status-chip{font-size:.75rem;font-weight:600;border-radius:20px;padding:3px 10px;display:inline-block;margin-bottom:2px;}
 .chip-verde{background:#dcfce7;color:#16a34a;}
 .chip-amarelo{background:#fef3c7;color:#d97706;}
 .chip-cinza{background:var(--cl);color:var(--c);}
 .chip-vermelho{background:#fee2e2;color:#dc2626;}
 .status-sub{font-size:.68rem;color:var(--c);}
+.outra-faz-badge{background:#fef3c7;color:#d97706;border-radius:4px;padding:1px 5px;font-size:.6rem;font-weight:700;}
 .seta{font-size:1.4rem;color:var(--cb);flex-shrink:0;}
 .emp-btns{display:flex;gap:6px;padding:8px 12px 10px 14px;border-top:1px solid var(--cl);flex-wrap:wrap;}
 .btn-j{border:none;border-radius:20px;padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;}
@@ -597,7 +783,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .hdr-v{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:13px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:sticky;top:54px;z-index:199;box-shadow:0 2px 8px rgba(0,0,0,.2);}
 .hdr-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;}
 .hdr-meta{font-size:.68rem;opacity:.85;margin-top:2px;}
-.perfil-section-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.perfil-section-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);margin-bottom:10px;}
 .perfil-jornada{background:var(--vb);border-radius:var(--rs);padding:11px 14px;display:flex;align-items:center;gap:10px;margin-bottom:10px;border-left:3px solid var(--v);}
 .pj-ico{font-size:1.1rem;flex-shrink:0;}
 .pj-val{flex:1;font-size:.88rem;font-weight:600;color:var(--ve);}
@@ -625,16 +811,16 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 /* NOVA ATIVIDADE */
 .nova-atv-hdr{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:14px 16px 16px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2);}
 .nova-atv-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
-.nova-atv-sub{font-size:.78rem;opacity:.88;margin-top:3px;font-weight:500;}
+.nova-atv-sub{font-size:.78rem;opacity:.88;margin-top:3px;}
 .campo{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;}
 .campo label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
 .campo input,.campo select,.campo textarea{border:1.5px solid var(--cb);border-radius:var(--rs);padding:11px 12px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;transition:border-color .15s;}
 .campo input:focus,.campo select:focus,.campo textarea:focus{border-color:var(--v);box-shadow:0 0 0 3px rgba(45,106,45,.1);}
 .campo-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.btn-add{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;letter-spacing:.03em;}
+.outra-faz-aviso{background:#fff7ed;border:1.5px solid #fed7aa;border-radius:var(--rs);padding:10px 12px;font-size:.8rem;color:#c2410c;margin-bottom:12px;}
+.btn-add,.btn-next-wiz{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;letter-spacing:.03em;}
 .wiz-btns{display:flex;gap:10px;padding-top:14px;border-top:1px solid var(--cb);}
 .btn-back-wiz{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;}
-.btn-next-wiz{flex:2;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
 /* CADASTRO */
 .cad-tabs{display:flex;gap:8px;padding:10px 14px;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;}
 .cad-tab{flex:1;background:var(--cl);border:2px solid var(--cb);border-radius:var(--rs);padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;color:var(--c);transition:.15s;}
@@ -648,17 +834,17 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .lista-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;color:var(--c);letter-spacing:.08em;margin-bottom:10px;}
 .btn-ico-sm{background:none;border:none;cursor:pointer;font-size:1rem;padding:4px 6px;border-radius:6px;}
 /* HISTÓRICO */
-.hist-filtros{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.hist-filtros{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
 .hist-resumo{font-size:.75rem;color:var(--c);margin-bottom:10px;font-weight:600;}
 .hist-reg{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px 14px;margin-bottom:8px;}
-.hist-reg-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.hist-reg-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
 .hist-reg-nome{font-weight:700;font-size:.95rem;}
 .hist-reg-data{font-size:.7rem;color:var(--c);margin-top:2px;}
-.hist-reg-jornada{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--v);font-weight:700;}
+.hist-reg-jornada{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--v);font-weight:700;flex-shrink:0;}
 .hist-atividades{display:flex;flex-direction:column;gap:5px;border-top:1px solid var(--cl);padding-top:8px;}
 .hist-atv-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .hist-atv-nome{font-weight:700;font-size:.82rem;}
-.hist-atv-maq{font-size:.72rem;color:var(--c);}
+.hist-atv-meta{font-size:.72rem;color:var(--c);}
 .hist-atv-hora{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--v);margin-left:auto;}
 /* UTILS */
 .vazio{text-align:center;padding:48px 24px;color:var(--c);}
@@ -672,6 +858,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 </style>
 </head>
 <body>
+
 <div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
 
 <header class="app-header">
@@ -697,7 +884,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 
   <!-- LISTA -->
   <div class="tela" id="tela-lista" style="display:flex;">
-    <div class="ts" id="listaEquipe"></div>
+    <div id="listaEquipe" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;"></div>
   </div>
 
   <!-- PERFIL -->
@@ -735,9 +922,15 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
         <datalist id="atividadesSug"></datalist>
       </div>
       <div class="campo"><label>Máquina (opcional)</label><select id="novaAtvMaquina"></select></div>
-      <div class="campo-row">
-        <div class="campo"><label>Fazenda (opcional)</label><input type="text" id="novaAtvFazenda" placeholder="Ex: Aeroporto"></div>
-        <div class="campo"><label>Talhão (opcional)</label><input type="text" id="novaAtvTalhao" placeholder="Ex: T-04"></div>
+      <div class="campo">
+        <label>Talhão (opcional)</label>
+        <select id="novaAtvTalhao" onchange="window._onTalhaoChange(this)"></select>
+      </div>
+      <!-- Aviso + campo obs aparecem quando talhão é de outra fazenda -->
+      <div id="obsLocalWrap" style="display:none;flex-direction:column;gap:4px;margin-bottom:12px;">
+        <div class="outra-faz-aviso">⚠️ Este talhão pertence a outra fazenda. Informe o motivo abaixo.</div>
+        <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:#c2410c;font-weight:700;">Motivo / Observação de local <span style="color:#ef4444;">*</span></label>
+        <input type="text" id="novaAtvObsLocal" placeholder="Ex: Cobrindo falta de funcionário, manutenção extra...">
       </div>
       <div class="campo-row">
         <div class="campo"><label>Início</label><input type="time" id="novaAtvInicio"></div>
