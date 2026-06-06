@@ -219,11 +219,13 @@ window.fecharDia = function() { document.getElementById('overlayDia').classList.
 function renderizarLista() {
   const content = document.getElementById('listaContent');
   const filtros = getFiltrosLista();
+  atualizarFiltroPragas();
   let filtradas = pulverizacoes;
   if (filtros.status === 'pendente') filtradas = filtradas.filter(p => !p.realizada);
   if (filtros.status === 'realizada') filtradas = filtradas.filter(p => p.realizada);
   if (filtros.data1) filtradas = filtradas.filter(p => p.data >= filtros.data1);
   if (filtros.data2) filtradas = filtradas.filter(p => p.data <= filtros.data2);
+  if (filtros.praga) filtradas = filtradas.filter(p => p.pragaAlvo === filtros.praga);
 
   if (!filtradas.length) {
     content.innerHTML = `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização encontrada.</p></div>`;
@@ -252,7 +254,16 @@ function getFiltrosLista() {
     status: document.getElementById('filtroStatus')?.value || '',
     data1: document.getElementById('filtroDataL1')?.value || '',
     data2: document.getElementById('filtroDataL2')?.value || '',
+    praga: document.getElementById('filtroPraga')?.value || '',
   };
+}
+
+function atualizarFiltroPragas() {
+  const sel = document.getElementById('filtroPraga'); if (!sel) return;
+  const atual = sel.value;
+  const pragas = [...new Set(pulverizacoes.map(p => p.pragaAlvo).filter(Boolean))].sort();
+  sel.innerHTML = `<option value="">Todas</option>`
+    + pragas.map(p => `<option value="${p}" ${p===atual?'selected':''}>${p}</option>`).join('');
 }
 
 // ═══════════════════════════════════════════════
@@ -359,6 +370,7 @@ function renderCardPulv(p) {
       ${pd.velocidade?` · Vel: <strong>${sanitizar(pd.velocidade)} km/h</strong>`:''}
       ${pd.volumeCalda?` · Calda: <strong>${sanitizar(pd.volumeCalda)} L/ha</strong>`:''}
     </div>`:''}
+    ${p.pragaAlvo?`<div class="pulv-praga">🐛 Alvo: <strong>${sanitizar(p.pragaAlvo)}</strong></div>`:''}
     <div class="pulv-produtos">
       ${(p.produtos||[]).map(pr=>`<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${pr.unidade||''}/ha</span>`:''}</div>`).join('')}
     </div>
@@ -966,6 +978,7 @@ window.abrirModalNova = function(dataInicial) {
   ['fAlturaVoo','fLarguraFaixa','fVelocidade','fVolumeCalda'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  document.getElementById('fPragaAlvo').value = '';
   document.getElementById('fObs').value = '';
   // Desbloquear todos os campos (caso tenha sido edição de realizada antes)
   destravarCamposPulv();
@@ -1005,6 +1018,7 @@ window.abrirEditarPulv = function(docId) {
   document.getElementById('fLarguraFaixa').value = pd.larguraFaixa || '';
   document.getElementById('fVelocidade').value = pd.velocidade || '';
   document.getElementById('fVolumeCalda').value = pd.volumeCalda || '';
+  document.getElementById('fPragaAlvo').value = p.pragaAlvo || '';
   document.getElementById('fObs').value = p.observacoes || '';
   // Travar campos se for realizada
   if (p.realizada) travarCamposPulv();
@@ -1017,7 +1031,7 @@ window.abrirEditarPulv = function(docId) {
 // Permitido editar: drone (Próprio/Terceiro), parâmetros do drone, observações.
 // Bloqueado: data, talhão, modo de aplicação, produtos.
 function travarCamposPulv() {
-  ['fData','fTalhao','fModo'].forEach(id => {
+  ['fData','fTalhao','fModo','fPragaAlvo'].forEach(id => {
     const el = document.getElementById(id); if (el) el.disabled = true;
   });
   // Esconder botão de adicionar produto e o "X" dos produtos existentes
@@ -1026,7 +1040,7 @@ function travarCamposPulv() {
   const btnAdd = document.querySelector('.btn-add-prod'); if (btnAdd) btnAdd.style.display = 'none';
 }
 function destravarCamposPulv() {
-  ['fData','fTalhao','fModo'].forEach(id => {
+  ['fData','fTalhao','fModo','fPragaAlvo'].forEach(id => {
     const el = document.getElementById(id); if (el) el.disabled = false;
   });
   document.getElementById('listaProdutos').classList.remove('pulv-travado');
@@ -1102,6 +1116,7 @@ window.salvarPulverizacao = async function() {
       const update = {
         // Sempre permitidos:
         drone,
+        pragaAlvo: document.getElementById('fPragaAlvo').value.trim(),
         observacoes: document.getElementById('fObs').value.trim(),
         editadoEm: new Date().toISOString(),
         editadoPor: usuarioAtual.email
@@ -1127,6 +1142,7 @@ window.salvarPulverizacao = async function() {
       const docPulv = {
         talhaoId, talhaoNome: talhao?.nome || talhaoId, fazenda: talhao?.fazenda || '',
         data, modoAplicacao: modo, drone, produtos: prods,
+        pragaAlvo: document.getElementById('fPragaAlvo').value.trim(),
         observacoes: document.getElementById('fObs').value.trim(),
         realizada: false, criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       };
@@ -1245,6 +1261,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .pulv-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
 .pulv-meta{font-size:.72rem;color:var(--c);margin-top:2px;}
 .pulv-drone{font-size:.72rem;color:#1d4ed8;margin-top:2px;font-weight:600;}
+.pulv-praga{font-size:.74rem;color:#7c3aed;font-weight:700;padding:4px 14px 0;}
 .pulv-status-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
 .pulv-badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
 .badge-ok{background:#dcfce7;color:#16a34a;}
@@ -1400,6 +1417,14 @@ input:disabled,select:disabled{background:#f3f4f6;color:#6b7280;cursor:not-allow
             <input type="date" class="filtro-sel" id="filtroDataL2" onchange="renderizarLista()">
           </div>
         </div>
+        <div class="filtro-row">
+          <div class="filtro-campo" style="flex:1;">
+            <span class="filtro-label">🐛 Praga / Alvo</span>
+            <select class="filtro-sel" id="filtroPraga" onchange="renderizarLista()" style="width:100%;">
+              <option value="">Todas</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div id="listaContent"></div>
     </div>
@@ -1469,6 +1494,26 @@ input:disabled,select:disabled{background:#f3f4f6;color:#6b7280;cursor:not-allow
           <div class="campo"><label>Velocidade (km/h)</label><input type="text" inputmode="decimal" id="fVelocidade" placeholder="ex: 23"></div>
           <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="fVolumeCalda" placeholder="ex: 8"></div>
         </div>
+      </div>
+      <div class="campo">
+        <label>Praga / Doença Alvo (opcional)</label>
+        <input type="text" id="fPragaAlvo" placeholder="Ex: Ferrugem, Bicho-mineiro, Cercosporiose..." list="listaPragasSug" autocomplete="off">
+        <datalist id="listaPragasSug">
+          <option value="Ferrugem (Hemileia vastatrix)">
+          <option value="Bicho-mineiro (Leucoptera coffeella)">
+          <option value="Cercosporiose (Cercospora coffeicola)">
+          <option value="Phoma (Phoma tarda)">
+          <option value="Mancha-de-olho-pardo">
+          <option value="Broca-do-café (Hypothenemus hampei)">
+          <option value="Cochonilhas">
+          <option value="Ácaro-vermelho">
+          <option value="Ácaro-branco">
+          <option value="Tripes">
+          <option value="Nematoides">
+          <option value="Cigarrinha">
+          <option value="Adubação foliar">
+          <option value="Preventiva">
+        </datalist>
       </div>
       <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Produtos</div>
       <div id="listaProdutos"></div>
