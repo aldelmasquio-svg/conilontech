@@ -80,6 +80,16 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
 .secao-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);margin-bottom:10px;display:flex;align-items:center;gap:7px;padding-bottom:8px;border-bottom:1px solid var(--cl);}
 .secao-sub{font-size:.74rem;color:var(--c);margin-bottom:9px;line-height:1.4;}
+.praga-lista{display:flex;flex-direction:column;gap:10px;}
+.praga-card{background:var(--cl);border-radius:10px;padding:12px 14px;border-left:4px solid #7c3aed;}
+.praga-card-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px;}
+.praga-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
+.praga-badge{font-size:.7rem;font-weight:700;border:1.5px solid;border-radius:20px;padding:2px 9px;white-space:nowrap;flex-shrink:0;}
+.praga-stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px;}
+.praga-stat{display:flex;flex-direction:column;align-items:center;font-size:.65rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);font-weight:600;}
+.praga-n{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;color:var(--ve);line-height:1;}
+.praga-prods{display:flex;flex-wrap:wrap;gap:5px;}
+.praga-prod-chip{background:white;border:1px solid var(--cb);border-radius:20px;padding:3px 9px;font-size:.7rem;font-weight:600;color:#6b21a8;}
 
 /* LISTAS RANKING */
 .rank-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--cl);}
@@ -926,6 +936,56 @@ function renderPulverizacoes() {
     <div class="kpi-card info"><div class="kpi-label">Cobertura</div><div class="kpi-value">${fmt(cobertura,0)}%</div><div class="kpi-aux">${talhComPulv.size} de ${talhFil.length} talhões</div></div>
     <div class="kpi-card"><div class="kpi-label">Custo estimado</div><div class="kpi-value">${custoTotal>0?fmtRS(custoTotal):'—'}</div><div class="kpi-aux">${custoTotal>0?'preço médio × qtd':'sem preços cadastrados'}</div></div>
   </div>`;
+
+  // ── Por Praga / Alvo (planejamento) ──────────────────────────────
+  const porPraga = {};
+  const todosPulv = pulverizacoesFiltradas(); // inclui pendentes
+  todosPulv.forEach(p => {
+    const praga = p.pragaAlvo?.trim() || '';
+    if (!praga) return;
+    if (!porPraga[praga]) porPraga[praga] = {realizadas:0, pendentes:0, talhoes:new Set(), ultimaData:'', produtos:new Set()};
+    if (p.realizada) {
+      porPraga[praga].realizadas++;
+      const dt = p.dataRealizada || p.data || '';
+      if (dt > porPraga[praga].ultimaData) porPraga[praga].ultimaData = dt;
+      (p.aplicacoes||[]).forEach(a => (a.produtos||[]).forEach(pr => { if(pr.produto) porPraga[praga].produtos.add(pr.produto); }));
+      (p.produtosUsados||[]).forEach(pr => { if(pr.produto) porPraga[praga].produtos.add(pr.produto); });
+    } else {
+      porPraga[praga].pendentes++;
+    }
+    if (p.talhaoId) porPraga[praga].talhoes.add(p.talhaoId);
+  });
+  const pragaArr = Object.entries(porPraga)
+    .map(([k,v]) => ({praga:k, realizadas:v.realizadas, pendentes:v.pendentes, talhoes:v.talhoes.size, ultimaData:v.ultimaData, produtos:[...v.produtos]}))
+    .sort((a,b) => b.realizadas - a.realizadas);
+  if (pragaArr.length) {
+    const hjStr = hoje();
+    html += `<div class="secao">
+      <div class="secao-tit">🐛 Por Praga / Doença Alvo</div>
+      <div class="secao-sub">Use para planejar próximas aplicações — quando foi a última vez que cada praga foi combatida</div>
+      <div class="praga-lista">
+        ${pragaArr.map(p => {
+          const diasDesde = p.ultimaData ? Math.floor((new Date(hjStr) - new Date(p.ultimaData)) / 86400000) : null;
+          const urgCor = diasDesde === null ? '#6b7280' : diasDesde > 60 ? '#dc2626' : diasDesde > 30 ? '#d97706' : '#16a34a';
+          const urgLabel = diasDesde === null ? 'Nenhuma realizada' : diasDesde === 0 ? 'Hoje' : diasDesde === 1 ? 'Ontem' : `Há ${diasDesde} dias`;
+          return `<div class="praga-card">
+            <div class="praga-card-top">
+              <div class="praga-nome">🐛 ${escHtml(p.praga)}</div>
+              <div class="praga-badge" style="color:${urgCor};border-color:${urgCor};">${urgLabel}</div>
+            </div>
+            <div class="praga-stats">
+              <div class="praga-stat"><span class="praga-n">${p.realizadas}</span>realizadas</div>
+              ${p.pendentes ? `<div class="praga-stat" style="color:#2563eb;"><span class="praga-n">${p.pendentes}</span>planejadas</div>` : ''}
+              <div class="praga-stat"><span class="praga-n">${p.talhoes}</span>talhões</div>
+              ${p.ultimaData ? `<div class="praga-stat"><span class="praga-n" style="font-size:.75rem;">${formatarData(p.ultimaData)}</span>última aplic.</div>` : ''}
+            </div>
+            ${p.produtos.length ? `<div class="praga-prods">${p.produtos.slice(0,4).map(x=>`<span class="praga-prod-chip">🧪 ${escHtml(x)}</span>`).join('')}${p.produtos.length>4?`<span class="praga-prod-chip" style="color:var(--c);">+${p.produtos.length-4}</span>`:''}</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
+  // ────────────────────────────────────────────────────────────────
   // Área pulverizada por mês (12 meses recentes)
   const porMes = {};
   pulvFil.forEach(p => {
