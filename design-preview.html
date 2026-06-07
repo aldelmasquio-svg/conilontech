@@ -1,0 +1,1295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConilonTech · Design Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   DESIGN SYSTEM — ConilonTech v2
+   ═══════════════════════════════════════════ */
+:root {
+  /* Superfícies */
+  --bg:         #f0f4f1;
+  --surface:    #ffffff;
+  --surface-2:  #f8faf8;
+
+  /* Sidebar */
+  --sidebar-bg: #141f16;
+  --sidebar-hover: rgba(255,255,255,.07);
+  --sidebar-active: rgba(255,255,255,.13);
+  --sidebar-border: rgba(255,255,255,.07);
+
+  /* Marca */
+  --brand:       #1e5c1e;
+  --brand-h:     #174d17;
+  --brand-light: #eaf4ea;
+  --brand-border:#b6d4b6;
+
+  /* Texto */
+  --tx-1: #0f1e11;
+  --tx-2: #374151;
+  --tx-3: #6b7280;
+  --tx-4: #9ca3af;
+
+  /* Borders */
+  --bd:   #e2e8e2;
+  --bd-l: #f0f4f0;
+
+  /* Semânticas */
+  --ok:       #16a34a; --ok-bg:   #dcfce7; --ok-tx:  #14532d;
+  --warn:     #d97706; --warn-bg: #fef3c7; --warn-tx:#92400e;
+  --danger:   #dc2626; --dng-bg:  #fee2e2; --dng-tx: #991b1b;
+  --info:     #2563eb; --info-bg: #dbeafe; --info-tx:#1e3a8a;
+  --purple:   #7c3aed; --pur-bg:  #ede9fe; --pur-tx: #4c1d95;
+
+  /* Sombras */
+  --sh-xs: 0 1px 2px rgba(0,0,0,.05);
+  --sh-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
+  --sh-md: 0 4px 8px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.04);
+
+  /* Raios */
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 10px;
+  --r-xl: 14px;
+
+  --sidebar-w: 220px;
+  --header-h:  52px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Barlow', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--tx-1);
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 3px; }
+
+/* ════════════════════════════════════════
+   SIDEBAR
+════════════════════════════════════════ */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--sidebar-bg);
+  position: fixed;
+  top: 0; bottom: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  z-index: 200;
+  overflow-y: auto;
+}
+.sidebar-brand {
+  padding: 16px 14px 14px;
+  border-bottom: 1px solid var(--sidebar-border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brand-icon {
+  width: 32px; height: 32px;
+  border-radius: var(--r-md);
+  background: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.brand-text { line-height: 1.2; }
+.brand-name {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1rem;
+  color: white;
+  display: block;
+}
+.brand-sub {
+  font-size: .6rem;
+  color: rgba(255,255,255,.3);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.nav-section { padding: 8px 8px 4px; flex: 1; }
+.nav-label {
+  font-size: .58rem;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: rgba(255,255,255,.25);
+  font-weight: 700;
+  padding: 8px 8px 4px;
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--r-md);
+  color: rgba(255,255,255,.55);
+  font-size: .84rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all .12s;
+  margin-bottom: 1px;
+  user-select: none;
+}
+.nav-item:hover { background: var(--sidebar-hover); color: rgba(255,255,255,.85); }
+.nav-item.active {
+  background: var(--sidebar-active);
+  color: white;
+  font-weight: 700;
+}
+.nav-ico { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; opacity: .8; }
+.nav-item.active .nav-ico { opacity: 1; }
+
+.sidebar-footer {
+  padding: 8px 8px 12px;
+  border-top: 1px solid var(--sidebar-border);
+}
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.user-row:hover { background: var(--sidebar-hover); }
+.u-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: .82rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.u-name { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.7); }
+.u-role { font-size: .62rem; color: rgba(255,255,255,.3); }
+
+/* ════════════════════════════════════════
+   TOPBAR
+════════════════════════════════════════ */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+.topbar {
+  height: var(--header-h);
+  background: var(--surface);
+  border-bottom: 1px solid var(--bd);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 10px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: var(--sh-xs);
+}
+.topbar-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--tx-1);
+}
+.topbar-sep { color: var(--tx-4); font-size: .9rem; }
+.topbar-sub { font-size: .78rem; color: var(--tx-3); font-weight: 500; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.topbar-date { font-size: .72rem; color: var(--tx-3); font-weight: 600; }
+.topbar-pill {
+  background: var(--ok-bg);
+  color: var(--ok-tx);
+  border: 1px solid #bbf7d0;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: .7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--ok);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+/* ════════════════════════════════════════
+   CONTENT AREA
+════════════════════════════════════════ */
+.content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* ── PAGE HEADER ── */
+.page-hdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 12px;
+}
+.page-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.5rem;
+  color: var(--tx-1);
+  line-height: 1.1;
+}
+.page-desc { font-size: .78rem; color: var(--tx-3); margin-top: 3px; font-weight: 500; }
+.page-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: flex-start; }
+
+/* ════════════════════════════════════════
+   BOTÕES
+════════════════════════════════════════ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--r-md);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: .88rem;
+  letter-spacing: .02em;
+  cursor: pointer;
+  border: none;
+  transition: all .12s;
+  white-space: nowrap;
+  line-height: 1;
+}
+.btn-primary  { background: var(--brand); color: white; }
+.btn-primary:hover { background: var(--brand-h); }
+.btn-secondary { background: var(--surface); color: var(--tx-2); border: 1px solid var(--bd); }
+.btn-secondary:hover { background: var(--bg); border-color: #c4cec4; }
+.btn-ghost { background: transparent; color: var(--tx-3); }
+.btn-ghost:hover { background: var(--bg); color: var(--tx-2); }
+.btn-sm { padding: 5px 10px; font-size: .78rem; }
+.btn-xs { padding: 3px 8px; font-size: .72rem; }
+
+/* ════════════════════════════════════════
+   BADGES
+════════════════════════════════════════ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: .7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.b-ok     { background: var(--ok-bg);   color: var(--ok-tx);   }
+.b-ok .badge-dot { background: var(--ok); }
+.b-warn   { background: var(--warn-bg); color: var(--warn-tx); }
+.b-warn .badge-dot { background: var(--warn); }
+.b-danger { background: var(--dng-bg);  color: var(--dng-tx);  }
+.b-danger .badge-dot { background: var(--danger); }
+.b-info   { background: var(--info-bg); color: var(--info-tx); }
+.b-info .badge-dot { background: var(--info); }
+.b-gray   { background: #f3f4f6; color: var(--tx-2); }
+.b-gray .badge-dot { background: var(--tx-4); }
+.b-purple { background: var(--pur-bg);  color: var(--pur-tx);  }
+.b-purple .badge-dot { background: var(--purple); }
+
+/* ════════════════════════════════════════
+   KPI CARDS
+════════════════════════════════════════ */
+.kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--bd);
+  border-radius: var(--r-lg);
+  padding: 14px 16px;
+  box-shadow: var(--sh-xs);
+  border-top-width: 3px;
+  cursor: default;
+  transition: box-shadow .15s;
+}
+.kpi-card:hover { box-shadow: var(--sh-sm); }
+.kpi-card.t-ok   { border-top-color: var(--ok); }
+.kpi-card.t-warn { border-top-color: var(--warn); }
+.kpi-card.t-info { border-top-color: var(--info); }
+.kpi-card.t-brand{ border-top-color: var(--brand); }
+.kpi-card.t-gray { border-top-color: var(--tx-4); }
+.kpi-label {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--tx-3);
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.kpi-value {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  color: var(--tx-1);
+  line-height: 1;
+}
+.kpi-unit { font-size: 1rem; color: var(--tx-3); font-weight: 600; }
+.kpi-delta {
+  font-size: .7rem;
+  margin-top: 5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.kpi-delta.up   { color: var(--ok); }
+.kpi-delta.down { color: var(--danger); }
+.kpi-delta.neutral { color: var(--tx-3); }
+
+/* ════════════════════════════════════════
+   CARDS GENÉRICOS
+════════════════════════════════════════ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--bd);
+  border-radius: var(--r-lg);
+  box-shadow: var(--sh-xs);
+  overflow: hidden;
+}
+.card-hdr {
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--bd-l);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.card-title {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: .82rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--tx-2);
+}
+.card-body { padding: 14px 16px; }
+.card-footer {
+  padding: 10px 16px;
+  border-top: 1px solid var(--bd-l);
+  background: var(--surface-2);
+  font-size: .75rem;
+  color: var(--tx-3);
+}
+
+/* ════════════════════════════════════════
+   TABELA
+════════════════════════════════════════ */
+.tbl-wrap { overflow-x: auto; }
+.tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .83rem;
+}
+.tbl thead tr { border-bottom: 2px solid var(--bd); }
+.tbl th {
+  padding: 8px 12px;
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--tx-3);
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+.tbl td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bd-l);
+  color: var(--tx-2);
+}
+.tbl tbody tr:last-child td { border-bottom: none; }
+.tbl tbody tr:hover td { background: #f8faf8; }
+.tbl td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: .78rem; }
+.tbl td strong { color: var(--tx-1); }
+
+/* ════════════════════════════════════════
+   FORM FIELDS
+════════════════════════════════════════ */
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.field label {
+  font-size: .64rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--brand);
+  font-weight: 700;
+}
+.field input, .field select, .field textarea {
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r-md);
+  padding: 9px 11px;
+  font-size: .88rem;
+  font-family: 'Barlow', sans-serif;
+  color: var(--tx-1);
+  outline: none;
+  background: var(--surface);
+  transition: border-color .15s, box-shadow .15s;
+  -webkit-appearance: none;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(30,92,30,.1);
+}
+.field-hint { font-size: .68rem; color: var(--tx-3); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* ════════════════════════════════════════
+   SCREEN 1 — DASHBOARD
+════════════════════════════════════════ */
+.section-label {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--tx-3);
+  font-weight: 700;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--bd); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+.quick-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border: 1px solid var(--bd);
+  border-radius: var(--r-md);
+  font-size: .83rem;
+  font-weight: 600;
+  color: var(--tx-2);
+  cursor: pointer;
+  transition: all .12s;
+  text-decoration: none;
+  box-shadow: var(--sh-xs);
+}
+.quick-btn:hover { background: var(--bg); border-color: #c4cec4; box-shadow: var(--sh-sm); }
+.quick-btn .ico { font-size: 16px; }
+
+.activity-list { display: flex; flex-direction: column; }
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bd-l);
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-ico {
+  width: 28px; height: 28px;
+  border-radius: var(--r-sm);
+  background: var(--brand-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.activity-main { flex: 1; min-width: 0; }
+.activity-title { font-size: .84rem; font-weight: 700; color: var(--tx-1); }
+.activity-meta { font-size: .7rem; color: var(--tx-3); margin-top: 2px; }
+.activity-time { font-size: .68rem; color: var(--tx-4); font-family: 'DM Mono', monospace; white-space: nowrap; margin-top: 3px; }
+
+.op-list { display: flex; flex-direction: column; }
+.op-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--bd-l);
+}
+.op-item:last-child { border-bottom: none; }
+.op-left { flex: 1; min-width: 0; }
+.op-title { font-size: .84rem; font-weight: 700; color: var(--tx-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.op-meta { font-size: .7rem; color: var(--tx-3); margin-top: 2px; }
+.op-date {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--tx-2);
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+}
+
+/* ════════════════════════════════════════
+   SCREEN 2 — EQUIPE
+════════════════════════════════════════ */
+.status-summary {
+  display: flex;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--bd);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: var(--sh-xs);
+}
+.ss-item {
+  flex: 1;
+  padding: 12px 8px;
+  text-align: center;
+  border-right: 1px solid var(--bd);
+}
+.ss-item:last-child { border-right: none; }
+.ss-n {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--tx-1);
+}
+.ss-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tx-3); font-weight: 700; margin-top: 3px; }
+.ss-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 3px; vertical-align: middle; }
+
+.filter-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.f-chip {
+  padding: 5px 13px;
+  border-radius: 20px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: .78rem;
+  cursor: pointer;
+  border: 1.5px solid var(--bd);
+  background: var(--surface);
+  color: var(--tx-3);
+  transition: all .12s;
+}
+.f-chip.on {
+  background: var(--brand-light);
+  border-color: var(--brand-border);
+  color: var(--brand);
+}
+
+.faz-label {
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  color: var(--tx-3);
+  font-weight: 700;
+  padding: 10px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.faz-label::after { content: ''; flex: 1; height: 1px; background: var(--bd); }
+
+.emp-list { display: flex; flex-direction: column; }
+.emp-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.emp-row + .emp-row { border-top: 1px solid var(--bd-l); }
+.emp-row:hover { background: var(--surface-2); }
+.e-av {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand) 0%, #3a8a3a 100%);
+  color: white;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: .88rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.e-name { font-weight: 700; font-size: .87rem; color: var(--tx-1); }
+.e-role { font-size: .7rem; color: var(--tx-3); margin-top: 1px; }
+.e-activity { font-size: .76rem; color: var(--tx-2); text-align: right; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.e-time { font-size: .66rem; color: var(--tx-3); margin-top: 1px; font-family: 'DM Mono', monospace; text-align: right; }
+.e-btns { display: flex; gap: 4px; }
+
+.emp-actions-row {
+  padding: 6px 14px 8px;
+  display: flex;
+  gap: 6px;
+  border-top: 1px solid var(--bd-l);
+  background: var(--surface-2);
+}
+
+/* ════════════════════════════════════════
+   SCREEN 3 — PULVERIZAÇÕES
+════════════════════════════════════════ */
+.pulv-list { display: flex; flex-direction: column; }
+.pulv-row {
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background .1s;
+}
+.pulv-row + .pulv-row { border-top: 1px solid var(--bd-l); }
+.pulv-row:hover { background: var(--surface-2); }
+.pulv-date-block { text-align: center; padding-top: 2px; }
+.pulv-day { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.6rem; color: var(--tx-1); line-height: 1; }
+.pulv-mon { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tx-3); font-weight: 700; }
+.pulv-body { min-width: 0; }
+.pulv-title { font-weight: 700; font-size: .9rem; color: var(--tx-1); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.chip {
+  font-size: .65rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+.chip-green { background: var(--ok-bg);  color: var(--ok-tx); }
+.chip-purple{ background: var(--pur-bg); color: var(--pur-tx); }
+.chip-brand { background: var(--brand-light); color: var(--brand); }
+.chip-amber { background: var(--warn-bg); color: var(--warn-tx); }
+.pulv-meta { font-size: .72rem; color: var(--tx-3); margin-top: 3px; }
+.pulv-prods { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.prod-chip {
+  font-size: .67rem;
+  color: var(--tx-2);
+  background: var(--bg);
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-weight: 600;
+}
+.pulv-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; padding-top: 2px; }
+
+/* ════════════════════════════════════════
+   SCREEN SWITCHER (preview only)
+════════════════════════════════════════ */
+.switcher {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: flex;
+  gap: 6px;
+  z-index: 999;
+  background: var(--sidebar-bg);
+  border-radius: 40px;
+  padding: 6px;
+  box-shadow: var(--sh-md);
+}
+.sw-btn {
+  padding: 7px 16px;
+  border-radius: 30px;
+  border: none;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: .8rem;
+  cursor: pointer;
+  color: rgba(255,255,255,.5);
+  background: transparent;
+  transition: all .15s;
+}
+.sw-btn.on {
+  background: var(--brand);
+  color: white;
+}
+
+.preview-banner {
+  background: #fef3c7;
+  border-bottom: 2px solid #fcd34d;
+  padding: 8px 20px;
+  font-size: .78rem;
+  color: #92400e;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.preview-banner strong { color: #78350f; }
+
+/* Misc */
+.divider { border: none; border-top: 1px solid var(--bd); margin: 16px 0; }
+.mt-4 { margin-top: 16px; }
+.mb-4 { margin-bottom: 16px; }
+.text-sm { font-size: .78rem; color: var(--tx-3); }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════
+     SIDEBAR
+══════════════════════════════ -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">🌿</div>
+    <div class="brand-text">
+      <span class="brand-name">Conilon Tech</span>
+      <span class="brand-sub">Gestão Agrícola</span>
+    </div>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-label">Principal</div>
+    <div class="nav-item active" onclick="showScreen('dashboard',this)">
+      <span class="nav-ico">📊</span>Dashboard
+    </div>
+    <div class="nav-item" onclick="showScreen('equipe',this)">
+      <span class="nav-ico">👥</span>Equipe
+    </div>
+    <div class="nav-item" onclick="showScreen('pulverizacoes',this)">
+      <span class="nav-ico">💧</span>Pulverizações
+    </div>
+
+    <div class="nav-label" style="margin-top:8px;">Operações</div>
+    <div class="nav-item"><span class="nav-ico">🗺️</span>Mapa de Talhões</div>
+    <div class="nav-item"><span class="nav-ico">🌾</span>Atividades</div>
+    <div class="nav-item"><span class="nav-ico">🧪</span>Adubações</div>
+    <div class="nav-item"><span class="nav-ico">📦</span>Pedidos</div>
+    <div class="nav-item"><span class="nav-ico">🏬</span>Estoque</div>
+
+    <div class="nav-label" style="margin-top:8px;">Análise</div>
+    <div class="nav-item"><span class="nav-ico">📈</span>Gestão</div>
+    <div class="nav-item"><span class="nav-ico">🔬</span>Análises</div>
+    <div class="nav-item"><span class="nav-ico">💊</span>Recomendações</div>
+  </div>
+
+  <div class="sidebar-footer">
+    <div class="user-row">
+      <div class="u-avatar">AD</div>
+      <div>
+        <div class="u-name">Administrador</div>
+        <div class="u-role">admin · todas as fazendas</div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════
+     MAIN
+══════════════════════════════ -->
+<div class="main">
+  <div class="preview-banner">
+    ⚠️ <strong>PREVIEW DE DESIGN</strong> — Esta página é apenas visual. Clique nos botões abaixo para trocar entre telas.
+  </div>
+
+  <!-- TOPBAR (dinâmica) -->
+  <div class="topbar">
+    <div class="topbar-title" id="topTitle">Dashboard</div>
+    <span class="topbar-sep" id="topSep" style="display:none">›</span>
+    <div class="topbar-sub" id="topSub" style="display:none"></div>
+    <div class="topbar-right">
+      <div class="topbar-date">07 jun 2026</div>
+      <div class="topbar-pill"><div class="live-dot"></div>Online</div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════════════════════
+         SCREEN 1 — DASHBOARD
+    ══════════════════════════ -->
+    <div class="screen active" id="screen-dashboard">
+      <div class="page-hdr">
+        <div>
+          <div class="page-title">Bom dia, Administrador</div>
+          <div class="page-desc">Sábado, 07 de junho de 2026 · 3 fazendas ativas</div>
+        </div>
+      </div>
+
+      <!-- Atalhos rápidos -->
+      <div class="quick-btns mb-4">
+        <a class="quick-btn"><span class="ico">🗺️</span>Mapa</a>
+        <a class="quick-btn"><span class="ico">🌾</span>Atividades</a>
+        <a class="quick-btn"><span class="ico">👥</span>Equipe</a>
+        <a class="quick-btn"><span class="ico">🧪</span>Adubações</a>
+        <a class="quick-btn"><span class="ico">💧</span>Pulverizações</a>
+        <a class="quick-btn"><span class="ico">📦</span>Pedidos</a>
+        <a class="quick-btn"><span class="ico">🏬</span>Estoque</a>
+      </div>
+
+      <!-- KPIs -->
+      <div class="section-label">Visão Geral</div>
+      <div class="kpi-grid">
+        <div class="kpi-card t-brand">
+          <div class="kpi-label">Talhões</div>
+          <div class="kpi-value">24</div>
+          <div class="kpi-delta neutral">3 fazendas · 487 ha</div>
+        </div>
+        <div class="kpi-card t-ok">
+          <div class="kpi-label">Equipe hoje</div>
+          <div class="kpi-value">8<span class="kpi-unit">/12</span></div>
+          <div class="kpi-delta up">↑ 3 em atividade agora</div>
+        </div>
+        <div class="kpi-card t-info">
+          <div class="kpi-label">Adubações</div>
+          <div class="kpi-value">14<span class="kpi-unit">/38</span></div>
+          <div class="kpi-delta neutral">ciclo atual</div>
+        </div>
+        <div class="kpi-card t-warn">
+          <div class="kpi-label">Pendentes</div>
+          <div class="kpi-value">5</div>
+          <div class="kpi-delta down">↓ 2 pulverizações atrasadas</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Atividades recentes -->
+        <div class="card">
+          <div class="card-hdr">
+            <div class="card-title">🕐 Atividades Recentes</div>
+            <a class="btn btn-ghost btn-xs">Ver todas →</a>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="activity-list" style="padding:4px 16px;">
+              <div class="activity-item">
+                <div class="activity-ico">🌾</div>
+                <div class="activity-main">
+                  <div class="activity-title">Colheita — T-07 · Boa Vista</div>
+                  <div class="activity-meta">Carlos Ferreira · 6,8 ha conferidos</div>
+                </div>
+                <div class="activity-time">hoje 09:14</div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-ico" style="background:var(--info-bg);">💧</div>
+                <div class="activity-main">
+                  <div class="activity-title">Pulverização — T-03 · Progresso</div>
+                  <div class="activity-meta">Drone · Ferrugem · 12 ha</div>
+                </div>
+                <div class="activity-time">ontem 15:30</div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-ico" style="background:var(--warn-bg);">🧪</div>
+                <div class="activity-main">
+                  <div class="activity-title">Adubação — T-11 · São João</div>
+                  <div class="activity-meta">Ureia 45% · 180 kg/ha</div>
+                </div>
+                <div class="activity-time">ontem 11:20</div>
+              </div>
+              <div class="activity-item">
+                <div class="activity-ico">✂️</div>
+                <div class="activity-main">
+                  <div class="activity-title">Poda — T-02 e T-04 · Boa Vista</div>
+                  <div class="activity-meta">3 funcionários · 8 ha</div>
+                </div>
+                <div class="activity-time">05 jun 08:00</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Operações pendentes -->
+        <div class="card">
+          <div class="card-hdr">
+            <div class="card-title">📅 Operações Pendentes</div>
+            <a class="btn btn-ghost btn-xs">Ver todas →</a>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="op-list" style="padding:4px 16px;">
+              <div class="op-item">
+                <div class="op-left">
+                  <div class="op-title">💧 Pulverização — T-08 · Progresso</div>
+                  <div class="op-meta">Bicho-mineiro · Terrestre · 14 ha</div>
+                </div>
+                <div style="text-align:right">
+                  <span class="badge b-warn"><div class="badge-dot"></div>Atrasada</span>
+                  <div class="op-date" style="margin-top:3px;">05 jun</div>
+                </div>
+              </div>
+              <div class="op-item">
+                <div class="op-left">
+                  <div class="op-title">🧪 Adubação — T-12, T-13 · São João</div>
+                  <div class="op-meta">KCL 60% · semana 24</div>
+                </div>
+                <div style="text-align:right">
+                  <span class="badge b-info"><div class="badge-dot"></div>Hoje</span>
+                  <div class="op-date" style="margin-top:3px;">07 jun</div>
+                </div>
+              </div>
+              <div class="op-item">
+                <div class="op-left">
+                  <div class="op-title">💧 Pulverização — T-01 · Boa Vista</div>
+                  <div class="op-meta">Ferrugem · Drone · 22 ha</div>
+                </div>
+                <div style="text-align:right">
+                  <span class="badge b-gray"><div class="badge-dot"></div>Pendente</span>
+                  <div class="op-date" style="margin-top:3px;">10 jun</div>
+                </div>
+              </div>
+              <div class="op-item">
+                <div class="op-left">
+                  <div class="op-title">🧪 Adubação — T-05 a T-09 · Boa Vista</div>
+                  <div class="op-meta">MAP 52% · ciclo 2</div>
+                </div>
+                <div style="text-align:right">
+                  <span class="badge b-gray"><div class="badge-dot"></div>Pendente</span>
+                  <div class="op-date" style="margin-top:3px;">14 jun</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════
+         SCREEN 2 — EQUIPE
+    ══════════════════════════ -->
+    <div class="screen" id="screen-equipe">
+      <div class="page-hdr">
+        <div>
+          <div class="page-title">Equipe</div>
+          <div class="page-desc">Sábado, 07 de junho · 12 funcionários ativos</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm">📋 Histórico</button>
+          <button class="btn btn-secondary btn-sm">⚙️ Cadastros</button>
+          <button class="btn btn-primary btn-sm">＋ Registrar Atividade</button>
+        </div>
+      </div>
+
+      <!-- Status resumo -->
+      <div class="status-summary">
+        <div class="ss-item">
+          <div class="ss-n" style="color:var(--ok);">3</div>
+          <div class="ss-label"><span class="ss-dot" style="background:var(--ok);"></span>Em atividade</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-n" style="color:var(--warn);">4</div>
+          <div class="ss-label"><span class="ss-dot" style="background:var(--warn);"></span>Disponível</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-n" style="color:var(--tx-3);">1</div>
+          <div class="ss-label"><span class="ss-dot" style="background:var(--tx-3);"></span>Encerrou</div>
+        </div>
+        <div class="ss-item">
+          <div class="ss-n" style="color:var(--danger);">4</div>
+          <div class="ss-label"><span class="ss-dot" style="background:var(--danger);"></span>Sem registro</div>
+        </div>
+      </div>
+
+      <!-- Filtro fazendas -->
+      <div class="filter-row">
+        <div class="f-chip on">Todas</div>
+        <div class="f-chip">Boa Vista</div>
+        <div class="f-chip">Progresso</div>
+        <div class="f-chip">São João</div>
+      </div>
+
+      <!-- Fazenda Boa Vista -->
+      <div class="faz-label">🏡 Boa Vista <span style="color:var(--tx-4);font-size:.58rem;margin-left:4px;">5 funcionários</span></div>
+      <div class="card mb-4">
+        <div class="emp-list">
+          <!-- Em atividade -->
+          <div class="emp-row" style="background:var(--surface);">
+            <div class="e-av">CA</div>
+            <div>
+              <div class="e-name">Carlos Andrade</div>
+              <div class="e-role">Operador de máquina</div>
+            </div>
+            <div>
+              <div class="e-activity">Operação de máquina</div>
+              <div class="e-time">desde 07:45</div>
+            </div>
+            <div><span class="badge b-ok"><div class="badge-dot"></div>Em atividade</span></div>
+          </div>
+          <div class="emp-actions-row">
+            <button class="btn btn-secondary btn-xs">＋ Atividade</button>
+            <button class="btn btn-xs" style="background:var(--dng-bg);color:var(--dng-tx);border:1px solid #fecaca;">⏹ Encerrar</button>
+          </div>
+          <!-- Disponível -->
+          <div class="emp-row">
+            <div class="e-av">MR</div>
+            <div>
+              <div class="e-name">Maria Ramos</div>
+              <div class="e-role">Encarregada</div>
+            </div>
+            <div>
+              <div class="e-activity">Disponível</div>
+              <div class="e-time">entrada 06:30</div>
+            </div>
+            <div><span class="badge b-warn"><div class="badge-dot"></div>Disponível</span></div>
+          </div>
+          <div class="emp-actions-row">
+            <button class="btn btn-secondary btn-xs">＋ Atividade</button>
+            <button class="btn btn-xs" style="background:var(--surface-2);color:var(--tx-3);border:1px solid var(--bd);">🔚 Saída</button>
+          </div>
+          <!-- Sem registro -->
+          <div class="emp-row">
+            <div class="e-av" style="background:linear-gradient(135deg,#9ca3af,#6b7280);">JO</div>
+            <div>
+              <div class="e-name">José Oliveira</div>
+              <div class="e-role">Tratorista</div>
+            </div>
+            <div>
+              <div class="e-activity" style="color:var(--tx-4);">—</div>
+              <div class="e-time">não registrado</div>
+            </div>
+            <div><span class="badge b-danger"><div class="badge-dot"></div>Sem registro</span></div>
+          </div>
+          <div class="emp-actions-row">
+            <button class="btn btn-xs" style="background:var(--ok-bg);color:var(--ok-tx);border:1px solid #bbf7d0;font-family:'Barlow Condensed',sans-serif;font-weight:700;">✅ Registrar Entrada</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Fazenda Progresso -->
+      <div class="faz-label">🏡 Progresso <span style="color:var(--tx-4);font-size:.58rem;margin-left:4px;">4 funcionários</span></div>
+      <div class="card mb-4">
+        <div class="emp-list">
+          <div class="emp-row">
+            <div class="e-av" style="background:linear-gradient(135deg,#1e5c1e,#2d8a2d);">PS</div>
+            <div>
+              <div class="e-name">Pedro Santos</div>
+              <div class="e-role">Aplicador</div>
+            </div>
+            <div>
+              <div class="e-activity">Irrigação · T-06</div>
+              <div class="e-time">desde 08:15</div>
+            </div>
+            <div><span class="badge b-ok"><div class="badge-dot"></div>Em atividade</span></div>
+          </div>
+          <div class="emp-actions-row">
+            <button class="btn btn-secondary btn-xs">＋ Atividade</button>
+            <button class="btn btn-xs" style="background:var(--dng-bg);color:var(--dng-tx);border:1px solid #fecaca;">⏹ Encerrar</button>
+          </div>
+          <div class="emp-row">
+            <div class="e-av" style="background:linear-gradient(135deg,#6b7280,#9ca3af);">AL</div>
+            <div>
+              <div class="e-name">Ana Lima</div>
+              <div class="e-role">Operadora</div>
+            </div>
+            <div>
+              <div class="e-activity">Encerrou 16:00</div>
+              <div class="e-time">07:00 → 16:00</div>
+            </div>
+            <div><span class="badge b-gray"><div class="badge-dot"></div>Encerrou</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════
+         SCREEN 3 — PULVERIZAÇÕES
+    ══════════════════════════ -->
+    <div class="screen" id="screen-pulverizacoes">
+      <div class="page-hdr">
+        <div>
+          <div class="page-title">Pulverizações</div>
+          <div class="page-desc">Planejamento e controle de aplicações</div>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-secondary btn-sm">📋 Lista</button>
+          <button class="btn btn-secondary btn-sm">📅 Calendário</button>
+          <button class="btn btn-primary btn-sm">＋ Planejar Aplicação</button>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card t-ok">
+          <div class="kpi-label">Realizadas (30d)</div>
+          <div class="kpi-value">11</div>
+          <div class="kpi-delta up">↑ 210 ha cobertos</div>
+        </div>
+        <div class="kpi-card t-warn">
+          <div class="kpi-label">Pendentes</div>
+          <div class="kpi-value">3</div>
+          <div class="kpi-delta down">↓ 2 atrasadas</div>
+        </div>
+        <div class="kpi-card t-info">
+          <div class="kpi-label">Cobertura</div>
+          <div class="kpi-value">71<span class="kpi-unit">%</span></div>
+          <div class="kpi-delta neutral">17 de 24 talhões</div>
+        </div>
+        <div class="kpi-card t-gray">
+          <div class="kpi-label">Custo estimado</div>
+          <div class="kpi-value" style="font-size:1.4rem;">R$</div>
+          <div class="kpi-delta neutral">14.380</div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">Status</span>
+          <select style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--tx-2);">
+            <option>Todos</option><option>Pendentes</option><option>Realizadas</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">🐛 Praga / Alvo</span>
+          <select style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--tx-2);">
+            <option>Todas</option><option>Ferrugem</option><option>Bicho-mineiro</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">De</span>
+          <input type="date" style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;" value="2026-06-01">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">Até</span>
+          <input type="date" style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;" value="2026-06-30">
+        </div>
+      </div>
+
+      <!-- Grupo mês -->
+      <div class="section-label">Junho 2026 · 5 registros</div>
+
+      <div class="card">
+        <div class="pulv-list">
+
+          <div class="pulv-row" style="border-left:4px solid var(--ok);padding-left:12px;">
+            <div class="pulv-date-block">
+              <div class="pulv-day">05</div>
+              <div class="pulv-mon">Jun</div>
+            </div>
+            <div class="pulv-body">
+              <div class="pulv-title">
+                T-03 · Talhão Pé de Serra
+                <span class="chip chip-green">Boa Vista</span>
+                <span class="chip chip-purple">Ferrugem</span>
+              </div>
+              <div class="pulv-meta">Drone · Próprio · 22 ha · 8 L/ha calda</div>
+              <div class="pulv-prods">
+                <span class="prod-chip">🧪 Amistar Top 300 mL/ha</span>
+                <span class="prod-chip">🧪 Agriforte 200 mL/ha</span>
+              </div>
+            </div>
+            <div class="pulv-right">
+              <span class="badge b-ok"><div class="badge-dot"></div>Realizada</span>
+              <div style="font-size:.7rem;color:var(--tx-3);font-family:'DM Mono',monospace;">22,0 ha</div>
+            </div>
+          </div>
+
+          <div class="pulv-row" style="border-left:4px solid var(--warn);padding-left:12px;">
+            <div class="pulv-date-block">
+              <div class="pulv-day">05</div>
+              <div class="pulv-mon">Jun</div>
+            </div>
+            <div class="pulv-body">
+              <div class="pulv-title">
+                T-08 · Talhão do Córrego
+                <span class="chip chip-brand">Progresso</span>
+                <span class="chip chip-amber">Bicho-mineiro</span>
+              </div>
+              <div class="pulv-meta">Terrestre · 14,5 ha</div>
+              <div class="pulv-prods">
+                <span class="prod-chip">🧪 Engeo Pleno 75 mL/ha</span>
+              </div>
+            </div>
+            <div class="pulv-right">
+              <span class="badge b-warn"><div class="badge-dot"></div>Atrasada</span>
+              <div style="font-size:.7rem;color:var(--tx-3);font-family:'DM Mono',monospace;">14,5 ha</div>
+              <button class="btn btn-primary btn-xs" style="margin-top:2px;">📝 Confirmar</button>
+            </div>
+          </div>
+
+          <div class="pulv-row" style="border-left:4px solid var(--tx-4);padding-left:12px;">
+            <div class="pulv-date-block">
+              <div class="pulv-day">10</div>
+              <div class="pulv-mon">Jun</div>
+            </div>
+            <div class="pulv-body">
+              <div class="pulv-title">
+                T-01 · Talhão Central
+                <span class="chip chip-green">Boa Vista</span>
+                <span class="chip chip-purple">Ferrugem</span>
+              </div>
+              <div class="pulv-meta">Drone · Terceiro · 28 ha</div>
+              <div class="pulv-prods">
+                <span class="prod-chip">🧪 Opera 500 mL/ha</span>
+                <span class="prod-chip">🧪 Nimbus 0,5% v/v</span>
+              </div>
+            </div>
+            <div class="pulv-right">
+              <span class="badge b-gray"><div class="badge-dot"></div>Pendente</span>
+              <div style="font-size:.7rem;color:var(--tx-3);font-family:'DM Mono',monospace;">28,0 ha</div>
+            </div>
+          </div>
+
+        </div>
+        <div class="card-footer">3 registros exibidos · filtro ativo</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<!-- Screen switcher -->
+<div class="switcher">
+  <button class="sw-btn on" onclick="showScreen('dashboard',null,this)">📊 Dashboard</button>
+  <button class="sw-btn" onclick="showScreen('equipe',null,this)">👥 Equipe</button>
+  <button class="sw-btn" onclick="showScreen('pulverizacoes',null,this)">💧 Pulverizações</button>
+</div>
+
+<script>
+const TITLES = {
+  dashboard: { title: 'Dashboard', sub: '' },
+  equipe:    { title: 'Equipe', sub: 'Gestão de pessoal' },
+  pulverizacoes: { title: 'Pulverizações', sub: 'Controle de aplicações' },
+};
+
+function showScreen(name, navEl, swEl) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.sw-btn').forEach(b => b.classList.remove('on'));
+
+  if (navEl) navEl.classList.add('active');
+  if (swEl)  swEl.classList.add('on');
+
+  // Sync switcher & sidebar
+  const swBtns = document.querySelectorAll('.sw-btn');
+  const idx = ['dashboard','equipe','pulverizacoes'].indexOf(name);
+  if (idx >= 0 && swBtns[idx]) swBtns[idx].classList.add('on');
+
+  const t = TITLES[name];
+  document.getElementById('topTitle').textContent = t.title;
+  document.getElementById('topSep').style.display = t.sub ? '' : 'none';
+  document.getElementById('topSub').style.display  = t.sub ? '' : 'none';
+  document.getElementById('topSub').textContent    = t.sub;
+}
+</script>
+</body>
+</html>
