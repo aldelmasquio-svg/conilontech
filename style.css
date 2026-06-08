@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════
+   ConilonTech — design system compartilhado v2
+   Carregado após o <style> inline de cada página, portanto
+   :root e seletores de mesma especificidade aqui prevalecem.
+   ═══════════════════════════════════════════════════════ */
+
+/* ── VARIÁVEIS GLOBAIS ─────────────────────────────── */
+:root {
+  /* Remapeia as variáveis existentes para a nova paleta */
+  --v:     #1a5c1a;       /* verde marca */
+  --ve:    #0b1c0d;       /* verde escuro — sidebar */
+  --vb:    #e2f0e2;       /* verde claro */
+  --c:     #5a6b48;       /* texto secundário oliva */
+  --cb:    #c6c0b0;       /* borda cinza quente */
+  --cl:    #f0ece3;       /* fundo claro interno */
+  --t:     #101a0c;       /* texto primário */
+  --ts:    #2c3a20;       /* texto secundário */
+  --danger: #991b1b;
+  --s:     0 2px 6px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.07);
+  --sf:    0 4px 14px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.09);
+  --rad:   10px;
+  --rs:    7px;
+  --menu-w: 222px;
+
+  /* Novos */
+  --accent:    #c47f17;
+  --accent-h:  #a86c12;
+  --accent-bg: #fef3dc;
+  --accent-tx: #7c4f0a;
+  --accent-bd: #f5d49a;
+  --bg:        #e9e5db;
+  --surface:   #fdfcf9;
+  --surface-2: #f3efe6;
+  --bd:        #c6c0b0;
+  --bd-l:      #dbd6cc;
+  --t3:        #5a6b48;
+  --t4:        #8fa07c;
+}
+
+/* ── FUNDO GERAL ─────────────────────────────────────── */
+body {
+  background: var(--bg) !important;
+}
+
+/* ── TOPBAR ──────────────────────────────────────────── */
+.app-header {
+  background: var(--v) !important;
+  height: 52px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.24) !important;
+}
+.hdr-sub {
+  opacity: .52 !important;
+  font-size: .53rem !important;
+  letter-spacing: .16em !important;
+}
+.hdr-user {
+  font-size: .7rem !important;
+  opacity: .65 !important;
+}
+
+/* ── SIDEBAR ─────────────────────────────────────────── */
+.menu-lateral {
+  background: var(--ve) !important;
+  width: var(--menu-w) !important;
+}
+.menu-topo {
+  padding: 14px 14px 12px !important;
+  border-bottom: 1px solid rgba(255,255,255,.07) !important;
+}
+.menu-app-nome {
+  font-family: 'Barlow Condensed', sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 1rem !important;
+  letter-spacing: .01em !important;
+}
+.menu-user-nome {
+  font-size: .76rem !important;
+  color: rgba(255,255,255,.6) !important;
+  margin-top: 2px !important;
+}
+.menu-user-email {
+  font-size: .64rem !important;
+  color: rgba(255,255,255,.3) !important;
+}
+
+/* Rótulo de seção */
+.menu-secao {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .56rem;
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  color: rgba(255,255,255,.22);
+  font-weight: 700;
+  padding: 10px 12px 4px;
+  user-select: none;
+}
+
+/* Item de menu */
+.menu-item {
+  border-left: 3px solid transparent !important;
+  padding: 9px 10px 9px 9px !important;
+  border-radius: 0 var(--rs) var(--rs) 0 !important;
+  color: rgba(255,255,255,.5) !important;
+  margin: 1px 8px 1px 0 !important;
+  font-size: .84rem !important;
+  font-weight: 500 !important;
+  gap: 9px !important;
+}
+.menu-item:hover {
+  background: rgba(255,255,255,.07) !important;
+  color: rgba(255,255,255,.85) !important;
+  border-left-color: transparent !important;
+}
+.menu-item.ativo {
+  background: rgba(196,127,23,.2) !important;
+  border-left-color: var(--accent) !important;
+  color: white !important;
+  font-weight: 700 !important;
+}
+.menu-ico {
+  opacity: .72;
+  font-size: 14px !important;
+  width: 18px !important;
+  flex-shrink: 0;
+}
+.menu-item.ativo .menu-ico { opacity: 1 !important; }
+
+/* Rodapé sidebar */
+.menu-rodape {
+  padding: 10px 8px 12px !important;
+  border-top: 1px solid rgba(255,255,255,.07) !important;
+}
+.btn-logout {
+  background: rgba(220,38,38,.12) !important;
+  border: 1px solid rgba(220,38,38,.22) !important;
+  color: #fca5a5 !important;
+  border-radius: var(--rs) !important;
+}
+
+/* ── CARDS ───────────────────────────────────────────── */
+.sec-card {
+  background: var(--surface) !important;
+  border: 1.5px solid var(--bd) !important;
+  box-shadow: var(--s) !important;
+}
+.kpi-card {
+  background: var(--surface) !important;
+  border: 1.5px solid var(--bd) !important;
+  box-shadow: var(--s) !important;
+}

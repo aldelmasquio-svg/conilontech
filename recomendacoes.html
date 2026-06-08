@@ -235,6 +235,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 /* TAG DE FASE DA LAVOURA */
 .fase-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:#f59e0b;color:white;}
 </style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -574,24 +575,34 @@ function isAdmin() {
 }
 
 function gerarMenu() {
-  const isAdm = perfilAtual.perfil==='admin' || Object.values(perfilAtual.modulos||{}).includes('admin');
-  const items = [
-    {href:'index.html',ico:'📊',label:'Dashboard'},
-    {href:'mapa.html',ico:'🗺️',label:'Mapa de Talhões'},
-    {href:'atividades.html',ico:'🌾',label:'Atividades'},
-    {href:'adubacoes.html',ico:'🧪',label:'Adubações'},
-    {href:'pulverizacoes.html',ico:'💧',label:'Pulverizações'},
-    {href:'pedidos.html',ico:'📦',label:'Pedidos'},
-    {href:'estoque.html',ico:'🏬',label:'Estoque'},
-    {href:'gestao.html',ico:'📊',label:'Gestão'},
-    {href:'analises.html',ico:'🔬',label:'Análises'},
-    {href:'recomendacoes.html',ico:'💊',label:'Recomendações'},
-    {href:'planejamento.html',ico:'🗓️',label:'Planejamento'}
+  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
+  const pg = (window.location.pathname.split('/').pop() || 'index.html');
+  const secoes = [
+    { label: 'Principal', items: [
+      { href:'index.html',         ico:'📊', label:'Dashboard' },
+      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
+      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
+      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
+      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
+      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
+      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
+      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
+    ]},
+    { label: 'Análise', items: [
+      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
+      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
+      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
+      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
+      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
+    ]},
   ];
-  if (isAdm) items.push({href:'admin.html',ico:'⚙️',label:'Administração'});
-  document.getElementById('menuModulos').innerHTML = items.map(m =>
-    `<a class="menu-item ${m.href==='recomendacoes.html'?'ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`
-  ).join('');
+  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
+    const html = s.items.map(m => {
+      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
+      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
+    }).filter(Boolean).join('');
+    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
+  }).join('');
 }
 
 function popularTalhoes() {
