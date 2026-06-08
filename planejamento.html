@@ -1082,7 +1082,7 @@ window.adicionarSelecionados = function() {
     if (!meses.find(m => m.mes === mesYM)) {
       const distribuicao = {};
       NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
-      meses.push({mes: mesYM, distribuicao});
+      meses.push({mes: mesYM, distribuicao, adubos: []});
       count++;
     }
   });
@@ -1103,7 +1103,7 @@ window.adicionarMes = function(mesYM) {
   // Distribuição vazia, usuário preenche
   const distribuicao = {};
   NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
-  meses.push({mes: mesYM, distribuicao});
+  meses.push({mes: mesYM, distribuicao, adubos: []});
   window.planWIP.meses = meses;
   fecharModalMes();
   renderNovo();
@@ -1127,7 +1127,7 @@ window.adicionarIntervalo = function() {
     if (!mesesExist.find(m => m.mes === mesYM)) {
       const distribuicao = {};
       NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
-      mesesExist.push({mes: mesYM, distribuicao});
+      mesesExist.push({mes: mesYM, distribuicao, adubos: []});
       adicionados++;
     }
     mes++; if (mes > 12) { mes = 1; ano++; }
@@ -1155,7 +1155,7 @@ window.aplicarTemplate = function(tplId) {
     NUTRIENTES.forEach(n => {
       distribuicao[n.id] = item.distrib[n.id] !== undefined ? item.distrib[n.id] : '';
     });
-    return {mes: mesYM, distribuicao};
+    return {mes: mesYM, distribuicao, adubos: []};
   });
   window.planWIP.meses = novosMeses;
   fecharModalMes();

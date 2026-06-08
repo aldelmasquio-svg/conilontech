@@ -399,7 +399,6 @@ function renderizarWizard() {
 function _adubosDoPlanoSafra() {
   if (!talhaoSel || !mesSel) return [];
   const mesYM = `${mesSel.ano}-${String(mesSel.mes + 1).padStart(2,'0')}`;
-  // talhaoId pode ser o _docId (rascunho) ou o campo id customizado (aprovado)
   const plan = planejamentosSafra.find(p =>
     (p.talhaoId === talhaoSel.id || p.talhaoId === talhaoSel._docId) &&
     (p.meses||[]).some(m => m.mes === mesYM)
@@ -407,9 +406,20 @@ function _adubosDoPlanoSafra() {
   return plan?.meses?.find(m => m.mes === mesYM)?.adubos || [];
 }
 
+function _planSafraParaMes() {
+  if (!talhaoSel || !mesSel) return null;
+  const mesYM = `${mesSel.ano}-${String(mesSel.mes + 1).padStart(2,'0')}`;
+  return planejamentosSafra.find(p =>
+    (p.talhaoId === talhaoSel.id || p.talhaoId === talhaoSel._docId) &&
+    (p.meses||[]).some(m => m.mes === mesYM)
+  ) || null;
+}
+
 function renderizarE1() {
   const adubosPlano = _adubosDoPlanoSafra();
+  const plan = _planSafraParaMes();
   const importBox = document.getElementById('importPlanoSec');
+  const avisoBox = document.getElementById('importPlanoAviso');
   if (importBox) {
     if (adubosPlano.length && !planoWIP.produtos.length) {
       importBox.style.display = 'block';
@@ -417,6 +427,14 @@ function renderizarE1() {
         `${adubosPlano.length} adubo(s) no planejamento: ${adubosPlano.map(a=>a.nome).join(', ')}`;
     } else {
       importBox.style.display = 'none';
+    }
+  }
+  if (avisoBox) {
+    if (plan && !adubosPlano.length) {
+      avisoBox.style.display = 'block';
+      avisoBox.innerHTML = `⚠️ Planejamento de Safra <strong>${plan.safra||''}</strong> encontrado, mas sem produtos definidos para este mês. Acesse <a href="planejamento.html" style="color:var(--v);font-weight:700;">Planejamento de Safra</a> e adicione os adubos no passo "Montar".`;
+    } else {
+      avisoBox.style.display = 'none';
     }
   }
   document.getElementById('produtosMes').innerHTML = (planoWIP.produtos||[]).map((p,i)=>`
@@ -1208,6 +1226,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
         <div id="importPlanoInfo" class="import-banner-info"></div>
         <button onclick="importarDoPlano()" class="import-banner-btn">📥 Importar adubos do planejamento</button>
       </div>
+      <div id="importPlanoAviso" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:var(--rs);padding:10px 14px;font-size:.83rem;color:#92400e;margin-bottom:12px;line-height:1.5;"></div>
       <div class="add-form">
         <div class="add-form-tit">➕ Produtos do Mês</div>
         <div class="campo"><label>Produto / Insumo</label>
