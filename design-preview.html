@@ -3,59 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ConilonTech · Design Preview</title>
+<title>ConilonTech · Design Preview v2</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 /* ═══════════════════════════════════════════
-   DESIGN SYSTEM — ConilonTech v2
+   DESIGN SYSTEM — ConilonTech v2 · Agro
    ═══════════════════════════════════════════ */
 :root {
-  /* Superfícies */
-  --bg:         #f0f4f1;
-  --surface:    #ffffff;
-  --surface-2:  #f8faf8;
+  /* Superfícies — fundo terroso quente */
+  --bg:        #e9e5db;
+  --surface:   #fdfcf9;
+  --surface-2: #f3efe6;
 
-  /* Sidebar */
-  --sidebar-bg: #141f16;
-  --sidebar-hover: rgba(255,255,255,.07);
-  --sidebar-active: rgba(255,255,255,.13);
+  /* Sidebar — verde floresta escuro */
+  --sidebar-bg:     #0b1c0d;
+  --sidebar-hover:  rgba(255,255,255,.06);
+  --sidebar-active-bg: rgba(196,127,23,.2);
   --sidebar-border: rgba(255,255,255,.07);
 
+  /* Topbar — verde marca */
+  --topbar-bg:  #1a5c1a;
+  --topbar-tx:  rgba(255,255,255,.95);
+  --topbar-sub: rgba(255,255,255,.52);
+  --topbar-bd:  rgba(0,0,0,.18);
+
   /* Marca */
-  --brand:       #1e5c1e;
-  --brand-h:     #174d17;
-  --brand-light: #eaf4ea;
-  --brand-border:#b6d4b6;
+  --brand:       #1a5c1a;
+  --brand-h:     #134e13;
+  --brand-light: #e2f0e2;
+  --brand-border:#9dc89d;
+  --brand-mid:   #2d7a2d;
 
-  /* Texto */
-  --tx-1: #0f1e11;
-  --tx-2: #374151;
-  --tx-3: #6b7280;
-  --tx-4: #9ca3af;
+  /* Âmbar — acento ouro/café */
+  --accent:    #c47f17;
+  --accent-h:  #a86c12;
+  --accent-bg: #fef3dc;
+  --accent-tx: #7c4f0a;
+  --accent-bd: #f5d49a;
 
-  /* Borders */
-  --bd:   #e2e8e2;
-  --bd-l: #f0f4f0;
+  /* Texto — tons oliva quentes */
+  --tx-1: #101a0c;
+  --tx-2: #2c3a20;
+  --tx-3: #5a6b48;
+  --tx-4: #8fa07c;
+
+  /* Bordas — cinza quente */
+  --bd:   #c6c0b0;
+  --bd-l: #dbd6cc;
 
   /* Semânticas */
-  --ok:       #16a34a; --ok-bg:   #dcfce7; --ok-tx:  #14532d;
-  --warn:     #d97706; --warn-bg: #fef3c7; --warn-tx:#92400e;
-  --danger:   #dc2626; --dng-bg:  #fee2e2; --dng-tx: #991b1b;
-  --info:     #2563eb; --info-bg: #dbeafe; --info-tx:#1e3a8a;
-  --purple:   #7c3aed; --pur-bg:  #ede9fe; --pur-tx: #4c1d95;
+  --ok:      #166534; --ok-bg:   #dcfce7; --ok-tx:  #14532d;
+  --warn:    #b45309; --warn-bg: #fef3c7; --warn-tx:#92400e;
+  --danger:  #991b1b; --dng-bg:  #fee2e2; --dng-tx: #7f1d1d;
+  --info:    #1e40af; --info-bg: #dbeafe; --info-tx:#1e3a8a;
+  --purple:  #6d28d9; --pur-bg:  #ede9fe; --pur-tx: #4c1d95;
 
   /* Sombras */
-  --sh-xs: 0 1px 2px rgba(0,0,0,.05);
-  --sh-sm: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.04);
-  --sh-md: 0 4px 8px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.04);
+  --sh-xs: 0 1px 3px rgba(0,0,0,.10);
+  --sh-sm: 0 2px 6px rgba(0,0,0,.12), 0 1px 3px rgba(0,0,0,.07);
+  --sh-md: 0 4px 14px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08);
 
   /* Raios */
-  --r-sm: 5px;
-  --r-md: 8px;
+  --r-sm: 4px;
+  --r-md: 7px;
   --r-lg: 10px;
   --r-xl: 14px;
 
-  --sidebar-w: 220px;
+  --sidebar-w: 222px;
   --header-h:  52px;
 }
 
@@ -70,7 +84,6 @@ body {
   display: flex;
 }
 
-/* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 3px; }
@@ -88,68 +101,77 @@ body {
   z-index: 200;
   overflow-y: auto;
 }
+
 .sidebar-brand {
-  padding: 16px 14px 14px;
+  padding: 14px 14px 12px;
   border-bottom: 1px solid var(--sidebar-border);
   display: flex;
   align-items: center;
   gap: 10px;
 }
 .brand-icon {
-  width: 32px; height: 32px;
+  width: 34px; height: 34px;
   border-radius: var(--r-md);
   background: var(--brand);
+  border: 1.5px solid rgba(255,255,255,.15);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 17px;
   flex-shrink: 0;
 }
 .brand-text { line-height: 1.2; }
 .brand-name {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 1rem;
+  font-size: 1.05rem;
   color: white;
+  letter-spacing: .01em;
   display: block;
 }
 .brand-sub {
-  font-size: .6rem;
+  font-size: .58rem;
   color: rgba(255,255,255,.3);
-  letter-spacing: .08em;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 
 .nav-section { padding: 8px 8px 4px; flex: 1; }
 .nav-label {
-  font-size: .58rem;
+  font-size: .56rem;
   text-transform: uppercase;
-  letter-spacing: .12em;
-  color: rgba(255,255,255,.25);
+  letter-spacing: .14em;
+  color: rgba(255,255,255,.22);
   font-weight: 700;
-  padding: 8px 8px 4px;
+  padding: 10px 10px 4px;
 }
 .nav-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 9px;
+  padding: 7px 9px 7px 12px;
   border-radius: var(--r-md);
-  color: rgba(255,255,255,.55);
+  color: rgba(255,255,255,.5);
   font-size: .84rem;
   font-weight: 500;
   cursor: pointer;
   transition: all .12s;
   margin-bottom: 1px;
   user-select: none;
+  border-left: 3px solid transparent;
 }
-.nav-item:hover { background: var(--sidebar-hover); color: rgba(255,255,255,.85); }
+.nav-item:hover {
+  background: var(--sidebar-hover);
+  color: rgba(255,255,255,.82);
+}
 .nav-item.active {
-  background: var(--sidebar-active);
+  background: var(--sidebar-active-bg);
   color: white;
   font-weight: 700;
+  border-left-color: var(--accent);
+  padding-left: 9px;
 }
-.nav-ico { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; opacity: .8; }
+.nav-ico { font-size: 14px; width: 18px; text-align: center; flex-shrink: 0; opacity: .75; }
 .nav-item.active .nav-ico { opacity: 1; }
 
 .sidebar-footer {
@@ -166,23 +188,23 @@ body {
 }
 .user-row:hover { background: var(--sidebar-hover); }
 .u-avatar {
-  width: 28px; height: 28px;
+  width: 30px; height: 30px;
   border-radius: 50%;
-  background: var(--brand);
+  background: var(--accent);
   color: white;
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: .82rem;
+  font-size: .86rem;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-.u-name { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.7); }
-.u-role { font-size: .62rem; color: rgba(255,255,255,.3); }
+.u-name { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.75); }
+.u-role { font-size: .62rem; color: rgba(255,255,255,.28); }
 
 /* ════════════════════════════════════════
-   TOPBAR
+   TOPBAR — verde escuro
 ════════════════════════════════════════ */
 .main {
   margin-left: var(--sidebar-w);
@@ -193,8 +215,8 @@ body {
 }
 .topbar {
   height: var(--header-h);
-  background: var(--surface);
-  border-bottom: 1px solid var(--bd);
+  background: var(--topbar-bg);
+  border-bottom: 1px solid var(--topbar-bd);
   display: flex;
   align-items: center;
   padding: 0 20px;
@@ -202,22 +224,23 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: var(--sh-xs);
+  box-shadow: 0 2px 8px rgba(0,0,0,.22);
 }
 .topbar-title {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 1.05rem;
-  color: var(--tx-1);
+  font-size: 1.08rem;
+  letter-spacing: .02em;
+  color: var(--topbar-tx);
 }
-.topbar-sep { color: var(--tx-4); font-size: .9rem; }
-.topbar-sub { font-size: .78rem; color: var(--tx-3); font-weight: 500; }
+.topbar-sep { color: rgba(255,255,255,.28); font-size: .9rem; }
+.topbar-sub { font-size: .78rem; color: var(--topbar-sub); font-weight: 500; }
 .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.topbar-date { font-size: .72rem; color: var(--tx-3); font-weight: 600; }
+.topbar-date { font-size: .72rem; color: rgba(255,255,255,.55); font-weight: 600; }
 .topbar-pill {
-  background: var(--ok-bg);
-  color: var(--ok-tx);
-  border: 1px solid #bbf7d0;
+  background: rgba(255,255,255,.14);
+  color: rgba(255,255,255,.9);
+  border: 1px solid rgba(255,255,255,.18);
   border-radius: 20px;
   padding: 3px 10px;
   font-size: .7rem;
@@ -229,19 +252,15 @@ body {
 .live-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
-  background: var(--ok);
+  background: #4ade80;
   animation: pulse 2s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
 /* ════════════════════════════════════════
-   CONTENT AREA
+   CONTENT
 ════════════════════════════════════════ */
-.content {
-  padding: 20px;
-  flex: 1;
-  overflow-y: auto;
-}
+.content { padding: 20px; flex: 1; overflow-y: auto; }
 .screen { display: none; }
 .screen.active { display: block; }
 
@@ -256,9 +275,10 @@ body {
 .page-title {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   color: var(--tx-1);
   line-height: 1.1;
+  letter-spacing: .01em;
 }
 .page-desc { font-size: .78rem; color: var(--tx-3); margin-top: 3px; font-weight: 500; }
 .page-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: flex-start; }
@@ -274,7 +294,7 @@ body {
   border-radius: var(--r-md);
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
-  font-size: .88rem;
+  font-size: .9rem;
   letter-spacing: .02em;
   cursor: pointer;
   border: none;
@@ -282,14 +302,16 @@ body {
   white-space: nowrap;
   line-height: 1;
 }
-.btn-primary  { background: var(--brand); color: white; }
+.btn-primary { background: var(--brand); color: white; box-shadow: 0 2px 6px rgba(26,92,26,.35); }
 .btn-primary:hover { background: var(--brand-h); }
-.btn-secondary { background: var(--surface); color: var(--tx-2); border: 1px solid var(--bd); }
-.btn-secondary:hover { background: var(--bg); border-color: #c4cec4; }
+.btn-accent { background: var(--accent); color: white; box-shadow: 0 2px 6px rgba(196,127,23,.35); }
+.btn-accent:hover { background: var(--accent-h); }
+.btn-secondary { background: var(--surface); color: var(--tx-2); border: 1.5px solid var(--bd); box-shadow: var(--sh-xs); }
+.btn-secondary:hover { background: var(--surface-2); border-color: #aea99e; }
 .btn-ghost { background: transparent; color: var(--tx-3); }
-.btn-ghost:hover { background: var(--bg); color: var(--tx-2); }
-.btn-sm { padding: 5px 10px; font-size: .78rem; }
-.btn-xs { padding: 3px 8px; font-size: .72rem; }
+.btn-ghost:hover { background: rgba(0,0,0,.05); color: var(--tx-2); }
+.btn-sm { padding: 6px 12px; font-size: .82rem; }
+.btn-xs { padding: 4px 9px; font-size: .74rem; }
 
 /* ════════════════════════════════════════
    BADGES
@@ -304,48 +326,47 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.badge-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.b-ok     { background: var(--ok-bg);   color: var(--ok-tx);   }
+.badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.b-ok     { background: var(--ok-bg);   color: var(--ok-tx);   border: 1px solid #a7f3c0; }
 .b-ok .badge-dot { background: var(--ok); }
-.b-warn   { background: var(--warn-bg); color: var(--warn-tx); }
+.b-warn   { background: var(--warn-bg); color: var(--warn-tx); border: 1px solid #fcd4a0; }
 .b-warn .badge-dot { background: var(--warn); }
-.b-danger { background: var(--dng-bg);  color: var(--dng-tx);  }
+.b-danger { background: var(--dng-bg);  color: var(--dng-tx);  border: 1px solid #fca5a5; }
 .b-danger .badge-dot { background: var(--danger); }
-.b-info   { background: var(--info-bg); color: var(--info-tx); }
+.b-info   { background: var(--info-bg); color: var(--info-tx); border: 1px solid #93c5fd; }
 .b-info .badge-dot { background: var(--info); }
-.b-gray   { background: #f3f4f6; color: var(--tx-2); }
+.b-gray   { background: #f0ece4; color: var(--tx-2); border: 1px solid var(--bd); }
 .b-gray .badge-dot { background: var(--tx-4); }
-.b-purple { background: var(--pur-bg);  color: var(--pur-tx);  }
+.b-purple { background: var(--pur-bg);  color: var(--pur-tx);  border: 1px solid #c4b5fd; }
 .b-purple .badge-dot { background: var(--purple); }
+.b-accent { background: var(--accent-bg); color: var(--accent-tx); border: 1px solid var(--accent-bd); }
+.b-accent .badge-dot { background: var(--accent); }
 
 /* ════════════════════════════════════════
-   KPI CARDS
+   KPI CARDS — borda esquerda colorida
 ════════════════════════════════════════ */
 .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
 .kpi-card {
   background: var(--surface);
-  border: 1px solid var(--bd);
+  border: 1.5px solid var(--bd);
+  border-left-width: 4px;
   border-radius: var(--r-lg);
   padding: 14px 16px;
-  box-shadow: var(--sh-xs);
-  border-top-width: 3px;
+  box-shadow: var(--sh-sm);
   cursor: default;
-  transition: box-shadow .15s;
+  transition: box-shadow .15s, transform .12s;
 }
-.kpi-card:hover { box-shadow: var(--sh-sm); }
-.kpi-card.t-ok   { border-top-color: var(--ok); }
-.kpi-card.t-warn { border-top-color: var(--warn); }
-.kpi-card.t-info { border-top-color: var(--info); }
-.kpi-card.t-brand{ border-top-color: var(--brand); }
-.kpi-card.t-gray { border-top-color: var(--tx-4); }
+.kpi-card:hover { box-shadow: var(--sh-md); transform: translateY(-1px); }
+.kpi-card.t-ok    { border-left-color: var(--ok); }
+.kpi-card.t-warn  { border-left-color: var(--warn); }
+.kpi-card.t-info  { border-left-color: var(--info); }
+.kpi-card.t-brand { border-left-color: var(--brand); }
+.kpi-card.t-gray  { border-left-color: var(--tx-4); }
+.kpi-card.t-accent{ border-left-color: var(--accent); }
 .kpi-label {
-  font-size: .68rem;
+  font-size: .67rem;
   text-transform: uppercase;
-  letter-spacing: .07em;
+  letter-spacing: .08em;
   color: var(--tx-3);
   font-weight: 700;
   margin-bottom: 6px;
@@ -353,11 +374,11 @@ body {
 .kpi-value {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 2rem;
+  font-size: 2.1rem;
   color: var(--tx-1);
   line-height: 1;
 }
-.kpi-unit { font-size: 1rem; color: var(--tx-3); font-weight: 600; }
+.kpi-unit { font-size: 1.1rem; color: var(--tx-3); font-weight: 600; }
 .kpi-delta {
   font-size: .7rem;
   margin-top: 5px;
@@ -366,60 +387,58 @@ body {
   align-items: center;
   gap: 3px;
 }
-.kpi-delta.up   { color: var(--ok); }
-.kpi-delta.down { color: var(--danger); }
-.kpi-delta.neutral { color: var(--tx-3); }
+.kpi-delta.up     { color: var(--ok); }
+.kpi-delta.down   { color: var(--danger); }
+.kpi-delta.neutral{ color: var(--tx-3); }
 
 /* ════════════════════════════════════════
    CARDS GENÉRICOS
 ════════════════════════════════════════ */
 .card {
   background: var(--surface);
-  border: 1px solid var(--bd);
+  border: 1.5px solid var(--bd);
   border-radius: var(--r-lg);
-  box-shadow: var(--sh-xs);
+  box-shadow: var(--sh-sm);
   overflow: hidden;
 }
 .card-hdr {
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--bd-l);
+  padding: 10px 16px;
+  border-bottom: 1.5px solid var(--bd-l);
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  background: var(--surface-2);
 }
 .card-title {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: .82rem;
+  font-size: .84rem;
   text-transform: uppercase;
   letter-spacing: .08em;
   color: var(--tx-2);
 }
 .card-body { padding: 14px 16px; }
 .card-footer {
-  padding: 10px 16px;
-  border-top: 1px solid var(--bd-l);
+  padding: 9px 16px;
+  border-top: 1.5px solid var(--bd-l);
   background: var(--surface-2);
-  font-size: .75rem;
+  font-size: .74rem;
   color: var(--tx-3);
+  font-weight: 500;
 }
 
 /* ════════════════════════════════════════
    TABELA
 ════════════════════════════════════════ */
 .tbl-wrap { overflow-x: auto; }
-.tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: .83rem;
-}
-.tbl thead tr { border-bottom: 2px solid var(--bd); }
+.tbl { width: 100%; border-collapse: collapse; font-size: .83rem; }
+.tbl thead tr { border-bottom: 2px solid var(--bd); background: var(--surface-2); }
 .tbl th {
   padding: 8px 12px;
-  font-size: .65rem;
+  font-size: .63rem;
   text-transform: uppercase;
-  letter-spacing: .08em;
+  letter-spacing: .1em;
   color: var(--tx-3);
   font-weight: 700;
   text-align: left;
@@ -431,7 +450,7 @@ body {
   color: var(--tx-2);
 }
 .tbl tbody tr:last-child td { border-bottom: none; }
-.tbl tbody tr:hover td { background: #f8faf8; }
+.tbl tbody tr:hover td { background: var(--surface-2); }
 .tbl td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: .78rem; }
 .tbl td strong { color: var(--tx-1); }
 
@@ -440,7 +459,7 @@ body {
 ════════════════════════════════════════ */
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .field label {
-  font-size: .64rem;
+  font-size: .62rem;
   text-transform: uppercase;
   letter-spacing: .1em;
   color: var(--brand);
@@ -460,43 +479,41 @@ body {
 }
 .field input:focus, .field select:focus, .field textarea:focus {
   border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(30,92,30,.1);
+  box-shadow: 0 0 0 3px rgba(26,92,26,.12);
 }
 .field-hint { font-size: .68rem; color: var(--tx-3); }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* ════════════════════════════════════════
-   SCREEN 1 — DASHBOARD
+   SECTION LABELS — verde com régua
 ════════════════════════════════════════ */
 .section-label {
-  font-size: .68rem;
+  font-size: .67rem;
   text-transform: uppercase;
-  letter-spacing: .1em;
-  color: var(--tx-3);
-  font-weight: 700;
+  letter-spacing: .11em;
+  color: var(--brand);
+  font-weight: 800;
   margin-bottom: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.section-label::after { content: ''; flex: 1; height: 1px; background: var(--bd); }
+.section-label::after { content: ''; flex: 1; height: 2px; background: var(--brand-border); border-radius: 1px; opacity: .5; }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 
-.quick-btns {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 20px;
-}
+/* ════════════════════════════════════════
+   DASHBOARD — atalhos
+════════════════════════════════════════ */
+.quick-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
 .quick-btn {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 14px;
+  padding: 7px 14px;
   background: var(--surface);
-  border: 1px solid var(--bd);
+  border: 1.5px solid var(--bd);
   border-radius: var(--r-md);
   font-size: .83rem;
   font-weight: 600;
@@ -506,15 +523,21 @@ body {
   text-decoration: none;
   box-shadow: var(--sh-xs);
 }
-.quick-btn:hover { background: var(--bg); border-color: #c4cec4; box-shadow: var(--sh-sm); }
-.quick-btn .ico { font-size: 16px; }
+.quick-btn:hover {
+  background: var(--brand-light);
+  border-color: var(--brand-border);
+  color: var(--brand);
+  box-shadow: var(--sh-sm);
+}
+.quick-btn .ico { font-size: 15px; }
 
+/* Atividades recentes */
 .activity-list { display: flex; flex-direction: column; }
 .activity-item {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 0;
+  padding: 9px 0;
   border-bottom: 1px solid var(--bd-l);
 }
 .activity-item:last-child { border-bottom: none; }
@@ -522,6 +545,7 @@ body {
   width: 28px; height: 28px;
   border-radius: var(--r-sm);
   background: var(--brand-light);
+  border: 1px solid var(--brand-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -532,94 +556,116 @@ body {
 .activity-main { flex: 1; min-width: 0; }
 .activity-title { font-size: .84rem; font-weight: 700; color: var(--tx-1); }
 .activity-meta { font-size: .7rem; color: var(--tx-3); margin-top: 2px; }
-.activity-time { font-size: .68rem; color: var(--tx-4); font-family: 'DM Mono', monospace; white-space: nowrap; margin-top: 3px; }
+.activity-time { font-size: .68rem; color: var(--tx-4); font-family: 'DM Mono', monospace; white-space: nowrap; margin-top: 2px; }
 
+/* Pendentes */
 .op-list { display: flex; flex-direction: column; }
 .op-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--bd-l);
 }
 .op-item:last-child { border-bottom: none; }
 .op-left { flex: 1; min-width: 0; }
 .op-title { font-size: .84rem; font-weight: 700; color: var(--tx-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .op-meta { font-size: .7rem; color: var(--tx-3); margin-top: 2px; }
-.op-date {
-  font-size: .72rem;
-  font-weight: 700;
-  color: var(--tx-2);
-  font-family: 'DM Mono', monospace;
-  white-space: nowrap;
-}
+.op-date { font-size: .72rem; font-weight: 700; color: var(--tx-2); font-family: 'DM Mono', monospace; white-space: nowrap; }
 
 /* ════════════════════════════════════════
-   SCREEN 2 — EQUIPE
+   EQUIPE
 ════════════════════════════════════════ */
 .status-summary {
   display: flex;
   gap: 0;
   background: var(--surface);
-  border: 1px solid var(--bd);
+  border: 1.5px solid var(--bd);
   border-radius: var(--r-lg);
   overflow: hidden;
   margin-bottom: 16px;
-  box-shadow: var(--sh-xs);
+  box-shadow: var(--sh-sm);
 }
 .ss-item {
   flex: 1;
-  padding: 12px 8px;
+  padding: 13px 8px;
   text-align: center;
-  border-right: 1px solid var(--bd);
+  border-right: 1.5px solid var(--bd-l);
 }
 .ss-item:last-child { border-right: none; }
 .ss-n {
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
-  font-size: 1.6rem;
+  font-size: 1.8rem;
   line-height: 1;
   color: var(--tx-1);
 }
-.ss-label { font-size: .62rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tx-3); font-weight: 700; margin-top: 3px; }
-.ss-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 3px; vertical-align: middle; }
-
-.filter-row {
+.ss-label {
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--tx-3);
+  font-weight: 700;
+  margin-top: 4px;
   display: flex;
-  gap: 6px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
+.ss-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+.filter-row { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .f-chip {
   padding: 5px 13px;
   border-radius: 20px;
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 700;
-  font-size: .78rem;
+  font-size: .8rem;
   cursor: pointer;
   border: 1.5px solid var(--bd);
   background: var(--surface);
   color: var(--tx-3);
   transition: all .12s;
+  box-shadow: var(--sh-xs);
 }
+.f-chip:hover { border-color: var(--brand-border); color: var(--brand); }
 .f-chip.on {
-  background: var(--brand-light);
-  border-color: var(--brand-border);
-  color: var(--brand);
+  background: var(--brand);
+  border-color: var(--brand);
+  color: white;
+  box-shadow: 0 2px 6px rgba(26,92,26,.3);
 }
 
+/* Fazenda label — banda verde */
 .faz-label {
-  font-size: .65rem;
+  font-size: .7rem;
   text-transform: uppercase;
   letter-spacing: .1em;
-  color: var(--tx-3);
-  font-weight: 700;
-  padding: 10px 0 6px;
+  color: var(--brand);
+  font-weight: 800;
+  padding: 7px 12px;
+  background: var(--brand-light);
+  border: 1.5px solid var(--brand-border);
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  margin-bottom: -1px;
 }
-.faz-label::after { content: ''; flex: 1; height: 1px; background: var(--bd); }
+.faz-count {
+  font-size: .65rem;
+  color: var(--tx-3);
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 4px;
+}
+
+.card-faz {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  margin-bottom: 14px;
+}
 
 .emp-list { display: flex; flex-direction: column; }
 .emp-row {
@@ -636,7 +682,7 @@ body {
 .e-av {
   width: 32px; height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--brand) 0%, #3a8a3a 100%);
+  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-mid) 100%);
   color: white;
   font-family: 'Barlow Condensed', sans-serif;
   font-weight: 800;
@@ -653,7 +699,7 @@ body {
 .e-btns { display: flex; gap: 4px; }
 
 .emp-actions-row {
-  padding: 6px 14px 8px;
+  padding: 5px 14px 8px;
   display: flex;
   gap: 6px;
   border-top: 1px solid var(--bd-l);
@@ -661,12 +707,12 @@ body {
 }
 
 /* ════════════════════════════════════════
-   SCREEN 3 — PULVERIZAÇÕES
+   PULVERIZAÇÕES
 ════════════════════════════════════════ */
 .pulv-list { display: flex; flex-direction: column; }
 .pulv-row {
   display: grid;
-  grid-template-columns: 48px 1fr auto;
+  grid-template-columns: 50px 1fr auto;
   align-items: flex-start;
   gap: 12px;
   padding: 12px 16px;
@@ -676,27 +722,27 @@ body {
 .pulv-row + .pulv-row { border-top: 1px solid var(--bd-l); }
 .pulv-row:hover { background: var(--surface-2); }
 .pulv-date-block { text-align: center; padding-top: 2px; }
-.pulv-day { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.6rem; color: var(--tx-1); line-height: 1; }
-.pulv-mon { font-size: .6rem; text-transform: uppercase; letter-spacing: .06em; color: var(--tx-3); font-weight: 700; }
+.pulv-day { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.7rem; color: var(--tx-1); line-height: 1; }
+.pulv-mon { font-size: .58rem; text-transform: uppercase; letter-spacing: .08em; color: var(--tx-3); font-weight: 700; }
 .pulv-body { min-width: 0; }
 .pulv-title { font-weight: 700; font-size: .9rem; color: var(--tx-1); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .chip {
   font-size: .65rem;
   font-weight: 700;
-  padding: 1px 7px;
+  padding: 2px 7px;
   border-radius: 4px;
 }
-.chip-green { background: var(--ok-bg);  color: var(--ok-tx); }
-.chip-purple{ background: var(--pur-bg); color: var(--pur-tx); }
-.chip-brand { background: var(--brand-light); color: var(--brand); }
-.chip-amber { background: var(--warn-bg); color: var(--warn-tx); }
+.chip-green  { background: var(--ok-bg);     color: var(--ok-tx);   border: 1px solid #a7f3c0; }
+.chip-purple { background: var(--pur-bg);    color: var(--pur-tx);  border: 1px solid #c4b5fd; }
+.chip-brand  { background: var(--brand-light); color: var(--brand); border: 1px solid var(--brand-border); }
+.chip-amber  { background: var(--accent-bg); color: var(--accent-tx); border: 1px solid var(--accent-bd); }
 .pulv-meta { font-size: .72rem; color: var(--tx-3); margin-top: 3px; }
 .pulv-prods { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
 .prod-chip {
   font-size: .67rem;
   color: var(--tx-2);
-  background: var(--bg);
-  border: 1px solid var(--bd);
+  background: var(--surface-2);
+  border: 1.5px solid var(--bd);
   border-radius: 4px;
   padding: 2px 7px;
   font-weight: 600;
@@ -704,7 +750,7 @@ body {
 .pulv-right { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; padding-top: 2px; }
 
 /* ════════════════════════════════════════
-   SCREEN SWITCHER (preview only)
+   SWITCHER + BANNER (preview only)
 ════════════════════════════════════════ */
 .switcher {
   position: fixed;
@@ -715,8 +761,9 @@ body {
   z-index: 999;
   background: var(--sidebar-bg);
   border-radius: 40px;
-  padding: 6px;
+  padding: 5px;
   box-shadow: var(--sh-md);
+  border: 1px solid rgba(255,255,255,.1);
 }
 .sw-btn {
   padding: 7px 16px;
@@ -726,30 +773,27 @@ body {
   font-weight: 700;
   font-size: .8rem;
   cursor: pointer;
-  color: rgba(255,255,255,.5);
+  color: rgba(255,255,255,.45);
   background: transparent;
   transition: all .15s;
 }
-.sw-btn.on {
-  background: var(--brand);
-  color: white;
-}
+.sw-btn.on { background: var(--brand); color: white; box-shadow: 0 2px 8px rgba(26,92,26,.4); }
 
 .preview-banner {
-  background: #fef3c7;
-  border-bottom: 2px solid #fcd34d;
+  background: var(--accent-bg);
+  border-bottom: 2px solid var(--accent-bd);
   padding: 8px 20px;
-  font-size: .78rem;
-  color: #92400e;
+  font-size: .77rem;
+  color: var(--accent-tx);
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.preview-banner strong { color: #78350f; }
+.preview-banner strong { color: #5c3b07; }
 
 /* Misc */
-.divider { border: none; border-top: 1px solid var(--bd); margin: 16px 0; }
+.divider { border: none; border-top: 1.5px solid var(--bd-l); margin: 16px 0; }
 .mt-4 { margin-top: 16px; }
 .mb-4 { margin-bottom: 16px; }
 .text-sm { font-size: .78rem; color: var(--tx-3); }
@@ -757,14 +801,14 @@ body {
 </head>
 <body>
 
-<!-- ══════════════════════════════
+<!-- ══════════════════════════
      SIDEBAR
-══════════════════════════════ -->
+══════════════════════════ -->
 <aside class="sidebar">
   <div class="sidebar-brand">
     <div class="brand-icon">🌿</div>
     <div class="brand-text">
-      <span class="brand-name">Conilon Tech</span>
+      <span class="brand-name">ConilonTech</span>
       <span class="brand-sub">Gestão Agrícola</span>
     </div>
   </div>
@@ -781,14 +825,14 @@ body {
       <span class="nav-ico">💧</span>Pulverizações
     </div>
 
-    <div class="nav-label" style="margin-top:8px;">Operações</div>
+    <div class="nav-label" style="margin-top:10px;">Operações</div>
     <div class="nav-item"><span class="nav-ico">🗺️</span>Mapa de Talhões</div>
     <div class="nav-item"><span class="nav-ico">🌾</span>Atividades</div>
     <div class="nav-item"><span class="nav-ico">🧪</span>Adubações</div>
     <div class="nav-item"><span class="nav-ico">📦</span>Pedidos</div>
     <div class="nav-item"><span class="nav-ico">🏬</span>Estoque</div>
 
-    <div class="nav-label" style="margin-top:8px;">Análise</div>
+    <div class="nav-label" style="margin-top:10px;">Análise</div>
     <div class="nav-item"><span class="nav-ico">📈</span>Gestão</div>
     <div class="nav-item"><span class="nav-ico">🔬</span>Análises</div>
     <div class="nav-item"><span class="nav-ico">💊</span>Recomendações</div>
@@ -805,21 +849,21 @@ body {
   </div>
 </aside>
 
-<!-- ══════════════════════════════
+<!-- ══════════════════════════
      MAIN
-══════════════════════════════ -->
+══════════════════════════ -->
 <div class="main">
   <div class="preview-banner">
-    ⚠️ <strong>PREVIEW DE DESIGN</strong> — Esta página é apenas visual. Clique nos botões abaixo para trocar entre telas.
+    ⚠️ <strong>PREVIEW DE DESIGN</strong> — Apenas visual. Use os botões abaixo para trocar entre telas.
   </div>
 
-  <!-- TOPBAR (dinâmica) -->
+  <!-- TOPBAR -->
   <div class="topbar">
     <div class="topbar-title" id="topTitle">Dashboard</div>
     <span class="topbar-sep" id="topSep" style="display:none">›</span>
     <div class="topbar-sub" id="topSub" style="display:none"></div>
     <div class="topbar-right">
-      <div class="topbar-date">07 jun 2026</div>
+      <div class="topbar-date">08 jun 2026</div>
       <div class="topbar-pill"><div class="live-dot"></div>Online</div>
     </div>
   </div>
@@ -833,7 +877,7 @@ body {
       <div class="page-hdr">
         <div>
           <div class="page-title">Bom dia, Administrador</div>
-          <div class="page-desc">Sábado, 07 de junho de 2026 · 3 fazendas ativas</div>
+          <div class="page-desc">Segunda-feira, 08 de junho de 2026 · 3 fazendas ativas</div>
         </div>
       </div>
 
@@ -880,8 +924,8 @@ body {
             <div class="card-title">🕐 Atividades Recentes</div>
             <a class="btn btn-ghost btn-xs">Ver todas →</a>
           </div>
-          <div class="card-body" style="padding:0;">
-            <div class="activity-list" style="padding:4px 16px;">
+          <div class="card-body" style="padding:0">
+            <div class="activity-list" style="padding:2px 16px 4px">
               <div class="activity-item">
                 <div class="activity-ico">🌾</div>
                 <div class="activity-main">
@@ -891,7 +935,7 @@ body {
                 <div class="activity-time">hoje 09:14</div>
               </div>
               <div class="activity-item">
-                <div class="activity-ico" style="background:var(--info-bg);">💧</div>
+                <div class="activity-ico" style="background:var(--info-bg);border-color:#93c5fd;">💧</div>
                 <div class="activity-main">
                   <div class="activity-title">Pulverização — T-03 · Progresso</div>
                   <div class="activity-meta">Drone · Ferrugem · 12 ha</div>
@@ -899,7 +943,7 @@ body {
                 <div class="activity-time">ontem 15:30</div>
               </div>
               <div class="activity-item">
-                <div class="activity-ico" style="background:var(--warn-bg);">🧪</div>
+                <div class="activity-ico" style="background:var(--accent-bg);border-color:var(--accent-bd);">🧪</div>
                 <div class="activity-main">
                   <div class="activity-title">Adubação — T-11 · São João</div>
                   <div class="activity-meta">Ureia 45% · 180 kg/ha</div>
@@ -912,7 +956,7 @@ body {
                   <div class="activity-title">Poda — T-02 e T-04 · Boa Vista</div>
                   <div class="activity-meta">3 funcionários · 8 ha</div>
                 </div>
-                <div class="activity-time">05 jun 08:00</div>
+                <div class="activity-time">06 jun 08:00</div>
               </div>
             </div>
           </div>
@@ -924,15 +968,15 @@ body {
             <div class="card-title">📅 Operações Pendentes</div>
             <a class="btn btn-ghost btn-xs">Ver todas →</a>
           </div>
-          <div class="card-body" style="padding:0;">
-            <div class="op-list" style="padding:4px 16px;">
+          <div class="card-body" style="padding:0">
+            <div class="op-list" style="padding:2px 16px 4px">
               <div class="op-item">
                 <div class="op-left">
                   <div class="op-title">💧 Pulverização — T-08 · Progresso</div>
                   <div class="op-meta">Bicho-mineiro · Terrestre · 14 ha</div>
                 </div>
                 <div style="text-align:right">
-                  <span class="badge b-warn"><div class="badge-dot"></div>Atrasada</span>
+                  <span class="badge b-danger"><div class="badge-dot"></div>Atrasada</span>
                   <div class="op-date" style="margin-top:3px;">05 jun</div>
                 </div>
               </div>
@@ -942,8 +986,8 @@ body {
                   <div class="op-meta">KCL 60% · semana 24</div>
                 </div>
                 <div style="text-align:right">
-                  <span class="badge b-info"><div class="badge-dot"></div>Hoje</span>
-                  <div class="op-date" style="margin-top:3px;">07 jun</div>
+                  <span class="badge b-accent"><div class="badge-dot"></div>Hoje</span>
+                  <div class="op-date" style="margin-top:3px;">08 jun</div>
                 </div>
               </div>
               <div class="op-item">
@@ -979,7 +1023,7 @@ body {
       <div class="page-hdr">
         <div>
           <div class="page-title">Equipe</div>
-          <div class="page-desc">Sábado, 07 de junho · 12 funcionários ativos</div>
+          <div class="page-desc">Segunda-feira, 08 de junho · 12 funcionários ativos</div>
         </div>
         <div class="page-actions">
           <button class="btn btn-secondary btn-sm">📋 Histórico</button>
@@ -995,12 +1039,12 @@ body {
           <div class="ss-label"><span class="ss-dot" style="background:var(--ok);"></span>Em atividade</div>
         </div>
         <div class="ss-item">
-          <div class="ss-n" style="color:var(--warn);">4</div>
-          <div class="ss-label"><span class="ss-dot" style="background:var(--warn);"></span>Disponível</div>
+          <div class="ss-n" style="color:var(--accent);">4</div>
+          <div class="ss-label"><span class="ss-dot" style="background:var(--accent);"></span>Disponível</div>
         </div>
         <div class="ss-item">
           <div class="ss-n" style="color:var(--tx-3);">1</div>
-          <div class="ss-label"><span class="ss-dot" style="background:var(--tx-3);"></span>Encerrou</div>
+          <div class="ss-label"><span class="ss-dot" style="background:var(--tx-4);"></span>Encerrou</div>
         </div>
         <div class="ss-item">
           <div class="ss-n" style="color:var(--danger);">4</div>
@@ -1017,11 +1061,10 @@ body {
       </div>
 
       <!-- Fazenda Boa Vista -->
-      <div class="faz-label">🏡 Boa Vista <span style="color:var(--tx-4);font-size:.58rem;margin-left:4px;">5 funcionários</span></div>
-      <div class="card mb-4">
+      <div class="faz-label">🏡 Boa Vista <span class="faz-count">5 funcionários</span></div>
+      <div class="card card-faz">
         <div class="emp-list">
-          <!-- Em atividade -->
-          <div class="emp-row" style="background:var(--surface);">
+          <div class="emp-row">
             <div class="e-av">CA</div>
             <div>
               <div class="e-name">Carlos Andrade</div>
@@ -1035,9 +1078,8 @@ body {
           </div>
           <div class="emp-actions-row">
             <button class="btn btn-secondary btn-xs">＋ Atividade</button>
-            <button class="btn btn-xs" style="background:var(--dng-bg);color:var(--dng-tx);border:1px solid #fecaca;">⏹ Encerrar</button>
+            <button class="btn btn-xs" style="background:var(--dng-bg);color:var(--dng-tx);border:1.5px solid #fca5a5;font-family:'Barlow Condensed',sans-serif;font-weight:700;border-radius:var(--r-md);">⏹ Encerrar</button>
           </div>
-          <!-- Disponível -->
           <div class="emp-row">
             <div class="e-av">MR</div>
             <div>
@@ -1052,11 +1094,10 @@ body {
           </div>
           <div class="emp-actions-row">
             <button class="btn btn-secondary btn-xs">＋ Atividade</button>
-            <button class="btn btn-xs" style="background:var(--surface-2);color:var(--tx-3);border:1px solid var(--bd);">🔚 Saída</button>
+            <button class="btn btn-xs" style="background:var(--surface-2);color:var(--tx-3);border:1.5px solid var(--bd);font-family:'Barlow Condensed',sans-serif;font-weight:700;border-radius:var(--r-md);">🔚 Saída</button>
           </div>
-          <!-- Sem registro -->
           <div class="emp-row">
-            <div class="e-av" style="background:linear-gradient(135deg,#9ca3af,#6b7280);">JO</div>
+            <div class="e-av" style="background:linear-gradient(135deg,#8fa07c,#5a6b48);">JO</div>
             <div>
               <div class="e-name">José Oliveira</div>
               <div class="e-role">Tratorista</div>
@@ -1068,17 +1109,17 @@ body {
             <div><span class="badge b-danger"><div class="badge-dot"></div>Sem registro</span></div>
           </div>
           <div class="emp-actions-row">
-            <button class="btn btn-xs" style="background:var(--ok-bg);color:var(--ok-tx);border:1px solid #bbf7d0;font-family:'Barlow Condensed',sans-serif;font-weight:700;">✅ Registrar Entrada</button>
+            <button class="btn btn-xs" style="background:var(--ok-bg);color:var(--ok-tx);border:1.5px solid #a7f3c0;font-family:'Barlow Condensed',sans-serif;font-weight:700;border-radius:var(--r-md);">✅ Registrar Entrada</button>
           </div>
         </div>
       </div>
 
       <!-- Fazenda Progresso -->
-      <div class="faz-label">🏡 Progresso <span style="color:var(--tx-4);font-size:.58rem;margin-left:4px;">4 funcionários</span></div>
-      <div class="card mb-4">
+      <div class="faz-label">🏡 Progresso <span class="faz-count">4 funcionários</span></div>
+      <div class="card card-faz">
         <div class="emp-list">
           <div class="emp-row">
-            <div class="e-av" style="background:linear-gradient(135deg,#1e5c1e,#2d8a2d);">PS</div>
+            <div class="e-av">PS</div>
             <div>
               <div class="e-name">Pedro Santos</div>
               <div class="e-role">Aplicador</div>
@@ -1091,10 +1132,10 @@ body {
           </div>
           <div class="emp-actions-row">
             <button class="btn btn-secondary btn-xs">＋ Atividade</button>
-            <button class="btn btn-xs" style="background:var(--dng-bg);color:var(--dng-tx);border:1px solid #fecaca;">⏹ Encerrar</button>
+            <button class="btn btn-xs" style="background:var(--dng-bg);color:var(--dng-tx);border:1.5px solid #fca5a5;font-family:'Barlow Condensed',sans-serif;font-weight:700;border-radius:var(--r-md);">⏹ Encerrar</button>
           </div>
           <div class="emp-row">
-            <div class="e-av" style="background:linear-gradient(135deg,#6b7280,#9ca3af);">AL</div>
+            <div class="e-av" style="background:linear-gradient(135deg,#5a6b48,#8fa07c);">AL</div>
             <div>
               <div class="e-name">Ana Lima</div>
               <div class="e-role">Operadora</div>
@@ -1142,44 +1183,44 @@ body {
           <div class="kpi-value">71<span class="kpi-unit">%</span></div>
           <div class="kpi-delta neutral">17 de 24 talhões</div>
         </div>
-        <div class="kpi-card t-gray">
+        <div class="kpi-card t-accent">
           <div class="kpi-label">Custo estimado</div>
-          <div class="kpi-value" style="font-size:1.4rem;">R$</div>
-          <div class="kpi-delta neutral">14.380</div>
+          <div class="kpi-value" style="font-size:1.5rem;">14.380</div>
+          <div class="kpi-delta neutral">R$ no período</div>
         </div>
       </div>
 
       <!-- Filtros -->
       <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;">
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">Status</span>
-          <select style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--tx-2);">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--brand);font-weight:800;">Status</span>
+          <select style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;background:var(--surface);color:var(--tx-2);box-shadow:var(--sh-xs);">
             <option>Todos</option><option>Pendentes</option><option>Realizadas</option>
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">🐛 Praga / Alvo</span>
-          <select style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--tx-2);">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--brand);font-weight:800;">🐛 Praga / Alvo</span>
+          <select style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;background:var(--surface);color:var(--tx-2);box-shadow:var(--sh-xs);">
             <option>Todas</option><option>Ferrugem</option><option>Bicho-mineiro</option>
           </select>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">De</span>
-          <input type="date" style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;" value="2026-06-01">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--brand);font-weight:800;">De</span>
+          <input type="date" style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;background:var(--surface);box-shadow:var(--sh-xs);" value="2026-06-01">
         </div>
         <div style="display:flex;flex-direction:column;gap:4px;">
-          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--tx-3);font-weight:700;">Até</span>
-          <input type="date" style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;" value="2026-06-30">
+          <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.09em;color:var(--brand);font-weight:800;">Até</span>
+          <input type="date" style="border:1.5px solid var(--bd);border-radius:var(--r-md);padding:7px 10px;font-size:.83rem;font-family:'Barlow',sans-serif;outline:none;background:var(--surface);box-shadow:var(--sh-xs);" value="2026-06-30">
         </div>
       </div>
 
-      <!-- Grupo mês -->
-      <div class="section-label">Junho 2026 · 5 registros</div>
+      <!-- Lista -->
+      <div class="section-label">Junho 2026 · 3 registros</div>
 
       <div class="card">
         <div class="pulv-list">
 
-          <div class="pulv-row" style="border-left:4px solid var(--ok);padding-left:12px;">
+          <div class="pulv-row" style="border-left:4px solid var(--ok);">
             <div class="pulv-date-block">
               <div class="pulv-day">05</div>
               <div class="pulv-mon">Jun</div>
@@ -1202,7 +1243,7 @@ body {
             </div>
           </div>
 
-          <div class="pulv-row" style="border-left:4px solid var(--warn);padding-left:12px;">
+          <div class="pulv-row" style="border-left:4px solid var(--danger);">
             <div class="pulv-date-block">
               <div class="pulv-day">05</div>
               <div class="pulv-mon">Jun</div>
@@ -1219,13 +1260,13 @@ body {
               </div>
             </div>
             <div class="pulv-right">
-              <span class="badge b-warn"><div class="badge-dot"></div>Atrasada</span>
+              <span class="badge b-danger"><div class="badge-dot"></div>Atrasada</span>
               <div style="font-size:.7rem;color:var(--tx-3);font-family:'DM Mono',monospace;">14,5 ha</div>
-              <button class="btn btn-primary btn-xs" style="margin-top:2px;">📝 Confirmar</button>
+              <button class="btn btn-accent btn-xs" style="margin-top:2px;">📝 Confirmar</button>
             </div>
           </div>
 
-          <div class="pulv-row" style="border-left:4px solid var(--tx-4);padding-left:12px;">
+          <div class="pulv-row" style="border-left:4px solid var(--bd);">
             <div class="pulv-date-block">
               <div class="pulv-day">10</div>
               <div class="pulv-mon">Jun</div>
@@ -1265,9 +1306,9 @@ body {
 
 <script>
 const TITLES = {
-  dashboard: { title: 'Dashboard', sub: '' },
-  equipe:    { title: 'Equipe', sub: 'Gestão de pessoal' },
-  pulverizacoes: { title: 'Pulverizações', sub: 'Controle de aplicações' },
+  dashboard:     { title: 'Dashboard',       sub: '' },
+  equipe:        { title: 'Equipe',           sub: 'Gestão de pessoal' },
+  pulverizacoes: { title: 'Pulverizações',    sub: 'Controle de aplicações' },
 };
 
 function showScreen(name, navEl, swEl) {
@@ -1279,14 +1320,19 @@ function showScreen(name, navEl, swEl) {
   if (navEl) navEl.classList.add('active');
   if (swEl)  swEl.classList.add('on');
 
-  // Sync switcher & sidebar
-  const swBtns = document.querySelectorAll('.sw-btn');
   const idx = ['dashboard','equipe','pulverizacoes'].indexOf(name);
+  const swBtns = document.querySelectorAll('.sw-btn');
   if (idx >= 0 && swBtns[idx]) swBtns[idx].classList.add('on');
+
+  const navItems = document.querySelectorAll('.nav-item');
+  const navMap = { dashboard: 0, equipe: 1, pulverizacoes: 2 };
+  if (navMap[name] !== undefined && navItems[navMap[name]]) {
+    navItems[navMap[name]].classList.add('active');
+  }
 
   const t = TITLES[name];
   document.getElementById('topTitle').textContent = t.title;
-  document.getElementById('topSep').style.display = t.sub ? '' : 'none';
+  document.getElementById('topSep').style.display  = t.sub ? '' : 'none';
   document.getElementById('topSub').style.display  = t.sub ? '' : 'none';
   document.getElementById('topSub').textContent    = t.sub;
 }
