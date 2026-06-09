@@ -464,9 +464,9 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('appContent').style.display = 'flex';
   abrirTab('novo');
   gerarMenu();
-  // Safra default: ano corrente / próximo (Conilon florada outubro)
+  // Safra default: jan-set → ano corrente; out-dez → já planeja próxima (pós-florada)
   const hoje = new Date();
-  const ano = hoje.getMonth() >= 6 ? hoje.getFullYear() : hoje.getFullYear() - 1;
+  const ano = hoje.getMonth() >= 9 ? hoje.getFullYear() + 1 : hoje.getFullYear();
   window.planWIP.safra = `${ano}/${ano+1}`;
   // Quando o usuário sai de qualquer campo, verifica se há um render pendente
   document.getElementById('content').addEventListener('focusout', () => {
@@ -635,6 +635,14 @@ window.renderNovo = function() {
   }
 };
 
+function _safraOpts(sel) {
+  const a = new Date().getMonth() >= 9 ? new Date().getFullYear() + 1 : new Date().getFullYear();
+  return [-1, 0, 1, 2].map(d => {
+    const v = `${a+d}/${a+d+1}`;
+    return `<option value="${v}"${v===sel?' selected':''}>${v}</option>`;
+  }).join('');
+}
+
 function renderCard1() {
   const w = window.planWIP;
   const talhao = w.talhaoId ? talhoes.find(t => t._docId === w.talhaoId) : null;
@@ -664,7 +672,7 @@ function renderCard1() {
       <div class="campo-row-2">
         <div>
           <label>Safra</label>
-          <input type="text" id="inpSafra" value="${escAttr(w.safra||'')}" oninput="window.planWIP.safra=this.value" placeholder="2026/2027">
+          <select id="inpSafra" onchange="window.planWIP.safra=this.value">${_safraOpts(w.safra||'')}</select>
         </div>
       </div>
       ${areaHtml}
