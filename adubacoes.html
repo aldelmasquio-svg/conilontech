@@ -174,6 +174,16 @@ window.irMes = (mesAno) => {
   mesSel = {mesAno, nomeMes, ano:parseInt(ano), mes:MESES.indexOf(nomeMes)};
   telaAtual='mes'; renderizarTela();
 };
+window.navegarMes = (dir) => {
+  const lista = gerarMesesSafra();
+  if (!lista.length || !mesSel) return;
+  const idx = lista.findIndex(m => m.mes===mesSel.mes && m.ano===mesSel.ano);
+  if (idx === -1) return;
+  const prox = idx + dir;
+  if (prox < 0 || prox >= lista.length) return;
+  const m = lista[prox];
+  window.irMes(`${MESES[m.mes]}/${m.ano}`);
+};
 window.irWizard = () => {
   planoWIP = {produtos:[], semanas:[], numSemanas:2};
   etapa=1; semanaAtiva=0;
@@ -291,6 +301,12 @@ function renderizarTelaMes() {
   if (!talhaoSel||!mesSel) return;
   document.getElementById('mesNome').textContent = mesSel.mesAno;
   document.getElementById('mesTalhao').textContent = talhaoSel.nome;
+  const _lista = gerarMesesSafra();
+  const _idx = _lista.findIndex(m => m.mes===mesSel.mes && m.ano===mesSel.ano);
+  const btnP = document.getElementById('btnMesAnterior');
+  const btnN = document.getElementById('btnProximoMes');
+  if (btnP) btnP.disabled = _idx <= 0;
+  if (btnN) btnN.disabled = _idx < 0 || _idx >= _lista.length - 1;
   const adm = isAdmin();
   document.getElementById('btnNovoPlano').style.display = adm ? 'flex' : 'none';
   document.getElementById('btnReplicar').style.display = adm ? 'flex' : 'none';
@@ -1193,7 +1209,11 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
   <div class="tela" id="tela-mes" style="display:none;">
     <div class="hdr-v">
       <button onclick="voltarParaTalhao()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
-      <div><div class="hdr-nome" id="mesNome"></div><div class="hdr-meta" id="mesTalhao"></div></div>
+      <div style="flex:1"><div class="hdr-nome" id="mesNome"></div><div class="hdr-meta" id="mesTalhao"></div></div>
+      <div style="display:flex;gap:6px;flex-shrink:0;">
+        <button id="btnMesAnterior" onclick="navegarMes(-1)" title="Mês anterior" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:36px;height:36px;border-radius:8px;cursor:pointer;line-height:1;">‹</button>
+        <button id="btnProximoMes" onclick="navegarMes(1)" title="Próximo mês" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:36px;height:36px;border-radius:8px;cursor:pointer;line-height:1;">›</button>
+      </div>
     </div>
     <div id="mesStats"></div>
     <div class="mes-acoes">
