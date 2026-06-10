@@ -28,6 +28,22 @@ const db = getFirestore(app);
 // Modo offline
 enableIndexedDbPersistence(db).catch(() => {});
 
+// DIAGNÓSTICO TEMPORÁRIO — mostra erros/timeout direto na tela de carregamento
+window.addEventListener('error', (e) => {
+  const ls = document.getElementById('loadingScreen');
+  if (ls) ls.innerHTML += `<div style="margin-top:14px;padding:10px;background:#fee2e2;color:#991b1b;font-size:11px;text-align:left;border-radius:6px;word-break:break-all;">ERRO JS: ${e.message}<br>${e.filename}:${e.lineno}</div>`;
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const ls = document.getElementById('loadingScreen');
+  if (ls) ls.innerHTML += `<div style="margin-top:14px;padding:10px;background:#fee2e2;color:#991b1b;font-size:11px;text-align:left;border-radius:6px;word-break:break-all;">ERRO (promise): ${e.reason?.message || e.reason}</div>`;
+});
+setTimeout(() => {
+  const ls = document.getElementById('loadingScreen');
+  if (ls && ls.style.display !== 'none') {
+    ls.innerHTML += `<div style="margin-top:14px;padding:10px;background:#fef3dc;color:#7c4f0a;font-size:11px;text-align:left;border-radius:6px;">⏱ 8s sem resposta do Firebase (Auth/Firestore). Provável bloqueio de rede ou problema no projeto Firebase.</div>`;
+  }
+}, 8000);
+
 let perfilAtual = {};
 let talhoes = [], registros = [], planosAdubacao = [], pulverizacoes = [];
 let equipeEmpregados = [], equipeRegistros = [];
