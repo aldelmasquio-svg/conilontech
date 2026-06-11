@@ -9,7 +9,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -56,7 +56,6 @@ window.fazerCadastro = async function() {
   const email = document.getElementById('cadEmail').value.trim();
   const senha = document.getElementById('cadSenha').value;
   const conf = document.getElementById('cadConf').value;
-  const codigo = document.getElementById('cadCodigo').value.trim();
   if (!nome||!email||!senha) { erroCad('Preencha todos os campos.'); return; }
   if (senha !== conf) { erroCad('As senhas não coincidem.'); return; }
   if (senha.length < 6) { erroCad('Mínimo 6 caracteres.'); return; }
@@ -66,9 +65,6 @@ window.fazerCadastro = async function() {
   if (primeiro) {
     modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
   } else {
-    const cfg = await getDoc(doc(db,'config','geral'));
-    const cod = cfg.exists() ? (cfg.data().codigoCadastro||'') : '';
-    if (cod && codigo !== cod) { erroCad('Código de acesso incorreto.'); return; }
     modulos = {mapa:'nenhum',atividades:'encarregado',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
   }
   const btn = document.getElementById('btnCadastro');
@@ -145,13 +141,12 @@ body{font-family:'Barlow',sans-serif;background:linear-gradient(135deg,#0d1f0d,#
       <div class="logo-icon">🌿</div>
       <div><div class="logo-name">Conilon Tech</div><div class="logo-sub">Criar Conta</div></div>
     </div>
-    <div class="auth-info">O primeiro usuário vira <strong>Administrador</strong> automaticamente. Os demais precisam de código de acesso.</div>
+    <div class="auth-info">O primeiro usuário vira <strong>Administrador</strong> automaticamente.</div>
     <div class="auth-error" id="erroCad"></div>
     <div class="field"><label>Nome completo</label><input type="text" id="cadNome" placeholder="Seu nome"></div>
     <div class="field"><label>E-mail</label><input type="email" id="cadEmail" placeholder="seu@email.com"></div>
     <div class="field"><label>Senha</label><input type="password" id="cadSenha" placeholder="Mínimo 6 caracteres"></div>
     <div class="field"><label>Confirmar senha</label><input type="password" id="cadConf" placeholder="Repita a senha"></div>
-    <div class="field"><label>Código de acesso</label><input type="text" id="cadCodigo" placeholder="Deixe vazio se não tiver"></div>
     <button class="btn-auth" id="btnCadastro" onclick="fazerCadastro()">Criar Conta</button>
     <div class="auth-link"><a onclick="voltarLogin()">← Voltar ao login</a></div>
   </div>
