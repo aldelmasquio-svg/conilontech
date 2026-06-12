@@ -167,6 +167,7 @@ function renderizarUsuarios() {
             ${u.ativo===false?'🔴':'🟢'}
           </button>
           <button onclick="enviarResetSenha('${u.email}')" class="btn-sm-ico" title="Redefinir senha">🔑</button>
+          ${u.uid!==usuarioAtual?.uid?`<button onclick="excluirUsuario('${u.uid}')" class="btn-sm-ico" title="Excluir usuário" style="color:var(--danger);">🗑️</button>`:''}
         </div>
       </div>
       <div class="usuario-modulos">
@@ -185,6 +186,18 @@ function renderizarUsuarios() {
     </div>`;
   }).join('');
 }
+
+window.excluirUsuario = async function(uid) {
+  const u = usuarios.find(x=>x.uid===uid); if(!u) return;
+  if (!confirm(`Excluir o usuário "${u.nome||u.email}"?\n\nIsso remove o acesso dele ao sistema permanentemente. Esta ação não pode ser desfeita.`)) return;
+  try {
+    await deleteDoc(doc(db,'usuarios',uid));
+    usuarios = usuarios.filter(x=>x.uid!==uid);
+    renderizarUsuarios();
+    toast('🗑️ Usuário excluído.');
+    registrarLog('usuario_excluido', `${usuarioAtual.email} excluiu o usuário ${u.email}`);
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
 
 window.alterarAcesso = async function(uid, modulo, nivel) {
   const u = usuarios.find(x=>x.uid===uid); if(!u) return;
