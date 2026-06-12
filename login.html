@@ -26,9 +26,12 @@ const db = getFirestore(app);
 
 enableIndexedDbPersistence(db).catch(() => {});
 
+let _cadastrando = false;
 onAuthStateChanged(auth, user => {
-  if (user) window.location.href = 'index.html';
-  else {
+  if (user) {
+    if (_cadastrando) return;
+    window.location.href = 'index.html';
+  } else {
     document.getElementById('loadingScreen').style.display = 'none';
     document.getElementById('telaLogin').style.display = 'flex';
   }
@@ -61,16 +64,19 @@ window.fazerCadastro = async function() {
   if (senha.length < 6) { erroCad('Mínimo 6 caracteres.'); return; }
   const btn = document.getElementById('btnCadastro');
   btn.disabled = true; btn.textContent = 'Criando...';
+  _cadastrando = true;
   try {
+    const cred = await createUserWithEmailAndPassword(auth, email, senha);
     const snap = await getDocs(collection(db,'usuarios'));
     const primeiro = snap.empty;
     const modulos = primeiro
       ? {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'}
       : {mapa:'nenhum',atividades:'encarregado',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
-    const cred = await createUserWithEmailAndPassword(auth, email, senha);
     await setDoc(doc(db,'usuarios',cred.user.uid), {nome,email,modulos,criadoEm:new Date().toISOString(),ativo:true});
     if (primeiro) await setDoc(doc(db,'config','geral'),{codigoCadastro:'',atividades:['Colheita','Desbrota','Poda','Roçada'],fazendas:[]});
+    window.location.href = 'index.html';
   } catch(e) {
+    _cadastrando = false;
     erroCad(e.code==='auth/email-already-in-use'?'E-mail já em uso.':`Erro ao criar conta: ${e.message}`);
     btn.disabled=false; btn.textContent='Criar Conta';
   }
