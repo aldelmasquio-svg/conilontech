@@ -241,6 +241,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
     <button class="tab" id="tabEstoque" onclick="abrirTab('estoque')">🏬 Estoque</button>
     <button class="tab" id="tabAdubacao" onclick="abrirTab('adubacao')">🧪 Adubação</button>
     <button class="tab" id="tabCompras" onclick="abrirTab('compras')">🛒 Compras</button>
+    <button class="tab" id="tabNutrientes" onclick="abrirTab('nutrientes')">🌿 Nutrientes</button>
   </div>
 
   <div class="tab-content" id="tabContent"></div>
@@ -291,15 +292,18 @@ window._confirmarSaida = function() { history.go(-2); }
 
 // ─── ESTADO ───
 let usuarioAtual=null, perfilAtual={};
-let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[];
+let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[], catalogoAdubos=[];
 let fazendas=[]; // derivado dos talhões
 let tabAtual='geral';
-let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false};
+let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false, catalogoAdubos:false};
 
 // Filtros da aba "Compras" (relatório de compras planejadas)
 let compraTalhaoId = '';
 let compraDe = '';
 let compraAte = '';
+
+// Filtro da aba "Nutrientes" (relatório de nutrientes já aplicados)
+let nutrTalhaoId = '';
 
 // Meses do ano (mesmo formato usado em adubacoes.html: "Mês/Ano")
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -372,6 +376,11 @@ onAuthStateChanged(auth, async (user) => {
   onSnapshot(collection(db,'planosAdubacao'), snap => {
     planosAdubacao = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
     _carregados.planosAdubacao = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'catalogo_adubos'), snap => {
+    catalogoAdubos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.catalogoAdubos = true;
     renderTab();
   });
 });
@@ -568,7 +577,7 @@ window.fazerLogout = async () => { await signOut(auth); window.location.href='lo
 window.abrirTab = function(t) {
   tabAtual = t;
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('ativa'));
-  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras'};
+  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras', nutrientes:'tabNutrientes'};
   document.getElementById(map[t])?.classList.add('ativa');
   renderTab();
 };
@@ -586,6 +595,7 @@ function renderTab() {
     else if (tabAtual === 'estoque') renderEstoque();
     else if (tabAtual === 'adubacao') renderAdubacao();
     else if (tabAtual === 'compras') renderCompras();
+    else if (tabAtual === 'nutrientes') renderNutrientes();
   } catch(e) {
     console.error(e);
     cont.innerHTML = `<div class="vazio"><div class="ico">⚠️</div><p>Erro ao renderizar relatório: ${escHtml(e.message)}</p></div>`;
@@ -1633,12 +1643,146 @@ function renderCompras() {
 }
 
 // ════════════════════════════════════════════════════
+// ABA 7 — NUTRIENTES APLICADOS (importa planosAdubacao + catalogo_adubos)
+// ════════════════════════════════════════════════════
+const NUTRIENTE_LABELS = {
+  n:'Nitrogênio (N)', p2o5:'Fósforo (P₂O₅)', k2o:'Potássio (K₂O)',
+  s:'Enxofre (S)', ca:'Cálcio (Ca)', mg:'Magnésio (Mg)',
+  zn:'Zinco (Zn)', b:'Boro (B)', cu:'Cobre (Cu)', mn:'Manganês (Mn)'
+};
+// Fator de conversão da unidade do produto para kg (líquidos aproximados pela densidade da água)
+const FATOR_KG = { kg:1, g:0.001, t:1000, L:1, mL:0.001 };
+
+function normNome(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '').trim();
+}
+function buscarComposicaoProduto(nomeProduto) {
+  const norm = normNome(nomeProduto);
+  if (!norm) return null;
+  return catalogoAdubos.find(a => (a.nomeNormalizado || normNome(a.nome)) === norm) || null;
+}
+
+window.setNutrTalhao = function(v) { nutrTalhaoId = v; renderTab(); };
+
+function renderNutrientes() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  const { inicio, fim, label: lblPeriodo } = periodoFiltro();
+
+  const talhoesBase = (faz ? talhoes.filter(t => t.fazenda === faz) : talhoes)
+    .slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  if (nutrTalhaoId && !talhoesBase.some(t => t.id === nutrTalhaoId)) nutrTalhaoId = '';
+  const talhoesSel = nutrTalhaoId ? talhoesBase.filter(t => t.id === nutrTalhaoId) : talhoesBase;
+
+  // Barra de filtro do relatório (talhão)
+  let html = `<div class="secao" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <div class="filtro-grupo">
+      <span class="filtro-label">🌱 Talhão</span>
+      <select class="filtro-sel" id="selNutrTalhao" onchange="window.setNutrTalhao(this.value)">
+        <option value="">Todos${faz ? '' : ' (todas fazendas)'}</option>
+        ${talhoesBase.map(t => `<option value="${escAttr(t.id)}"${t.id === nutrTalhaoId ? ' selected' : ''}>${escHtml(t.nome || t.id)}${!faz ? ' · ' + escHtml(t.fazenda || '') : ''}</option>`).join('')}
+      </select>
+    </div>
+  </div>`;
+
+  // Agrega aplicações já realizadas (feito=true) dentro do período selecionado
+  const nutrientes = {}; // chave (n,p2o5,...) -> kg total
+  const naoContabilizados = {}; // "produto|unidade" -> {produto,unidade,qtd}
+  let totalAplicacoes = 0;
+  const talhoesAdubados = new Set();
+
+  talhoesSel.forEach(t => {
+    const area = parseDose(t.area);
+    planosAdubacao.filter(p => p.talhaoId === t.id).forEach(plano => {
+      (plano.aplicacoes || []).forEach(ap => {
+        if (!ap.feito) return;
+        if (ap.dataFeito && (ap.dataFeito < inicio || ap.dataFeito > fim)) return;
+        totalAplicacoes++;
+        talhoesAdubados.add(t.id);
+        (ap.produtos || []).forEach(p => {
+          const dose = parseDose(p.dose);
+          if (!dose) return;
+          const qtdProduto = dose * area; // na unidade do produto
+          const fator = FATOR_KG[p.unidade];
+          const comp = buscarComposicaoProduto(p.produto);
+          if (fator == null || !comp) {
+            const k = `${p.produto}|${p.unidade}`;
+            if (!naoContabilizados[k]) naoContabilizados[k] = { produto: p.produto, unidade: p.unidade, qtd: 0 };
+            naoContabilizados[k].qtd += qtdProduto;
+            return;
+          }
+          const qtdKg = qtdProduto * fator;
+          Object.keys(NUTRIENTE_LABELS).forEach(nk => {
+            const pct = comp[nk];
+            if (pct) nutrientes[nk] = (nutrientes[nk] || 0) + qtdKg * pct / 100;
+          });
+        });
+      });
+    });
+  });
+
+  const areaAdubada = talhoes.filter(t => talhoesAdubados.has(t.id)).reduce((s, t) => s + parseDose(t.area), 0);
+  const nutrientesOrd = Object.keys(NUTRIENTE_LABELS).filter(k => nutrientes[k] > 0);
+
+  html += `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Período</div><div class="kpi-value" style="font-size:1.05rem;">${escHtml(lblPeriodo)}</div><div class="kpi-aux">${faz ? escHtml(faz) : 'todas as fazendas'}</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Aplicações realizadas</div><div class="kpi-value">${totalAplicacoes}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(areaAdubada, 1)}</div><div class="kpi-aux">${talhoesAdubados.size} talhão(ões)</div></div>
+  </div>`;
+
+  if (!totalAplicacoes) {
+    html += `<div class="vazio"><div class="ico">🌿</div><p>Nenhuma aplicação de adubação confirmada no período/seleção escolhidos.<br><span style="font-size:.78rem;">Marque as aplicações como "feitas" no módulo de Adubações.</span></p></div>`;
+    cont.innerHTML = html;
+    return;
+  }
+
+  if (nutrientesOrd.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">🌿 Nutrientes aplicados</div>
+      <div class="secao-sub">Calculado a partir das doses aplicadas (confirmadas) × área dos talhões × composição cadastrada no catálogo de adubos (Administração). Líquidos (L/mL) considerados com densidade ≈ 1 kg/L.</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Nutriente</th><th class="num">Total aplicado</th>
+      </tr></thead><tbody>
+      ${nutrientesOrd.map(k => `<tr>
+        <td><strong>${escHtml(NUTRIENTE_LABELS[k])}</strong></td>
+        <td class="num">${fmt(nutrientes[k], 1)} kg</td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  } else {
+    html += `<div class="vazio"><div class="ico">🌿</div><p>Nenhum dos produtos aplicados tem composição cadastrada no catálogo de adubos.<br><span style="font-size:.78rem;">Cadastre a composição NPK em Administração → Catálogo de adubos.</span></p></div>`;
+  }
+
+  const naoContOrd = Object.values(naoContabilizados).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
+  if (naoContOrd.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">⚠️ Produtos não contabilizados</div>
+      <div class="secao-sub">Sem composição cadastrada no catálogo de adubos — não entraram na soma de nutrientes acima.</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Produto</th><th class="num">Quantidade aplicada</th>
+      </tr></thead><tbody>
+      ${naoContOrd.map(p => `<tr>
+        <td>${escHtml(p.produto)}</td>
+        <td class="num">${fmt(p.qtd, 2)} ${escHtml(p.unidade)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  }
+
+  html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
+    Relatório baseado nas aplicações confirmadas em "Adubações" · ${escHtml(lblPeriodo)}${faz ? ' · ' + escHtml(faz) : ''}${nutrTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}
+  </div>`;
+
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
 // EXPORTAR PDF (impressão da aba atual)
 // ════════════════════════════════════════════════════
 window.exportarPDF = function() {
   const cont = document.getElementById('tabContent');
   if (!cont.innerHTML) { toast('⚠️ Aguarde os dados carregarem.'); return; }
-  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação', compras:'Compras Planejadas'}[tabAtual] || tabAtual;
+  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação', compras:'Compras Planejadas', nutrientes:'Nutrientes Aplicados'}[tabAtual] || tabAtual;
   const {label: lblPeriodo} = periodoFiltro();
   const faz = fazendaFiltro() || 'Todas as fazendas';
   const html = `<div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:24px;color:#111;">
@@ -1659,7 +1803,7 @@ window.exportarPDF = function() {
 window.exportarExcel = function() {
   const cont = document.getElementById('tabContent');
   const wb = XLSX.utils.book_new();
-  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao',compras:'Compras'}[tabAtual] || tabAtual;
+  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao',compras:'Compras',nutrientes:'Nutrientes'}[tabAtual] || tabAtual;
   const tables = cont.querySelectorAll('table');
   tables.forEach((tbl, i) => {
     const ws = XLSX.utils.table_to_sheet(tbl);
