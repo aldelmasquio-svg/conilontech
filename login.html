@@ -89,10 +89,10 @@ document.addEventListener('keydown',e=>{if(e.key==='Enter')fazerLogin();});
 </script>
 
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;}
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Barlow',sans-serif;background:linear-gradient(135deg,#0d1f0d,#1a3d1a);min-height:100vh;height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;}
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+body{font-family:'Barlow',sans-serif;background:linear-gradient(135deg,#0d1f0d,var(--ve));min-height:100vh;height:100dvh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .auth-screen{display:none;width:100%;max-width:400px;flex-direction:column;}

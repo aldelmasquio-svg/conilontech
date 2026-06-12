@@ -145,7 +145,7 @@ function renderizarItensPedido(){
     }).join('');
     // Resumo curto para item inativo (não colapsa totalmente, mostra o que tem)
     const resumoInativo = !ativo ? `<div class="ped-item-resumo">
-      ${item.produto?`<strong>${item.produto}</strong>`:'<span style="color:#9ca3af;">Sem produto</span>'}
+      ${item.produto?`<strong>${item.produto}</strong>`:'<span style="color:var(--t4);">Sem produto</span>'}
       ${dosePorHa>0?` · ${dosePorHa} ${unidade}/ha`:''}
       ${nTal>0?` · ${nTal} talhão(ões)`:''}
       ${doseTotal>0?` · <span class="ped-total-mini">${doseTotal.toLocaleString('pt-BR')} ${unidade}</span>`:''}
@@ -169,9 +169,9 @@ function renderizarItensPedido(){
         </div>
         <div class="ped-total-box" id="pedTotalBox-${i}">
           ${nTal===0
-            ? '<span style="color:#9ca3af;">👇 Selecione talhões no mapa pra calcular o total</span>'
+            ? '<span style="color:var(--t4);">👇 Selecione talhões no mapa pra calcular o total</span>'
             : dosePorHa===0
-              ? `<span style="color:#9ca3af;">Total a pedir aparecerá quando informar a dose</span>`
+              ? `<span style="color:var(--t4);">Total a pedir aparecerá quando informar a dose</span>`
               : `<span class="ped-total-label">Total a pedir:</span> <strong class="ped-total-val">${doseTotal.toLocaleString('pt-BR')} ${unidade}</strong> <span class="ped-total-aux">(${dosePorHa} ${unidade}/ha × ${areaTotal.toLocaleString('pt-BR')} ha)</span>`
           }
         </div>
@@ -196,8 +196,8 @@ window.atualizarTotalPed = function(i) {
   const doseTotal = dosePorHa * areaTotal;
   const unidade = item.unidade || 'kg';
   const nTal = item.talhoes.size;
-  if (nTal === 0) box.innerHTML = '<span style="color:#9ca3af;">👇 Selecione talhões no mapa pra calcular o total</span>';
-  else if (dosePorHa === 0) box.innerHTML = '<span style="color:#9ca3af;">Total a pedir aparecerá quando informar a dose</span>';
+  if (nTal === 0) box.innerHTML = '<span style="color:var(--t4);">👇 Selecione talhões no mapa pra calcular o total</span>';
+  else if (dosePorHa === 0) box.innerHTML = '<span style="color:var(--t4);">Total a pedir aparecerá quando informar a dose</span>';
   else box.innerHTML = `<span class="ped-total-label">Total a pedir:</span> <strong class="ped-total-val">${doseTotal.toLocaleString('pt-BR')} ${unidade}</strong> <span class="ped-total-aux">(${dosePorHa} ${unidade}/ha × ${areaTotal.toLocaleString('pt-BR')} ha)</span>`;
 };
 window.ativarItemPed=function(i){pedItemAtivo=i;renderizarItensPedido();};
@@ -251,7 +251,7 @@ function renderizarListaPedidos(){
     {id:'em_andamento', lab:'🚚 Em andamento', cor:'#3b82f6'},
     {id:'recebido', lab:'✅ Recebido', cor:'#22c55e'},
     {id:'recebido_parcial', lab:'🔶 Parcial', cor:'#a855f7'},
-    {id:'cancelado', lab:'❌ Cancelado', cor:'#6b7280'},
+    {id:'cancelado', lab:'❌ Cancelado', cor:'var(--c)'},
   ];
   lista.innerHTML=pedidos.map(p=>{
     const dataF=p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—';
@@ -302,13 +302,13 @@ window.gerarRelatorioPedido=function(docId){
   const dataF=p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—';
   const porFazenda={};
   (p.itens||[]).forEach(it=>{(it.talhoes||[]).forEach(t=>{const f=t.fazenda||'Sem fazenda';if(!porFazenda[f])porFazenda[f]={};if(!porFazenda[f][t.id])porFazenda[f][t.id]={nome:t.nome,itens:[]};porFazenda[f][t.id].itens.push(it);});});
-  document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #2d6a2d;padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#9ca3af;margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:#1a3d1a;">PEDIDO DE INSUMOS</div><div style="font-size:12px;color:#6b7280;margin-top:3px;">Data: ${dataF} · ${p.criadoPor||'—'}</div></div><div style="font-size:11px;color:#9ca3af;">${(p.itens||[]).length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">📦 RESUMO DO PEDIDO</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#1a3d1a;color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:center;">Dose/ha</th><th style="padding:9px 12px;text-align:center;">Área total</th><th style="padding:9px 12px;text-align:center;">TOTAL A PEDIR</th></tr></thead><tbody>${(p.itens||[]).map((it,i)=>{
+  document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">PEDIDO DE INSUMOS</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${p.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${(p.itens||[]).length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 RESUMO DO PEDIDO</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:center;">Dose/ha</th><th style="padding:9px 12px;text-align:center;">Área total</th><th style="padding:9px 12px;text-align:center;">TOTAL A PEDIR</th></tr></thead><tbody>${(p.itens||[]).map((it,i)=>{
     const temNovo = it.dosePorHa!=null && it.total!=null;
     const dosePh = temNovo ? `${it.dosePorHa} ${it.unidade}/ha` : '—';
     const areaT = temNovo ? `${(it.areaTotal||0).toLocaleString('pt-BR')} ha` : '—';
     const totalT = temNovo ? `${(it.total||0).toLocaleString('pt-BR')} ${it.unidade}` : (it.quantidade||'—');
-    return `<tr style="background:${i%2===0?'white':'#f9fafb'}"><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;color:#9ca3af;">${i+1}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;font-weight:600;">${it.produto}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;">${dosePh}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;">${areaT}</td><td style="padding:8px 12px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#2d6a2d;font-weight:700;font-size:13px;">${totalT}</td></tr>`;
-  }).join('')}</tbody></table></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">🗺️ DISTRIBUIÇÃO POR FAZENDA</div>${Object.entries(porFazenda).map(([faz,tals])=>`<div style="margin-bottom:16px;"><div style="background:#e8f5e8;border-left:4px solid #2d6a2d;padding:8px 14px;font-weight:700;font-size:13px;color:#1a3d1a;">🏡 ${faz}</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:#f3f4f6;"><th style="padding:7px 14px;text-align:left;">Talhão</th><th style="padding:7px 14px;text-align:left;">Insumos</th></tr></thead><tbody>${Object.entries(tals).map(([tid,td],ti)=>`<tr style="background:${ti%2===0?'white':'#f9fafb'}"><td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;font-weight:600;">${tid} · ${td.nome}${td.area?' · '+td.area+'ha':''}</td><td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;">${td.itens.map(it=>{const temNovo=it.dosePorHa!=null;const txt=temNovo?`${it.dosePorHa} ${it.unidade}/ha`:(it.quantidade||'');return `<span style="display:inline-block;background:#e8f5e8;border-radius:12px;padding:2px 9px;margin:2px;font-size:11px;color:#1a3d1a;font-weight:600;">${it.produto}${txt?' · '+txt:''}</span>`;}).join('')}</td></tr>`).join('')}</tbody></table></div>`).join('')}</div><div style="font-size:10px;color:#9ca3af;text-align:right;border-top:1px solid #e5e7eb;padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
+    return `<tr style="background:${i%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);color:var(--t4);">${i+1}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-weight:600;">${it.produto}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${dosePh}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${areaT}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--v);font-weight:700;font-size:13px;">${totalT}</td></tr>`;
+  }).join('')}</tbody></table></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">🗺️ DISTRIBUIÇÃO POR FAZENDA</div>${Object.entries(porFazenda).map(([faz,tals])=>`<div style="margin-bottom:16px;"><div style="background:var(--vb);border-left:4px solid var(--v);padding:8px 14px;font-weight:700;font-size:13px;color:var(--ve);">🏡 ${faz}</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--cl);"><th style="padding:7px 14px;text-align:left;">Talhão</th><th style="padding:7px 14px;text-align:left;">Insumos</th></tr></thead><tbody>${Object.entries(tals).map(([tid,td],ti)=>`<tr style="background:${ti%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);font-weight:600;">${tid} · ${td.nome}${td.area?' · '+td.area+'ha':''}</td><td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);">${td.itens.map(it=>{const temNovo=it.dosePorHa!=null;const txt=temNovo?`${it.dosePorHa} ${it.unidade}/ha`:(it.quantidade||'');return `<span style="display:inline-block;background:var(--vb);border-radius:12px;padding:2px 9px;margin:2px;font-size:11px;color:var(--ve);font-weight:600;">${it.produto}${txt?' · '+txt:''}</span>`;}).join('')}</td></tr>`).join('')}</tbody></table></div>`).join('')}</div><div style="font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
   setTimeout(()=>window.print(),200);
 };
 window.abrirTab=function(tab,btn){tabAtual=tab;document.querySelectorAll('.ped-tab').forEach(b=>b.classList.remove('ativo'));if(btn)btn.classList.add('ativo');document.getElementById('pmod-mapa').style.display=tab==='mapa'?'flex':'none';document.getElementById('pmod-lista').style.display=tab==='lista'?'flex':'none';if(tab==='mapa')iniciarMapaPedidos();if(tab==='lista')renderizarListaPedidos();};
@@ -319,10 +319,10 @@ window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('
 window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
 </script>
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}

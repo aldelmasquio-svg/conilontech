@@ -281,7 +281,7 @@ function renderizarTelaTalhao() {
         const aps = plano?.aplicacoes||[];
         const total=aps.length, feitas=aps.filter(a=>a.feito).length;
         const agora=new Date(), isMesAtual=agora.getMonth()===mi&&agora.getFullYear()===parseInt(ano);
-        let cor='#e5e7eb',txtCor='#6b7280';
+        let cor='var(--bd-l)',txtCor='var(--c)';
         if(total>0&&feitas===total){cor='#dcfce7';txtCor='#16a34a';}
         else if(total>0&&estaAtrasado(mi,parseInt(ano))&&feitas<total){cor='#fee2e2';txtCor='#dc2626';}
         else if(total>0){cor='#fef9c3';txtCor='#d97706';}
@@ -848,33 +848,33 @@ window.imprimirMes = function() {
   const areaHa = talhaoSel.area || '—';
 
   const html = `<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #2d6a2d;padding-bottom:14px;margin-bottom:22px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;">
       <div>
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#9ca3af;margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div>
-        <div style="font-size:22px;font-weight:900;color:#1a3d1a;">PLANO DE ADUBAÇÃO · ${sanitizar(mesSel.mesAno)}</div>
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div>
+        <div style="font-size:22px;font-weight:900;color:var(--ve);">PLANO DE ADUBAÇÃO · ${sanitizar(mesSel.mesAno)}</div>
         <div style="font-size:13px;color:#374151;margin-top:5px;">
           <strong>${sanitizar(talhaoSel.nome)}</strong>${talhaoSel.fazenda?' · '+sanitizar(talhaoSel.fazenda):''} · ${areaHa} ha
         </div>
       </div>
-      <div style="font-size:11px;color:#9ca3af;text-align:right;">
+      <div style="font-size:11px;color:var(--t4);text-align:right;">
         ${total} aplicação(ões)<br>${feitas} realizada(s) · ${pct}%
       </div>
     </div>
 
     <!-- RESUMO DE INSUMOS DO MÊS -->
     <div style="margin-bottom:24px;">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">📦 Total de Insumos no Mês</div>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 Total de Insumos no Mês</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead><tr style="background:#1a3d1a;color:white;">
+        <thead><tr style="background:var(--ve);color:white;">
           <th style="padding:9px 14px;text-align:left;">Produto</th>
           <th style="padding:9px 14px;text-align:center;">Dose total/ha</th>
           ${areaHa!=='—'?`<th style="padding:9px 14px;text-align:center;">Para ${areaHa} ha</th>`:''}
         </tr></thead>
         <tbody>
-          ${Object.values(totaisProd).map((p,i)=>`<tr style="background:${i%2===0?'white':'#f9fafb'}">
-            <td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;font-weight:600;">🧪 ${sanitizar(p.produto)}</td>
-            <td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#2d6a2d;font-weight:700;">${fmt(p.total)} ${sanitizar(p.unidade)}/ha</td>
-            ${areaHa!=='—'?`<td style="padding:8px 14px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#1a3d1a;font-weight:700;">${fmt(p.total*parseFloat(areaHa))} ${sanitizar(p.unidade)}</td>`:''}
+          ${Object.values(totaisProd).map((p,i)=>`<tr style="background:${i%2===0?'white':'var(--surface-2)'}">
+            <td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);font-weight:600;">🧪 ${sanitizar(p.produto)}</td>
+            <td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--v);font-weight:700;">${fmt(p.total)} ${sanitizar(p.unidade)}/ha</td>
+            ${areaHa!=='—'?`<td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--ve);font-weight:700;">${fmt(p.total*parseFloat(areaHa))} ${sanitizar(p.unidade)}</td>`:''}
           </tr>`).join('')}
         </tbody>
       </table>
@@ -884,13 +884,13 @@ window.imprimirMes = function() {
     ${semanasOrd.map(([sem,saps])=>{
       const sf = saps.filter(a=>a.feito).length;
       return `<div style="margin-bottom:18px;page-break-inside:avoid;">
-        <div style="background:#e8f5e8;border-left:4px solid #2d6a2d;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:6px 6px 0 0;">
-          <span style="font-weight:800;font-size:14px;color:#1a3d1a;">📅 ${sanitizar(sem)}</span>
+        <div style="background:var(--vb);border-left:4px solid var(--v);padding:9px 14px;display:flex;justify-content:space-between;align-items:center;border-radius:6px 6px 0 0;">
+          <span style="font-weight:800;font-size:14px;color:var(--ve);">📅 ${sanitizar(sem)}</span>
           <span style="font-size:11px;color:#374151;">${sf}/${saps.length} realizadas</span>
         </div>
-        ${saps.map(ap => `<div style="border:1px solid #e5e7eb;border-top:none;padding:11px 14px;${ap.feito?'background:#f0fdf4;':''}">
+        ${saps.map(ap => `<div style="border:1px solid var(--bd-l);border-top:none;padding:11px 14px;${ap.feito?'background:#f0fdf4;':''}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:7px;">
-            <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">
+            <div style="font-size:11px;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:700;">
               ${ap.modo?'⚙️ '+sanitizar(ap.modo):''}${ap.fase?' · '+sanitizar(ap.fase):''}
             </div>
             <div style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;${ap.feito?'background:#dcfce7;color:#16a34a;':'background:#fef3c7;color:#92400e;'}">
@@ -898,19 +898,19 @@ window.imprimirMes = function() {
             </div>
           </div>
           <div style="display:flex;flex-wrap:wrap;gap:6px;">
-            ${(ap.produtos||[]).map(p=>`<span style="display:inline-flex;align-items:center;gap:6px;background:#e8f5e8;border:1px solid #c8e0c8;border-radius:8px;padding:5px 10px;font-size:12px;">
+            ${(ap.produtos||[]).map(p=>`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--vb);border:1px solid #c8e0c8;border-radius:8px;padding:5px 10px;font-size:12px;">
               <span style="font-weight:700;">${sanitizar(p.produto)}</span>
-              <span style="background:#2d6a2d;color:white;border-radius:5px;padding:2px 7px;font-family:monospace;font-weight:700;font-size:11px;">${sanitizar(p.dose)} ${sanitizar(p.unidade)}/ha</span>
+              <span style="background:var(--v);color:white;border-radius:5px;padding:2px 7px;font-family:monospace;font-weight:700;font-size:11px;">${sanitizar(p.dose)} ${sanitizar(p.unidade)}/ha</span>
             </span>`).join('')}
           </div>
-          ${ap.obs?`<div style="margin-top:7px;font-size:11px;color:#6b7280;font-style:italic;">💬 ${sanitizar(ap.obs)}</div>`:''}
+          ${ap.obs?`<div style="margin-top:7px;font-size:11px;color:var(--c);font-style:italic;">💬 ${sanitizar(ap.obs)}</div>`:''}
           ${ap.feito&&ap.feitoEm?`<div style="margin-top:7px;font-size:10px;color:#16a34a;">✔ Realizada em ${sanitizar(ap.feitoEm)}${ap.feitoPor?' por '+sanitizar(ap.feitoPor):''}</div>`:''}
-          ${!ap.feito?`<div style="margin-top:9px;padding-top:7px;border-top:1px dashed #e5e7eb;font-size:10px;color:#9ca3af;">Assinatura responsável: ____________________________  Data: _____/_____/______</div>`:''}
+          ${!ap.feito?`<div style="margin-top:9px;padding-top:7px;border-top:1px dashed var(--bd-l);font-size:10px;color:var(--t4);">Assinatura responsável: ____________________________  Data: _____/_____/______</div>`:''}
         </div>`).join('')}
       </div>`;
     }).join('')}
 
-    <div style="margin-top:24px;font-size:10px;color:#9ca3af;text-align:right;border-top:1px solid #e5e7eb;padding-top:10px;">
+    <div style="margin-top:24px;font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">
       Gerado em ${dataGer} · ConilonTech
     </div>
   </div>`;
@@ -943,10 +943,10 @@ window.irReplicar=irReplicar;
 </script>
 
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
@@ -984,11 +984,11 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .tc-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
 .tc-meta{font-size:.7rem;color:var(--c);margin-top:1px;}
 .tc-right{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;margin-left:12px;}
-.prog-ring{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--v) calc(var(--p)*1%),#e5e7eb 0);position:relative;}
+.prog-ring{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--v) calc(var(--p)*1%),var(--bd-l) 0);position:relative;}
 .prog-ring::before{content:'';position:absolute;width:36px;height:36px;border-radius:50%;background:white;}
 .prog-val{position:relative;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;}
 .prog-lbl{font-size:.65rem;color:var(--c);font-weight:700;}
-.sem-plano{font-size:.68rem;color:#9ca3af;text-align:center;line-height:1.4;}
+.sem-plano{font-size:.68rem;color:var(--t4);text-align:center;line-height:1.4;}
 .seta{font-size:1.4rem;color:var(--cb);margin-left:4px;}
 /* TALHÃO */
 .hdr-v{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:13px 16px;display:flex;align-items:center;gap:10px;flex-shrink:0;position:sticky;top:54px;z-index:199;box-shadow:0 2px 8px rgba(0,0,0,.2);}
@@ -1074,7 +1074,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .prod-wip-dose{font-size:.72rem;color:var(--c);margin-top:2px;}
 .btn-rm{background:none;border:none;color:#ef4444;cursor:pointer;font-size:1.1rem;padding:4px 6px;border-radius:6px;}
 .vazio-sm{text-align:center;padding:16px;font-size:.82rem;color:var(--c);font-style:italic;}
-.import-banner{background:linear-gradient(135deg,#e8f5e8 0%,#f0fdf0 100%);border:2px solid #a7d7a7;border-radius:var(--rad);padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 10px rgba(45,106,45,.1);}
+.import-banner{background:linear-gradient(135deg,var(--vb) 0%,#f0fdf0 100%);border:2px solid #a7d7a7;border-radius:var(--rad);padding:14px 16px;margin-bottom:14px;box-shadow:0 2px 10px rgba(45,106,45,.1);}
 .import-banner-titulo{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.08rem;color:var(--ve);margin-bottom:6px;}
 .import-banner-info{font-size:.82rem;color:var(--ts);margin-bottom:12px;line-height:1.5;}
 .import-banner-btn{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;letter-spacing:.02em;}

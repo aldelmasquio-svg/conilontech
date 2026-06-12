@@ -8,12 +8,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
 
 /* LOADING */
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
@@ -1632,17 +1632,17 @@ window.imprimirHistorico = function() {
   const periodo = (hfD1 || hfD2) ? `${hfD1?formatarData(hfD1):'início'} a ${hfD2?formatarData(hfD2):'hoje'}` : 'Todo o período';
 
   const html = `<div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:28px;color:#111;">
-    <div style="border-bottom:3px solid #2d6a2d;padding-bottom:14px;margin-bottom:20px;">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#9ca3af;margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div>
-      <div style="font-size:22px;font-weight:900;color:#1a3d1a;">${titulo}</div>
+    <div style="border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:20px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div>
+      <div style="font-size:22px;font-weight:900;color:var(--ve);">${titulo}</div>
       <div style="font-size:12px;color:#374151;margin-top:5px;">📅 ${periodo} · ${lista.length} movimentação(ões)</div>
     </div>
 
     <!-- TOTAIS POR PRODUTO -->
     <div style="margin-bottom:22px;">
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">📊 Totais por Produto no Período</div>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📊 Totais por Produto no Período</div>
       <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <thead><tr style="background:#1a3d1a;color:white;">
+        <thead><tr style="background:var(--ve);color:white;">
           <th style="padding:9px 13px;text-align:left;">Produto</th>
           <th style="padding:9px 13px;text-align:center;">Entradas</th>
           <th style="padding:9px 13px;text-align:center;">Saídas</th>
@@ -1651,11 +1651,11 @@ window.imprimirHistorico = function() {
         <tbody>
           ${Object.values(totais).map((t,i)=>{
             const dif = t.entradas - t.saidas;
-            return `<tr style="background:${i%2===0?'white':'#f9fafb'}">
-              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;font-weight:600;">${sanitizar(t.nome)}</td>
-              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#16a34a;font-weight:700;">+${fmt(t.entradas)} ${sanitizar(t.unidade||'')}</td>
-              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:#dc2626;font-weight:700;">−${fmt(t.saidas)} ${sanitizar(t.unidade||'')}</td>
-              <td style="padding:8px 13px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;color:${dif>=0?'#16a34a':'#dc2626'};font-weight:700;">${dif>=0?'+':''}${fmt(dif)} ${sanitizar(t.unidade||'')}</td>
+            return `<tr style="background:${i%2===0?'white':'var(--surface-2)'}">
+              <td style="padding:8px 13px;border-bottom:1px solid var(--bd-l);font-weight:600;">${sanitizar(t.nome)}</td>
+              <td style="padding:8px 13px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:#16a34a;font-weight:700;">+${fmt(t.entradas)} ${sanitizar(t.unidade||'')}</td>
+              <td style="padding:8px 13px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:#dc2626;font-weight:700;">−${fmt(t.saidas)} ${sanitizar(t.unidade||'')}</td>
+              <td style="padding:8px 13px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:${dif>=0?'#16a34a':'#dc2626'};font-weight:700;">${dif>=0?'+':''}${fmt(dif)} ${sanitizar(t.unidade||'')}</td>
             </tr>`;
           }).join('')}
         </tbody>
@@ -1664,9 +1664,9 @@ window.imprimirHistorico = function() {
 
     <!-- MOVIMENTAÇÕES -->
     <div>
-      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:#2d6a2d;margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid #e5e7eb;">📜 Movimentações Detalhadas</div>
+      <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📜 Movimentações Detalhadas</div>
       <table style="width:100%;border-collapse:collapse;font-size:11.5px;">
-        <thead><tr style="background:#1a3d1a;color:white;">
+        <thead><tr style="background:var(--ve);color:white;">
           <th style="padding:8px 10px;text-align:left;">Data</th>
           <th style="padding:8px 10px;text-align:left;">Tipo</th>
           <th style="padding:8px 10px;text-align:left;">Produto</th>
@@ -1686,20 +1686,20 @@ window.imprimirHistorico = function() {
               m.fazendaOrigem ? `Origem: ${sanitizar(m.fazendaOrigem)}` : '',
               m.observacao ? `Obs: ${sanitizar(m.observacao)}` : ''
             ].filter(Boolean).join(' · ');
-            return `<tr style="background:${i%2===0?'white':'#f9fafb'};">
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-family:monospace;">${formatarData(m.data)}</td>
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;">${tipoLab}</td>
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-weight:600;">${sanitizar(m.produtoNome||'')}</td>
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;text-align:center;font-family:monospace;font-weight:700;color:${sinal==='+'?'#16a34a':'#dc2626'};">${sinal}${fmt(m.quantidade)} ${sanitizar(m.unidade||'')}</td>
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-size:10.5px;">${detalhe || '—'}</td>
-              <td style="padding:7px 10px;border-bottom:1px solid #e5e7eb;font-size:10.5px;color:#6b7280;">${sanitizar(m.criadoPor||'—')}</td>
+            return `<tr style="background:${i%2===0?'white':'var(--surface-2)'};">
+              <td style="padding:7px 10px;border-bottom:1px solid var(--bd-l);font-family:monospace;">${formatarData(m.data)}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid var(--bd-l);">${tipoLab}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid var(--bd-l);font-weight:600;">${sanitizar(m.produtoNome||'')}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;font-weight:700;color:${sinal==='+'?'#16a34a':'#dc2626'};">${sinal}${fmt(m.quantidade)} ${sanitizar(m.unidade||'')}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid var(--bd-l);font-size:10.5px;">${detalhe || '—'}</td>
+              <td style="padding:7px 10px;border-bottom:1px solid var(--bd-l);font-size:10.5px;color:var(--c);">${sanitizar(m.criadoPor||'—')}</td>
             </tr>`;
           }).join('')}
         </tbody>
       </table>
     </div>
 
-    <div style="margin-top:20px;font-size:10px;color:#9ca3af;text-align:right;border-top:1px solid #e5e7eb;padding-top:10px;">
+    <div style="margin-top:20px;font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">
       Gerado em ${new Date().toLocaleString('pt-BR')} por ${sanitizar(usuarioAtual.email)} · ConilonTech
     </div>
   </div>`;

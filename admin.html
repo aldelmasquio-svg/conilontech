@@ -601,10 +601,10 @@ window.excluirAduboCat = async function() {
 </script>
 
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
@@ -832,7 +832,7 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);height:10
       <div class="cat-inp"><label>Mn</label><input type="text" inputmode="decimal" id="catMn" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
     </div>
     <!-- Unidade padrão de aplicação -->
-    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;background:#f0f4f0;border-radius:7px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:7px;">
       <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;">Unidade de dose</span>
       <select id="catUnidade" style="flex:1;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-size:.85rem;background:white;outline:none;">
         <option value="kg/ha">kg/ha — sólido / granulado</option>

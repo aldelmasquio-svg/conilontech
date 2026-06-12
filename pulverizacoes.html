@@ -505,10 +505,10 @@ function listaFazendasOrdenadas() {
   return [...set].sort((a,b)=>a.localeCompare(b,'pt-BR'));
 }
 function corFazenda(nome) {
-  if (!nome) return '#6b7280';
+  if (!nome) return 'var(--c)';
   const ord = listaFazendasOrdenadas();
   const idx = ord.indexOf(nome);
-  if (idx < 0) return '#6b7280';
+  if (idx < 0) return 'var(--c)';
   return FARM_COLORS[idx % FARM_COLORS.length];
 }
 
@@ -556,7 +556,7 @@ function renderizarRelatorioPulv() {
       <div class="rel-prod-calc">
         ${dose > 0 && haAplicar > 0
           ? `Total: <strong>${total.toLocaleString('pt-BR')} ${pr.unidade}</strong> (${pr.dose} ${pr.unidade}/ha × ${haAplicar} ha)`
-          : '<span style="color:#9ca3af;">Informe a dose/ha para calcular o total</span>'}
+          : '<span style="color:var(--t4);">Informe a dose/ha para calcular o total</span>'}
       </div>
       ${infoEstoque}
     </div>`;
@@ -586,7 +586,7 @@ window.relAtualizarLinha = function(i) {
   if (calc) {
     calc.innerHTML = dose > 0 && haAplicar > 0
       ? `Total: <strong>${total.toLocaleString('pt-BR')} ${pr.unidade}</strong> (${pr.dose} ${pr.unidade}/ha × ${haAplicar} ha)`
-      : '<span style="color:#9ca3af;">Informe a dose/ha para calcular o total</span>';
+      : '<span style="color:var(--t4);">Informe a dose/ha para calcular o total</span>';
   }
   // Atualizar info estoque
   const estoqFaz = _estoqueCache[r.fazenda] || [];
@@ -1202,10 +1202,10 @@ window.renderizarProdutosWIP=renderizarProdutosWIP;
 </script>
 
 <style>
-:root{--v:#2d6a2d;--ve:#1a3d1a;--vb:#e8f5e8;--c:#6b7280;--cb:#d1d5db;--cl:#f3f4f6;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
-.loading-screen{position:fixed;inset:0;background:#f0f4f0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
@@ -1311,8 +1311,8 @@ body{font-family:'Barlow',sans-serif;background:#f0f4f0;color:var(--t);min-heigh
 .btn-duplicar:active{transform:scale(.97);background:#eff6ff;}
 .btn-editar{background:none;border:1.5px solid #fbbf24;border-radius:6px;padding:7px 12px;font-size:.78rem;color:#92400e;cursor:pointer;margin-top:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
 .btn-editar:active{transform:scale(.97);background:#fffbeb;}
-.pulv-travado input,.pulv-travado select{background:#f3f4f6!important;color:#9ca3af!important;cursor:not-allowed;}
-input:disabled,select:disabled{background:#f3f4f6;color:#6b7280;cursor:not-allowed;}
+.pulv-travado input,.pulv-travado select{background:var(--cl)!important;color:var(--t4)!important;cursor:not-allowed;}
+input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-allowed;}
 .pulv-params-drone{padding:0 14px 8px;font-size:.78rem;color:#1e40af;background:linear-gradient(to bottom,#eff6ff,transparent);}
 .campo-inp{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:11px;font-size:1rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
 .campo-inp:focus{border-color:var(--v);}
