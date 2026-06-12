@@ -240,6 +240,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
     <button class="tab" id="tabPulverizacoes" onclick="abrirTab('pulverizacoes')">💧 Pulverizações</button>
     <button class="tab" id="tabEstoque" onclick="abrirTab('estoque')">🏬 Estoque</button>
     <button class="tab" id="tabAdubacao" onclick="abrirTab('adubacao')">🧪 Adubação</button>
+    <button class="tab" id="tabCompras" onclick="abrirTab('compras')">🛒 Compras</button>
   </div>
 
   <div class="tab-content" id="tabContent"></div>
@@ -294,6 +295,15 @@ let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=
 let fazendas=[]; // derivado dos talhões
 let tabAtual='geral';
 let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false};
+
+// Filtros da aba "Compras" (relatório de compras planejadas)
+let compraTalhaoId = '';
+let compraDe = '';
+let compraAte = '';
+
+// Meses do ano (mesmo formato usado em adubacoes.html: "Mês/Ano")
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 // CATEGORIAS dos produtos (cópia local do estoque, pra montar relatórios)
 const CAT_LABELS = {
@@ -558,7 +568,7 @@ window.fazerLogout = async () => { await signOut(auth); window.location.href='lo
 window.abrirTab = function(t) {
   tabAtual = t;
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('ativa'));
-  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao'};
+  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras'};
   document.getElementById(map[t])?.classList.add('ativa');
   renderTab();
 };
@@ -575,6 +585,7 @@ function renderTab() {
     else if (tabAtual === 'pulverizacoes') renderPulverizacoes();
     else if (tabAtual === 'estoque') renderEstoque();
     else if (tabAtual === 'adubacao') renderAdubacao();
+    else if (tabAtual === 'compras') renderCompras();
   } catch(e) {
     console.error(e);
     cont.innerHTML = `<div class="vazio"><div class="ico">⚠️</div><p>Erro ao renderizar relatório: ${escHtml(e.message)}</p></div>`;
@@ -1442,12 +1453,192 @@ function renderAdubacao() {
 }
 
 // ════════════════════════════════════════════════════
+// ABA 6 — COMPRAS PLANEJADAS (importa planosAdubacao)
+// ════════════════════════════════════════════════════
+// Converte "Mês/Ano" em chave numérica ordenável (ano*12 + índice do mês)
+function mesAnoKey(mesAno) {
+  if (!mesAno) return null;
+  const [mes, ano] = String(mesAno).split('/');
+  const idx = MESES.indexOf(mes);
+  if (idx < 0 || !ano) return null;
+  return parseInt(ano) * 12 + idx;
+}
+function mesAnoAbrev(mesAno) {
+  const [mes, ano] = String(mesAno || '').split('/');
+  const idx = MESES.indexOf(mes);
+  return idx >= 0 ? `${MESES_ABREV[idx]}/${ano}` : (mesAno || '');
+}
+function defaultMesAnoAtual() {
+  const h = new Date();
+  return `${MESES[h.getMonth()]}/${h.getFullYear()}`;
+}
+// Lista os meses (Mês/Ano) presentes nos planos de adubação, em ordem cronológica
+function listaMesesPlanos() {
+  const set = new Set();
+  planosAdubacao.forEach(p => { if (p.mesAno && mesAnoKey(p.mesAno) != null) set.add(p.mesAno); });
+  return [...set].sort((a, b) => mesAnoKey(a) - mesAnoKey(b));
+}
+
+window.setCompraTalhao = function(v) { compraTalhaoId = v; renderTab(); };
+window.setCompraDe = function(v) {
+  compraDe = v;
+  if (mesAnoKey(compraDe) > mesAnoKey(compraAte)) compraAte = compraDe;
+  renderTab();
+};
+window.setCompraAte = function(v) {
+  compraAte = v;
+  if (mesAnoKey(compraAte) < mesAnoKey(compraDe)) compraDe = compraAte;
+  renderTab();
+};
+
+function renderCompras() {
+  const cont = document.getElementById('tabContent');
+  const meses = listaMesesPlanos();
+  if (!meses.length) {
+    cont.innerHTML = `<div class="vazio"><div class="ico">🛒</div><p>Nenhum plano de adubação cadastrado.<br><span style="font-size:.78rem;">Cadastre os planos no módulo de Adubações para gerar o relatório de compras.</span></p></div>`;
+    return;
+  }
+  // Define padrões do período: do mês atual (ou próximo disponível) até o último planejado
+  const hojeKey = mesAnoKey(defaultMesAnoAtual());
+  if (!compraDe || mesAnoKey(compraDe) == null || !meses.includes(compraDe)) {
+    compraDe = meses.find(m => mesAnoKey(m) >= hojeKey) || meses[0];
+  }
+  if (!compraAte || mesAnoKey(compraAte) == null || !meses.includes(compraAte)) {
+    compraAte = meses[meses.length - 1];
+  }
+  if (mesAnoKey(compraDe) > mesAnoKey(compraAte)) compraAte = compraDe;
+
+  // Talhões disponíveis (respeita o filtro global de fazenda)
+  const faz = fazendaFiltro();
+  const talhoesBase = (faz ? talhoes.filter(t => t.fazenda === faz) : talhoes)
+    .slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  if (compraTalhaoId && !talhoesBase.some(t => t.id === compraTalhaoId)) compraTalhaoId = '';
+  const talhoesSel = compraTalhaoId ? talhoesBase.filter(t => t.id === compraTalhaoId) : talhoesBase;
+  const mesesSel = meses.filter(m => mesAnoKey(m) >= mesAnoKey(compraDe) && mesAnoKey(m) <= mesAnoKey(compraAte));
+
+  // Barra de filtros do relatório
+  let html = `<div class="secao" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <div class="filtro-grupo">
+      <span class="filtro-label">🌱 Talhão</span>
+      <select class="filtro-sel" id="selCompraTalhao" onchange="window.setCompraTalhao(this.value)">
+        <option value="">Todos${faz ? '' : ' (todas fazendas)'}</option>
+        ${talhoesBase.map(t => `<option value="${escAttr(t.id)}"${t.id === compraTalhaoId ? ' selected' : ''}>${escHtml(t.nome || t.id)}${!faz ? ' · ' + escHtml(t.fazenda || '') : ''}</option>`).join('')}
+      </select>
+    </div>
+    <div class="filtro-grupo">
+      <span class="filtro-label">📅 De</span>
+      <select class="filtro-sel" id="selCompraDe" onchange="window.setCompraDe(this.value)">
+        ${meses.map(m => `<option value="${escAttr(m)}"${m === compraDe ? ' selected' : ''}>${mesAnoAbrev(m)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="filtro-grupo">
+      <span class="filtro-label">📅 Até</span>
+      <select class="filtro-sel" id="selCompraAte" onchange="window.setCompraAte(this.value)">
+        ${meses.map(m => `<option value="${escAttr(m)}"${m === compraAte ? ' selected' : ''}>${mesAnoAbrev(m)}</option>`).join('')}
+      </select>
+    </div>
+  </div>`;
+
+  if (!mesesSel.length || !talhoesSel.length) {
+    html += `<div class="vazio"><div class="ico">🛒</div><p>Nenhum plano de adubação no período/seleção escolhidos.</p></div>`;
+    cont.innerHTML = html;
+    return;
+  }
+
+  // Agrega: para cada talhão, soma as doses (por ha) de cada produto nos planos do período
+  // e multiplica pela área do talhão para obter a quantidade total a comprar.
+  const totais = {}; // "produto|unidade" -> {produto,unidade,doseHa,qtd}
+  const detalhe = []; // [{fazenda,talhao,area,produto,unidade,doseHa,qtd}]
+  talhoesSel.forEach(t => {
+    const area = parseDose(t.area);
+    const planos = planosAdubacao.filter(p => p.talhaoId === t.id && mesesSel.includes(p.mesAno));
+    const porProdutoTalhao = {};
+    planos.forEach(plano => {
+      (plano.aplicacoes || []).forEach(ap => {
+        (ap.produtos || []).forEach(p => {
+          const dose = parseDose(p.dose);
+          if (!dose) return;
+          const key = `${p.produto}|${p.unidade}`;
+          if (!totais[key]) totais[key] = { produto: p.produto, unidade: p.unidade, doseHa: 0, qtd: 0 };
+          totais[key].doseHa += dose;
+          totais[key].qtd += dose * area;
+          if (!porProdutoTalhao[key]) porProdutoTalhao[key] = { produto: p.produto, unidade: p.unidade, doseHa: 0, qtd: 0 };
+          porProdutoTalhao[key].doseHa += dose;
+          porProdutoTalhao[key].qtd += dose * area;
+        });
+      });
+    });
+    Object.values(porProdutoTalhao).forEach(item => {
+      detalhe.push({ fazenda: t.fazenda, talhao: t.nome || t.id, area, ...item });
+    });
+  });
+
+  const totaisOrd = Object.values(totais).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
+  const areaTotal = talhoesSel.reduce((s, t) => s + parseDose(t.area), 0);
+  const periodoLbl = compraDe === compraAte ? mesAnoAbrev(compraDe) : `${mesAnoAbrev(compraDe)} a ${mesAnoAbrev(compraAte)}`;
+
+  html += `<div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Período</div><div class="kpi-value" style="font-size:1.05rem;">${escHtml(periodoLbl)}</div><div class="kpi-aux">${mesesSel.length} mês(es)</div></div>
+    <div class="kpi-card"><div class="kpi-label">Talhões considerados</div><div class="kpi-value">${talhoesSel.length}</div><div class="kpi-aux">${fmt(areaTotal, 1)} ha</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Produtos</div><div class="kpi-value">${totaisOrd.length}</div><div class="kpi-aux">distintos no período</div></div>
+  </div>`;
+
+  if (!totaisOrd.length) {
+    html += `<div class="vazio"><div class="ico">🛒</div><p>Nenhum produto previsto para o período/seleção escolhidos.</p></div>`;
+    cont.innerHTML = html;
+    return;
+  }
+
+  html += `<div class="secao">
+    <div class="secao-tit">🛒 Total a comprar</div>
+    <div class="secao-sub">Soma das doses previstas nos planos de adubação × área dos talhões, no período selecionado.</div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr>
+      <th>Produto</th><th class="num">Dose total (/ha)</th><th class="num">Quantidade a comprar</th>
+    </tr></thead><tbody>
+    ${totaisOrd.map(p => `<tr>
+      <td><strong>${escHtml(p.produto)}</strong></td>
+      <td class="num">${fmt(p.doseHa, 2)} ${escHtml(p.unidade)}/ha</td>
+      <td class="num">${fmt(p.qtd, 2)} ${escHtml(p.unidade)}</td>
+    </tr>`).join('')}
+    </tbody></table></div>
+  </div>`;
+
+  if (talhoesSel.length > 1 && detalhe.length) {
+    const detOrd = detalhe.slice().sort((a, b) =>
+      (a.fazenda || '').localeCompare(b.fazenda || '', 'pt-BR') ||
+      a.talhao.localeCompare(b.talhao, 'pt-BR') ||
+      a.produto.localeCompare(b.produto, 'pt-BR'));
+    html += `<div class="secao">
+      <div class="secao-tit">📋 Detalhamento por talhão</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Fazenda</th><th>Talhão</th><th class="num">Área (ha)</th><th>Produto</th><th class="num">Dose (/ha)</th><th class="num">Quantidade</th>
+      </tr></thead><tbody>
+      ${detOrd.map(d => `<tr>
+        <td><span class="faz-bullet" style="background:${corFazenda(d.fazenda)};"></span>${escHtml(d.fazenda || '—')}</td>
+        <td>${escHtml(d.talhao)}</td>
+        <td class="num">${fmt(d.area, 1)}</td>
+        <td>${escHtml(d.produto)}</td>
+        <td class="num">${fmt(d.doseHa, 2)} ${escHtml(d.unidade)}/ha</td>
+        <td class="num">${fmt(d.qtd, 2)} ${escHtml(d.unidade)}</td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>`;
+  }
+
+  html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
+    Relatório baseado nos planos de adubação cadastrados em "Adubações" · ${escHtml(periodoLbl)}${faz ? ' · ' + escHtml(faz) : ''}${compraTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}
+  </div>`;
+
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
 // EXPORTAR PDF (impressão da aba atual)
 // ════════════════════════════════════════════════════
 window.exportarPDF = function() {
   const cont = document.getElementById('tabContent');
   if (!cont.innerHTML) { toast('⚠️ Aguarde os dados carregarem.'); return; }
-  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação'}[tabAtual] || tabAtual;
+  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação', compras:'Compras Planejadas'}[tabAtual] || tabAtual;
   const {label: lblPeriodo} = periodoFiltro();
   const faz = fazendaFiltro() || 'Todas as fazendas';
   const html = `<div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:24px;color:#111;">
@@ -1468,7 +1659,7 @@ window.exportarPDF = function() {
 window.exportarExcel = function() {
   const cont = document.getElementById('tabContent');
   const wb = XLSX.utils.book_new();
-  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao'}[tabAtual] || tabAtual;
+  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao',compras:'Compras'}[tabAtual] || tabAtual;
   const tables = cont.querySelectorAll('table');
   tables.forEach((tbl, i) => {
     const ws = XLSX.utils.table_to_sheet(tbl);
