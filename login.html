@@ -59,22 +59,19 @@ window.fazerCadastro = async function() {
   if (!nome||!email||!senha) { erroCad('Preencha todos os campos.'); return; }
   if (senha !== conf) { erroCad('As senhas não coincidem.'); return; }
   if (senha.length < 6) { erroCad('Mínimo 6 caracteres.'); return; }
-  const snap = await getDocs(collection(db,'usuarios'));
-  const primeiro = snap.empty;
-  let modulos = {};
-  if (primeiro) {
-    modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
-  } else {
-    modulos = {mapa:'nenhum',atividades:'encarregado',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
-  }
   const btn = document.getElementById('btnCadastro');
   btn.disabled = true; btn.textContent = 'Criando...';
   try {
+    const snap = await getDocs(collection(db,'usuarios'));
+    const primeiro = snap.empty;
+    const modulos = primeiro
+      ? {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'}
+      : {mapa:'nenhum',atividades:'encarregado',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
     const cred = await createUserWithEmailAndPassword(auth, email, senha);
     await setDoc(doc(db,'usuarios',cred.user.uid), {nome,email,modulos,criadoEm:new Date().toISOString(),ativo:true});
     if (primeiro) await setDoc(doc(db,'config','geral'),{codigoCadastro:'',atividades:['Colheita','Desbrota','Poda','Roçada'],fazendas:[]});
   } catch(e) {
-    erroCad(e.code==='auth/email-already-in-use'?'E-mail já em uso.':'Erro ao criar conta.');
+    erroCad(e.code==='auth/email-already-in-use'?'E-mail já em uso.':`Erro ao criar conta: ${e.message}`);
     btn.disabled=false; btn.textContent='Criar Conta';
   }
 };
