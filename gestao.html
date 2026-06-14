@@ -166,6 +166,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 /* Bolinha colorida indicando fazenda */
 .faz-bullet{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;flex-shrink:0;}
 
+/* CALENDÁRIO (aba de pendências) */
+.cal-data-grupo{margin-bottom:10px;}
+.cal-data-grupo:last-child{margin-bottom:0;}
+.cal-data-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);padding:6px 0 4px;border-bottom:1px solid var(--cl);margin-bottom:6px;}
+.cal-evento{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid var(--cl);}
+.cal-evento:last-child{border-bottom:none;}
+.cal-evento-ico{font-size:1.2rem;flex-shrink:0;line-height:1.3;}
+.cal-evento-info{flex:1;min-width:0;}
+.cal-evento-tit{font-weight:700;font-size:.86rem;color:var(--t);display:flex;align-items:center;}
+.cal-evento-desc{font-size:.75rem;color:var(--c);margin-top:2px;}
+
 /* Seções de alerta e danger */
 .secao.secao-alerta{border-left:4px solid var(--warn);background:#fffbeb;}
 .secao.secao-danger{border-left:4px solid var(--danger);background:#fef2f2;}
@@ -242,6 +253,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
     <button class="tab" id="tabAdubacao" onclick="abrirTab('adubacao')">🧪 Adubação</button>
     <button class="tab" id="tabCompras" onclick="abrirTab('compras')">🛒 Compras</button>
     <button class="tab" id="tabNutrientes" onclick="abrirTab('nutrientes')">🌿 Nutrientes</button>
+    <button class="tab" id="tabCalendario" onclick="abrirTab('calendario')">🗓️ Calendário</button>
   </div>
 
   <div class="tab-content" id="tabContent"></div>
@@ -292,10 +304,10 @@ window._confirmarSaida = function() { history.go(-2); }
 
 // ─── ESTADO ───
 let usuarioAtual=null, perfilAtual={};
-let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[], catalogoAdubos=[];
+let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[], catalogoAdubos=[], drenchPrevencao=[];
 let fazendas=[]; // derivado dos talhões
 let tabAtual='geral';
-let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false, catalogoAdubos:false};
+let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false, catalogoAdubos:false, drenchPrevencao:false};
 let configAdubacao = {}; // período da safra (mesInicio/anoInicio/mesFim/anoFim), definido em Adubações
 
 // Filtros da aba "Compras" (relatório de compras planejadas)
@@ -311,6 +323,10 @@ let nutrSafra = '';
 // Meses do ano (mesmo formato usado em adubacoes.html: "Mês/Ano")
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+// Semanas dos planos de adubação (mesmo formato usado em adubacoes.html)
+const SEMANAS = ['1ª Semana','2ª Semana','3ª Semana','4ª Semana'];
+function ordemSem(s) { return SEMANAS.findIndex(x => String(s||'').startsWith(x)); }
 
 // CATEGORIAS dos produtos (cópia local do estoque, pra montar relatórios)
 const CAT_LABELS = {
@@ -384,6 +400,11 @@ onAuthStateChanged(auth, async (user) => {
   onSnapshot(collection(db,'catalogo_adubos'), snap => {
     catalogoAdubos = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
     _carregados.catalogoAdubos = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'drenchPrevencao'), snap => {
+    drenchPrevencao = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
+    _carregados.drenchPrevencao = true;
     renderTab();
   });
   onSnapshot(doc(db,'configAdubacao','geral'), snap => {
@@ -585,7 +606,7 @@ window.fazerLogout = async () => { await signOut(auth); window.location.href='lo
 window.abrirTab = function(t) {
   tabAtual = t;
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('ativa'));
-  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras', nutrientes:'tabNutrientes'};
+  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras', nutrientes:'tabNutrientes', calendario:'tabCalendario'};
   document.getElementById(map[t])?.classList.add('ativa');
   renderTab();
 };
@@ -604,6 +625,7 @@ function renderTab() {
     else if (tabAtual === 'adubacao') renderAdubacao();
     else if (tabAtual === 'compras') renderCompras();
     else if (tabAtual === 'nutrientes') renderNutrientes();
+    else if (tabAtual === 'calendario') renderCalendario();
   } catch(e) {
     console.error(e);
     cont.innerHTML = `<div class="vazio"><div class="ico">⚠️</div><p>Erro ao renderizar relatório: ${escHtml(e.message)}</p></div>`;
@@ -1855,12 +1877,154 @@ function renderNutrientes() {
 }
 
 // ════════════════════════════════════════════════════
+// ABA 8 — CALENDÁRIO (pendências: pulverizações, drench preventivo e adubações)
+// ════════════════════════════════════════════════════
+// Mapeia a semana de uma aplicação de adubação para um dia aproximado do mês
+const DIAS_SEMANA_ADUBACAO = [5, 12, 19, 26];
+
+function renderCalendario() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  const hj = hoje();
+  const eventos = [];
+
+  // Pulverizações pendentes (ainda não realizadas / não encerradas como parciais)
+  pulverizacoes.forEach(p => {
+    if (p.realizada || p.aplicacaoStatus === 'encerrada_parcial') return;
+    if (!p.data) return;
+    if (faz && p.fazenda !== faz) return;
+    const prods = (p.produtos || []).map(pr => pr.produto).filter(Boolean).join(', ');
+    eventos.push({
+      data: p.data,
+      tipo: 'pulverizacao',
+      icone: '💧',
+      label: 'Pulverização',
+      fazenda: p.fazenda || '',
+      talhaoNome: p.talhaoNome || '',
+      descricao: [p.pragaAlvo, prods].filter(Boolean).join(' · '),
+      parcial: p.aplicacaoStatus === 'parcial'
+    });
+  });
+
+  // Drench preventivo pendente
+  drenchPrevencao.forEach(d => {
+    if (d.status === 'realizado') return;
+    if (!d.data) return;
+    if (faz && d.fazenda !== faz) return;
+    const prods = (d.produtos || []).map(pr => pr.produto).filter(Boolean).join(', ');
+    eventos.push({
+      data: d.data,
+      tipo: 'drench',
+      icone: '🌱',
+      label: 'Drench preventivo',
+      fazenda: d.fazenda || '',
+      talhaoNome: d.talhaoNome || '',
+      descricao: [d.alvoPrevencao, prods].filter(Boolean).join(' · '),
+      parcial: false
+    });
+  });
+
+  // Adubações pendentes (aplicações não confirmadas dos planos de adubação)
+  planosAdubacao.forEach(plano => {
+    const t = talhoes.find(x => x.id === plano.talhaoId);
+    if (faz && (t?.fazenda || '') !== faz) return;
+    const [mesNome, anoStr] = String(plano.mesAno || '').split('/');
+    const mesIdx = MESES.indexOf(mesNome);
+    const ano = parseInt(anoStr);
+    if (mesIdx < 0 || !ano) return;
+    (plano.aplicacoes || []).forEach(ap => {
+      if (ap.feito) return;
+      const semIdx = ordemSem(ap.semana);
+      const dia = DIAS_SEMANA_ADUBACAO[semIdx >= 0 ? semIdx : 0];
+      const data = `${ano}-${String(mesIdx + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+      const prods = (ap.produtos || []).map(pr => pr.produto).filter(Boolean).join(', ');
+      eventos.push({
+        data,
+        tipo: 'adubacao',
+        icone: '🧪',
+        label: 'Adubação',
+        fazenda: t?.fazenda || '',
+        talhaoNome: t?.nome || plano.talhaoId || '',
+        descricao: [ap.fase, prods].filter(Boolean).join(' · ') || (ap.modo || ''),
+        parcial: false
+      });
+    });
+  });
+
+  eventos.sort((a, b) => a.data.localeCompare(b.data) || (a.fazenda || '').localeCompare(b.fazenda || '', 'pt-BR') || (a.talhaoNome || '').localeCompare(b.talhaoNome || '', 'pt-BR'));
+
+  const atrasados = eventos.filter(e => e.data < hj);
+  const em7 = new Date(hj + 'T00:00:00');
+  em7.setDate(em7.getDate() + 7);
+  const dataLimite7 = em7.toISOString().slice(0, 10);
+  const proximos = eventos.filter(e => e.data >= hj && e.data <= dataLimite7);
+  const futuros = eventos.filter(e => e.data > dataLimite7);
+
+  const atrasPulv = atrasados.filter(e => e.tipo === 'pulverizacao').length;
+  const atrasDrench = atrasados.filter(e => e.tipo === 'drench').length;
+  const atrasAdub = atrasados.filter(e => e.tipo === 'adubacao').length;
+
+  let html = `<div class="kpi-grid">
+    <div class="kpi-card ${atrasados.length > 0 ? 'danger' : ''}"><div class="kpi-label">Atrasadas</div><div class="kpi-value">${atrasados.length}</div><div class="kpi-aux">passaram da data prevista</div></div>
+    <div class="kpi-card ${proximos.length > 0 ? 'alerta' : ''}"><div class="kpi-label">Próximos 7 dias</div><div class="kpi-value">${proximos.length}</div><div class="kpi-aux">a vencer</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Total pendentes</div><div class="kpi-value">${eventos.length}</div><div class="kpi-aux">${faz ? escHtml(faz) : 'todas as fazendas'}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Atrasadas por tipo</div><div class="kpi-value" style="font-size:.95rem;">💧${atrasPulv} · 🌱${atrasDrench} · 🧪${atrasAdub}</div><div class="kpi-aux">pulv. · drench · adubação</div></div>
+  </div>`;
+
+  if (!eventos.length) {
+    html += `<div class="vazio"><div class="ico">🗓️</div><p>Nenhuma pendência encontrada${faz ? ' para ' + escHtml(faz) : ''}.<br>Tudo em dia! ✅</p></div>`;
+    cont.innerHTML = html;
+    return;
+  }
+
+  const renderGrupoData = (lista) => {
+    const porData = {};
+    lista.forEach(e => { (porData[e.data] = porData[e.data] || []).push(e); });
+    return Object.keys(porData).sort().map(data => `
+      <div class="cal-data-grupo">
+        <div class="cal-data-tit">${formatarData(data)}${data < hj ? ' · <span style="color:var(--danger);">atrasado</span>' : ''}</div>
+        ${porData[data].map(e => `
+          <div class="cal-evento">
+            <div class="cal-evento-ico">${e.icone}</div>
+            <div class="cal-evento-info">
+              <div class="cal-evento-tit"><span class="faz-bullet" style="background:${corFazenda(e.fazenda)};"></span>${escHtml(e.talhaoNome)}${!faz && e.fazenda ? ' · ' + escHtml(e.fazenda) : ''}</div>
+              <div class="cal-evento-desc">${e.label}${e.descricao ? ' — ' + escHtml(e.descricao) : ''}${e.parcial ? ' (parcial)' : ''}</div>
+            </div>
+          </div>`).join('')}
+      </div>`).join('');
+  };
+
+  html += `<div class="secao secao-danger">
+    <div class="secao-tit">🔴 Atrasadas <span style="font-weight:400;font-size:.75rem;color:var(--c);">(${atrasados.length})</span></div>
+    ${atrasados.length ? renderGrupoData(atrasados) : '<div class="vazio-sm">Nenhuma pendência atrasada.</div>'}
+  </div>`;
+
+  html += `<div class="secao secao-alerta">
+    <div class="secao-tit">🟡 Próximos 7 dias <span style="font-weight:400;font-size:.75rem;color:var(--c);">(${proximos.length})</span></div>
+    ${proximos.length ? renderGrupoData(proximos) : '<div class="vazio-sm">Nada previsto para os próximos 7 dias.</div>'}
+  </div>`;
+
+  if (futuros.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">📅 Mais adiante <span style="font-weight:400;font-size:.75rem;color:var(--c);">(${futuros.length})</span></div>
+      ${renderGrupoData(futuros)}
+    </div>`;
+  }
+
+  html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
+    Pendências de pulverizações, drench preventivo e adubações ainda não confirmadas${faz ? ' · ' + escHtml(faz) : ''}
+  </div>`;
+
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
 // EXPORTAR PDF (impressão da aba atual)
 // ════════════════════════════════════════════════════
 window.exportarPDF = function() {
   const cont = document.getElementById('tabContent');
   if (!cont.innerHTML) { toast('⚠️ Aguarde os dados carregarem.'); return; }
-  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação', compras:'Compras Planejadas', nutrientes:'Nutrientes Aplicados'}[tabAtual] || tabAtual;
+  const labelTab = {geral:'Visão Geral', produtividade:'Produtividade', pulverizacoes:'Pulverizações', estoque:'Estoque', adubacao:'Adubação', compras:'Compras Planejadas', nutrientes:'Nutrientes Aplicados', calendario:'Calendário de Pendências'}[tabAtual] || tabAtual;
   const {label: lblPeriodo} = periodoFiltro();
   const faz = fazendaFiltro() || 'Todas as fazendas';
   const html = `<div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:24px;color:#111;">
@@ -1881,7 +2045,7 @@ window.exportarPDF = function() {
 window.exportarExcel = function() {
   const cont = document.getElementById('tabContent');
   const wb = XLSX.utils.book_new();
-  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao',compras:'Compras',nutrientes:'Nutrientes'}[tabAtual] || tabAtual;
+  const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao',compras:'Compras',nutrientes:'Nutrientes',calendario:'Calendario'}[tabAtual] || tabAtual;
   const tables = cont.querySelectorAll('table');
   tables.forEach((tbl, i) => {
     const ws = XLSX.utils.table_to_sheet(tbl);
