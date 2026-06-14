@@ -170,7 +170,7 @@ function fmtNum(n, d=2) {
 // Retrocompat: docs antigos têm {produto, dose, unidade} (dose era /ha)
 function normalizarProduto(pr) {
   if (pr.modo && pr.valor !== undefined) return pr;
-  return {produto: pr.produto || '', modo:'ha', valor: pr.dose ?? '', unidade: pr.unidade || 'L'};
+  return {produto: pr.produto || '', modo:'ha', valor: pr.dose ?? '', unidade: pr.unidade || 'kg'};
 }
 
 // ══════════════════════════════
@@ -258,7 +258,7 @@ window.toggleDrSidebar = function() {
 // ══════════════════════════════
 function iniciarNovoAgendamento() {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
-  novoWIP = {talhoes:new Set(), data:hoje(), alvo:'', obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'L'}]};
+  novoWIP = {talhoes:new Set(), data:hoje(), alvo:'', obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
   document.getElementById('painelDrench').style.display = 'flex';
   document.getElementById('btnNovoAgendamento').style.display = 'none';
   document.getElementById('nData').value = novoWIP.data;
@@ -307,7 +307,7 @@ function produtoRowHtml(p, i, arrPath, remFn) {
       <input type="text" inputmode="decimal" class="prod-dose-inp" placeholder="Valor" value="${escAttr(p.valor)}"
         oninput="${arrPath}[${i}].valor=this.value">
       <select class="prod-und-sel" onchange="${arrPath}[${i}].unidade=this.value">
-        ${['L','mL','kg','g'].map(u=>`<option value="${u}" ${(p.unidade||'L')===u?'selected':''}>${u}</option>`).join('')}
+        ${['kg','g','L','mL'].map(u=>`<option value="${u}" ${(p.unidade||'kg')===u?'selected':''}>${u}</option>`).join('')}
       </select>
       <button onclick="${remFn}(${i})" class="btn-rm-prod">✕</button>
     </div>
@@ -319,7 +319,7 @@ function renderizarProdutosNovo() {
     .map((p,i)=>produtoRowHtml(p,i,'window.novoWIP.produtos','window.remProdutoNovo')).join('')
     || '<div class="vazio-sm">Adicione os produtos acima.</div>';
 }
-window.addProdutoNovo = function() { novoWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'L'}); renderizarProdutosNovo(); };
+window.addProdutoNovo = function() { novoWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'kg'}); renderizarProdutosNovo(); };
 window.remProdutoNovo = function(i) { novoWIP.produtos.splice(i,1); renderizarProdutosNovo(); };
 
 window.salvarNovoAgendamento = async function() {
@@ -511,7 +511,7 @@ function renderizarProdutosEdit() {
     .map((p,i)=>produtoRowHtml(p,i,'window.editWIP.produtos','window.remEditProduto')).join('')
     || '<div class="vazio-sm">Adicione os produtos acima.</div>';
 }
-window.addEditProduto = function() { window.editWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'L'}); renderizarProdutosEdit(); };
+window.addEditProduto = function() { window.editWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'kg'}); renderizarProdutosEdit(); };
 window.remEditProduto = function(i) { window.editWIP.produtos.splice(i,1); renderizarProdutosEdit(); };
 
 window.salvarEditarDrench = async function() {
