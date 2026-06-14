@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ConilonTech · Drench Preventivo</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -27,8 +28,13 @@ enableIndexedDbPersistence(db).catch(() => {});
 
 let usuarioAtual = null, perfilAtual = {};
 let talhoes = [], drenchPrevencao = [];
+let novoWIP = null;
+let drMap, drMapIniciado = false, drPolMap = {}, drSidebarAberta = true, tabAtual = 'mapa';
 
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const PED_CORES = {ativo:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'},colhido:{border:'rgba(196,133,90,.9)',fill:'rgba(139,94,60,.4)'}};
+const MODO_LABELS = {ha:'Dose/ha', planta:'Dose/planta', metro_linear:'Dose/m linear'};
+const MODO_SUF = {ha:'/ha', planta:'/planta', metro_linear:'/m linear'};
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'login.html'; return; }
@@ -46,7 +52,8 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('appContent').style.display = 'flex';
   gerarMenu();
   iniciarListeners();
-  if (isAdmin()) document.getElementById('btnNovoDrench').style.display = 'flex';
+  if (isAdmin()) document.getElementById('btnNovoAgendamento').style.display = 'flex';
+  setTimeout(iniciarMapaDrench, 200);
 });
 
 function nivelAcesso(mod) {
@@ -92,23 +99,22 @@ function gerarMenu() {
 function iniciarListeners() {
   onSnapshot(collection(db, 'talhoes'), snap => {
     talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
-    atualizarSelectTalhoes();
+    if (drMapIniciado) renderizarDrPoligonos();
+    atualizarFiltroTalhao();
   });
   onSnapshot(collection(db, 'drenchPrevencao'), snap => {
     drenchPrevencao = snap.docs.map(d => ({_docId:d.id,...d.data()}))
       .sort((a,b) => (a.data||'').localeCompare(b.data||''));
-    renderizarLista();
+    if (tabAtual === 'lista') renderizarLista();
   });
 }
 
-function atualizarSelectTalhoes() {
+function atualizarFiltroTalhao() {
   const fazendas = {};
   talhoes.forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
   const optgroups = Object.entries(fazendas).sort().map(([faz,ts]) =>
     `<optgroup label="${faz}">${ts.map(t=>`<option value="${t.id}">${t.id} · ${t.nome}</option>`).join('')}</optgroup>`
   ).join('');
-  const selModal = document.getElementById('fTalhao');
-  if (selModal) selModal.innerHTML = '<option value="">Selecione...</option>' + optgroups;
   const selFiltro = document.getElementById('filtroTalhao');
   if (selFiltro) {
     const atual = selFiltro.value;
@@ -118,7 +124,241 @@ function atualizarSelectTalhoes() {
 }
 
 // ══════════════════════════════
-// LISTA
+// CONVERSÃO DE DOSES (ha / planta / metro linear)
+// ══════════════════════════════
+function parseEspacamento(esp) {
+  if (!esp) return null;
+  const nums = String(esp).match(/\d+[.,]?\d*/g);
+  if (!nums || nums.length < 2) return null;
+  const entreLinhas = parseFloat(nums[0].replace(',','.'));
+  const entrePlantas = parseFloat(nums[1].replace(',','.'));
+  if (!entreLinhas || !entrePlantas) return null;
+  return {entreLinhas, entrePlantas};
+}
+
+function converterDoses(p, esp) {
+  const valor = parseFloat(String(p.valor ?? '').replace(',','.'));
+  let doseHa = null, dosePlanta = null, doseMl = null;
+  if (!isNaN(valor)) {
+    if (p.modo === 'planta') dosePlanta = valor;
+    else if (p.modo === 'metro_linear') doseMl = valor;
+    else doseHa = valor;
+  }
+  const parsed = parseEspacamento(esp);
+  if (parsed) {
+    const fatorPlanta = (parsed.entreLinhas * parsed.entrePlantas) / 10000;
+    const fatorMl = parsed.entreLinhas / 10000;
+    if (doseHa != null) {
+      if (dosePlanta == null) dosePlanta = doseHa * fatorPlanta;
+      if (doseMl == null) doseMl = doseHa * fatorMl;
+    } else if (dosePlanta != null) {
+      doseHa = dosePlanta / fatorPlanta;
+      if (doseMl == null) doseMl = doseHa * fatorMl;
+    } else if (doseMl != null) {
+      doseHa = doseMl / fatorMl;
+      if (dosePlanta == null) dosePlanta = doseHa * fatorPlanta;
+    }
+  }
+  return {doseHa, dosePlanta, doseMl};
+}
+
+function fmtNum(n, d=2) {
+  if (n == null || isNaN(n)) return '—';
+  return n.toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:d});
+}
+
+// Retrocompat: docs antigos têm {produto, dose, unidade} (dose era /ha)
+function normalizarProduto(pr) {
+  if (pr.modo && pr.valor !== undefined) return pr;
+  return {produto: pr.produto || '', modo:'ha', valor: pr.dose ?? '', unidade: pr.unidade || 'L'};
+}
+
+// ══════════════════════════════
+// ABAS
+// ══════════════════════════════
+window.abrirTab = function(tab, btn) {
+  tabAtual = tab;
+  document.querySelectorAll('.dr-tab').forEach(b=>b.classList.remove('ativo'));
+  if (btn) btn.classList.add('ativo');
+  document.getElementById('dmod-mapa').style.display = tab==='mapa' ? 'flex' : 'none';
+  document.getElementById('dmod-lista').style.display = tab==='lista' ? 'flex' : 'none';
+  if (tab==='mapa') iniciarMapaDrench();
+  if (tab==='lista') renderizarLista();
+};
+
+// ══════════════════════════════
+// MAPA
+// ══════════════════════════════
+function iniciarMapaDrench() {
+  if (drMapIniciado) { drMap?.invalidateSize(); return; }
+  drMapIniciado = true;
+  drMap = L.map('drenchMap', {center:[-18.7166,-40.4000], zoom:14});
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {attribution:'© Esri', maxZoom:19}).addTo(drMap);
+  setTimeout(()=>drMap.invalidateSize(), 300);
+  renderizarDrPoligonos();
+}
+
+function drCorPoly(id) {
+  const t = talhoes.find(x=>x.id===id), cor = PED_CORES[t?.status||'ativo'] || PED_CORES.ativo;
+  const sel = novoWIP && novoWIP.talhoes.has(id);
+  if (sel) return {color:'#f5c842', weight:4, fillColor:'rgba(245,200,66,.55)', fillOpacity:1};
+  return {color:cor.border, weight:2, fillColor:cor.fill, fillOpacity:1};
+}
+
+function renderizarDrPoligonos() {
+  if (!drMap) return;
+  Object.values(drPolMap).forEach(p=>drMap.removeLayer(p)); drPolMap = {};
+  talhoes.forEach(t => {
+    if (!t.coordenadas || t.coordenadas.length < 3) return;
+    const latlngs = t.coordenadas.map(c=>Array.isArray(c)?c:[c.lat,c.lng]);
+    const poly = L.polygon(latlngs, drCorPoly(t.id)).addTo(drMap);
+    poly.bindTooltip(`<b>${t.id}</b> · ${t.nome}`, {sticky:true, direction:'top'});
+    poly.on('click', e=>{ L.DomEvent.stopPropagation(e); clicarTalhaoDrench(t.id); });
+    poly.on('mouseover', ()=>{ const c=drCorPoly(t.id); poly.setStyle({...c, weight:c.weight+1, fillOpacity:.6}); });
+    poly.on('mouseout', ()=>poly.setStyle(drCorPoly(t.id)));
+    drPolMap[t.id] = poly;
+  });
+  renderizarDrSidebar();
+}
+
+function renderizarDrSidebar() {
+  const lista = document.getElementById('drSidebarList'); if (!lista) return;
+  const fazendas = {};
+  talhoes.forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
+  lista.innerHTML = Object.entries(fazendas).sort().map(([faz,ts]) => `
+    <div class="sb-faz">${faz}</div>
+    ${ts.map(t => {
+      const sel = novoWIP && novoWIP.talhoes.has(t.id);
+      return `<div class="msb-item ${sel?'active':''}" onclick="clicarTalhaoDrench('${t.id}')">
+        <div class="msb-dot ${t.status||'ativo'}"></div>
+        <div class="msb-info"><div class="msb-id">${t.id}</div><div class="msb-nome">${sanitizar(t.nome||'')}</div></div>
+        ${sel?'<span style="color:var(--v);font-weight:700;">✓</span>':''}
+      </div>`;
+    }).join('')}`).join('');
+}
+
+function clicarTalhaoDrench(id) {
+  if (!isAdmin()) return;
+  if (!novoWIP) iniciarNovoAgendamento();
+  if (novoWIP.talhoes.has(id)) novoWIP.talhoes.delete(id); else novoWIP.talhoes.add(id);
+  renderizarPainelNovo();
+}
+window.clicarTalhaoDrench = clicarTalhaoDrench;
+
+window.toggleDrSidebar = function() {
+  drSidebarAberta = !drSidebarAberta;
+  const sb = document.getElementById('drSidebar'), btn = document.getElementById('btnExpandDrSb');
+  if (sb) sb.style.display = drSidebarAberta ? 'flex' : 'none';
+  if (btn) btn.style.display = drSidebarAberta ? 'none' : 'flex';
+  if (drMap) setTimeout(()=>drMap.invalidateSize(), 100);
+};
+
+// ══════════════════════════════
+// NOVO AGENDAMENTO (painel do mapa)
+// ══════════════════════════════
+function iniciarNovoAgendamento() {
+  if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
+  novoWIP = {talhoes:new Set(), data:hoje(), alvo:'', obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'L'}]};
+  document.getElementById('painelDrench').style.display = 'flex';
+  document.getElementById('btnNovoAgendamento').style.display = 'none';
+  document.getElementById('nData').value = novoWIP.data;
+  document.getElementById('nAlvo').value = '';
+  document.getElementById('nObs').value = '';
+  renderizarProdutosNovo();
+  renderizarPainelNovo();
+}
+window.iniciarNovoAgendamento = iniciarNovoAgendamento;
+
+function renderizarPainelNovo() {
+  if (!novoWIP) return;
+  const n = novoWIP.talhoes.size;
+  const el = document.getElementById('drResumo');
+  if (el) el.textContent = `${n} talhão(ões) selecionado(s)`;
+  const chips = [...novoWIP.talhoes].map(id => {
+    const t = talhoes.find(x=>x.id===id);
+    return `<span class="chip-tal">${t?t.id:id}<button onclick="remTalhaoNovo('${id}')">✕</button></span>`;
+  }).join('');
+  const chipsEl = document.getElementById('drChips');
+  if (chipsEl) chipsEl.innerHTML = chips || '<div class="vazio-sm">Clique nos talhões no mapa ou na lista à esquerda.</div>';
+  renderizarDrPoligonos();
+}
+window.remTalhaoNovo = function(id) { if(!novoWIP) return; novoWIP.talhoes.delete(id); renderizarPainelNovo(); };
+window.drSelTodos = function() { if(!novoWIP) return; talhoes.forEach(t=>novoWIP.talhoes.add(t.id)); renderizarPainelNovo(); };
+window.drLimparSel = function() { if(!novoWIP) return; novoWIP.talhoes.clear(); renderizarPainelNovo(); };
+
+window.cancelarNovoAgendamento = function() {
+  if (novoWIP && novoWIP.talhoes.size > 0 && !confirm('Cancelar este agendamento?')) return;
+  novoWIP = null;
+  document.getElementById('painelDrench').style.display = 'none';
+  document.getElementById('btnNovoAgendamento').style.display = isAdmin() ? 'flex' : 'none';
+  renderizarDrPoligonos();
+};
+
+// ─── Editor de produtos (compartilhado entre painel novo e modal de edição) ───
+function produtoRowHtml(p, i, arrPath, remFn) {
+  const escAttr = s => String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return `<div class="prod-row">
+    <input type="text" class="prod-inp" placeholder="Produto / Insumo..." value="${escAttr(p.produto)}"
+      oninput="${arrPath}[${i}].produto=this.value">
+    <div class="prod-row2">
+      <select class="prod-modo-sel" onchange="${arrPath}[${i}].modo=this.value">
+        ${Object.entries(MODO_LABELS).map(([k,l])=>`<option value="${k}" ${p.modo===k?'selected':''}>${l}</option>`).join('')}
+      </select>
+      <input type="text" inputmode="decimal" class="prod-dose-inp" placeholder="Valor" value="${escAttr(p.valor)}"
+        oninput="${arrPath}[${i}].valor=this.value">
+      <select class="prod-und-sel" onchange="${arrPath}[${i}].unidade=this.value">
+        ${['L','mL','kg','g'].map(u=>`<option value="${u}" ${(p.unidade||'L')===u?'selected':''}>${u}</option>`).join('')}
+      </select>
+      <button onclick="${remFn}(${i})" class="btn-rm-prod">✕</button>
+    </div>
+  </div>`;
+}
+
+function renderizarProdutosNovo() {
+  document.getElementById('listaProdutosNovo').innerHTML = novoWIP.produtos
+    .map((p,i)=>produtoRowHtml(p,i,'window.novoWIP.produtos','window.remProdutoNovo')).join('')
+    || '<div class="vazio-sm">Adicione os produtos acima.</div>';
+}
+window.addProdutoNovo = function() { novoWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'L'}); renderizarProdutosNovo(); };
+window.remProdutoNovo = function(i) { novoWIP.produtos.splice(i,1); renderizarProdutosNovo(); };
+
+window.salvarNovoAgendamento = async function() {
+  if (!novoWIP) return;
+  const data = document.getElementById('nData').value;
+  if (!data) { toast('⚠️ Preencha a data prevista.'); return; }
+  const prods = novoWIP.produtos.filter(p=>p.produto.trim());
+  if (!prods.length) { toast('⚠️ Adicione ao menos um produto.'); return; }
+  const semValor = prods.find(p=>String(p.valor).trim()==='');
+  if (semValor) { toast(`⚠️ Informe a dose de "${semValor.produto}".`); return; }
+  if (novoWIP.talhoes.size === 0) { toast('⚠️ Selecione ao menos um talhão.'); return; }
+  const alvo = document.getElementById('nAlvo').value.trim();
+  const obs = document.getElementById('nObs').value.trim();
+  const btn = document.getElementById('btnSalvarDr');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    const grupoId = (crypto.randomUUID && crypto.randomUUID()) || ('g'+Date.now()+Math.random().toString(36).slice(2));
+    const prodsFS = prods.map(p=>({produto:p.produto.trim(), modo:p.modo, valor:p.valor, unidade:p.unidade}));
+    for (const talId of novoWIP.talhoes) {
+      const t = talhoes.find(x=>x.id===talId);
+      await addDoc(collection(db,'drenchPrevencao'), {
+        grupoId, talhaoId:talId, talhaoNome: t?.nome || talId, fazenda: t?.fazenda || '',
+        data, alvoPrevencao: alvo, produtos: prodsFS, observacoes: obs,
+        status: 'pendente', dataRealizado: null, realizadoPor: null, obsRealizacao: '',
+        criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
+      });
+    }
+    toast('✅ Drench agendado!');
+    novoWIP = null;
+    document.getElementById('painelDrench').style.display = 'none';
+    document.getElementById('btnNovoAgendamento').style.display = isAdmin() ? 'flex' : 'none';
+    renderizarDrPoligonos();
+    abrirTab('lista', document.getElementById('dtab-lista'));
+  } catch(e) { toast('❌ Erro: ' + e.message); }
+  btn.disabled = false; btn.textContent = '💾 Salvar Agendamento';
+};
+
+// ══════════════════════════════
+// LISTA / AGENDAMENTOS
 // ══════════════════════════════
 function renderizarLista() {
   const content = document.getElementById('listaContent');
@@ -137,20 +377,21 @@ function renderizarLista() {
     content.innerHTML = `<div class="vazio"><div class="ico">🌱</div><p>Nenhum agendamento de drench encontrado.</p></div>`;
     return;
   }
-  // Agrupar por mês
   const porMes = {};
   filtrados.forEach(d => {
     if (!d.data) return;
     const [a, m] = d.data.split('-');
     const key = `${a}-${m}`;
-    if (!porMes[key]) porMes[key] = [];
-    porMes[key].push(d);
+    if (!porMes[key]) porMes[key] = {};
+    const gid = d.grupoId || ('_legacy_'+d._docId);
+    if (!porMes[key][gid]) porMes[key][gid] = [];
+    porMes[key][gid].push(d);
   });
-  content.innerHTML = Object.entries(porMes).sort().map(([key, ds]) => {
+  content.innerHTML = Object.entries(porMes).sort().map(([key, grupos]) => {
     const [a,m] = key.split('-');
     return `<div class="mes-grupo">
       <div class="mes-titulo">📅 ${MESES[parseInt(m)-1]} ${a}</div>
-      ${ds.map(d => renderCardDrench(d)).join('')}
+      ${Object.values(grupos).map(docs => renderCardGrupo(docs)).join('')}
     </div>`;
   }).join('');
 }
@@ -163,7 +404,6 @@ function atualizarFiltroAlvos() {
     + alvos.map(a => `<option value="${a}" ${a===atual?'selected':''}>${a}</option>`).join('');
 }
 
-// ─── COR POR FAZENDA ───
 const FARM_COLORS = ['#1e3a5f','#1e5631','#5d3a1a','#37474f','#8b6914','#722f37','#1d5b6e','#556b2f','#a0522d','#455a64'];
 function listaFazendasOrdenadas() {
   const set = new Set();
@@ -178,129 +418,123 @@ function corFazenda(nome) {
   return FARM_COLORS[idx % FARM_COLORS.length];
 }
 
-function renderCardDrench(d) {
+function renderCardGrupo(docs) {
+  const first = docs[0];
+  const prods = (first.produtos||[]).map(normalizarProduto);
+  return `<div class="grupo-card">
+    <div class="grupo-hdr">
+      <div class="grupo-tit">📅 Previsto: ${formatarData(first.data)}${first.alvoPrevencao?` · 🛡️ ${sanitizar(first.alvoPrevencao)}`:''}</div>
+      <div class="grupo-meta">${docs.length} talhão(ões)</div>
+    </div>
+    <div class="grupo-receita">
+      ${prods.map(pr=>`<span class="receita-chip">🧪 ${sanitizar(pr.produto)}: ${fmtNum(parseFloat(String(pr.valor??'').replace(',','.')))} ${sanitizar(pr.unidade||'')}${MODO_SUF[pr.modo]||''}</span>`).join('')}
+    </div>
+    ${first.observacoes?`<div class="pulv-obs">💬 ${sanitizar(first.observacoes)}</div>`:''}
+    <div class="grupo-talhoes">
+      ${docs.map(d=>renderTalhaoItem(d)).join('')}
+    </div>
+  </div>`;
+}
+
+function renderDoseLinha(pr, esp) {
+  const conv = converterDoses(pr, esp);
+  const un = sanitizar(pr.unidade||'');
+  return `<div class="prod-linha">
+    <span class="prod-nome">🧪 ${sanitizar(pr.produto)}</span>
+    <span class="dose-chips">
+      <span class="dose-chip ${pr.modo==='ha'?'principal':''}">${fmtNum(conv.doseHa,2)} ${un}/ha</span>
+      <span class="dose-chip ${pr.modo==='planta'?'principal':''}">${fmtNum(conv.dosePlanta,4)} ${un}/planta</span>
+      <span class="dose-chip ${pr.modo==='metro_linear'?'principal':''}">${fmtNum(conv.doseMl,4)} ${un}/m linear</span>
+    </span>
+  </div>`;
+}
+
+function renderTalhaoItem(d) {
   const adm = isAdmin(), podConf = podeConfirmar();
   const realizado = (d.status||'pendente') === 'realizado';
   const corFaz = corFazenda(d.fazenda);
   const badge = realizado ? {cls:'badge-ok',txt:'✅ Realizado'} : {cls:'badge-pend',txt:'⏳ Pendente'};
-  return `<div class="pulv-card ${realizado?'realizada':''}" style="border-left:5px solid ${corFaz};">
-    <div class="pulv-header">
+  const t = talhoes.find(x=>x.id===d.talhaoId);
+  const esp = t?.espacamento;
+  const espParsed = parseEspacamento(esp);
+  const prods = (d.produtos||[]).map(normalizarProduto);
+  return `<div class="talhao-item ${realizado?'realizada':''}">
+    <div class="talhao-item-hdr">
       <div>
-        <div class="pulv-titulo">🌱 <span class="pulv-faz-tag" style="background:${corFaz};">${sanitizar(d.fazenda||'—')}</span> ${sanitizar(d.talhaoNome||d.talhaoId||'—')}</div>
-        <div class="pulv-meta">📅 Previsto: ${formatarData(d.data)}${realizado?` · ✅ Aplicado em ${formatarData(d.dataRealizado)}`:''}</div>
+        <span class="pulv-faz-tag" style="background:${corFaz};">${sanitizar(d.fazenda||'—')}</span>
+        <strong>${sanitizar(d.talhaoNome||d.talhaoId||'—')}</strong>
+        ${!espParsed?'<span class="aviso-esp" title="Espaçamento não cadastrado para este talhão">⚠️</span>':''}
       </div>
       <div class="pulv-status-wrap">
         <div class="pulv-badge ${badge.cls}">${badge.txt}</div>
-        ${adm?`<button class="btn-rm-pulv" data-doc="${d._docId}" onclick="excluirDrench(this)">🗑</button>`:''}
       </div>
     </div>
-    ${d.alvoPrevencao?`<div class="pulv-praga">🛡️ Prevenção: <strong>${sanitizar(d.alvoPrevencao)}</strong></div>`:''}
     <div class="pulv-produtos">
-      ${(d.produtos||[]).map(pr=>`<div class="prod-linha"><span class="prod-nome">🧪 ${sanitizar(pr.produto)}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${pr.unidade||''}/ha</span>`:''}</div>`).join('')}
+      ${prods.map(pr=>renderDoseLinha(pr, esp)).join('')}
     </div>
-    ${d.observacoes?`<div class="pulv-obs">💬 ${sanitizar(d.observacoes)}</div>`:''}
-    ${realizado && d.obsRealizacao?`<div class="pulv-obs">✅ ${sanitizar(d.obsRealizacao)}${d.realizadoPor?' · '+sanitizar(d.realizadoPor):''}</div>`:''}
+    ${realizado?`<div class="pulv-meta">✅ Aplicado em ${formatarData(d.dataRealizado)}${d.realizadoPor?' · '+sanitizar(d.realizadoPor):''}</div>`:''}
+    ${realizado && d.obsRealizacao?`<div class="pulv-obs">✅ ${sanitizar(d.obsRealizacao)}</div>`:''}
     ${(podConf || adm) ? `<div class="pulv-acoes">
       ${!realizado && podConf ? `<button class="btn-confirmar" onclick="abrirMarcarRealizado('${d._docId}')">✅ Marcar como realizado</button>` : ''}
       ${realizado && adm ? `<button class="btn-desfazer" onclick="desfazerRealizado('${d._docId}')">↩ Desfazer</button>` : ''}
       ${adm?`<button class="btn-editar" onclick="abrirEditarDrench('${d._docId}')">✏️ Editar</button>`:''}
+      ${adm?`<button class="btn-rm-pulv" data-doc="${d._docId}" onclick="excluirDrench(this)">🗑</button>`:''}
     </div>` : ''}
   </div>`;
 }
 
 // ══════════════════════════════
-// MODAL NOVO / EDITAR AGENDAMENTO
+// EDITAR AGENDAMENTO (por talhão)
 // ══════════════════════════════
-window.produtosWIP = [];
 window.drenchEditandoId = null;
-
-window.abrirModalNova = function() {
-  if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
-  window.drenchEditandoId = null;
-  window.produtosWIP = [];
-  document.getElementById('tituloNova').textContent = '🌱 Novo Agendamento de Drench';
-  document.getElementById('btnSalvarDrench').textContent = '💾 Salvar';
-  document.getElementById('fData').value = hoje();
-  document.getElementById('fTalhao').value = '';
-  document.getElementById('fAlvo').value = '';
-  document.getElementById('fObs').value = '';
-  atualizarSelectTalhoes();
-  renderizarProdutosWIP();
-  document.getElementById('overlayNova').classList.add('open');
-};
+window.editWIP = null;
 
 window.abrirEditarDrench = function(docId) {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
   const d = drenchPrevencao.find(x => x._docId === docId);
   if (!d) { toast('❌ Agendamento não encontrado.'); return; }
   window.drenchEditandoId = docId;
-  window.produtosWIP = (d.produtos||[]).map(pr => ({produto:pr.produto||'',dose:pr.dose||'',unidade:pr.unidade||'L'}));
-  document.getElementById('tituloNova').textContent = '✏️ Editar Agendamento';
-  document.getElementById('btnSalvarDrench').textContent = '💾 Salvar alterações';
-  atualizarSelectTalhoes();
-  document.getElementById('fData').value = d.data || '';
-  document.getElementById('fTalhao').value = d.talhaoId || '';
-  document.getElementById('fAlvo').value = d.alvoPrevencao || '';
-  document.getElementById('fObs').value = d.observacoes || '';
-  renderizarProdutosWIP();
-  document.getElementById('overlayNova').classList.add('open');
+  window.editWIP = {produtos: (d.produtos||[]).map(normalizarProduto).map(p=>({...p}))};
+  document.getElementById('editInfo').innerHTML =
+    `🌱 <strong>${sanitizar(d.talhaoNome||d.talhaoId||'')}</strong> · ${sanitizar(d.fazenda||'sem fazenda')}`;
+  document.getElementById('eData').value = d.data || '';
+  document.getElementById('eAlvo').value = d.alvoPrevencao || '';
+  document.getElementById('eObs').value = d.observacoes || '';
+  renderizarProdutosEdit();
+  document.getElementById('overlayEditar').classList.add('open');
 };
 
-window.fecharNova = function() { document.getElementById('overlayNova').classList.remove('open'); };
+window.fecharEditar = function() { document.getElementById('overlayEditar').classList.remove('open'); window.drenchEditandoId = null; };
 
-window.addProduto = function() {
-  window.produtosWIP.push({produto:'', dose:'', unidade:'L'});
-  renderizarProdutosWIP();
-};
-
-function renderizarProdutosWIP() {
-  const escAttr = s => String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  document.getElementById('listaProdutos').innerHTML = window.produtosWIP.map((p,i) => `
-    <div class="prod-row">
-      <input type="text" class="prod-inp" placeholder="Produto / Insumo..." value="${escAttr(p.produto)}"
-        oninput="window.produtosWIP[${i}].produto=this.value">
-      <input type="text" inputmode="decimal" class="prod-dose-inp" placeholder="Dose/ha" value="${escAttr(p.dose)}"
-        oninput="window.produtosWIP[${i}].dose=this.value">
-      <select class="prod-und-sel" onchange="window.produtosWIP[${i}].unidade=this.value">
-        ${['L','mL','kg','g'].map(u=>`<option value="${u}" ${p.unidade===u?'selected':''}>${u}/ha</option>`).join('')}
-      </select>
-      <button onclick="window.produtosWIP.splice(${i},1);renderizarProdutosWIP()" class="btn-rm-prod">✕</button>
-    </div>
-  `).join('') || `<div class="vazio-sm">Adicione os produtos acima.</div>`;
+function renderizarProdutosEdit() {
+  document.getElementById('listaProdutosEdit').innerHTML = window.editWIP.produtos
+    .map((p,i)=>produtoRowHtml(p,i,'window.editWIP.produtos','window.remEditProduto')).join('')
+    || '<div class="vazio-sm">Adicione os produtos acima.</div>';
 }
+window.addEditProduto = function() { window.editWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'L'}); renderizarProdutosEdit(); };
+window.remEditProduto = function(i) { window.editWIP.produtos.splice(i,1); renderizarProdutosEdit(); };
 
-window.salvarDrench = async function() {
-  const talhaoId = document.getElementById('fTalhao').value;
-  const data = document.getElementById('fData').value;
-  if (!talhaoId || !data) { toast('⚠️ Preencha talhão e data prevista.'); return; }
-  const prods = window.produtosWIP.filter(p => p.produto.trim());
+window.salvarEditarDrench = async function() {
+  const docId = window.drenchEditandoId;
+  if (!docId) return;
+  const data = document.getElementById('eData').value;
+  if (!data) { toast('⚠️ Preencha a data prevista.'); return; }
+  const prods = window.editWIP.produtos.filter(p=>p.produto.trim());
   if (!prods.length) { toast('⚠️ Adicione ao menos um produto.'); return; }
-  const talhao = talhoes.find(t => t.id === talhaoId);
-  const alvo = document.getElementById('fAlvo').value.trim();
-  const obs = document.getElementById('fObs').value.trim();
-  const btn = document.getElementById('btnSalvarDrench');
+  const alvo = document.getElementById('eAlvo').value.trim();
+  const obs = document.getElementById('eObs').value.trim();
+  const btn = document.getElementById('btnSalvarEditar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
-    if (window.drenchEditandoId) {
-      await updateDoc(doc(db,'drenchPrevencao',window.drenchEditandoId), {
-        talhaoId, talhaoNome: talhao?.nome || talhaoId, fazenda: talhao?.fazenda || '',
-        data, alvoPrevencao: alvo, produtos: prods, observacoes: obs,
-        editadoEm: new Date().toISOString(), editadoPor: usuarioAtual.email
-      });
-      toast('✅ Agendamento atualizado!');
-    } else {
-      await addDoc(collection(db,'drenchPrevencao'), {
-        talhaoId, talhaoNome: talhao?.nome || talhaoId, fazenda: talhao?.fazenda || '',
-        data, alvoPrevencao: alvo, produtos: prods, observacoes: obs,
-        status: 'pendente', dataRealizado: null, realizadoPor: null, obsRealizacao: '',
-        criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
-      });
-      toast('✅ Drench agendado!');
-    }
-    fecharNova();
+    await updateDoc(doc(db,'drenchPrevencao',docId), {
+      data, alvoPrevencao: alvo, observacoes: obs,
+      produtos: prods.map(p=>({produto:p.produto.trim(), modo:p.modo, valor:p.valor, unidade:p.unidade})),
+      editadoEm: new Date().toISOString(), editadoPor: usuarioAtual.email
+    });
+    toast('✅ Agendamento atualizado!');
+    fecharEditar();
   } catch(e) { toast('❌ Erro: ' + e.message); }
-  btn.disabled = false; btn.textContent = window.drenchEditandoId ? '💾 Salvar alterações' : '💾 Salvar';
-  window.drenchEditandoId = null;
+  btn.disabled = false; btn.textContent = '💾 Salvar alterações';
 };
 
 window.excluirDrench = async function(btn) {
@@ -360,16 +594,17 @@ window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('
 window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
 window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
 window.renderizarLista=renderizarLista;
+Object.defineProperty(window, 'novoWIP', { get(){return novoWIP;}, set(v){novoWIP=v;} });
 </script>
 
 <style>
 :root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
 .loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
 .hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
 .hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
 .btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
@@ -388,46 +623,90 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
 .menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
 .btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
-.app-main{display:flex;flex-direction:column;}
-.mod-header{background:var(--ve);color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;position:sticky;top:54px;z-index:199;}
-.mod-header-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.dr-tabs{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;}
+.dr-tab{flex:1;padding:11px 6px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+.dr-tab.ativo{color:var(--v);border-bottom-color:var(--v);}
 
-#viewLista{padding:12px 14px 20px;display:flex;flex-direction:column;gap:10px;}
-.filtros-lista{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;}
+#dmod-mapa{flex:1;position:relative;overflow:hidden;}
+#drenchMap{width:100%;height:100%;z-index:1;}
+.ped-sidebar{position:absolute;top:10px;left:10px;width:200px;max-height:calc(100% - 20px);background:white;border-radius:var(--rad);box-shadow:var(--sf);z-index:1000;display:flex;flex-direction:column;overflow:hidden;}
+.msb-header{padding:9px 11px;border-bottom:1px solid var(--cl);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.msb-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.msb-list{overflow-y:auto;flex:1;}
+.sb-faz{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;padding:7px 11px 3px;background:var(--cl);}
+.msb-item{padding:8px 11px;border-bottom:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:7px;transition:.15s;}
+.msb-item:hover{background:var(--cl);}
+.msb-item.active{background:var(--vb);border-left:3px solid var(--v);}
+.msb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.msb-dot.ativo{background:#22c55e;}.msb-dot.reforma{background:#eab308;}.msb-dot.colhido{background:#ef4444;}
+.msb-info{flex:1;min-width:0;}
+.msb-id{font-size:.6rem;color:var(--v);font-weight:700;font-family:'DM Mono',monospace;}
+.msb-nome{font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ped-legenda{position:absolute;bottom:14px;left:10px;background:white;border-radius:10px;padding:9px 12px;z-index:1000;box-shadow:var(--s);font-size:.65rem;}
+.leg-tit{font-weight:700;color:var(--ve);margin-bottom:5px;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.05em;}
+.leg-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.leg-cor{width:11px;height:11px;border-radius:2px;flex-shrink:0;}
+.painel-pedido{position:absolute;top:0;right:0;bottom:0;width:290px;background:white;z-index:2000;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.15);}
+.painel-hdr{background:var(--ve);color:white;padding:11px 14px;flex-shrink:0;}
+.painel-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
+.painel-res{font-size:.68rem;opacity:.7;margin-top:2px;}
+.painel-scroll{flex:1;overflow-y:auto;padding:10px;}
+.painel-footer{padding:10px;border-top:1.5px solid var(--cb);display:flex;flex-direction:column;gap:7px;flex-shrink:0;background:white;}
+.painel-sel-row{display:flex;gap:6px;}
+.painel-sel-btn{flex:1;background:var(--cl);border:1px solid var(--cb);color:var(--c);border-radius:6px;padding:6px 4px;font-size:.68rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+.btn-salvar-ped{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;}
+.btn-salvar-ped:disabled{opacity:.5;}
+.btn-cancelar-ped{width:100%;background:white;border:1.5px solid var(--cb);color:var(--c);border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;}
+.chips-talhoes{display:flex;flex-wrap:wrap;gap:4px;}
+.chip-tal{display:inline-flex;align-items:center;gap:3px;background:var(--v);color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;}
+.chip-tal button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0;}
+#btnNovoAgendamento{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
+#btnExpandDrSb{display:none;position:absolute;top:10px;left:10px;z-index:1001;background:white;border:none;border-radius:10px;padding:9px 13px;cursor:pointer;box-shadow:var(--sf);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);}
+
+#dmod-lista{flex:1;overflow:hidden;flex-direction:column;display:none;}
+.filtros-lista{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;margin:12px 14px 0;flex-shrink:0;}
 .filtro-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .filtro-row + .filtro-row{margin-top:8px;}
 .filtro-campo{display:flex;flex-direction:column;gap:3px;}
 .filtro-label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
 .filtro-sel{border:1.5px solid var(--cb);border-radius:var(--rs);padding:8px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;width:100%;}
+.lista-scroll{flex:1;overflow-y:auto;padding:12px 14px 20px;}
 .mes-grupo{margin-bottom:8px;}
 .mes-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;}
 
-.pulv-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;border-left:4px solid var(--cb);margin-bottom:10px;}
-.pulv-card.realizada{border-left-color:#16a34a;background:#f0fdf4;}
-.pulv-header{padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
-.pulv-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
-.pulv-meta{font-size:.72rem;color:var(--c);margin-top:2px;}
-.pulv-praga{font-size:.74rem;color:#7c3aed;font-weight:700;padding:4px 14px 0;}
+.grupo-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:10px;}
+.grupo-hdr{padding:12px 14px;border-bottom:1px solid var(--cl);display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
+.grupo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.96rem;color:var(--ve);}
+.grupo-meta{font-size:.7rem;color:var(--c);white-space:nowrap;font-weight:700;}
+.grupo-receita{padding:8px 14px 0;display:flex;flex-wrap:wrap;gap:6px;}
+.receita-chip{font-size:.74rem;background:var(--vb);border:1px solid #c8e0c8;border-radius:9px;padding:4px 9px;color:var(--ve);font-weight:600;}
+.grupo-talhoes{padding:8px 14px 12px;display:flex;flex-direction:column;gap:8px;}
+
+.talhao-item{border:1px solid var(--cl);border-radius:9px;padding:9px 11px;}
+.talhao-item.realizada{background:#f0fdf4;border-color:#bbf7d0;}
+.talhao-item-hdr{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;}
+.aviso-esp{margin-left:5px;}
+.pulv-faz-tag{display:inline-block;font-size:.65rem;color:white;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.02em;vertical-align:middle;margin-right:3px;}
 .pulv-status-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
 .pulv-badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
 .badge-ok{background:#dcfce7;color:#16a34a;}
 .badge-pend{background:#fef9c3;color:#d97706;}
-.pulv-faz-tag{display:inline-block;font-size:.65rem;color:white;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.02em;vertical-align:middle;margin-right:3px;}
-.btn-rm-pulv{background:none;border:none;cursor:pointer;font-size:1rem;color:var(--danger);}
-.pulv-produtos{padding:0 14px 10px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;}
-.prod-linha{display:inline-flex;align-items:center;gap:9px;background:var(--vb);border:1px solid #c8e0c8;border-radius:9px;padding:6px 10px;max-width:100%;}
-.prod-nome{font-size:.88rem;font-weight:700;color:var(--t);}
-.prod-dose{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:700;color:white;background:var(--v);border-radius:5px;padding:2px 8px;white-space:nowrap;}
-.pulv-obs{padding:0 14px 10px;font-size:.75rem;color:var(--c);font-style:italic;}
-.pulv-acoes{padding:10px 14px;border-top:1px solid var(--cl);display:flex;flex-direction:column;gap:6px;}
-.btn-confirmar{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.pulv-produtos{display:flex;flex-direction:column;gap:6px;}
+.prod-linha{display:flex;flex-direction:column;gap:3px;}
+.prod-nome{font-size:.85rem;font-weight:700;color:var(--t);}
+.dose-chips{display:flex;flex-wrap:wrap;gap:5px;}
+.dose-chip{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:600;color:var(--c);background:var(--cl);border-radius:5px;padding:2px 8px;white-space:nowrap;}
+.dose-chip.principal{color:white;background:var(--v);font-weight:700;}
+.pulv-meta{font-size:.72rem;color:var(--c);margin-top:6px;}
+.pulv-obs{font-size:.75rem;color:var(--c);font-style:italic;margin-top:6px;}
+.pulv-acoes{margin-top:8px;padding-top:8px;border-top:1px solid var(--cl);display:flex;flex-wrap:wrap;gap:6px;}
+.btn-confirmar{flex:1 1 100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;cursor:pointer;}
 .btn-desfazer{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 12px;font-size:.72rem;color:var(--c);cursor:pointer;font-family:'Barlow',sans-serif;}
 .btn-editar{background:none;border:1.5px solid #fbbf24;border-radius:6px;padding:7px 12px;font-size:.78rem;color:#92400e;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
-.btn-editar:active{transform:scale(.97);background:#fffbeb;}
+.btn-rm-pulv{background:none;border:1.5px solid #fca5a5;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:.85rem;color:var(--danger);}
 
-#btnNovoDrench{display:none;position:fixed;bottom:20px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:100;align-items:center;gap:8px;}
-
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .25s;}
 .overlay.open{opacity:1;pointer-events:all;}
 .modal-sheet{background:white;border-radius:16px 16px 0 0;width:100%;max-height:88vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,20px);transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.1,.64,1);}
 .overlay.open .modal-sheet{transform:translateY(0);}
@@ -442,10 +721,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .campo input:focus,.campo select:focus,.campo textarea:focus{border-color:var(--v);}
 .campo textarea{resize:none;min-height:60px;}
 .campo-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.prod-row{display:flex;gap:6px;align-items:center;margin-bottom:7px;background:var(--cl);border-radius:var(--rs);padding:8px;}
-.prod-inp{flex:2;border:1.5px solid var(--cb);border-radius:6px;padding:8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;min-width:0;}
-.prod-dose-inp{width:70px;border:1.5px solid var(--cb);border-radius:6px;padding:8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;flex-shrink:0;}
-.prod-und-sel{width:78px;border:1.5px solid var(--cb);border-radius:6px;padding:8px 4px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;flex-shrink:0;text-align:center;}
+
+.label-sec{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;margin-top:4px;}
+.prod-row{background:var(--cl);border-radius:var(--rs);padding:8px;margin-bottom:7px;display:flex;flex-direction:column;gap:6px;}
+.prod-inp{border:1.5px solid var(--cb);border-radius:6px;padding:8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;width:100%;}
+.prod-row2{display:flex;gap:6px;align-items:center;}
+.prod-modo-sel{flex:1.5;border:1.5px solid var(--cb);border-radius:6px;padding:8px 4px;font-size:.78rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;min-width:0;}
+.prod-dose-inp{flex:1;width:0;border:1.5px solid var(--cb);border-radius:6px;padding:8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;}
+.prod-und-sel{width:60px;border:1.5px solid var(--cb);border-radius:6px;padding:8px 2px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;flex-shrink:0;text-align:center;background:white;}
 .btn-rm-prod{background:none;border:none;color:var(--danger);cursor:pointer;font-size:1rem;padding:4px;flex-shrink:0;}
 .btn-add-prod{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:9px;font-size:.85rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-bottom:12px;}
 .btn-salvar{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
@@ -482,13 +765,69 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
   <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
 </div>
 
-<div id="appContent" style="display:none;flex-direction:column;">
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
   <div class="app-main">
-    <div class="mod-header">
-      <div class="mod-header-title"><span>🌱</span> Drench Preventivo</div>
+    <div class="dr-tabs">
+      <button class="dr-tab ativo" id="dtab-mapa" onclick="abrirTab('mapa',this)">🗺️ Mapa</button>
+      <button class="dr-tab" id="dtab-lista" onclick="abrirTab('lista',this)">📋 Agendamentos</button>
     </div>
 
-    <div id="viewLista">
+    <div id="dmod-mapa" style="display:flex;">
+      <div id="drenchMap"></div>
+      <div class="ped-sidebar" id="drSidebar">
+        <div class="msb-header"><span class="msb-title">Talhões</span><button onclick="toggleDrSidebar()" style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--c);padding:2px 4px;">◀</button></div>
+        <div class="msb-list" id="drSidebarList"></div>
+      </div>
+      <button id="btnExpandDrSb" onclick="toggleDrSidebar()">▶ Talhões</button>
+      <div class="ped-legenda">
+        <div class="leg-tit">Legenda</div>
+        <div class="leg-item"><div class="leg-cor" style="background:rgba(74,140,63,.4);border:2px solid rgba(123,198,126,.9);"></div>Ativo</div>
+        <div class="leg-item"><div class="leg-cor" style="background:rgba(201,168,76,.4);border:2px solid rgba(220,190,90,.9);"></div>Reforma</div>
+        <div class="leg-item"><div class="leg-cor" style="background:rgba(139,94,60,.4);border:2px solid rgba(196,133,90,.9);"></div>Colhido</div>
+        <div class="leg-item"><div class="leg-cor" style="background:rgba(245,200,66,.55);border:2px solid #f5c842;"></div>Selecionado</div>
+      </div>
+
+      <div class="painel-pedido" id="painelDrench" style="display:none;">
+        <div class="painel-hdr">
+          <div class="painel-tit">🌱 Novo Agendamento de Drench</div>
+          <div class="painel-res" id="drResumo">0 talhão(ões) selecionado(s)</div>
+        </div>
+        <div class="painel-scroll">
+          <div class="campo"><label>Data Prevista</label><input type="date" id="nData" onchange="novoWIP.data=this.value"></div>
+          <div class="campo">
+            <label>Alvo de Prevenção (opcional)</label>
+            <input type="text" id="nAlvo" placeholder="Ex: Nematoides, Ferrugem, Preventivo geral..." list="listaAlvosSug" autocomplete="off" oninput="novoWIP.alvo=this.value">
+            <datalist id="listaAlvosSug">
+              <option value="Nematoides">
+              <option value="Ferrugem (Hemileia vastatrix)">
+              <option value="Broca-do-café (Hypothenemus hampei)">
+              <option value="Cochonilhas">
+              <option value="Ácaro-vermelho">
+              <option value="Preventivo geral">
+              <option value="Reforço nutricional">
+            </datalist>
+          </div>
+          <div class="label-sec">Produtos / Dosagem</div>
+          <div id="listaProdutosNovo"></div>
+          <button class="btn-add-prod" onclick="addProdutoNovo()">＋ Adicionar produto</button>
+          <div class="campo"><label>Observações</label><textarea id="nObs" placeholder="Cuidados, época, dosagem..." oninput="novoWIP.obs=this.value"></textarea></div>
+          <div class="label-sec">Talhões selecionados</div>
+          <div class="chips-talhoes" id="drChips"></div>
+        </div>
+        <div class="painel-footer">
+          <div class="painel-sel-row">
+            <button class="painel-sel-btn" onclick="drSelTodos()">Selec. todos</button>
+            <button class="painel-sel-btn" onclick="drLimparSel()">Limpar seleção</button>
+          </div>
+          <button class="btn-salvar-ped" id="btnSalvarDr" onclick="salvarNovoAgendamento()">💾 Salvar Agendamento</button>
+          <button class="btn-cancelar-ped" onclick="cancelarNovoAgendamento()">Cancelar</button>
+        </div>
+      </div>
+
+      <button id="btnNovoAgendamento" onclick="iniciarNovoAgendamento()">＋ Novo Agendamento</button>
+    </div>
+
+    <div id="dmod-lista">
       <div class="filtros-lista">
         <div class="filtro-row">
           <div class="filtro-campo">
@@ -515,45 +854,31 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
           </div>
         </div>
       </div>
-      <div id="listaContent"></div>
+      <div class="lista-scroll" id="listaContent"></div>
     </div>
   </div>
 </div>
 
-<!-- FAB -->
-<button id="btnNovoDrench" onclick="abrirModalNova()">＋ Agendar Drench</button>
-
-<!-- MODAL NOVO/EDITAR AGENDAMENTO -->
-<div class="overlay" id="overlayNova" onclick="if(event.target===this)fecharNova()">
+<!-- MODAL EDITAR AGENDAMENTO (POR TALHÃO) -->
+<div class="overlay" id="overlayEditar" onclick="if(event.target===this)fecharEditar()">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <div class="modal-tit">
-      <span id="tituloNova">🌱 Novo Agendamento de Drench</span>
-      <button class="btn-fechar" onclick="fecharNova()">✕</button>
+      <span>✏️ Editar Agendamento</span>
+      <button class="btn-fechar" onclick="fecharEditar()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="campo-row">
-        <div class="campo"><label>Data Prevista</label><input type="date" id="fData"></div>
-        <div class="campo"><label>Talhão</label><select id="fTalhao"></select></div>
-      </div>
+      <div id="editInfo" style="background:var(--vb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;color:var(--ve);margin-bottom:6px;line-height:1.45;"></div>
+      <div class="campo"><label>Data Prevista</label><input type="date" id="eData"></div>
       <div class="campo">
         <label>Alvo de Prevenção (opcional)</label>
-        <input type="text" id="fAlvo" placeholder="Ex: Nematoides, Ferrugem, Preventivo geral..." list="listaAlvosSug" autocomplete="off">
-        <datalist id="listaAlvosSug">
-          <option value="Nematoides">
-          <option value="Ferrugem (Hemileia vastatrix)">
-          <option value="Broca-do-café (Hypothenemus hampei)">
-          <option value="Cochonilhas">
-          <option value="Ácaro-vermelho">
-          <option value="Preventivo geral">
-          <option value="Reforço nutricional">
-        </datalist>
+        <input type="text" id="eAlvo" placeholder="Ex: Nematoides, Ferrugem, Preventivo geral..." list="listaAlvosSug" autocomplete="off">
       </div>
-      <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Produtos</div>
-      <div id="listaProdutos"></div>
-      <button class="btn-add-prod" onclick="addProduto()">＋ Adicionar produto</button>
-      <div class="campo"><label>Observações</label><textarea id="fObs" placeholder="Cuidados, época, dosagem..."></textarea></div>
-      <button class="btn-salvar" id="btnSalvarDrench" onclick="salvarDrench()">💾 Salvar</button>
+      <div class="label-sec">Produtos / Dosagem</div>
+      <div id="listaProdutosEdit"></div>
+      <button class="btn-add-prod" onclick="addEditProduto()">＋ Adicionar produto</button>
+      <div class="campo"><label>Observações</label><textarea id="eObs" placeholder="Cuidados, época, dosagem..."></textarea></div>
+      <button class="btn-salvar" id="btnSalvarEditar" onclick="salvarEditarDrench()">💾 Salvar alterações</button>
     </div>
   </div>
 </div>
