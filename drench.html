@@ -261,6 +261,7 @@ function iniciarNovoAgendamento() {
   novoWIP = {talhoes:new Set(), data:hoje(), alvo:'', obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
   document.getElementById('painelDrench').style.display = 'flex';
   document.getElementById('btnNovoAgendamento').style.display = 'none';
+  document.getElementById('btnExpandPainel').style.display = 'none';
   document.getElementById('nData').value = novoWIP.data;
   document.getElementById('nAlvo').value = '';
   document.getElementById('nObs').value = '';
@@ -269,11 +270,25 @@ function iniciarNovoAgendamento() {
 }
 window.iniciarNovoAgendamento = iniciarNovoAgendamento;
 
+// Minimiza o painel para liberar o mapa e poder clicar em mais talhões
+window.toggleMinimizarPainel = function() {
+  if (!novoWIP) return;
+  const painel = document.getElementById('painelDrench');
+  const btnExp = document.getElementById('btnExpandPainel');
+  const minimizar = painel.style.display !== 'none';
+  painel.style.display = minimizar ? 'none' : 'flex';
+  btnExp.style.display = minimizar ? 'flex' : 'none';
+  if (drMap) setTimeout(()=>drMap.invalidateSize(), 100);
+};
+
 function renderizarPainelNovo() {
   if (!novoWIP) return;
   const n = novoWIP.talhoes.size;
+  const resumoTxt = `${n} talhão(ões) selecionado(s)`;
   const el = document.getElementById('drResumo');
-  if (el) el.textContent = `${n} talhão(ões) selecionado(s)`;
+  if (el) el.textContent = resumoTxt;
+  const elMini = document.getElementById('drResumoMini');
+  if (elMini) elMini.textContent = `· ${n}`;
   const chips = [...novoWIP.talhoes].map(id => {
     const t = talhoes.find(x=>x.id===id);
     return `<span class="chip-tal">${t?t.id:id}<button onclick="remTalhaoNovo('${id}')">✕</button></span>`;
@@ -290,6 +305,7 @@ window.cancelarNovoAgendamento = function() {
   if (novoWIP && novoWIP.talhoes.size > 0 && !confirm('Cancelar este agendamento?')) return;
   novoWIP = null;
   document.getElementById('painelDrench').style.display = 'none';
+  document.getElementById('btnExpandPainel').style.display = 'none';
   document.getElementById('btnNovoAgendamento').style.display = isAdmin() ? 'flex' : 'none';
   renderizarDrPoligonos();
 };
@@ -350,6 +366,7 @@ window.salvarNovoAgendamento = async function() {
     toast('✅ Drench agendado!');
     novoWIP = null;
     document.getElementById('painelDrench').style.display = 'none';
+    document.getElementById('btnExpandPainel').style.display = 'none';
     document.getElementById('btnNovoAgendamento').style.display = isAdmin() ? 'flex' : 'none';
     renderizarDrPoligonos();
     abrirTab('lista', document.getElementById('dtab-lista'));
@@ -648,7 +665,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .leg-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
 .leg-cor{width:11px;height:11px;border-radius:2px;flex-shrink:0;}
 .painel-pedido{position:absolute;top:0;right:0;bottom:0;width:290px;background:white;z-index:2000;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,.15);}
-.painel-hdr{background:var(--ve);color:white;padding:11px 14px;flex-shrink:0;}
+.painel-hdr{background:var(--ve);color:white;padding:11px 14px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;}
+.btn-minimizar-painel{background:rgba(255,255,255,.15);border:none;color:white;border-radius:6px;width:30px;height:30px;font-size:1.1rem;line-height:1;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
 .painel-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;}
 .painel-res{font-size:.68rem;opacity:.7;margin-top:2px;}
 .painel-scroll{flex:1;overflow-y:auto;padding:10px;}
@@ -662,6 +680,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .chip-tal{display:inline-flex;align-items:center;gap:3px;background:var(--v);color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;}
 .chip-tal button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0;}
 #btnNovoAgendamento{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
+#btnExpandPainel{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
+#drResumoMini{background:rgba(255,255,255,.25);border-radius:10px;padding:1px 8px;font-size:.85rem;}
 #btnExpandDrSb{display:none;position:absolute;top:10px;left:10px;z-index:1001;background:white;border:none;border-radius:10px;padding:9px 13px;cursor:pointer;box-shadow:var(--sf);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);}
 
 #dmod-lista{flex:1;overflow:hidden;flex-direction:column;display:none;}
@@ -789,8 +809,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 
       <div class="painel-pedido" id="painelDrench" style="display:none;">
         <div class="painel-hdr">
-          <div class="painel-tit">🌱 Novo Agendamento de Drench</div>
-          <div class="painel-res" id="drResumo">0 talhão(ões) selecionado(s)</div>
+          <div>
+            <div class="painel-tit">🌱 Novo Agendamento de Drench</div>
+            <div class="painel-res" id="drResumo">0 talhão(ões) selecionado(s)</div>
+          </div>
+          <button class="btn-minimizar-painel" onclick="toggleMinimizarPainel()" title="Minimizar para selecionar no mapa">➖</button>
         </div>
         <div class="painel-scroll">
           <div class="campo"><label>Data Prevista</label><input type="date" id="nData" onchange="novoWIP.data=this.value"></div>
@@ -825,6 +848,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       </div>
 
       <button id="btnNovoAgendamento" onclick="iniciarNovoAgendamento()">＋ Novo Agendamento</button>
+      <button id="btnExpandPainel" onclick="toggleMinimizarPainel()">🌱 Continuar agendamento <span id="drResumoMini"></span></button>
     </div>
 
     <div id="dmod-lista">
