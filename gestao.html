@@ -1912,6 +1912,7 @@ function renderCalendario() {
     if (!d.data) return;
     if (faz && d.fazenda !== faz) return;
     const prods = (d.produtos || []).map(pr => pr.produto).filter(Boolean).join(', ');
+    const alvo = Array.isArray(d.alvoPrevencao) ? d.alvoPrevencao.filter(Boolean).join(', ') : (d.alvoPrevencao || '');
     eventos.push({
       data: d.data,
       tipo: 'drench',
@@ -1919,7 +1920,7 @@ function renderCalendario() {
       label: 'Drench preventivo',
       fazenda: d.fazenda || '',
       talhaoNome: d.talhaoNome || '',
-      descricao: [d.alvoPrevencao, prods].filter(Boolean).join(' · '),
+      descricao: [alvo, prods].filter(Boolean).join(' · '),
       parcial: false
     });
   });

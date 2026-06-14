@@ -173,6 +173,14 @@ function normalizarProduto(pr) {
   return {produto: pr.produto || '', modo:'ha', valor: pr.dose ?? '', unidade: pr.unidade || 'kg'};
 }
 
+// Retrocompat: docs antigos têm alvoPrevencao como string única; novos usam array
+function getAlvos(d) {
+  const a = d?.alvoPrevencao;
+  if (Array.isArray(a)) return a.filter(Boolean);
+  if (a) return [a];
+  return [];
+}
+
 // ══════════════════════════════
 // ABAS
 // ══════════════════════════════
@@ -258,14 +266,15 @@ window.toggleDrSidebar = function() {
 // ══════════════════════════════
 function iniciarNovoAgendamento() {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
-  novoWIP = {talhoes:new Set(), data:hoje(), alvo:'', obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
+  novoWIP = {talhoes:new Set(), data:hoje(), alvos:[], obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
   document.getElementById('painelDrench').style.display = 'flex';
   document.getElementById('btnNovoAgendamento').style.display = 'none';
   document.getElementById('btnExpandPainel').style.display = 'none';
   document.getElementById('nData').value = novoWIP.data;
-  document.getElementById('nAlvo').value = '';
+  document.getElementById('nAlvoInput').value = '';
   document.getElementById('nObs').value = '';
   renderizarProdutosNovo();
+  renderizarAlvosNovo();
   renderizarPainelNovo();
 }
 window.iniciarNovoAgendamento = iniciarNovoAgendamento;
@@ -300,6 +309,21 @@ function renderizarPainelNovo() {
 window.remTalhaoNovo = function(id) { if(!novoWIP) return; novoWIP.talhoes.delete(id); renderizarPainelNovo(); };
 window.drSelTodos = function() { if(!novoWIP) return; talhoes.forEach(t=>novoWIP.talhoes.add(t.id)); renderizarPainelNovo(); };
 window.drLimparSel = function() { if(!novoWIP) return; novoWIP.talhoes.clear(); renderizarPainelNovo(); };
+
+// ─── Alvos de prevenção (múltiplos) ───
+function renderizarAlvosNovo() {
+  const el = document.getElementById('nAlvosChips'); if (!el) return;
+  el.innerHTML = novoWIP.alvos.map((a,i)=>`<span class="chip-alvo">🛡️ ${sanitizar(a)}<button onclick="remAlvoNovo(${i})">✕</button></span>`).join('');
+}
+window.addAlvoNovo = function() {
+  const inp = document.getElementById('nAlvoInput');
+  const val = inp.value.trim();
+  if (!val) return;
+  if (!novoWIP.alvos.includes(val)) novoWIP.alvos.push(val);
+  inp.value = '';
+  renderizarAlvosNovo();
+};
+window.remAlvoNovo = function(i) { novoWIP.alvos.splice(i,1); renderizarAlvosNovo(); };
 
 window.cancelarNovoAgendamento = function() {
   if (novoWIP && novoWIP.talhoes.size > 0 && !confirm('Cancelar este agendamento?')) return;
@@ -347,7 +371,7 @@ window.salvarNovoAgendamento = async function() {
   const semValor = prods.find(p=>String(p.valor).trim()==='');
   if (semValor) { toast(`⚠️ Informe a dose de "${semValor.produto}".`); return; }
   if (novoWIP.talhoes.size === 0) { toast('⚠️ Selecione ao menos um talhão.'); return; }
-  const alvo = document.getElementById('nAlvo').value.trim();
+  addAlvoNovo(); // adiciona alvo pendente no campo de texto, se houver
   const obs = document.getElementById('nObs').value.trim();
   const btn = document.getElementById('btnSalvarDr');
   btn.disabled = true; btn.textContent = 'Salvando...';
@@ -358,7 +382,7 @@ window.salvarNovoAgendamento = async function() {
       const t = talhoes.find(x=>x.id===talId);
       await addDoc(collection(db,'drenchPrevencao'), {
         grupoId, talhaoId:talId, talhaoNome: t?.nome || talId, fazenda: t?.fazenda || '',
-        data, alvoPrevencao: alvo, produtos: prodsFS, observacoes: obs,
+        data, alvoPrevencao: novoWIP.alvos.slice(), produtos: prodsFS, observacoes: obs,
         status: 'pendente', dataRealizado: null, realizadoPor: null, obsRealizacao: '',
         criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       });
@@ -388,7 +412,7 @@ function renderizarLista() {
   let filtrados = drenchPrevencao;
   if (filtros.status) filtrados = filtrados.filter(d => (d.status||'pendente') === filtros.status);
   if (filtros.talhao) filtrados = filtrados.filter(d => d.talhaoId === filtros.talhao);
-  if (filtros.alvo) filtrados = filtrados.filter(d => d.alvoPrevencao === filtros.alvo);
+  if (filtros.alvo) filtrados = filtrados.filter(d => getAlvos(d).includes(filtros.alvo));
 
   if (!filtrados.length) {
     content.innerHTML = `<div class="vazio"><div class="ico">🌱</div><p>Nenhum agendamento de drench encontrado.</p></div>`;
@@ -416,7 +440,7 @@ function renderizarLista() {
 function atualizarFiltroAlvos() {
   const sel = document.getElementById('filtroAlvo'); if (!sel) return;
   const atual = sel.value;
-  const alvos = [...new Set(drenchPrevencao.map(d => d.alvoPrevencao).filter(Boolean))].sort();
+  const alvos = [...new Set(drenchPrevencao.flatMap(d => getAlvos(d)))].sort();
   sel.innerHTML = `<option value="">Todos</option>`
     + alvos.map(a => `<option value="${a}" ${a===atual?'selected':''}>${a}</option>`).join('');
 }
@@ -438,9 +462,10 @@ function corFazenda(nome) {
 function renderCardGrupo(docs) {
   const first = docs[0];
   const prods = (first.produtos||[]).map(normalizarProduto);
+  const alvosTxt = getAlvos(first).map(a=>'🛡️ '+sanitizar(a)).join(' · ');
   return `<div class="grupo-card">
     <div class="grupo-hdr">
-      <div class="grupo-tit">📅 Previsto: ${formatarData(first.data)}${first.alvoPrevencao?` · 🛡️ ${sanitizar(first.alvoPrevencao)}`:''}</div>
+      <div class="grupo-tit">📅 Previsto: ${formatarData(first.data)}${alvosTxt?` · ${alvosTxt}`:''}</div>
       <div class="grupo-meta">${docs.length} talhão(ões)</div>
     </div>
     <div class="grupo-receita">
@@ -511,13 +536,14 @@ window.abrirEditarDrench = function(docId) {
   const d = drenchPrevencao.find(x => x._docId === docId);
   if (!d) { toast('❌ Agendamento não encontrado.'); return; }
   window.drenchEditandoId = docId;
-  window.editWIP = {produtos: (d.produtos||[]).map(normalizarProduto).map(p=>({...p}))};
+  window.editWIP = {produtos: (d.produtos||[]).map(normalizarProduto).map(p=>({...p})), alvos: getAlvos(d)};
   document.getElementById('editInfo').innerHTML =
     `🌱 <strong>${sanitizar(d.talhaoNome||d.talhaoId||'')}</strong> · ${sanitizar(d.fazenda||'sem fazenda')}`;
   document.getElementById('eData').value = d.data || '';
-  document.getElementById('eAlvo').value = d.alvoPrevencao || '';
+  document.getElementById('eAlvoInput').value = '';
   document.getElementById('eObs').value = d.observacoes || '';
   renderizarProdutosEdit();
+  renderizarAlvosEdit();
   document.getElementById('overlayEditar').classList.add('open');
 };
 
@@ -531,6 +557,20 @@ function renderizarProdutosEdit() {
 window.addEditProduto = function() { window.editWIP.produtos.push({produto:'',modo:'ha',valor:'',unidade:'kg'}); renderizarProdutosEdit(); };
 window.remEditProduto = function(i) { window.editWIP.produtos.splice(i,1); renderizarProdutosEdit(); };
 
+function renderizarAlvosEdit() {
+  const el = document.getElementById('eAlvosChips'); if (!el) return;
+  el.innerHTML = window.editWIP.alvos.map((a,i)=>`<span class="chip-alvo">🛡️ ${sanitizar(a)}<button onclick="remAlvoEdit(${i})">✕</button></span>`).join('');
+}
+window.addAlvoEdit = function() {
+  const inp = document.getElementById('eAlvoInput');
+  const val = inp.value.trim();
+  if (!val) return;
+  if (!window.editWIP.alvos.includes(val)) window.editWIP.alvos.push(val);
+  inp.value = '';
+  renderizarAlvosEdit();
+};
+window.remAlvoEdit = function(i) { window.editWIP.alvos.splice(i,1); renderizarAlvosEdit(); };
+
 window.salvarEditarDrench = async function() {
   const docId = window.drenchEditandoId;
   if (!docId) return;
@@ -538,13 +578,13 @@ window.salvarEditarDrench = async function() {
   if (!data) { toast('⚠️ Preencha a data prevista.'); return; }
   const prods = window.editWIP.produtos.filter(p=>p.produto.trim());
   if (!prods.length) { toast('⚠️ Adicione ao menos um produto.'); return; }
-  const alvo = document.getElementById('eAlvo').value.trim();
+  addAlvoEdit(); // adiciona alvo pendente no campo de texto, se houver
   const obs = document.getElementById('eObs').value.trim();
   const btn = document.getElementById('btnSalvarEditar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
     await updateDoc(doc(db,'drenchPrevencao',docId), {
-      data, alvoPrevencao: alvo, observacoes: obs,
+      data, alvoPrevencao: window.editWIP.alvos.slice(), observacoes: obs,
       produtos: prods.map(p=>({produto:p.produto.trim(), modo:p.modo, valor:p.valor, unidade:p.unidade})),
       editadoEm: new Date().toISOString(), editadoPor: usuarioAtual.email
     });
@@ -568,8 +608,9 @@ window.excluirDrench = async function(btn) {
 window.abrirMarcarRealizado = function(docId) {
   const d = drenchPrevencao.find(x => x._docId === docId);
   if (!d) { toast('❌ Agendamento não encontrado.'); return; }
+  const alvosTxt = getAlvos(d).map(a=>'🛡️ '+sanitizar(a)).join(' · ');
   document.getElementById('realizadoInfo').innerHTML =
-    `🌱 <strong>${sanitizar(d.talhaoNome||d.talhaoId||'')}</strong> · ${sanitizar(d.fazenda||'sem fazenda')}${d.alvoPrevencao?' · 🛡️ '+sanitizar(d.alvoPrevencao):''}`;
+    `🌱 <strong>${sanitizar(d.talhaoNome||d.talhaoId||'')}</strong> · ${sanitizar(d.fazenda||'sem fazenda')}${alvosTxt?' · '+alvosTxt:''}`;
   document.getElementById('realData').value = hoje();
   document.getElementById('realObs').value = '';
   document.getElementById('realData').dataset.docId = docId;
@@ -679,6 +720,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .chips-talhoes{display:flex;flex-wrap:wrap;gap:4px;}
 .chip-tal{display:inline-flex;align-items:center;gap:3px;background:var(--v);color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;}
 .chip-tal button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0;}
+.chip-alvo{display:inline-flex;align-items:center;gap:3px;background:#7c3aed;color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;}
+.chip-alvo button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0;}
+.alvo-input-row{display:flex;gap:6px;}
+.alvo-input-row input{flex:1;}
+.btn-add-alvo{background:#7c3aed;border:none;color:white;border-radius:var(--rs);padding:0 14px;font-size:1rem;font-weight:800;cursor:pointer;}
 #btnNovoAgendamento{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
 #btnExpandPainel{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
 #drResumoMini{background:rgba(255,255,255,.25);border-radius:10px;padding:1px 8px;font-size:.85rem;}
@@ -818,8 +864,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
         <div class="painel-scroll">
           <div class="campo"><label>Data Prevista</label><input type="date" id="nData" onchange="novoWIP.data=this.value"></div>
           <div class="campo">
-            <label>Alvo de Prevenção (opcional)</label>
-            <input type="text" id="nAlvo" placeholder="Ex: Nematoides, Ferrugem, Preventivo geral..." list="listaAlvosSug" autocomplete="off" oninput="novoWIP.alvo=this.value">
+            <label>Alvos de Prevenção (opcional)</label>
+            <div class="chips-talhoes" id="nAlvosChips" style="margin-bottom:6px;"></div>
+            <div class="alvo-input-row">
+              <input type="text" id="nAlvoInput" placeholder="Ex: Nematoides, Ferrugem..." list="listaAlvosSug" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addAlvoNovo();}">
+              <button type="button" class="btn-add-alvo" onclick="addAlvoNovo()">＋</button>
+            </div>
             <datalist id="listaAlvosSug">
               <option value="Nematoides">
               <option value="Ferrugem (Hemileia vastatrix)">
@@ -895,8 +945,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div id="editInfo" style="background:var(--vb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;color:var(--ve);margin-bottom:6px;line-height:1.45;"></div>
       <div class="campo"><label>Data Prevista</label><input type="date" id="eData"></div>
       <div class="campo">
-        <label>Alvo de Prevenção (opcional)</label>
-        <input type="text" id="eAlvo" placeholder="Ex: Nematoides, Ferrugem, Preventivo geral..." list="listaAlvosSug" autocomplete="off">
+        <label>Alvos de Prevenção (opcional)</label>
+        <div class="chips-talhoes" id="eAlvosChips" style="margin-bottom:6px;"></div>
+        <div class="alvo-input-row">
+          <input type="text" id="eAlvoInput" placeholder="Ex: Nematoides, Ferrugem..." list="listaAlvosSug" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();addAlvoEdit();}">
+          <button type="button" class="btn-add-alvo" onclick="addAlvoEdit()">＋</button>
+        </div>
       </div>
       <div class="label-sec">Produtos / Dosagem</div>
       <div id="listaProdutosEdit"></div>
