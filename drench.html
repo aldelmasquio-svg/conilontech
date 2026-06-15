@@ -64,6 +64,14 @@ function nivelAcesso(mod) {
 function isAdmin() { return nivelAcesso('pulverizacao') === 'admin'; }
 function podeConfirmar() { return ['admin','encarregado','operador'].includes(nivelAcesso('pulverizacao')); }
 
+// Restringe a visualização de agendamentos às fazendas liberadas para o usuário
+function fazendaPermitida(fazenda) {
+  if (isAdmin()) return true;
+  const permitidas = perfilAtual.fazendasModulo?.pulverizacao;
+  if (!permitidas || !permitidas.length) return true;
+  return permitidas.includes(fazenda);
+}
+
 function gerarMenu() {
   const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
   const pg = (window.location.pathname.split('/').pop() || 'index.html');
@@ -104,6 +112,7 @@ function iniciarListeners() {
   });
   onSnapshot(collection(db, 'drenchPrevencao'), snap => {
     drenchPrevencao = snap.docs.map(d => ({_docId:d.id,...d.data()}))
+      .filter(d => fazendaPermitida(d.fazenda))
       .sort((a,b) => (a.data||'').localeCompare(b.data||''));
     if (tabAtual === 'lista') renderizarLista();
   });
@@ -111,7 +120,7 @@ function iniciarListeners() {
 
 function atualizarFiltroTalhao() {
   const fazendas = {};
-  talhoes.forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
+  talhoes.filter(t => fazendaPermitida(t.fazenda)).forEach(t => { const f=t.fazenda||'Sem fazenda'; if(!fazendas[f])fazendas[f]=[]; fazendas[f].push(t); });
   const optgroups = Object.entries(fazendas).sort().map(([faz,ts]) =>
     `<optgroup label="${faz}">${ts.map(t=>`<option value="${t.id}">${t.id} · ${t.nome}</option>`).join('')}</optgroup>`
   ).join('');
@@ -404,14 +413,17 @@ window.salvarNovoAgendamento = async function() {
 function renderizarLista() {
   const content = document.getElementById('listaContent');
   atualizarFiltroAlvos();
+  atualizarFiltroFazenda();
   const filtros = {
     status: document.getElementById('filtroStatus')?.value ?? 'pendente',
     talhao: document.getElementById('filtroTalhao')?.value || '',
+    fazenda: document.getElementById('filtroFazenda')?.value || '',
     alvo: document.getElementById('filtroAlvo')?.value || '',
   };
   let filtrados = drenchPrevencao;
   if (filtros.status) filtrados = filtrados.filter(d => (d.status||'pendente') === filtros.status);
   if (filtros.talhao) filtrados = filtrados.filter(d => d.talhaoId === filtros.talhao);
+  if (filtros.fazenda) filtrados = filtrados.filter(d => (d.fazenda||'Sem fazenda') === filtros.fazenda);
   if (filtros.alvo) filtrados = filtrados.filter(d => getAlvos(d).includes(filtros.alvo));
 
   if (!filtrados.length) {
@@ -443,6 +455,14 @@ function atualizarFiltroAlvos() {
   const alvos = [...new Set(drenchPrevencao.flatMap(d => getAlvos(d)))].sort();
   sel.innerHTML = `<option value="">Todos</option>`
     + alvos.map(a => `<option value="${a}" ${a===atual?'selected':''}>${a}</option>`).join('');
+}
+
+function atualizarFiltroFazenda() {
+  const sel = document.getElementById('filtroFazenda'); if (!sel) return;
+  const atual = sel.value;
+  const fazendas = [...new Set(drenchPrevencao.map(d => d.fazenda || 'Sem fazenda'))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  sel.innerHTML = `<option value="">Todas</option>`
+    + fazendas.map(f => `<option value="${f}" ${f===atual?'selected':''}>${sanitizar(f)}</option>`).join('');
 }
 
 const FARM_COLORS = ['#1e3a5f','#1e5631','#5d3a1a','#37474f','#8b6914','#722f37','#1d5b6e','#556b2f','#a0522d','#455a64'];
@@ -913,13 +933,19 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
             </select>
           </div>
           <div class="filtro-campo">
+            <span class="filtro-label">🏡 Fazenda</span>
+            <select class="filtro-sel" id="filtroFazenda" onchange="renderizarLista()">
+              <option value="">Todas</option>
+            </select>
+          </div>
+        </div>
+        <div class="filtro-row">
+          <div class="filtro-campo">
             <span class="filtro-label">Talhão</span>
             <select class="filtro-sel" id="filtroTalhao" onchange="renderizarLista()">
               <option value="">Todos</option>
             </select>
           </div>
-        </div>
-        <div class="filtro-row" style="grid-template-columns:1fr;">
           <div class="filtro-campo">
             <span class="filtro-label">🛡️ Alvo de Prevenção</span>
             <select class="filtro-sel" id="filtroAlvo" onchange="renderizarLista()">
