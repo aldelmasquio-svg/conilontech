@@ -791,7 +791,7 @@ function faixaEfetiva(parametro, tipo) {
     return {tipo:'ideal', faixa: (custom && custom.ideal !== undefined) ? {ideal:custom.ideal} : parametro.faixaIdeal};
   }
   if (parametro.faixa) {
-    return {tipo:'simples', faixa: custom || parametro.faixa};
+    return {tipo:'simples', faixa: custom ? {...parametro.faixa, ...custom} : parametro.faixa};
   }
   if (parametro.faixaEspecial === 'ph') {
     return {tipo:'ph'};
@@ -827,11 +827,20 @@ function classificar(parametro, valor, tipo, textura) {
   } else {
     faixa = ef.faixa;
   }
-  // Folha (baixo/adequado/alto)
+  // Folha 5 níveis (quando muitoBaixo definido via customização)
+  if (tipo === 'folha' && faixa && faixa.muitoBaixo !== undefined) {
+    if (valor < faixa.muitoBaixo) return {cls:'mb', label:'Muito baixo'};
+    if (valor < faixa.baixo)      return {cls:'bx', label:'Baixo'};
+    if (valor < faixa.alto)       return {cls:'ad', label:'Adequado'};
+    if (faixa.muitoAlto !== undefined && isFinite(faixa.muitoAlto) && valor < faixa.muitoAlto) return {cls:'at', label:'Alto'};
+    return (faixa.muitoAlto !== undefined && isFinite(faixa.muitoAlto)) ? {cls:'ma', label:'Muito alto'} : {cls:'at', label:'Alto'};
+  }
+  // Folha 3 níveis (padrão), com muitoAlto opcional
   if (tipo === 'folha' && faixa && faixa.baixo !== undefined && faixa.muitoBaixo === undefined) {
     if (valor < faixa.baixo) return {cls:'bx', label:'Baixo'};
     if (valor <= faixa.alto) return {cls:'ad', label:'Adequado'};
-    return {cls:'at', label:'Alto'};
+    if (faixa.muitoAlto !== undefined && isFinite(faixa.muitoAlto) && valor < faixa.muitoAlto) return {cls:'at', label:'Alto'};
+    return (faixa.muitoAlto !== undefined && isFinite(faixa.muitoAlto)) ? {cls:'ma', label:'Muito alto'} : {cls:'at', label:'Alto'};
   }
   // Faixa padrão (solo): muito baixo/baixo/médio/alto/muito alto
   if (!faixa) return {cls:'ne', label:'—'};
@@ -2111,12 +2120,20 @@ function renderEditorParam(param, tipo) {
     if (tipo === 'folha' && def.muitoBaixo === undefined) {
       html += `<div class="faixa-inputs">
         <div class="faixa-inp-grp">
+          <label>Muito baixo &lt;</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('muitoBaixo')?'cust':''}" value="${ehCust('muitoBaixo')?v('muitoBaixo'):''}" placeholder="opcional" oninput="setFaixa('${param.id}','${tipo}','muitoBaixo',this.value)">
+        </div>
+        <div class="faixa-inp-grp">
           <label>Baixo &lt;</label>
           <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('baixo')?'cust':''}" value="${ehCust('baixo')?v('baixo'):''}" placeholder="${def.baixo}" oninput="setFaixa('${param.id}','${tipo}','baixo',this.value)">
         </div>
         <div class="faixa-inp-grp">
           <label>Alto ≥</label>
           <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('alto')?'cust':''}" value="${ehCust('alto')?v('alto'):''}" placeholder="${def.alto}" oninput="setFaixa('${param.id}','${tipo}','alto',this.value)">
+        </div>
+        <div class="faixa-inp-grp">
+          <label>Muito alto ≥</label>
+          <input type="text" inputmode="decimal" class="faixa-inp ${ehCust('muitoAlto')?'cust':''}" value="${ehCust('muitoAlto')?v('muitoAlto'):''}" placeholder="opcional" oninput="setFaixa('${param.id}','${tipo}','muitoAlto',this.value)">
         </div>
       </div>`;
     } else {
