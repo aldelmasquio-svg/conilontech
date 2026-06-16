@@ -958,8 +958,8 @@ function renderResultadoVHtml(resV, v1, ctc, w) {
     : 'kg/ha de calcário';
   return `${statusAviso}
   <div class="formula-box">
-    <strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ (PRNT × 10)<br>
-    Cálculo: (${fmt(w.v2,0)} − ${fmt(v1,1)}) × ${fmt(ctc,2)} ÷ (${fmt(w.prnt,0)} × 10)<br>
+    <strong>Fórmula:</strong> NC (t/ha) = (V₂ − V₁) × CTC ÷ PRNT<br>
+    Cálculo: (${fmt(w.v2,0)} − ${fmt(v1,1)}) × ${fmt(ctc,2)} ÷ ${fmt(w.prnt,0)}<br>
     NC (20cm) = <strong>${fmt(ncBase,2)}</strong> t/ha · Fator profundidade (${w.profundidade}cm) = × ${fmt(resV.fatorProf,2)}<br>
     NC final = <strong>${fmt(ncFinal,2)} t/ha</strong>
   </div>
@@ -1537,9 +1537,9 @@ function renderRodape(prod, params) {
 function calcCalagemVImpl(v1, ctc, v2, prnt, profundidade) {
   if (v1 == null || ctc == null || v2 == null || prnt == null) return null;
   if (v1 >= v2) return {nc:0, fatorProf:profundidade/20, ncCorrigida:0, jaCorrigido:true};
-  const nc = (v2 - v1) * ctc / (prnt * 10);
+  const nc = (v2 - v1) * ctc / prnt;
   const fatorProf = profundidade / 20;
-  return {nc, fatorProf, ncCorrigida:nc*fatorProf, formulaTxt:`NC = (${v2} − ${v1.toFixed(1)}) × ${ctc.toFixed(2)} / (${prnt} × 10)`, jaCorrigido:false};
+  return {nc, fatorProf, ncCorrigida:nc*fatorProf, formulaTxt:`NC = (${v2} − ${v1.toFixed(1)}) × ${ctc.toFixed(2)} / ${prnt}`, jaCorrigido:false};
 }
 function calcCalagemCaMgImpl(ca1, mg1, ca2, mg2, prnt, profundidade) {
   if (ca1 == null || mg1 == null || ca2 == null || mg2 == null || prnt == null) return null;
