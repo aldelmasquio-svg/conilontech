@@ -197,6 +197,39 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .placeholder-comparar .ico{font-size:3rem;margin-bottom:14px;}
 .placeholder-comparar p{color:var(--c);font-size:.9rem;line-height:1.5;margin-bottom:14px;}
 
+/* DIAGNÓSTICO */
+.diag-sel-bar{position:fixed;bottom:0;left:0;right:0;background:var(--ve);color:white;padding:11px 16px;display:none;align-items:center;justify-content:space-between;gap:10px;z-index:100;box-shadow:0 -2px 12px rgba(0,0,0,.25);}
+.diag-sel-bar.visivel{display:flex;}
+.diag-sel-txt{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;}
+.diag-sel-acoes{display:flex;gap:8px;}
+.btn-diag-ver{background:white;border:none;color:var(--ve);border-radius:7px;padding:8px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;cursor:pointer;}
+.btn-diag-lim{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:white;border-radius:7px;padding:8px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;}
+.an-card-top{display:flex;align-items:stretch;}
+.diag-check-wrap{display:flex;align-items:center;justify-content:center;padding:10px 4px 10px 12px;cursor:pointer;flex-shrink:0;}
+.diag-check{width:18px;height:18px;cursor:pointer;accent-color:var(--v);}
+.an-card-body{flex:1;min-width:0;cursor:pointer;}
+.diag-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--rad);background:white;box-shadow:var(--s);margin-bottom:10px;}
+.diag-table{border-collapse:collapse;min-width:100%;font-size:.74rem;}
+.diag-table th,.diag-table td{padding:5px 6px;border:1px solid var(--cl);text-align:center;white-space:nowrap;}
+.diag-table th.col-talhao,.diag-table td.col-talhao{text-align:left;position:sticky;left:0;background:white;z-index:2;min-width:110px;max-width:150px;white-space:normal;font-weight:700;font-size:.72rem;border-right:2px solid var(--cb);}
+.diag-table thead th{background:#f0ece3;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ve);position:sticky;top:0;z-index:1;}
+.diag-table thead th.col-talhao{z-index:3;}
+.diag-cell{display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:42px;border-radius:5px;padding:3px 5px;cursor:default;}
+.diag-cell-val{font-family:'DM Mono',monospace;font-weight:700;font-size:.76rem;color:white;}
+.diag-cell-lbl{font-size:.56rem;color:rgba(255,255,255,.85);font-weight:600;text-transform:uppercase;letter-spacing:.02em;}
+.diag-cell.cls-ne{background:#e5e7eb;}
+.diag-cell.cls-ne .diag-cell-val,.diag-cell.cls-ne .diag-cell-lbl{color:var(--c);}
+.diag-alertas{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;}
+.diag-alerta-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:99px;font-size:.74rem;font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.diag-alerta-chip.critico{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
+.diag-alerta-chip.baixo{background:#fef3c7;color:#92400e;border:1px solid #fde68a;}
+.diag-alerta-chip.ok{background:#dcfce7;color:#166534;border:1px solid #86efac;}
+.diag-secao-hdr{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);margin:12px 0 7px;display:flex;align-items:center;gap:7px;}
+.diag-badge-tipo{font-size:.65rem;padding:2px 8px;border-radius:99px;color:white;font-weight:700;}
+.diag-sem-sel{background:white;border-radius:var(--rad);padding:40px 22px;text-align:center;box-shadow:var(--s);}
+.diag-sem-sel .ico{font-size:3rem;margin-bottom:12px;opacity:.4;}
+.diag-sem-sel p{color:var(--c);font-size:.9rem;line-height:1.55;}
+
 /* ━━━━━━━━━━ FASE B: COMPARAÇÃO ━━━━━━━━━━ */
 /* Botão de Faixas no header */
 .btn-faixas-header{background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:38px;height:38px;border-radius:8px;cursor:pointer;display:none;align-items:center;justify-content:center;margin-left:8px;}
@@ -347,6 +380,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
   <div class="tabs-top">
     <button class="tab-top ativa" id="tabLista" onclick="abrirTab('lista')">📋 Análises</button>
     <button class="tab-top" id="tabComparar" onclick="abrirTab('comparar')">📊 Comparar</button>
+    <button class="tab-top" id="tabDiag" onclick="abrirTab('diag')">🩺 Diagnóstico</button>
   </div>
 
   <!-- FILTROS (só na aba lista) -->
@@ -376,6 +410,15 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
   <button class="fab" id="fabNovo" onclick="abrirNovaAnalise()" title="Nova análise manual">+</button>
 </div>
 <input type="file" id="inpPDF" accept=".pdf,application/pdf" style="display:none;" onchange="importarPDF(event)">
+
+<!-- Barra flutuante de seleção para diagnóstico -->
+<div class="diag-sel-bar" id="diagSelBar">
+  <span class="diag-sel-txt" id="diagSelTxt">0 análises selecionadas</span>
+  <div class="diag-sel-acoes">
+    <button class="btn-diag-lim" onclick="limparDiagSel()">✕ Limpar</button>
+    <button class="btn-diag-ver" onclick="abrirTab('diag')">🩺 Ver diagnóstico</button>
+  </div>
+</div>
 
 <!-- MODAL: cadastrar/editar análise -->
 <div class="overlay-an" id="overlayAnalise">
@@ -578,6 +621,7 @@ let usuarioAtual=null, perfilAtual={};
 let analises=[], amostras=[], talhoes=[];
 let fazendas=[];
 let tabAtual='lista';
+let diagSelecionadas = new Set();
 let editandoId=null;
 window.formWIP=null;
 window.texturaAtiva='medio';
@@ -723,10 +767,12 @@ window.fazerLogout = async () => { await signOut(auth); window.location.href='lo
 window.abrirTab = function(t) {
   tabAtual = t;
   document.querySelectorAll('.tab-top').forEach(b => b.classList.remove('ativa'));
-  document.getElementById(t==='lista'?'tabLista':'tabComparar').classList.add('ativa');
+  const tabEl = t==='lista'?'tabLista':t==='comparar'?'tabComparar':'tabDiag';
+  document.getElementById(tabEl).classList.add('ativa');
   document.getElementById('filtrosBar').style.display = t==='lista' ? 'flex' : 'none';
   if (t === 'lista') renderLista();
-  else renderComparar();
+  else if (t === 'comparar') renderComparar();
+  else renderDiagnostico();
 };
 
 // ━━━━━━━━━━ CLASSIFICAÇÃO (avalia parâmetro contra faixa) ━━━━━━━━━━
@@ -819,15 +865,23 @@ window.renderLista = function() {
   cont.innerHTML = lista.map(a => {
     const amos = amostras.filter(x => x.analiseId === a._docId);
     const isSolo = a.tipo === 'solo';
-    return `<div class="an-card ${a.tipo}" onclick="verAnalise('${a._docId}')" style="cursor:pointer;">
-      <div class="an-card-header">
-        <div style="flex:1;min-width:0;">
-          <div class="an-titulo">${isSolo?'🧪':'🍃'} ${escHtml(a.fazendaVinculada || a.propriedade || '—')}</div>
-          <div class="an-meta">📅 ${formatarData(a.dataLaudo || a.dataEntrada)} · ${escHtml(a.laboratorio || '—')}${a.responsavelTecnico?' · '+escHtml(a.responsavelTecnico):''}</div>
+    const sel = diagSelecionadas.has(a._docId);
+    return `<div class="an-card ${a.tipo}" ${sel?'style="outline:2.5px solid var(--v);outline-offset:-1px;"':''}>
+      <div class="an-card-top">
+        <label class="diag-check-wrap" onclick="event.stopPropagation()" title="Selecionar para diagnóstico">
+          <input type="checkbox" class="diag-check" ${sel?'checked':''} onchange="toggleDiagSel('${a._docId}',this.checked)">
+        </label>
+        <div class="an-card-body" onclick="verAnalise('${a._docId}')">
+          <div class="an-card-header">
+            <div style="flex:1;min-width:0;">
+              <div class="an-titulo">${isSolo?'🧪':'🍃'} ${escHtml(a.fazendaVinculada || a.propriedade || '—')}</div>
+              <div class="an-meta">📅 ${formatarData(a.dataLaudo || a.dataEntrada)} · ${escHtml(a.laboratorio || '—')}${a.responsavelTecnico?' · '+escHtml(a.responsavelTecnico):''}</div>
+            </div>
+            <div class="an-badge ${isSolo?'badge-solo':'badge-folha'}">${isSolo?'Solo':'Folha'}</div>
+          </div>
+          <div class="an-card-amostras">📦 <strong>${amos.length}</strong> amostra${amos.length>1?'s':''}${amos.length?': '+amos.slice(0,3).map(x=>escHtml(x.nome+(x.profundidade?' ('+x.profundidade+')':''))).join(', ')+(amos.length>3?' …':''):''}</div>
         </div>
-        <div class="an-badge ${isSolo?'badge-solo':'badge-folha'}">${isSolo?'Solo':'Folha'}</div>
       </div>
-      <div class="an-card-amostras">📦 <strong>${amos.length}</strong> amostra${amos.length>1?'s':''}${amos.length?': '+amos.slice(0,3).map(x=>escHtml(x.nome+(x.profundidade?' ('+x.profundidade+')':''))).join(', ')+(amos.length>3?' …':''):''}</div>
       <div class="an-card-acoes" onclick="event.stopPropagation()">
         <button class="btn-acao primary" onclick="verAnalise('${a._docId}')">👁️ Ver detalhes</button>
         ${podeEditar()?`<button class="btn-acao" onclick="editarAnalise('${a._docId}')">✏️ Editar</button>`:''}
@@ -836,6 +890,156 @@ window.renderLista = function() {
     </div>`;
   }).join('');
 };
+
+// ━━━━━━━━━━ DIAGNÓSTICO ━━━━━━━━━━
+window.toggleDiagSel = function(id, checked) {
+  if (checked) diagSelecionadas.add(id); else diagSelecionadas.delete(id);
+  atualizarDiagFab();
+  // Atualiza contorno do card sem re-renderizar a lista inteira
+  const cont = document.getElementById('content');
+  if (cont) {
+    cont.querySelectorAll('.an-card').forEach(card => {
+      // Identificar pelo checkbox dentro
+      const cb = card.querySelector('.diag-check');
+      if (cb) card.style.outline = cb.checked ? '2.5px solid var(--v)' : '';
+    });
+  }
+};
+
+function atualizarDiagFab() {
+  const bar = document.getElementById('diagSelBar');
+  if (!bar) return;
+  const n = diagSelecionadas.size;
+  if (n === 0) { bar.classList.remove('visivel'); return; }
+  bar.classList.add('visivel');
+  document.getElementById('diagSelTxt').textContent = `${n} análise${n>1?'s':''} selecionada${n>1?'s':''}`;
+}
+
+window.limparDiagSel = function() {
+  diagSelecionadas.clear();
+  atualizarDiagFab();
+  if (tabAtual === 'lista') window.renderLista();
+};
+
+function renderDiagnostico() {
+  const cont = document.getElementById('content');
+  if (diagSelecionadas.size === 0) {
+    cont.innerHTML = `<div class="diag-sem-sel">
+      <div class="ico">🩺</div>
+      <p><strong>Nenhuma análise selecionada.</strong><br><br>
+      Volte para <strong>📋 Análises</strong>, marque as análises que deseja incluir no diagnóstico e clique em <strong>🩺 Ver diagnóstico</strong>.</p>
+    </div>`;
+    return;
+  }
+  const amSel = amostras.filter(am => diagSelecionadas.has(am.analiseId));
+  const amFolha = amSel.filter(am => am.tipo === 'folha');
+  const amSolo  = amSel.filter(am => am.tipo === 'solo');
+  let html = '';
+  if (amFolha.length) html += renderDiagSecao(amFolha, 'folha');
+  if (amSolo.length)  html += renderDiagSecao(amSolo, 'solo');
+  if (!html) html = `<div class="diag-sem-sel"><div class="ico">📭</div><p>As análises selecionadas não possuem amostras cadastradas.</p></div>`;
+  cont.innerHTML = html;
+}
+window.renderDiagnostico = renderDiagnostico;
+
+function renderDiagSecao(amos, tipo) {
+  const params = PARAMS[tipo].filter(p => p.destaque && !p.faixaIdeal);
+  const textura = window.texturaAtiva || 'medio';
+  const ABREV = {
+    'Nitrogênio (N)':'N','Fósforo (P)':'P','Potássio (K)':'K','Cálcio (Ca)':'Ca','Magnésio (Mg)':'Mg','Enxofre (S)':'S',
+    'Ferro (Fe)':'Fe','Zinco (Zn)':'Zn','Cobre (Cu)':'Cu','Manganês (Mn)':'Mn','Boro (B)':'B',
+    'Fósforo (Mehlich-1)':'P','Potássio':'K','Enxofre':'S','Cálcio':'Ca','Magnésio':'Mg',
+    'Matéria orgânica':'MO','pH em H₂O':'pH','Ferro':'Fe','Zinco':'Zn','Cobre':'Cu','Manganês':'Mn','Boro':'B',
+    'Saturação de bases (V)':'V%','Saturação de Alumínio (m)':'m%'
+  };
+  const BG = {mb:'#991b1b',bx:'#dc2626',md:'#16a34a',ad:'#16a34a',at:'#2563eb',ma:'#7c3aed',id:'#16a34a',fora:'#f59e0b',ne:'#e5e7eb'};
+
+  const linhas = amos.map(am => {
+    const an = analises.find(a => a._docId === am.analiseId);
+    const tal = am.talhaoIdVinculado ? talhoes.find(t => t.id === am.talhaoIdVinculado) : null;
+    const rotulo = tal ? (tal.nome || tal.id) : am.nome || '—';
+    const fazenda = an?.fazendaVinculada || '';
+    const cells = params.map(p => {
+      const val = am.parametros?.[p.id];
+      if (val == null) return {cls:'ne', val:null, label:'—', param:p};
+      const c = classificar(p, val, tipo, textura);
+      return {cls:c.cls, val, label:c.label, param:p};
+    });
+    return {rotulo, fazenda, cells};
+  });
+
+  // Alertas por nutriente
+  const alertas = params.map((p, ci) => {
+    const def = linhas.filter(l => ['mb','bx'].includes(l.cells[ci].cls));
+    if (!def.length) return null;
+    const crit = def.some(l => l.cells[ci].cls === 'mb');
+    const abrev = ABREV[p.label] || p.label.replace(/\s*\(.*\)/,'');
+    return {abrev, n:def.length, total:linhas.length, crit};
+  }).filter(Boolean).sort((a,b) => b.n - a.n);
+
+  const ico = tipo==='folha' ? '🍃' : '🧪';
+  const corBadge = tipo==='folha' ? '#1e5631' : '#5d3a1a';
+  const titulo = tipo==='folha' ? 'Análise Foliar' : 'Análise de Solo';
+
+  let html = `<div class="diag-secao-hdr">${ico} ${titulo}
+    <span class="diag-badge-tipo" style="background:${corBadge};">${amos.length} amostra${amos.length>1?'s':''}</span>
+  </div>`;
+
+  if (tipo === 'solo') {
+    html += `<div class="textura-box" style="margin-bottom:8px;">
+      <label>Textura do solo (afeta P-Mehlich):</label>
+      <select onchange="window.texturaAtiva=this.value;renderDiagnostico()">
+        ${TEXTURAS.map(t => `<option value="${t.id}" ${window.texturaAtiva===t.id?'selected':''}>${t.label}</option>`).join('')}
+      </select>
+    </div>`;
+  }
+
+  html += `<div class="diag-alertas">`;
+  if (alertas.length) {
+    alertas.forEach(al => {
+      const cls = al.crit ? 'critico' : 'baixo';
+      const dot = al.crit ? '🔴' : '🟡';
+      html += `<div class="diag-alerta-chip ${cls}">${dot} ${escHtml(al.abrev)} — ${al.n}/${al.total}</div>`;
+    });
+  } else {
+    html += `<div class="diag-alerta-chip ok">✅ Sem deficiências nas amostras selecionadas</div>`;
+  }
+  html += `</div>`;
+
+  // Cabeçalho da tabela
+  const colHeaders = params.map(p => {
+    const abrev = ABREV[p.label] || p.label.replace(/\s*\(.*\)/,'');
+    return `<th title="${escAttr(p.label)} (${escAttr(p.un)})">${escHtml(abrev)}<br><span style="font-size:.56rem;font-weight:500;opacity:.65;">${escHtml(p.un)}</span></th>`;
+  }).join('');
+
+  const rows = linhas.map(l => {
+    const cels = l.cells.map(c => {
+      const bg = BG[c.cls] || '#9ca3af';
+      const valFmt = c.val != null
+        ? (c.val < 10 ? c.val.toLocaleString('pt-BR',{maximumFractionDigits:2})
+          : c.val < 100 ? c.val.toLocaleString('pt-BR',{maximumFractionDigits:1})
+          : Math.round(c.val).toLocaleString('pt-BR'))
+        : '—';
+      const titleAttr = c.val != null ? `title="${escAttr(c.param.label)}: ${c.val} ${escAttr(c.param.un)} — ${escAttr(c.label)}"` : '';
+      const textColor = c.cls === 'ne' ? 'color:var(--c);' : 'color:white;';
+      return `<td><div class="diag-cell cls-${c.cls}" style="background:${bg};" ${titleAttr}>
+        <span class="diag-cell-val" style="${textColor}">${valFmt}</span>
+        <span class="diag-cell-lbl" style="${c.cls==='ne'?'color:var(--c);':''}">${escHtml(c.label)}</span>
+      </div></td>`;
+    }).join('');
+    return `<tr>
+      <td class="col-talhao">${escHtml(l.rotulo)}${l.fazenda?`<br><span style="font-size:.63rem;color:var(--c);font-weight:600;">${escHtml(l.fazenda)}</span>`:''}</td>
+      ${cels}
+    </tr>`;
+  }).join('');
+
+  html += `<div class="diag-wrap"><table class="diag-table">
+    <thead><tr><th class="col-talhao">Talhão / Amostra</th>${colHeaders}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+
+  return html;
+}
 
 window.renderComparar = function() {
   const cont = document.getElementById('content');
