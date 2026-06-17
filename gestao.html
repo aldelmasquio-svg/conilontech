@@ -312,6 +312,7 @@ let configAdubacao = {}; // período da safra (mesInicio/anoInicio/mesFim/anoFim
 
 // Filtros da aba "Compras" (relatório de compras planejadas)
 let compraTalhaoId = '';
+let compraFazendaId = '';
 let compraDe = '';
 let compraAte = '';
 let compraSafra = '';
@@ -1549,6 +1550,14 @@ function listaSafras() {
 }
 
 window.setCompraTalhao = function(v) { compraTalhaoId = v; renderTab(); };
+window.setCompraFazenda = function(v) {
+  compraFazendaId = v;
+  if (compraTalhaoId) {
+    const t = talhoes.find(x => x.id === compraTalhaoId);
+    if (t && v && t.fazenda !== v) compraTalhaoId = '';
+  }
+  renderTab();
+};
 window.setCompraDe = function(v) {
   compraDe = v;
   compraSafra = '';
@@ -1594,9 +1603,12 @@ function renderCompras() {
   }
   if (mesAnoKey(compraDe) > mesAnoKey(compraAte)) compraAte = compraDe;
 
-  // Talhões disponíveis (respeita o filtro global de fazenda)
+  // Talhões disponíveis (respeita filtro global e filtro local de fazenda da aba)
   const faz = fazendaFiltro();
-  const talhoesBase = (faz ? talhoes.filter(t => t.fazenda === faz) : talhoes)
+  const fazEfetiva = faz || compraFazendaId;
+  const fazendasBase = [...new Set((faz ? talhoes.filter(t => t.fazenda === faz) : talhoes).map(t => t.fazenda).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  if (compraFazendaId && !fazendasBase.includes(compraFazendaId)) compraFazendaId = '';
+  const talhoesBase = (fazEfetiva ? talhoes.filter(t => t.fazenda === fazEfetiva) : talhoes)
     .slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   if (compraTalhaoId && !talhoesBase.some(t => t.id === compraTalhaoId)) compraTalhaoId = '';
   const talhoesSel = compraTalhaoId ? talhoesBase.filter(t => t.id === compraTalhaoId) : talhoesBase;
@@ -1605,11 +1617,18 @@ function renderCompras() {
 
   // Barra de filtros do relatório
   let html = `<div class="secao" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    ${!faz && fazendasBase.length > 1 ? `<div class="filtro-grupo">
+      <span class="filtro-label">🏡 Fazenda</span>
+      <select class="filtro-sel" id="selCompraFazenda" onchange="window.setCompraFazenda(this.value)">
+        <option value="">Todas</option>
+        ${fazendasBase.map(f => `<option value="${escAttr(f)}"${f === compraFazendaId ? ' selected' : ''}>${escHtml(f)}</option>`).join('')}
+      </select>
+    </div>` : ''}
     <div class="filtro-grupo">
       <span class="filtro-label">🌱 Talhão</span>
       <select class="filtro-sel" id="selCompraTalhao" onchange="window.setCompraTalhao(this.value)">
-        <option value="">Todos${faz ? '' : ' (todas fazendas)'}</option>
-        ${talhoesBase.map(t => `<option value="${escAttr(t.id)}"${t.id === compraTalhaoId ? ' selected' : ''}>${escHtml(t.nome || t.id)}${!faz ? ' · ' + escHtml(t.fazenda || '') : ''}</option>`).join('')}
+        <option value="">Todos</option>
+        ${talhoesBase.map(t => `<option value="${escAttr(t.id)}"${t.id === compraTalhaoId ? ' selected' : ''}>${escHtml(t.nome || t.id)}</option>`).join('')}
       </select>
     </div>
     ${safras.length ? `<div class="filtro-grupo">
@@ -1720,7 +1739,7 @@ function renderCompras() {
   }
 
   html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
-    Relatório baseado nos planos de adubação cadastrados em "Adubações" · ${escHtml(periodoLbl)}${faz ? ' · ' + escHtml(faz) : ''}${compraTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}
+    Relatório baseado nos planos de adubação cadastrados em "Adubações" · ${escHtml(periodoLbl)}${fazEfetiva ? ' · ' + escHtml(fazEfetiva) : ''}${compraTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}
   </div>`;
 
   cont.innerHTML = html;
