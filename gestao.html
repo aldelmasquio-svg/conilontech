@@ -1660,7 +1660,7 @@ function renderCompras() {
 
   // Agrega: para cada talhão, soma as doses (por ha) de cada produto nos planos do período
   // e multiplica pela área do talhão para obter a quantidade total a comprar.
-  const totais = {}; // "produto|unidade" -> {produto,unidade,doseHa,qtd}
+  const totais = {}; // "produto|unidade" -> {produto,unidade,qtd,_talhoes}
   const detalhe = []; // [{fazenda,talhao,area,produto,unidade,doseHa,qtd}]
   talhoesSel.forEach(t => {
     const area = parseDose(t.area);
@@ -1672,9 +1672,10 @@ function renderCompras() {
           const dose = parseDose(p.dose);
           if (!dose) return;
           const key = `${p.produto}|${p.unidade}`;
-          if (!totais[key]) totais[key] = { produto: p.produto, unidade: p.unidade, doseHa: 0, qtd: 0 };
-          totais[key].doseHa += dose;
+          if (!totais[key]) totais[key] = { produto: p.produto, unidade: p.unidade, qtd: 0, _talhoes: new Map() };
           totais[key].qtd += dose * area;
+          // acumula dose por talhão sem misturar talhões distintos
+          totais[key]._talhoes.set(t.id, (totais[key]._talhoes.get(t.id) || 0) + dose * area);
           if (!porProdutoTalhao[key]) porProdutoTalhao[key] = { produto: p.produto, unidade: p.unidade, doseHa: 0, qtd: 0 };
           porProdutoTalhao[key].doseHa += dose;
           porProdutoTalhao[key].qtd += dose * area;
@@ -1684,6 +1685,15 @@ function renderCompras() {
     Object.values(porProdutoTalhao).forEach(item => {
       detalhe.push({ fazenda: t.fazenda, talhao: t.nome || t.id, area, ...item });
     });
+  });
+
+  // Calcula dose média por hectare = quantidade total ÷ área dos talhões que receberam o produto
+  Object.values(totais).forEach(item => {
+    const areaTratada = [...item._talhoes.keys()].reduce((s, id) => {
+      const t = talhoesSel.find(x => x.id === id);
+      return s + parseDose(t?.area);
+    }, 0);
+    item.doseHa = areaTratada > 0 ? item.qtd / areaTratada : 0;
   });
 
   const totaisOrd = Object.values(totais).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
@@ -1706,7 +1716,7 @@ function renderCompras() {
     <div class="secao-tit">🛒 Total a comprar</div>
     <div class="secao-sub">Soma das doses previstas nos planos de adubação × área dos talhões, no período selecionado.</div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr>
-      <th>Produto</th><th class="num">Dose total (/ha)</th><th class="num">Quantidade a comprar</th>
+      <th>Produto</th><th class="num">Dose média (kg/ha)</th><th class="num">Quantidade a comprar</th>
     </tr></thead><tbody>
     ${totaisOrd.map(p => `<tr>
       <td><strong>${escHtml(p.produto)}</strong></td>
