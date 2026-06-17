@@ -626,7 +626,7 @@ let editandoId=null;
 window.formWIP=null;
 window.texturaAtiva='medio';
 // COMPARAÇÃO
-window.slotsComparar=[null, null, null];   // até 3 amostras (IDs)
+window.slotsComparar=[null, null, null, null]; // até 4 amostras (IDs)
 window.modoComparar='tabela';              // 'tabela' | 'graficos'
 window.seletorSlotAlvo=null;               // qual slot está sendo selecionado (0/1/2)
 // FAIXAS CUSTOMIZADAS
@@ -1091,7 +1091,7 @@ window.renderComparar = function() {
   </div>`;
   if (selecionadas.length === 0) {
     html += `<div class="vazio" style="padding:40px 18px;"><div class="ico">👆</div><p style="font-size:.88rem;">Toque em <strong>+ Amostra 1</strong> acima para começar.<br>
-      <span style="font-size:.74rem;color:var(--c);">Compare de 2 a 3 amostras (solo e/ou folha).</span></p></div>`;
+      <span style="font-size:.74rem;color:var(--c);">Compare de 2 a 4 amostras (solo e/ou folha).</span></p></div>`;
   } else if (selecionadas.length === 1) {
     html += `<div class="vazio" style="padding:30px 18px;"><div class="ico">🤏</div><p style="font-size:.88rem;">Adicione mais 1 amostra para comparar.</p></div>`;
   } else {
@@ -1124,7 +1124,7 @@ window.setModoCmp = function(modo) {
   renderComparar();
 };
 window.limparSlots = function() {
-  window.slotsComparar = [null, null, null];
+  window.slotsComparar = [null, null, null, null];
   renderComparar();
 };
 
