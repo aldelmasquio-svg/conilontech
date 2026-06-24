@@ -6,6 +6,9 @@
 <title>ConilonTech · Pulverizações</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
@@ -1176,6 +1179,187 @@ window.salvarPulverizacao = async function() {
 };
 
 // ══════════════════════════════
+// MODAL MAPA PLANEJAMENTO
+// ══════════════════════════════
+window.mapaPlanoMap = null;
+window.mapaPlanoLayers = {};  // talhaoId -> L.polygon
+window.mapaPlanoSel = [];     // [{talhaoId, talhaoNome, fazenda, data}]
+window.mpProdutosWIP = [];
+
+window.abrirModalMapaPlano = function() {
+  if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
+  window.mapaPlanoSel = [];
+  window.mpProdutosWIP = [];
+  document.getElementById('mpModo').value = '';
+  document.getElementById('mpDrone').value = 'Próprio';
+  document.getElementById('mpDroneRow').style.display = 'none';
+  document.getElementById('mpParamsDroneBox').style.display = 'none';
+  ['mpAlturaVoo','mpLarguraFaixa','mpVelocidade','mpVolumeCalda'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  document.getElementById('mpPragaAlvo').value = '';
+  document.getElementById('mpObs').value = '';
+  window.mpRenderProdutos();
+  window.mpRenderSel();
+  document.getElementById('overlayMapaPlano').classList.add('open');
+  requestAnimationFrame(() => initMapaPlano());
+};
+
+function initMapaPlano() {
+  const cont = document.getElementById('mapaPlanoContainer');
+  if (!cont) return;
+  if (window.mapaPlanoMap) {
+    window.mapaPlanoMap.invalidateSize();
+    return;
+  }
+  const map = L.map(cont, { zoomControl: true, attributionControl: false });
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20 }).addTo(map);
+  window.mapaPlanoMap = map;
+  window.mapaPlanoLayers = {};
+  const bounds = [];
+  let semCoord = false;
+  talhoes.forEach(t => {
+    const coords = t.coordenadas;
+    if (!coords || coords.length < 3) { semCoord = true; return; }
+    const latlngs = coords.map(c => {
+      if (Array.isArray(c)) return [c[0], c[1]];
+      if (c.lat !== undefined) return [c.lat, c.lng];
+      if (c.latitude !== undefined) return [c.latitude, c.longitude];
+      return null;
+    }).filter(Boolean);
+    if (latlngs.length < 3) { semCoord = true; return; }
+    const cor = corFazenda(t.fazenda);
+    const poly = L.polygon(latlngs, { color: cor, fillColor: cor, weight: 2, fillOpacity: 0.35, opacity: 0.85 });
+    poly.bindTooltip(sanitizar(t.nome || t.id), { permanent: false, direction: 'center', className: 'mp-tip' });
+    poly.on('click', () => window.mpToggleTalhao(t.id));
+    poly.addTo(map);
+    window.mapaPlanoLayers[t.id] = poly;
+    latlngs.forEach(ll => bounds.push(ll));
+  });
+  document.getElementById('mpSemCoord').style.display = semCoord ? 'block' : 'none';
+  if (bounds.length) map.fitBounds(bounds, { padding: [10, 10] });
+  else map.setView([-18.7166, -40.4000], 13);
+}
+
+window.mpToggleTalhao = function(talhaoId) {
+  const t = talhoes.find(x => x.id === talhaoId);
+  if (!t) return;
+  const idx = window.mapaPlanoSel.findIndex(x => x.talhaoId === talhaoId);
+  const poly = window.mapaPlanoLayers[talhaoId];
+  const cor = corFazenda(t.fazenda);
+  if (idx >= 0) {
+    window.mapaPlanoSel.splice(idx, 1);
+    if (poly) poly.setStyle({ color: cor, weight: 2, fillOpacity: 0.35, opacity: 0.85 });
+  } else {
+    window.mapaPlanoSel.push({ talhaoId, talhaoNome: t.nome || talhaoId, fazenda: t.fazenda || '', data: hoje() });
+    if (poly) poly.setStyle({ color: '#fff', weight: 3, fillOpacity: 0.65, opacity: 1 });
+  }
+  window.mpRenderSel();
+};
+
+window.mpRenderSel = function() {
+  const list = document.getElementById('mpSelList');
+  if (!window.mapaPlanoSel.length) {
+    list.innerHTML = `<div class="mp-vazio">Nenhum talhão selecionado.<br><span style="font-size:.74rem;">Toque nos polígonos no mapa acima.</span></div>`;
+    return;
+  }
+  const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  list.innerHTML = window.mapaPlanoSel.map((s, i) => `
+    <div class="mp-sel-item">
+      <div class="mp-sel-dot" style="background:${esc(corFazenda(s.fazenda))};"></div>
+      <div class="mp-sel-nome">${esc(s.talhaoNome)}<div class="mp-sel-faz">${esc(s.fazenda)}</div></div>
+      <input type="date" class="mp-sel-data" value="${esc(s.data)}" onchange="window.mapaPlanoSel[${i}].data=this.value">
+      <button class="mp-sel-rm" onclick="window.mpToggleTalhao('${esc(s.talhaoId)}')">✕</button>
+    </div>`).join('');
+};
+
+window.mpAddProduto = function() {
+  window.mpProdutosWIP.push({ produto: '', dose: '', unidade: 'L' });
+  window.mpRenderProdutos();
+};
+
+window.mpRenderProdutos = function() {
+  const el = document.getElementById('mpListaProdutos');
+  if (!el) return;
+  const esc = s => String(s || '').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const unidades = ['L','mL','kg','g','t'];
+  el.innerHTML = window.mpProdutosWIP.map((p, i) => `
+    <div class="prod-row">
+      <input type="text" class="prod-nome" placeholder="Produto" value="${esc(p.produto)}" oninput="window.mpProdutosWIP[${i}].produto=this.value">
+      <input type="text" class="prod-dose" inputmode="decimal" placeholder="Dose" value="${esc(p.dose)}" oninput="window.mpProdutosWIP[${i}].dose=this.value">
+      <select class="prod-un" onchange="window.mpProdutosWIP[${i}].unidade=this.value">
+        ${unidades.map(u => `<option value="${u}"${p.unidade===u?' selected':''}>${u}</option>`).join('')}
+      </select>
+      <button onclick="window.mpProdutosWIP.splice(${i},1);window.mpRenderProdutos()" class="btn-rm-prod">✕</button>
+    </div>`).join('') || `<div class="vazio-sm">Adicione os produtos acima.</div>`;
+};
+
+window.mpToggleDrone = function(sel) {
+  const isDrone = sel.value === 'Drone';
+  document.getElementById('mpDroneRow').style.display = isDrone ? 'block' : 'none';
+  document.getElementById('mpParamsDroneBox').style.display = isDrone ? 'block' : 'none';
+  if (!isDrone) {
+    document.getElementById('mpDrone').value = 'Próprio';
+    ['mpAlturaVoo','mpLarguraFaixa','mpVelocidade','mpVolumeCalda'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+  }
+};
+
+window.fecharMapaPlano = function() {
+  document.getElementById('overlayMapaPlano').classList.remove('open');
+  if (window.mapaPlanoMap) {
+    window.mapaPlanoMap.remove();
+    window.mapaPlanoMap = null;
+    window.mapaPlanoLayers = {};
+  }
+};
+
+window.salvarMapaPlano = async function() {
+  if (!window.mapaPlanoSel.length) { toast('⚠️ Selecione ao menos um talhão no mapa.'); return; }
+  const modo = document.getElementById('mpModo').value;
+  if (!modo) { toast('⚠️ Selecione o modo de aplicação.'); return; }
+  for (const s of window.mapaPlanoSel) {
+    if (!s.data) { toast(`⚠️ Defina a data para ${s.talhaoNome}.`); return; }
+  }
+  const prods = window.mpProdutosWIP.filter(p => p.produto.trim());
+  if (!prods.length) { toast('⚠️ Adicione ao menos um produto.'); return; }
+  const ehDrone = modo === 'Drone';
+  const drone = ehDrone ? document.getElementById('mpDrone').value : '';
+  let paramsDrone = null;
+  if (ehDrone) {
+    const av = document.getElementById('mpAlturaVoo').value.trim();
+    const lf = document.getElementById('mpLarguraFaixa').value.trim();
+    const vl = document.getElementById('mpVelocidade').value.trim();
+    const vc = document.getElementById('mpVolumeCalda').value.trim();
+    if (av || lf || vl || vc) paramsDrone = { alturaVoo: av, larguraFaixa: lf, velocidade: vl, volumeCalda: vc };
+  }
+  const pragaAlvo = document.getElementById('mpPragaAlvo').value.trim();
+  const observacoes = document.getElementById('mpObs').value.trim();
+  const btn = document.getElementById('btnSalvarMapaPlano');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  try {
+    for (const s of window.mapaPlanoSel) {
+      const docPulv = {
+        talhaoId: s.talhaoId, talhaoNome: s.talhaoNome, fazenda: s.fazenda,
+        data: s.data, modoAplicacao: modo, drone, produtos: prods,
+        pragaAlvo, observacoes, realizada: false,
+        criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
+      };
+      if (paramsDrone) docPulv.paramsDrone = paramsDrone;
+      await addDoc(collection(db, 'pulverizacoes'), docPulv);
+      await registrarLog('pulverizacao', `${usuarioAtual.email} planejou pulverização em ${s.talhaoNome} para ${formatarData(s.data)}`);
+    }
+    const n = window.mapaPlanoSel.length;
+    fecharMapaPlano();
+    toast(`✅ ${n} pulverização(ões) planejada(s)!`);
+  } catch(e) {
+    toast('❌ Erro: ' + e.message);
+    btn.disabled = false; btn.textContent = '💾 Salvar planejamento';
+  }
+};
+
+// ══════════════════════════════
 // VISUALIZAÇÃO
 // ══════════════════════════════
 window.alternarViz = function(viz, btn) {
@@ -1364,6 +1548,24 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
+/* ━━━━━━━━━━ MAPA PLANEJAMENTO ━━━━━━━━━━ */
+#mapaPlanoContainer{height:260px;width:100%;background:#ddd;position:relative;z-index:0;}
+.mp-legenda{padding:7px 14px;font-size:.72rem;color:var(--c);background:#f8f8f8;border-bottom:1px solid var(--cl);}
+.mp-sel-header{padding:9px 14px 5px;font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;}
+.mp-sel-list{padding:0 14px;}
+.mp-sel-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--cl);}
+.mp-sel-item:last-child{border-bottom:none;}
+.mp-sel-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.mp-sel-nome{flex:1;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;color:var(--t);}
+.mp-sel-faz{font-size:.62rem;color:var(--c);font-weight:600;line-height:1.2;}
+.mp-sel-data{font-size:.8rem;border:1px solid var(--cb);border-radius:6px;padding:5px 6px;color:var(--t);background:#fafafa;width:130px;flex-shrink:0;}
+.mp-sel-rm{background:none;border:none;cursor:pointer;color:var(--c);font-size:.9rem;padding:4px;flex-shrink:0;}
+.mp-sel-rm:hover{color:#dc2626;}
+.mp-vazio{padding:18px 14px;text-align:center;color:var(--c);font-size:.82rem;}
+.mp-campos{padding:12px 14px 0;}
+.mp-sem-coord{background:#fef3c7;border-left:3px solid #f59e0b;border-radius:6px;padding:7px 12px;font-size:.74rem;color:#92400e;margin:8px 14px;}
+.leaflet-tooltip.mp-tip{background:rgba(0,0,0,.75);color:#fff;border:none;border-radius:4px;font-size:.72rem;font-weight:700;padding:3px 7px;box-shadow:none;}
+.leaflet-tooltip.mp-tip::before{display:none;}
 </style>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -1449,7 +1651,7 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
 </div>
 
 <!-- FAB -->
-<button id="btnNovaPulv" onclick="abrirModalNova()">＋ Planejar Pulverização</button>
+<button id="btnNovaPulv" onclick="abrirModalMapaPlano()">🗺️ Planejar Pulverizações</button>
 
 <!-- OVERLAY DIA -->
 <div class="overlay" id="overlayDia" onclick="if(event.target===this)fecharDia()">
@@ -1537,6 +1739,64 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
       <button class="btn-add-prod" onclick="addProduto()">＋ Adicionar produto</button>
       <div class="campo"><label>Observações</label><textarea id="fObs" placeholder="Cuidados, dose, período..."></textarea></div>
       <button class="btn-salvar" id="btnSalvarPulv" onclick="salvarPulverizacao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MAPA PLANEJAMENTO -->
+<div class="overlay" id="overlayMapaPlano" onclick="if(event.target===this)fecharMapaPlano()">
+  <div class="modal-sheet" style="max-height:96vh;display:flex;flex-direction:column;">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">
+      <span>🗺️ Planejar Pulverizações</span>
+      <button class="btn-fechar" onclick="fecharMapaPlano()">✕</button>
+    </div>
+    <div class="modal-body" style="flex:1;overflow-y:auto;padding:0;">
+      <div id="mapaPlanoContainer"></div>
+      <div class="mp-legenda">Toque nos talhões para selecioná-los · toque novamente para remover</div>
+      <div id="mpSemCoord" class="mp-sem-coord" style="display:none;">⚠️ Alguns talhões não têm polígono cadastrado no mapa.</div>
+      <div class="mp-sel-header">Talhões selecionados</div>
+      <div id="mpSelList"></div>
+      <div class="mp-campos">
+        <div class="campo-row">
+          <div class="campo"><label>Modo de Aplicação</label>
+            <select id="mpModo" onchange="window.mpToggleDrone(this)">
+              <option value="">Selecione...</option>
+              <option value="Terrestre">Terrestre</option>
+              <option value="Drone">Drone</option>
+              <option value="Costal">Costal</option>
+              <option value="Tratorizado">Tratorizado</option>
+            </select>
+          </div>
+          <div class="campo" id="mpDroneRow" style="display:none;">
+            <label>Drone</label>
+            <select id="mpDrone">
+              <option value="Próprio">Próprio</option>
+              <option value="Terceiro">Terceiro</option>
+            </select>
+          </div>
+        </div>
+        <div id="mpParamsDroneBox" style="display:none;background:#eff6ff;border:1px solid #93c5fd;border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;">
+          <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:#1e40af;font-weight:700;margin-bottom:8px;">🚁 Parâmetros do voo</div>
+          <div class="campo-row">
+            <div class="campo"><label>Altura de voo (m)</label><input type="text" inputmode="decimal" id="mpAlturaVoo" placeholder="ex: 4,5"></div>
+            <div class="campo"><label>Largura de faixa (m)</label><input type="text" inputmode="decimal" id="mpLarguraFaixa" placeholder="ex: 7"></div>
+          </div>
+          <div class="campo-row">
+            <div class="campo"><label>Velocidade (km/h)</label><input type="text" inputmode="decimal" id="mpVelocidade" placeholder="ex: 23"></div>
+            <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="mpVolumeCalda" placeholder="ex: 8"></div>
+          </div>
+        </div>
+        <div class="campo">
+          <label>Praga / Doença Alvo (opcional)</label>
+          <input type="text" id="mpPragaAlvo" placeholder="Ex: Ferrugem, Bicho-mineiro..." list="listaPragasSug" autocomplete="off">
+        </div>
+        <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Produtos</div>
+        <div id="mpListaProdutos"></div>
+        <button class="btn-add-prod" onclick="window.mpAddProduto()">＋ Adicionar produto</button>
+        <div class="campo"><label>Observações</label><textarea id="mpObs" placeholder="Cuidados, dose, período..."></textarea></div>
+        <button class="btn-salvar" id="btnSalvarMapaPlano" onclick="window.salvarMapaPlano()">💾 Salvar planejamento</button>
+      </div>
     </div>
   </div>
 </div>
