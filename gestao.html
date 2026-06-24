@@ -310,6 +310,10 @@ let tabAtual='geral';
 let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false, catalogoAdubos:false, drenchPrevencao:false};
 let configAdubacao = {}; // período da safra (mesInicio/anoInicio/mesFim/anoFim), definido em Adubações
 
+// Filtros da aba "Pulverizações" (detalhe interno)
+let pulvFiltroTalhao = '';
+let pulvFiltroPraga = '';
+
 // Filtros da aba "Compras" (relatório de compras planejadas)
 let compraTalhaoId = '';
 let compraFazendaId = '';
@@ -963,13 +967,60 @@ function renderProdutividade() {
 // ════════════════════════════════════════════════════
 // ABA 3 — PULVERIZAÇÕES
 // ════════════════════════════════════════════════════
+// pragaAlvo pode ser string (legado) ou array (novo)
+function getPragasPulv(p) {
+  const a = p?.pragaAlvo;
+  if (Array.isArray(a)) return a.filter(Boolean);
+  if (a && a.trim()) return [a.trim()];
+  return [];
+}
+
+window.setPulvFiltroTalhao = function(v) { pulvFiltroTalhao = v; renderTab(); };
+window.setPulvFiltroPraga  = function(v) { pulvFiltroPraga  = v; renderTab(); };
+
 function renderPulverizacoes() {
   const cont = document.getElementById('tabContent');
   const faz = fazendaFiltro();
-  const pulvFil = pulverizacoesFiltradas().filter(p => p.realizada);
+  const pulvTodas = pulverizacoesFiltradas().filter(p => p.realizada);
+
+  // Talhões e pragas disponíveis para os selects internos
+  const talhoesPulv = [...new Map(pulvTodas.map(p => [p.talhaoId, {id:p.talhaoId, nome:p.talhaoNome, fazenda:p.fazenda}])).values()]
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  const pragasPulv = [...new Set(pulvTodas.flatMap(p => getPragasPulv(p)))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+
+  // Limpa filtros obsoletos
+  if (pulvFiltroTalhao && !talhoesPulv.some(t => t.id === pulvFiltroTalhao)) pulvFiltroTalhao = '';
+  if (pulvFiltroPraga  && !pragasPulv.includes(pulvFiltroPraga))              pulvFiltroPraga  = '';
+
+  // Aplica filtros internos
+  const pulvFil = pulvTodas
+    .filter(p => !pulvFiltroTalhao || p.talhaoId === pulvFiltroTalhao)
+    .filter(p => !pulvFiltroPraga  || getPragasPulv(p).includes(pulvFiltroPraga));
   const talhFil = talhoesFiltrados();
+  // Barra de filtros internos
+  const barraFiltros = (talhoesPulv.length > 1 || pragasPulv.length > 0) ? `<div class="secao" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 14px;">
+    ${talhoesPulv.length > 1 ? `<div class="filtro-grupo">
+      <span class="filtro-label">🌱 Talhão</span>
+      <select class="filtro-sel" id="selPulvTalhao" onchange="window.setPulvFiltroTalhao(this.value)">
+        <option value="">Todos</option>
+        ${talhoesPulv.map(t => `<option value="${escAttr(t.id)}"${t.id===pulvFiltroTalhao?' selected':''}>${escHtml(t.nome||t.id)}${!faz?' · '+escHtml(t.fazenda||''):''}</option>`).join('')}
+      </select>
+    </div>` : ''}
+    ${pragasPulv.length > 0 ? `<div class="filtro-grupo">
+      <span class="filtro-label">🐛 Praga / Doença</span>
+      <select class="filtro-sel" id="selPulvPraga" onchange="window.setPulvFiltroPraga(this.value)">
+        <option value="">Todas</option>
+        ${pragasPulv.map(pr => `<option value="${escAttr(pr)}"${pr===pulvFiltroPraga?' selected':''}>${escHtml(pr)}</option>`).join('')}
+      </select>
+    </div>` : ''}
+  </div>` : '';
+
+  if (!pulvTodas.length) {
+    cont.innerHTML = barraFiltros + `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização realizada no período selecionado.<br><span style="font-size:.78rem;">Ajuste o filtro de período ou aguarde aplicações serem confirmadas.</span></p></div>`;
+    return;
+  }
   if (!pulvFil.length) {
-    cont.innerHTML = `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização realizada no período selecionado.<br><span style="font-size:.78rem;">Ajuste o filtro de período ou aguarde aplicações serem confirmadas.</span></p></div>`;
+    cont.innerHTML = barraFiltros + `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização encontrada com os filtros selecionados.</p></div>`;
     return;
   }
   // KPIs
@@ -995,7 +1046,7 @@ function renderPulverizacoes() {
       }
     });
   });
-  let html = `<div class="kpi-grid">
+  let html = barraFiltros + `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Pulverizações</div><div class="kpi-value">${totalPulv}</div><div class="kpi-aux">realizadas no período</div></div>
     <div class="kpi-card ok"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">soma das áreas</div></div>
     <div class="kpi-card info"><div class="kpi-label">Cobertura</div><div class="kpi-value">${fmt(cobertura,0)}%</div><div class="kpi-aux">${talhComPulv.size} de ${talhFil.length} talhões</div></div>
@@ -1004,21 +1055,24 @@ function renderPulverizacoes() {
 
   // ── Por Praga / Alvo (planejamento) ──────────────────────────────
   const porPraga = {};
-  const todosPulv = pulverizacoesFiltradas(); // inclui pendentes
-  todosPulv.forEach(p => {
-    const praga = p.pragaAlvo?.trim() || '';
-    if (!praga) return;
-    if (!porPraga[praga]) porPraga[praga] = {realizadas:0, pendentes:0, talhoes:new Set(), ultimaData:'', produtos:new Set()};
-    if (p.realizada) {
-      porPraga[praga].realizadas++;
-      const dt = p.dataRealizada || p.data || '';
-      if (dt > porPraga[praga].ultimaData) porPraga[praga].ultimaData = dt;
-      (p.aplicacoes||[]).forEach(a => (a.produtos||[]).forEach(pr => { if(pr.produto) porPraga[praga].produtos.add(pr.produto); }));
-      (p.produtosUsados||[]).forEach(pr => { if(pr.produto) porPraga[praga].produtos.add(pr.produto); });
-    } else {
-      porPraga[praga].pendentes++;
-    }
-    if (p.talhaoId) porPraga[praga].talhoes.add(p.talhaoId);
+  const todosPulvPraga = pulverizacoesFiltradas()
+    .filter(p => !pulvFiltroTalhao || p.talhaoId === pulvFiltroTalhao); // respeita filtro de talhão
+  todosPulvPraga.forEach(p => {
+    const pragas = getPragasPulv(p);
+    if (!pragas.length) return;
+    pragas.forEach(praga => {
+      if (!porPraga[praga]) porPraga[praga] = {realizadas:0, pendentes:0, talhoes:new Set(), ultimaData:'', produtos:new Set()};
+      if (p.realizada) {
+        porPraga[praga].realizadas++;
+        const dt = p.dataRealizada || p.data || '';
+        if (dt > porPraga[praga].ultimaData) porPraga[praga].ultimaData = dt;
+        (p.aplicacoes||[]).forEach(a => (a.produtos||[]).forEach(pr => { if(pr.produto) porPraga[praga].produtos.add(pr.produto); }));
+        (p.produtosUsados||[]).forEach(pr => { if(pr.produto) porPraga[praga].produtos.add(pr.produto); });
+      } else {
+        porPraga[praga].pendentes++;
+      }
+      if (p.talhaoId) porPraga[praga].talhoes.add(p.talhaoId);
+    });
   });
   const pragaArr = Object.entries(porPraga)
     .map(([k,v]) => ({praga:k, realizadas:v.realizadas, pendentes:v.pendentes, talhoes:v.talhoes.size, ultimaData:v.ultimaData, produtos:[...v.produtos]}))
@@ -1220,6 +1274,44 @@ function renderPulverizacoes() {
       </div>`;
     }
   }
+  // ── Histórico detalhado de aplicações ───────────────────────────
+  const pulvHist = pulvFil.slice().sort((a,b) => {
+    const da = a.dataRealizada || a.data || '';
+    const db_ = b.dataRealizada || b.data || '';
+    return db_.localeCompare(da);
+  });
+  if (pulvHist.length) {
+    html += `<div class="secao">
+      <div class="secao-tit">📋 Histórico de Aplicações</div>
+      <div class="secao-sub">Cada pulverização realizada no período${pulvFiltroTalhao||pulvFiltroPraga?' · filtro ativo':''}${pulvFiltroTalhao?' · talhão: '+escHtml(talhoesPulv.find(t=>t.id===pulvFiltroTalhao)?.nome||pulvFiltroTalhao):''}${pulvFiltroPraga?' · praga: '+escHtml(pulvFiltroPraga):''}</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Data</th>
+        ${!faz&&!pulvFiltroTalhao?'<th>Fazenda</th>':''}
+        <th>Talhão</th>
+        <th>Praga / Alvo</th>
+        <th>Modo</th>
+        <th>Produtos utilizados</th>
+      </tr></thead><tbody>
+      ${pulvHist.map(p => {
+        const dt = p.dataRealizada || p.data || '—';
+        const pragas = getPragasPulv(p);
+        // produtos: prefere produtosUsados (quantidade real), senão aplicacoes
+        const prods = (p.produtosUsados||[]).length
+          ? (p.produtosUsados||[]).map(pu => `${escHtml(pu.produto||'')}${pu.totalUsado?` <span style="color:var(--c);font-size:.72rem;">(${fmt(Number(pu.totalUsado),2)} ${escHtml(pu.unidade||'')})</span>`:''}`)
+          : [...new Set((p.aplicacoes||[]).flatMap(a=>(a.produtos||[]).map(pr=>pr.produto)).filter(Boolean))].map(pr=>escHtml(pr));
+        return `<tr>
+          <td style="white-space:nowrap;">${formatarData(dt)}</td>
+          ${!faz&&!pulvFiltroTalhao?`<td><span class="faz-bullet" style="background:${corFazenda(p.fazenda)};"></span>${escHtml(p.fazenda||'—')}</td>`:''}
+          <td><strong>${escHtml(p.talhaoNome||p.talhaoId||'—')}</strong></td>
+          <td>${pragas.length?pragas.map(pr=>`<span class="praga-prod-chip" style="background:#ede9fe;color:#6d28d9;border:none;">🐛 ${escHtml(pr)}</span>`).join(' '):'<span style="color:var(--c);font-size:.78rem;">—</span>'}</td>
+          <td style="white-space:nowrap;">${escHtml(p.modoAplicacao||'—')}</td>
+          <td style="font-size:.78rem;">${prods.length?prods.join('<br>'):'<span style="color:var(--c);">—</span>'}</td>
+        </tr>`;
+      }).join('')}
+      </tbody></table></div>
+    </div>`;
+  }
+
   cont.innerHTML = html;
 }
 
