@@ -246,7 +246,7 @@ function renderizarLista() {
   if (filtros.status === 'realizada') filtradas = filtradas.filter(p => p.realizada);
   if (filtros.data1) filtradas = filtradas.filter(p => p.data >= filtros.data1);
   if (filtros.data2) filtradas = filtradas.filter(p => p.data <= filtros.data2);
-  if (filtros.praga) filtradas = filtradas.filter(p => p.pragaAlvo === filtros.praga);
+  if (filtros.praga) filtradas = filtradas.filter(p => getPragas(p).includes(filtros.praga));
 
   if (!filtradas.length) {
     content.innerHTML = `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização encontrada.</p></div>`;
@@ -282,7 +282,7 @@ function getFiltrosLista() {
 function atualizarFiltroPragas() {
   const sel = document.getElementById('filtroPraga'); if (!sel) return;
   const atual = sel.value;
-  const pragas = [...new Set(pulverizacoes.map(p => p.pragaAlvo).filter(Boolean))].sort();
+  const pragas = [...new Set(pulverizacoes.flatMap(p => getPragas(p)).filter(Boolean))].sort();
   sel.innerHTML = `<option value="">Todas</option>`
     + pragas.map(p => `<option value="${p}" ${p===atual?'selected':''}>${p}</option>`).join('');
 }
@@ -391,7 +391,7 @@ function renderCardPulv(p) {
       ${pd.velocidade?` · Vel: <strong>${sanitizar(pd.velocidade)} km/h</strong>`:''}
       ${pd.volumeCalda?` · Calda: <strong>${sanitizar(pd.volumeCalda)} L/ha</strong>`:''}
     </div>`:''}
-    ${p.pragaAlvo?`<div class="pulv-praga">🐛 Alvo: <strong>${sanitizar(p.pragaAlvo)}</strong></div>`:''}
+    ${getPragas(p).length?`<div class="pulv-praga">🐛 Alvo: <strong>${getPragas(p).map(a=>sanitizar(a)).join(' · ')}</strong></div>`:''}
     <div class="pulv-produtos">
       ${(p.produtos||[]).map(pr=>`<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${pr.unidade||''}/ha</span>`:''}</div>`).join('')}
     </div>
@@ -980,6 +980,44 @@ window.pulvEditandoId = null;
 // Se for edição de pulverização realizada, alguns campos ficam bloqueados
 window.pulvEditandoRealizada = false;
 
+// Backward compat: pragaAlvo pode ser string (antigo) ou array (novo)
+function getPragas(p) {
+  const a = p?.pragaAlvo;
+  if (Array.isArray(a)) return a.filter(Boolean);
+  if (a) return [a];
+  return [];
+}
+
+// Chips de praga — modal edição/nova
+window.pragasWIP = [];
+function renderPragasWIP() {
+  const el = document.getElementById('fPragaChips'); if (!el) return;
+  el.innerHTML = window.pragasWIP.map((p,i) =>
+    `<span class="chip-praga">🐛 ${sanitizar(p)}<button onclick="window.remPragaWIP(${i})">✕</button></span>`).join('');
+}
+window.addPragaWIP = function() {
+  const inp = document.getElementById('fPragaInput'); if (!inp) return;
+  const val = inp.value.trim(); if (!val) return;
+  if (!window.pragasWIP.includes(val)) window.pragasWIP.push(val);
+  inp.value = ''; renderPragasWIP();
+};
+window.remPragaWIP = function(i) { window.pragasWIP.splice(i,1); renderPragasWIP(); };
+
+// Chips de praga — modal mapa planejamento
+window.mpPragasWIP = [];
+function mpRenderPragas() {
+  const el = document.getElementById('mpPragaChips'); if (!el) return;
+  el.innerHTML = window.mpPragasWIP.map((p,i) =>
+    `<span class="chip-praga">🐛 ${sanitizar(p)}<button onclick="window.remMpPraga(${i})">✕</button></span>`).join('');
+}
+window.addMpPraga = function() {
+  const inp = document.getElementById('mpPragaInput'); if (!inp) return;
+  const val = inp.value.trim(); if (!val) return;
+  if (!window.mpPragasWIP.includes(val)) window.mpPragasWIP.push(val);
+  inp.value = ''; mpRenderPragas();
+};
+window.remMpPraga = function(i) { window.mpPragasWIP.splice(i,1); mpRenderPragas(); };
+
 window.abrirModalNova = function(dataInicial) {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
   window.pulvEditandoId = null;
@@ -999,7 +1037,8 @@ window.abrirModalNova = function(dataInicial) {
   ['fAlturaVoo','fLarguraFaixa','fVelocidade','fVolumeCalda'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  document.getElementById('fPragaAlvo').value = '';
+  window.pragasWIP = [];
+  renderPragasWIP();
   document.getElementById('fObs').value = '';
   // Desbloquear todos os campos (caso tenha sido edição de realizada antes)
   destravarCamposPulv();
@@ -1039,7 +1078,8 @@ window.abrirEditarPulv = function(docId) {
   document.getElementById('fLarguraFaixa').value = pd.larguraFaixa || '';
   document.getElementById('fVelocidade').value = pd.velocidade || '';
   document.getElementById('fVolumeCalda').value = pd.volumeCalda || '';
-  document.getElementById('fPragaAlvo').value = p.pragaAlvo || '';
+  window.pragasWIP = getPragas(p);
+  renderPragasWIP();
   document.getElementById('fObs').value = p.observacoes || '';
   // Travar campos se for realizada
   if (p.realizada) travarCamposPulv();
@@ -1052,18 +1092,20 @@ window.abrirEditarPulv = function(docId) {
 // Permitido editar: drone (Próprio/Terceiro), parâmetros do drone, observações.
 // Bloqueado: data, talhão, modo de aplicação, produtos.
 function travarCamposPulv() {
-  ['fData','fTalhao','fModo','fPragaAlvo'].forEach(id => {
+  ['fData','fTalhao','fModo','fPragaInput'].forEach(id => {
     const el = document.getElementById(id); if (el) el.disabled = true;
   });
+  const btnAddPraga = document.querySelector('#fPragaArea .btn-add-praga'); if (btnAddPraga) btnAddPraga.style.display='none';
   // Esconder botão de adicionar produto e o "X" dos produtos existentes
   document.getElementById('listaProdutos').classList.add('pulv-travado');
   document.querySelectorAll('#listaProdutos input, #listaProdutos select').forEach(el => el.disabled = true);
   const btnAdd = document.querySelector('.btn-add-prod'); if (btnAdd) btnAdd.style.display = 'none';
 }
 function destravarCamposPulv() {
-  ['fData','fTalhao','fModo','fPragaAlvo'].forEach(id => {
+  ['fData','fTalhao','fModo','fPragaInput'].forEach(id => {
     const el = document.getElementById(id); if (el) el.disabled = false;
   });
+  const btnAddPraga = document.querySelector('#fPragaArea .btn-add-praga'); if (btnAddPraga) btnAddPraga.style.display='';
   document.getElementById('listaProdutos').classList.remove('pulv-travado');
   document.querySelectorAll('#listaProdutos input, #listaProdutos select').forEach(el => el.disabled = false);
   const btnAdd = document.querySelector('.btn-add-prod'); if (btnAdd) btnAdd.style.display = '';
@@ -1137,7 +1179,7 @@ window.salvarPulverizacao = async function() {
       const update = {
         // Sempre permitidos:
         drone,
-        pragaAlvo: document.getElementById('fPragaAlvo').value.trim(),
+        pragaAlvo: [...window.pragasWIP],
         observacoes: document.getElementById('fObs').value.trim(),
         editadoEm: new Date().toISOString(),
         editadoPor: usuarioAtual.email
@@ -1163,7 +1205,7 @@ window.salvarPulverizacao = async function() {
       const docPulv = {
         talhaoId, talhaoNome: talhao?.nome || talhaoId, fazenda: talhao?.fazenda || '',
         data, modoAplicacao: modo, drone, produtos: prods,
-        pragaAlvo: document.getElementById('fPragaAlvo').value.trim(),
+        pragaAlvo: [...window.pragasWIP],
         observacoes: document.getElementById('fObs').value.trim(),
         realizada: false, criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       };
@@ -1201,7 +1243,8 @@ window.abrirModalMapaPlano = function(dataInicial) {
   ['mpAlturaVoo','mpLarguraFaixa','mpVelocidade','mpVolumeCalda'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
-  document.getElementById('mpPragaAlvo').value = '';
+  window.mpPragasWIP = [];
+  mpRenderPragas();
   document.getElementById('mpObs').value = '';
   window.mpRenderProdutos();
   window.mpRenderSel();
@@ -1345,7 +1388,7 @@ window.salvarMapaPlano = async function() {
     const vc = document.getElementById('mpVolumeCalda').value.trim();
     if (av || lf || vl || vc) paramsDrone = { alturaVoo: av, larguraFaixa: lf, velocidade: vl, volumeCalda: vc };
   }
-  const pragaAlvo = document.getElementById('mpPragaAlvo').value.trim();
+  const pragaAlvo = [...window.mpPragasWIP];
   const observacoes = document.getElementById('mpObs').value.trim();
   const btn = document.getElementById('btnSalvarMapaPlano');
   btn.disabled = true; btn.textContent = 'Salvando...';
@@ -1472,6 +1515,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .pulv-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
 .pulv-meta{font-size:.72rem;color:var(--c);margin-top:2px;}
 .pulv-drone{font-size:.72rem;color:#1d4ed8;margin-top:2px;font-weight:600;}
+.chip-praga{display:inline-flex;align-items:center;gap:3px;background:#7c3aed;color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;margin:2px 2px 2px 0;}
+.chip-praga button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0 0 0 2px;}
+.praga-input-row{display:flex;gap:6px;align-items:center;}
+.btn-add-praga{background:#7c3aed;border:none;color:white;border-radius:8px;padding:6px 13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;flex-shrink:0;}
 .pulv-praga{font-size:.74rem;color:#7c3aed;font-weight:700;padding:4px 14px 0;}
 .pulv-status-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
 .pulv-badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
@@ -1730,9 +1777,13 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
           <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="fVolumeCalda" placeholder="ex: 8"></div>
         </div>
       </div>
-      <div class="campo">
+      <div class="campo" id="fPragaArea">
         <label>Praga / Doença Alvo (opcional)</label>
-        <input type="text" id="fPragaAlvo" placeholder="Ex: Ferrugem, Bicho-mineiro, Cercosporiose..." list="listaPragasSug" autocomplete="off">
+        <div id="fPragaChips" style="margin-bottom:6px;min-height:4px;"></div>
+        <div class="praga-input-row">
+          <input type="text" id="fPragaInput" placeholder="Ex: Ferrugem, Bicho-mineiro..." list="listaPragasSug" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();window.addPragaWIP();}">
+          <button type="button" class="btn-add-praga" onclick="window.addPragaWIP()">＋</button>
+        </div>
         <datalist id="listaPragasSug">
           <option value="Ferrugem (Hemileia vastatrix)">
           <option value="Bicho-mineiro (Leucoptera coffeella)">
@@ -1809,7 +1860,11 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
         </div>
         <div class="campo">
           <label>Praga / Doença Alvo (opcional)</label>
-          <input type="text" id="mpPragaAlvo" placeholder="Ex: Ferrugem, Bicho-mineiro..." list="listaPragasSug" autocomplete="off">
+          <div id="mpPragaChips" style="margin-bottom:6px;min-height:4px;"></div>
+          <div class="praga-input-row">
+            <input type="text" id="mpPragaInput" placeholder="Ex: Ferrugem, Bicho-mineiro..." list="listaPragasSug" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();window.addMpPraga();}">
+            <button type="button" class="btn-add-praga" onclick="window.addMpPraga()">＋</button>
+          </div>
         </div>
         <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Produtos</div>
         <div id="mpListaProdutos"></div>
