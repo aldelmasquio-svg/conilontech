@@ -216,11 +216,13 @@ function renderLegendaFazendas() {
 window.mesAnterior = function() { mesAtual--; if(mesAtual<0){mesAtual=11;anoAtual--;} renderizarCalendario(); };
 window.mesProximo = function() { mesAtual++; if(mesAtual>11){mesAtual=0;anoAtual++;} renderizarCalendario(); };
 
+window._diaAtual = null;
 window.verDia = function(dia) {
   const dataStr = `${anoAtual}-${String(mesAtual+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  window._diaAtual = dataStr;
   const eventos = pulverizacoes.filter(p => p.data === dataStr);
   if (!eventos.length) {
-    if (isAdmin()) abrirModalNova(dataStr);
+    if (isAdmin()) abrirModalMapaPlano(dataStr);
     return;
   }
   // Mostrar eventos do dia
@@ -1186,8 +1188,10 @@ window.mapaPlanoLayers = {};  // talhaoId -> L.polygon
 window.mapaPlanoSel = [];     // [{talhaoId, talhaoNome, fazenda, data}]
 window.mpProdutosWIP = [];
 
-window.abrirModalMapaPlano = function() {
+window.mapaPlanoDataInicial = null;
+window.abrirModalMapaPlano = function(dataInicial) {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
+  window.mapaPlanoDataInicial = dataInicial || null;
   window.mapaPlanoSel = [];
   window.mpProdutosWIP = [];
   document.getElementById('mpModo').value = '';
@@ -1251,7 +1255,7 @@ window.mpToggleTalhao = function(talhaoId) {
     window.mapaPlanoSel.splice(idx, 1);
     if (poly) poly.setStyle({ color: cor, weight: 2, fillOpacity: 0.35, opacity: 0.85 });
   } else {
-    window.mapaPlanoSel.push({ talhaoId, talhaoNome: t.nome || talhaoId, fazenda: t.fazenda || '', data: hoje() });
+    window.mapaPlanoSel.push({ talhaoId, talhaoNome: t.nome || talhaoId, fazenda: t.fazenda || '', data: window.mapaPlanoDataInicial || hoje() });
     if (poly) poly.setStyle({ color: '#fff', weight: 3, fillOpacity: 0.65, opacity: 1 });
   }
   window.mpRenderSel();
@@ -1663,7 +1667,7 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
     </div>
     <div class="modal-body" id="listaDia"></div>
     <div style="padding:0 20px 20px;">
-      <button onclick="abrirModalNova()" style="width:100%;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;" id="btnAddNoDia">＋ Adicionar neste dia</button>
+      <button onclick="abrirModalMapaPlano(_diaAtual)" style="width:100%;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;" id="btnAddNoDia">🗺️ Planejar neste dia</button>
     </div>
   </div>
 </div>
