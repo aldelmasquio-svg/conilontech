@@ -186,7 +186,8 @@ function renderizarCalendario() {
       <span class="cal-num">${d}</span>
       ${eventos.map(e=>{
         const cor = corFazenda(e.fazenda);
-        return `<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}" style="background:${cor};border-color:${cor};" title="${escAttrCal(e.fazenda||'')}: ${escAttrCal(e.talhaoNome||e.talhaoId||'')}">${escAttrCal(e.talhaoNome||e.talhaoId||'—')}</div>`;
+        const modoIco = {Drone:'🚁',Tratorizado:'🚜',Terrestre:'🚶',Costal:'🎒'}[e.modoAplicacao] || '';
+        return `<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}" style="background:${cor};border-color:${cor};" title="${escAttrCal(e.fazenda||'')}: ${escAttrCal(e.talhaoNome||e.talhaoId||'')}${e.modoAplicacao?' ('+e.modoAplicacao+')':''}">${modoIco?modoIco+' ':''}${escAttrCal(e.talhaoNome||e.talhaoId||'—')}</div>`;
       }).join('')}
     </div>`;
   }
