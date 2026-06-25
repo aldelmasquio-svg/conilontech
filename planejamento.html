@@ -648,12 +648,13 @@ function renderCard1() {
   const w = window.planWIP;
   const talhao = w.talhaoId ? talhoes.find(t => t._docId === w.talhaoId) : null;
   // Lista talhões ativos agrupados
+  const STATUS_SUF = {reforma:' — Reforma', colhido:' — Colhido'};
   const talhoesOrd = [...talhoes]
-    .filter(t => t.status === 'ativo' || !t.status)
     .sort((a,b) => (a.fazenda||'').localeCompare(b.fazenda||'') || (a.nome||'').localeCompare(b.nome||''));
-  const opcoesT = '<option value="">— selecione —</option>' + talhoesOrd.map(t =>
-    `<option value="${escAttr(t._docId)}" ${t._docId===w.talhaoId?'selected':''}>${escHtml((t.fazenda?t.fazenda+' · ':'') + (t.nome || t.id))}</option>`
-  ).join('');
+  const opcoesT = '<option value="">— selecione —</option>' + talhoesOrd.map(t => {
+    const suf = STATUS_SUF[t.status] || '';
+    return `<option value="${escAttr(t._docId)}" ${t._docId===w.talhaoId?'selected':''}>${escHtml((t.fazenda?t.fazenda+' · ':'') + (t.nome || t.id) + suf)}</option>`;
+  }).join('');
   // Recomendações aprovadas para este talhão
   const recsAprov = w.talhaoId ? recomendacoes.filter(r => r.talhaoId === w.talhaoId && r.status === 'aprovada')
     .sort((a,b) => (b.atualizadoEm||b.criadoEm||'').localeCompare(a.atualizadoEm||a.criadoEm||''))
