@@ -535,8 +535,8 @@ function renderDrenchDoses(d, esp) {
   const prods = (d.produtos||[]).map(normalizarProduto);
   if (!prods.length) return '';
   const metodo = d.metodoAplicacao || 'costal';
-  const volPlanta = parseFloat(String(d.volumePlanta??'').replace(',','.'));   // ml/planta (costal)
-  const volMetro  = parseFloat(String(d.volumeMetro??'').replace(',','.'));    // ml/metro (turbina)
+  const volPlanta = parseFloat(String(d.volumePlanta??'').replace(',','.'));
+  const volMetro  = parseFloat(String(d.volumeMetro??'').replace(',','.'));
   const parsed = parseEspacamento(esp);
 
   return prods.map(pr => {
@@ -544,36 +544,52 @@ function renderDrenchDoses(d, esp) {
     const un = sanitizar(pr.unidade||'');
     const doseHa = conv.doseHa;
     let chips = [];
+    let avisos = [];
 
     // /ha — sempre mostrado
     if (doseHa != null) chips.push({label:`${fmtNum(doseHa,2)} ${un}/ha`, cls:'principal'});
 
-    if (metodo === 'costal' && !isNaN(volPlanta) && volPlanta > 0) {
-      const dosePlanta = conv.dosePlanta;
-      if (dosePlanta != null) {
-        chips.push({label:`${fmtNum(dosePlanta,4)} ${un}/planta`});
-        const plantasPorBomba = 20000 / volPlanta;
-        const prodBomba = dosePlanta * plantasPorBomba;
-        chips.push({label:`${fmtNum(prodBomba,2)} ${un}/bomba (20L cobre ${fmtNum(plantasPorBomba,0)} plantas)`, cls:'destaque'});
+    if (metodo === 'costal') {
+      if (!isNaN(volPlanta) && volPlanta > 0) {
+        // Tenta calcular dose/planta
+        let dosePlanta = conv.dosePlanta;
+        // Se não veio da conversão (sem espaçamento), tenta via /ha se espaçamento disponível
+        if (dosePlanta == null && doseHa != null && parsed) {
+          dosePlanta = doseHa * (parsed.el * parsed.ep) / 10000;
+        }
+        if (dosePlanta != null) {
+          const plantasPorBomba = 20000 / volPlanta;
+          chips.push({label:`${fmtNum(dosePlanta,4)} ${un}/planta`});
+          chips.push({label:`${fmtNum(dosePlanta * plantasPorBomba,2)} ${un}/bomba (20L · ${fmtNum(plantasPorBomba,0)} plantas)`, cls:'destaque'});
+        } else {
+          avisos.push('⚠️ Espaçamento do talhão não cadastrado — não foi possível calcular dose/planta');
+        }
+      } else {
+        avisos.push('⚠️ Informe o volume por planta (ml) no agendamento');
       }
-    } else if (metodo === 'turbina' && !isNaN(volMetro) && volMetro > 0 && parsed) {
-      const metrosPorHa = 10000 / parsed.el;
-      const aguaHaL = (volMetro * metrosPorHa) / 1000;   // litros de água por ha
-      if (doseHa != null && aguaHaL > 0) {
-        const doseMl = conv.doseMl;
-        if (doseMl != null) chips.push({label:`${fmtNum(doseMl,4)} ${un}/m linear`});
-        const prod2000L = doseHa * 2000 / aguaHaL;
-        chips.push({label:`${fmtNum(prod2000L,2)} ${un} para 2000L (turbina)`, cls:'destaque'});
+    } else if (metodo === 'turbina') {
+      if (!isNaN(volMetro) && volMetro > 0) {
+        if (parsed) {
+          const metrosPorHa = 10000 / parsed.el;
+          const aguaHaL = (volMetro * metrosPorHa) / 1000;
+          if (doseHa != null && aguaHaL > 0) {
+            const dosePorMetro = doseHa / metrosPorHa;
+            chips.push({label:`${fmtNum(dosePorMetro,4)} ${un}/m linear`});
+            chips.push({label:`${fmtNum(doseHa * 2000 / aguaHaL, 2)} ${un} para 2000L (turbina)`, cls:'destaque'});
+          }
+        } else {
+          avisos.push('⚠️ Espaçamento do talhão não cadastrado — não foi possível calcular dose/turbina');
+        }
+      } else {
+        avisos.push('⚠️ Informe o volume por metro linear (ml) no agendamento');
       }
-    } else {
-      // Fertirrigação ou sem volume definido: mostra /planta e /m linear se disponíveis
-      if (conv.dosePlanta != null) chips.push({label:`${fmtNum(conv.dosePlanta,4)} ${un}/planta`});
-      if (conv.doseMl != null) chips.push({label:`${fmtNum(conv.doseMl,4)} ${un}/m linear`});
     }
 
+    const avisosHtml = avisos.map(a => `<span style="font-size:.68rem;color:#92400e;background:#fef3c7;border-radius:4px;padding:2px 6px;">${a}</span>`).join('');
     return `<div class="prod-linha">
       <span class="prod-nome">🧪 ${sanitizar(pr.produto)}</span>
       <span class="dose-chips">${chips.map(c=>`<span class="dose-chip ${c.cls||''}">${c.label}</span>`).join('')}</span>
+      ${avisosHtml ? `<span style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;">${avisosHtml}</span>` : ''}
     </div>`;
   }).join('');
 }
