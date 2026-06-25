@@ -331,6 +331,11 @@ let drenchFiltroFazenda = '';
 let drenchFiltroStatus = 'pendente';
 let drenchFiltroDe = '';
 let drenchFiltroAte = '';
+// Setters expostos no window para que handlers inline possam atualizar as variáveis de módulo
+window.setDrFaz    = function(v) { drenchFiltroFazenda = v; renderTab(); };
+window.setDrStatus = function(v) { drenchFiltroStatus  = v; renderTab(); };
+window.setDrDe     = function(v) { drenchFiltroDe = v; renderTab(); };
+window.setDrAte    = function(v) { drenchFiltroAte = v; renderTab(); };
 
 // Meses do ano (mesmo formato usado em adubacoes.html: "Mês/Ano")
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -2200,20 +2205,27 @@ function renderDrench() {
   const talhoesUnicos = new Set(lista.map(d => d.talhaoId)).size;
 
   // ── Consolidar produtos necessários (soma total de todos pendentes) ──
-  const totProd = new Map(); // key: "produto||unidade" → {produto, unidade, total, fazendas:Set}
+  // key: "produto||unidade" → {produto, unidade, total, semArea, fazendas:Set, detalhes:Map<faz,{total,talhoes:Array<{nome,total}>}>}
+  const totProd = new Map();
   for (const d of pendentes) {
     const t = talhoes.find(x => x.id === d.talhaoId);
     const area = parseFloat(String(t?.area||'').replace(',','.')) || 0;
     const esp = t?.espacamento;
+    const fazNome = d.fazenda || '—';
+    const talNome = d.talhaoNome || d.talhaoId || '—';
     for (const p of (d.produtos||[])) {
       if (!p.produto?.trim()) continue;
       const key = `${p.produto.trim()}||${p.unidade||''}`;
       const total = drTotalProduto(p, area, esp);
-      if (!totProd.has(key)) totProd.set(key, {produto:p.produto.trim(), unidade:p.unidade||'', total:0, semArea:0, fazendas:new Set()});
+      if (!totProd.has(key)) totProd.set(key, {produto:p.produto.trim(), unidade:p.unidade||'', total:0, semArea:0, fazendas:new Set(), detalhes:new Map()});
       const entry = totProd.get(key);
       if (total != null) entry.total += total;
       else entry.semArea++;
-      entry.fazendas.add(d.fazenda||'—');
+      entry.fazendas.add(fazNome);
+      if (!entry.detalhes.has(fazNome)) entry.detalhes.set(fazNome, {total:0, talhoes:[]});
+      const det = entry.detalhes.get(fazNome);
+      if (total != null) det.total += total;
+      det.talhoes.push({nome:talNome, total});
     }
   }
 
@@ -2223,11 +2235,11 @@ function renderDrench() {
     <div class="filtros-bar" style="flex-wrap:wrap;gap:6px;">
       <div class="filtro-grupo">
         <span class="filtro-label">🏡</span>
-        <select class="filtro-sel" onchange="drenchFiltroFazenda=this.value;renderTab();">${fazOpts}</select>
+        <select class="filtro-sel" onchange="setDrFaz(this.value)">${fazOpts}</select>
       </div>
       <div class="filtro-grupo">
         <span class="filtro-label">📌</span>
-        <select class="filtro-sel" onchange="drenchFiltroStatus=this.value;renderTab();">
+        <select class="filtro-sel" onchange="setDrStatus(this.value)">
           <option value="pendente" ${drenchFiltroStatus==='pendente'?'selected':''}>Pendentes</option>
           <option value="realizado" ${drenchFiltroStatus==='realizado'?'selected':''}>Realizados</option>
           <option value="" ${drenchFiltroStatus===''?'selected':''}>Todos</option>
@@ -2235,11 +2247,11 @@ function renderDrench() {
       </div>
       <div class="filtro-grupo">
         <span class="filtro-label">De</span>
-        <input type="date" class="filtro-sel" value="${drenchFiltroDe}" onchange="drenchFiltroDe=this.value;renderTab();">
+        <input type="date" class="filtro-sel" value="${drenchFiltroDe}" onchange="setDrDe(this.value)">
       </div>
       <div class="filtro-grupo">
         <span class="filtro-label">Até</span>
-        <input type="date" class="filtro-sel" value="${drenchFiltroAte}" onchange="drenchFiltroAte=this.value;renderTab();">
+        <input type="date" class="filtro-sel" value="${drenchFiltroAte}" onchange="setDrAte(this.value)">
       </div>
     </div>
     <div class="kpi-grid" style="margin-top:10px;">
@@ -2264,16 +2276,22 @@ function renderDrench() {
       <div class="secao-sub" style="margin-bottom:8px;">Quantidade total calculada por área de talhão para pedido de compra</div>
       <table class="tab-nutrientes" style="width:100%;">
         <thead><tr>
-          <th>Produto</th><th style="text-align:right;">Total</th><th>Un</th><th>Fazendas</th>${rows.some(r=>r.semArea)?"<th>⚠️</th>":''}
+          <th>Produto</th><th style="text-align:right;">Total</th><th>Un</th><th>Fazenda / Talhões</th>
         </tr></thead>
         <tbody>
-          ${rows.map(r => `<tr>
-            <td><strong>${escHtml(r.produto)}</strong></td>
-            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">${r.total>0?fmt(r.total,2):'—'}</td>
-            <td style="color:var(--c);font-size:.8rem;">${escHtml(r.unidade)}</td>
-            <td style="font-size:.75rem;color:var(--c);">${escHtml([...r.fazendas].join(', '))}</td>
-            ${rows.some(x=>x.semArea)?`<td style="font-size:.7rem;color:#f59e0b;">${r.semArea>0?`${r.semArea} talhão(ões) sem área cadastrada`:''}</td>`:''}
-          </tr>`).join('')}
+          ${rows.map(r => {
+            const fazList = [...r.detalhes.entries()].sort((a,b) => a[0].localeCompare(b[0],'pt'));
+            const detalheHtml = fazList.map(([faz, det]) => {
+              const talStr = det.talhoes.map(tt => tt.total!=null ? `${escHtml(tt.nome)} (${fmt(tt.total,2)} ${escHtml(r.unidade)})` : `${escHtml(tt.nome)} ⚠️`).join(', ');
+              return (drenchFiltroFazenda ? '' : `<span style="font-weight:700;color:var(--ve);">${escHtml(faz)}:</span> `) + talStr;
+            }).join('<br>');
+            return `<tr>
+              <td><strong>${escHtml(r.produto)}</strong></td>
+              <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">${r.total>0?fmt(r.total,2):'—'}</td>
+              <td style="color:var(--c);font-size:.8rem;">${escHtml(r.unidade)}</td>
+              <td style="font-size:.73rem;color:var(--c);line-height:1.6;">${detalheHtml}${r.semArea>0?`<br><span style="color:#f59e0b;">⚠️ ${r.semArea} talhão(ões) sem área cadastrada</span>`:''}</td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>`;
