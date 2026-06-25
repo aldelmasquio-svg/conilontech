@@ -623,12 +623,13 @@ function gerarMenu() {
 function popularTalhoes() {
   const sel = document.getElementById('selTalhao');
   const val = sel.value;
-  // Inclui ativo e reforma; exclui colhido
+  // Inclui todos os talhões; indica status para os não-ativos
+  const STATUS_SUF = {reforma:' — Reforma', colhido:' — Colhido'};
   const ord = [...talhoes]
-    .filter(t => t.status !== 'colhido')
     .sort((a,b) => (a.fazenda||'').localeCompare(b.fazenda||'') || (a.nome||'').localeCompare(b.nome||''));
   sel.innerHTML = '<option value="">— selecione —</option>' + ord.map(t => {
-    const label = (t.fazenda ? t.fazenda + ' · ' : '') + (t.nome || t.id) + (t.status === 'reforma' ? ' — Reforma' : '');
+    const suf = STATUS_SUF[t.status] || '';
+    const label = (t.fazenda ? t.fazenda + ' · ' : '') + (t.nome || t.id) + suf;
     return `<option value="${escAttr(t._docId)}">${escHtml(label)}</option>`;
   }).join('');
   if (val) sel.value = val;
