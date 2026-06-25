@@ -555,7 +555,7 @@ function renderDrenchDoses(d, esp) {
         let dosePlanta = conv.dosePlanta;
         // Se não veio da conversão (sem espaçamento), tenta via /ha se espaçamento disponível
         if (dosePlanta == null && doseHa != null && parsed) {
-          dosePlanta = doseHa * (parsed.el * parsed.ep) / 10000;
+          dosePlanta = doseHa * (parsed.entreLinhas * parsed.entrePlantas) / 10000;
         }
         if (dosePlanta != null) {
           const plantasPorBomba = 20000 / volPlanta;
@@ -570,7 +570,7 @@ function renderDrenchDoses(d, esp) {
     } else if (metodo === 'turbina') {
       if (!isNaN(volMetro) && volMetro > 0) {
         if (parsed) {
-          const metrosPorHa = 10000 / parsed.el;
+          const metrosPorHa = 10000 / parsed.entreLinhas;
           const aguaHaL = (volMetro * metrosPorHa) / 1000;
           if (doseHa != null && aguaHaL > 0) {
             const dosePorMetro = doseHa / metrosPorHa;
