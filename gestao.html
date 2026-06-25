@@ -254,6 +254,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
     <button class="tab" id="tabCompras" onclick="abrirTab('compras')">🛒 Compras</button>
     <button class="tab" id="tabNutrientes" onclick="abrirTab('nutrientes')">🌿 Nutrientes</button>
     <button class="tab" id="tabCalendario" onclick="abrirTab('calendario')">🗓️ Calendário</button>
+    <button class="tab" id="tabDrench" onclick="abrirTab('drench')">🌱 Drench</button>
   </div>
 
   <div class="tab-content" id="tabContent"></div>
@@ -324,6 +325,12 @@ let compraSafra = '';
 // Filtro da aba "Nutrientes" (relatório de nutrientes já aplicados)
 let nutrTalhaoId = '';
 let nutrSafra = '';
+
+// Filtros da aba "Drench"
+let drenchFiltroFazenda = '';
+let drenchFiltroStatus = 'pendente';
+let drenchFiltroDe = '';
+let drenchFiltroAte = '';
 
 // Meses do ano (mesmo formato usado em adubacoes.html: "Mês/Ano")
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -611,7 +618,7 @@ window.fazerLogout = async () => { await signOut(auth); window.location.href='lo
 window.abrirTab = function(t) {
   tabAtual = t;
   document.querySelectorAll('.tab').forEach(b => b.classList.remove('ativa'));
-  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras', nutrientes:'tabNutrientes', calendario:'tabCalendario'};
+  const map = {geral:'tabGeral', produtividade:'tabProdutividade', pulverizacoes:'tabPulverizacoes', estoque:'tabEstoque', adubacao:'tabAdubacao', compras:'tabCompras', nutrientes:'tabNutrientes', calendario:'tabCalendario', drench:'tabDrench'};
   document.getElementById(map[t])?.classList.add('ativa');
   renderTab();
 };
@@ -631,6 +638,7 @@ function renderTab() {
     else if (tabAtual === 'compras') renderCompras();
     else if (tabAtual === 'nutrientes') renderNutrientes();
     else if (tabAtual === 'calendario') renderCalendario();
+    else if (tabAtual === 'drench') renderDrench();
   } catch(e) {
     console.error(e);
     cont.innerHTML = `<div class="vazio"><div class="ico">⚠️</div><p>Erro ao renderizar relatório: ${escHtml(e.message)}</p></div>`;
@@ -2137,6 +2145,193 @@ function renderCalendario() {
   html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
     Pendências de pulverizações, drench preventivo e adubações ainda não confirmadas${faz ? ' · ' + escHtml(faz) : ''}
   </div>`;
+
+  cont.innerHTML = html;
+}
+
+// ════════════════════════════════════════════════════
+// ABA 9 — DRENCH PREVENTIVO
+// ════════════════════════════════════════════════════
+const METODO_DR_LABEL = {costal:'💪 Costal', turbina:'⚙️ Turbina', fertirrigacao:'💧 Fertirrigação'};
+
+function parseDrEsp(esp) {
+  if (!esp) return null;
+  const nums = String(esp).match(/\d+[.,]?\d*/g);
+  if (!nums || nums.length < 2) return null;
+  const el = parseFloat(nums[0].replace(',','.')), ep = parseFloat(nums[1].replace(',','.'));
+  if (!el || !ep) return null;
+  return {el, ep};
+}
+function drDoseHa(p) {
+  const v = parseFloat(String(p.valor??'').replace(',','.'));
+  if (isNaN(v)) return null;
+  return v; // modo 'ha' é o mais comum; planta/metro_linear requerem espacamento
+}
+function drTotalProduto(p, area, esp) {
+  const v = parseFloat(String(p.valor??'').replace(',','.'));
+  if (isNaN(v) || !area) return null;
+  const parsed = parseDrEsp(esp);
+  let doseHa = null;
+  if (p.modo === 'ha') doseHa = v;
+  else if (parsed) {
+    const fP = (parsed.el * parsed.ep) / 10000;
+    const fM = parsed.el / 10000;
+    if (p.modo === 'planta') doseHa = v / fP;
+    else if (p.modo === 'metro_linear') doseHa = v / fM;
+  }
+  return doseHa != null ? doseHa * parseFloat(String(area).replace(',','.')) : null;
+}
+
+function renderDrench() {
+  const cont = document.getElementById('tabContent');
+  // ── Filtros ──
+  const fazendas = [...new Set(drenchPrevencao.map(d => d.fazenda || '—'))].sort((a,b) => a.localeCompare(b,'pt'));
+  const fazOpts = `<option value="">Todas</option>` + fazendas.map(f => `<option value="${escHtml(f)}" ${drenchFiltroFazenda===f?'selected':''}>${escHtml(f)}</option>`).join('');
+
+  // ── Aplicar filtros ──
+  let lista = [...drenchPrevencao];
+  if (drenchFiltroFazenda) lista = lista.filter(d => (d.fazenda||'—') === drenchFiltroFazenda);
+  if (drenchFiltroStatus) lista = lista.filter(d => (d.status||'pendente') === drenchFiltroStatus);
+  if (drenchFiltroDe) lista = lista.filter(d => (d.data||'') >= drenchFiltroDe);
+  if (drenchFiltroAte) lista = lista.filter(d => (d.data||'') <= drenchFiltroAte);
+
+  const pendentes = lista.filter(d => (d.status||'pendente') === 'pendente');
+  const realizados = lista.filter(d => d.status === 'realizado');
+  const talhoesUnicos = new Set(lista.map(d => d.talhaoId)).size;
+
+  // ── Consolidar produtos necessários (soma total de todos pendentes) ──
+  const totProd = new Map(); // key: "produto||unidade" → {produto, unidade, total, fazendas:Set}
+  for (const d of pendentes) {
+    const t = talhoes.find(x => x.id === d.talhaoId);
+    const area = parseFloat(String(t?.area||'').replace(',','.')) || 0;
+    const esp = t?.espacamento;
+    for (const p of (d.produtos||[])) {
+      if (!p.produto?.trim()) continue;
+      const key = `${p.produto.trim()}||${p.unidade||''}`;
+      const total = drTotalProduto(p, area, esp);
+      if (!totProd.has(key)) totProd.set(key, {produto:p.produto.trim(), unidade:p.unidade||'', total:0, semArea:0, fazendas:new Set()});
+      const entry = totProd.get(key);
+      if (total != null) entry.total += total;
+      else entry.semArea++;
+      entry.fazendas.add(d.fazenda||'—');
+    }
+  }
+
+  // ── KPIs ──
+  let html = `
+  <div style="padding:10px 2px 4px;">
+    <div class="filtros-bar" style="flex-wrap:wrap;gap:6px;">
+      <div class="filtro-grupo">
+        <span class="filtro-label">🏡</span>
+        <select class="filtro-sel" onchange="drenchFiltroFazenda=this.value;renderTab();">${fazOpts}</select>
+      </div>
+      <div class="filtro-grupo">
+        <span class="filtro-label">📌</span>
+        <select class="filtro-sel" onchange="drenchFiltroStatus=this.value;renderTab();">
+          <option value="pendente" ${drenchFiltroStatus==='pendente'?'selected':''}>Pendentes</option>
+          <option value="realizado" ${drenchFiltroStatus==='realizado'?'selected':''}>Realizados</option>
+          <option value="" ${drenchFiltroStatus===''?'selected':''}>Todos</option>
+        </select>
+      </div>
+      <div class="filtro-grupo">
+        <span class="filtro-label">De</span>
+        <input type="date" class="filtro-sel" value="${drenchFiltroDe}" onchange="drenchFiltroDe=this.value;renderTab();">
+      </div>
+      <div class="filtro-grupo">
+        <span class="filtro-label">Até</span>
+        <input type="date" class="filtro-sel" value="${drenchFiltroAte}" onchange="drenchFiltroAte=this.value;renderTab();">
+      </div>
+    </div>
+    <div class="kpi-grid" style="margin-top:10px;">
+      <div class="kpi-card"><div class="kpi-label">Pendentes</div><div class="kpi-value">${pendentes.length}</div><div class="kpi-aux">agendamentos</div></div>
+      <div class="kpi-card"><div class="kpi-label">Realizados</div><div class="kpi-value">${realizados.length}</div><div class="kpi-aux">no período</div></div>
+      <div class="kpi-card"><div class="kpi-label">Talhões</div><div class="kpi-value">${talhoesUnicos}</div><div class="kpi-aux">no filtro</div></div>
+      <div class="kpi-card"><div class="kpi-label">Produtos</div><div class="kpi-value">${totProd.size}</div><div class="kpi-aux">distintos</div></div>
+    </div>
+  </div>`;
+
+  if (!lista.length) {
+    html += `<div class="vazio"><div class="ico">🌱</div><p>Nenhum agendamento de drench encontrado com esses filtros.</p></div>`;
+    cont.innerHTML = html;
+    return;
+  }
+
+  // ── Tabela de produtos necessários ──
+  if (totProd.size) {
+    const rows = [...totProd.values()].sort((a,b) => a.produto.localeCompare(b.produto,'pt'));
+    html += `<div class="secao-bloco" style="margin-top:8px;">
+      <div class="secao-tit">📦 Necessidade de Produtos (pendentes)</div>
+      <div class="secao-sub" style="margin-bottom:8px;">Quantidade total calculada por área de talhão para pedido de compra</div>
+      <table class="tab-nutrientes" style="width:100%;">
+        <thead><tr>
+          <th>Produto</th><th style="text-align:right;">Total</th><th>Un</th><th>Fazendas</th>${rows.some(r=>r.semArea)?"<th>⚠️</th>":''}
+        </tr></thead>
+        <tbody>
+          ${rows.map(r => `<tr>
+            <td><strong>${escHtml(r.produto)}</strong></td>
+            <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">${r.total>0?fmt(r.total,2):'—'}</td>
+            <td style="color:var(--c);font-size:.8rem;">${escHtml(r.unidade)}</td>
+            <td style="font-size:.75rem;color:var(--c);">${escHtml([...r.fazendas].join(', '))}</td>
+            ${rows.some(x=>x.semArea)?`<td style="font-size:.7rem;color:#f59e0b;">${r.semArea>0?`${r.semArea} talhão(ões) sem área cadastrada`:''}</td>`:''}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  // ── Por Fazenda ──
+  const porFaz = new Map();
+  for (const d of lista) {
+    const faz = d.fazenda || '—';
+    if (!porFaz.has(faz)) porFaz.set(faz, []);
+    porFaz.get(faz).push(d);
+  }
+  const fazOrdem = [...porFaz.keys()].sort((a,b) => a.localeCompare(b,'pt'));
+
+  for (const faz of fazOrdem) {
+    const docs = porFaz.get(faz).sort((a,b) => (a.data||'').localeCompare(b.data||''));
+    // Por talhão
+    const porTal = new Map();
+    for (const d of docs) {
+      if (!porTal.has(d.talhaoId)) porTal.set(d.talhaoId, {nome:d.talhaoNome||d.talhaoId, docs:[]});
+      porTal.get(d.talhaoId).docs.push(d);
+    }
+    html += `<div class="secao-bloco" style="margin-top:10px;">
+      <div class="secao-tit">🏡 ${escHtml(faz)}</div>`;
+    for (const [talId, tal] of porTal) {
+      const t = talhoes.find(x => x.id === talId);
+      const area = t?.area ? fmt(parseFloat(String(t.area).replace(',','.')),1)+' ha' : 'área não cadastrada';
+      html += `<div style="background:#fafafa;border:1px solid var(--cb);border-radius:8px;padding:10px;margin-top:7px;">
+        <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;color:var(--ve);margin-bottom:6px;">
+          🌿 ${escHtml(tal.nome)} <span style="font-weight:500;font-size:.75rem;color:var(--c);">· ${area}</span>
+        </div>`;
+      for (const d of tal.docs) {
+        const st = (d.status||'pendente') === 'realizado';
+        const metTxt = METODO_DR_LABEL[d.metodoAplicacao] || '';
+        const alvos = (Array.isArray(d.alvoPrevencao) ? d.alvoPrevencao : d.alvoPrevencao ? [d.alvoPrevencao] : []).filter(Boolean);
+        html += `<div style="border-left:3px solid ${st?'#22c55e':'#f59e0b'};padding:6px 8px;margin-bottom:5px;border-radius:0 6px 6px 0;background:white;">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+            <span style="font-size:.82rem;font-weight:700;">📅 ${formatarData(d.data)}${metTxt?' · '+metTxt:''}</span>
+            <span style="font-size:.66rem;padding:2px 7px;border-radius:99px;font-weight:700;background:${st?'#dcfce7':'#fef3c7'};color:${st?'#166534':'#92400e'};">${st?'✅ Realizado':'⏳ Pendente'}</span>
+          </div>
+          ${alvos.length?`<div style="font-size:.73rem;color:var(--c);margin-bottom:4px;">${alvos.map(a=>'🛡️ '+escHtml(a)).join(' · ')}</div>`:''}
+          <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            ${(d.produtos||[]).filter(p=>p.produto?.trim()).map(p => {
+              const total = drTotalProduto(p, t?.area, t?.espacamento);
+              const v = parseFloat(String(p.valor??'').replace(',','.'));
+              return `<span style="font-size:.74rem;background:var(--vb);color:var(--ve);padding:3px 8px;border-radius:99px;font-weight:700;">
+                🧪 ${escHtml(p.produto.trim())}: ${isNaN(v)?'—':fmt(v,2)} ${escHtml(p.unidade||'')}/${p.modo==='ha'?'ha':p.modo==='planta'?'planta':'m linear'}
+                ${total!=null?' → <strong>'+fmt(total,2)+' '+escHtml(p.unidade||'')+'</strong> total':''}
+              </span>`;
+            }).join('')}
+          </div>
+          ${st&&d.dataRealizado?`<div style="font-size:.7rem;color:var(--c);margin-top:4px;">✅ Realizado em ${formatarData(d.dataRealizado)}${d.realizadoPor?' · '+escHtml(d.realizadoPor):''}</div>`:''}
+        </div>`;
+      }
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
 
   cont.innerHTML = html;
 }
