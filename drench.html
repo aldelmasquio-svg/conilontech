@@ -275,7 +275,7 @@ window.toggleDrSidebar = function() {
 // ══════════════════════════════
 function iniciarNovoAgendamento() {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
-  novoWIP = {talhoes:new Set(), data:hoje(), alvos:[], obs:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
+  novoWIP = {talhoes:new Set(), data:hoje(), alvos:[], obs:'', metodo:'costal', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
   document.getElementById('painelDrench').style.display = 'flex';
   document.getElementById('btnNovoAgendamento').style.display = 'none';
   document.getElementById('btnExpandPainel').style.display = 'none';
@@ -391,7 +391,7 @@ window.salvarNovoAgendamento = async function() {
       const t = talhoes.find(x=>x.id===talId);
       await addDoc(collection(db,'drenchPrevencao'), {
         grupoId, talhaoId:talId, talhaoNome: t?.nome || talId, fazenda: t?.fazenda || '',
-        data, alvoPrevencao: novoWIP.alvos.slice(), produtos: prodsFS, observacoes: obs,
+        data, metodoAplicacao: novoWIP.metodo || 'costal', alvoPrevencao: novoWIP.alvos.slice(), produtos: prodsFS, observacoes: obs,
         status: 'pendente', dataRealizado: null, realizadoPor: null, obsRealizacao: '',
         criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       });
@@ -479,13 +479,16 @@ function corFazenda(nome) {
   return FARM_COLORS[idx % FARM_COLORS.length];
 }
 
+const METODO_LABEL = {costal:'💪 Bomba Costal', turbina:'⚙️ Adaptação na Turbina', fertirrigacao:'💧 Fertirrigação'};
+
 function renderCardGrupo(docs) {
   const first = docs[0];
   const prods = (first.produtos||[]).map(normalizarProduto);
   const alvosTxt = getAlvos(first).map(a=>'🛡️ '+sanitizar(a)).join(' · ');
+  const metodoTxt = first.metodoAplicacao ? ` · ${METODO_LABEL[first.metodoAplicacao]||sanitizar(first.metodoAplicacao)}` : '';
   return `<div class="grupo-card">
     <div class="grupo-hdr">
-      <div class="grupo-tit">📅 Previsto: ${formatarData(first.data)}${alvosTxt?` · ${alvosTxt}`:''}</div>
+      <div class="grupo-tit">📅 Previsto: ${formatarData(first.data)}${metodoTxt}${alvosTxt?` · ${alvosTxt}`:''}</div>
       <div class="grupo-meta">${docs.length} talhão(ões)</div>
     </div>
     <div class="grupo-receita">
@@ -560,6 +563,7 @@ window.abrirEditarDrench = function(docId) {
   document.getElementById('editInfo').innerHTML =
     `🌱 <strong>${sanitizar(d.talhaoNome||d.talhaoId||'')}</strong> · ${sanitizar(d.fazenda||'sem fazenda')}`;
   document.getElementById('eData').value = d.data || '';
+  document.getElementById('eMetodo').value = d.metodoAplicacao || 'costal';
   document.getElementById('eAlvoInput').value = '';
   document.getElementById('eObs').value = d.observacoes || '';
   renderizarProdutosEdit();
@@ -603,8 +607,9 @@ window.salvarEditarDrench = async function() {
   const btn = document.getElementById('btnSalvarEditar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
+    const metodo = document.getElementById('eMetodo').value;
     await updateDoc(doc(db,'drenchPrevencao',docId), {
-      data, alvoPrevencao: window.editWIP.alvos.slice(), observacoes: obs,
+      data, metodoAplicacao: metodo, alvoPrevencao: window.editWIP.alvos.slice(), observacoes: obs,
       produtos: prods.map(p=>({produto:p.produto.trim(), modo:p.modo, valor:p.valor, unidade:p.unidade})),
       editadoEm: new Date().toISOString(), editadoPor: usuarioAtual.email
     });
@@ -884,6 +889,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
         <div class="painel-scroll">
           <div class="campo"><label>Data Prevista</label><input type="date" id="nData" onchange="novoWIP.data=this.value"></div>
           <div class="campo">
+            <label>Método de Aplicação</label>
+            <select id="nMetodo" onchange="novoWIP.metodo=this.value">
+              <option value="costal">💪 Bomba Costal</option>
+              <option value="turbina">⚙️ Adaptação na Turbina</option>
+              <option value="fertirrigacao">💧 Fertirrigação</option>
+            </select>
+          </div>
+          <div class="campo">
             <label>Alvos de Prevenção (opcional)</label>
             <div class="chips-talhoes" id="nAlvosChips" style="margin-bottom:6px;"></div>
             <div class="alvo-input-row">
@@ -970,6 +983,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="modal-body">
       <div id="editInfo" style="background:var(--vb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;color:var(--ve);margin-bottom:6px;line-height:1.45;"></div>
       <div class="campo"><label>Data Prevista</label><input type="date" id="eData"></div>
+      <div class="campo">
+        <label>Método de Aplicação</label>
+        <select id="eMetodo">
+          <option value="costal">💪 Bomba Costal</option>
+          <option value="turbina">⚙️ Adaptação na Turbina</option>
+          <option value="fertirrigacao">💧 Fertirrigação</option>
+        </select>
+      </div>
       <div class="campo">
         <label>Alvos de Prevenção (opcional)</label>
         <div class="chips-talhoes" id="eAlvosChips" style="margin-bottom:6px;"></div>
