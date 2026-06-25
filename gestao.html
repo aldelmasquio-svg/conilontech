@@ -1962,11 +1962,12 @@ function renderNutrientes() {
       <div class="secao-tit">🌿 Nutrientes aplicados</div>
       <div class="secao-sub">Calculado a partir das doses aplicadas (confirmadas) × área dos talhões × composição cadastrada no catálogo de adubos (Administração). Líquidos (L/mL) considerados com densidade ≈ 1 kg/L.</div>
       <div class="tbl-wrap"><table class="tbl"><thead><tr>
-        <th>Nutriente</th><th class="num">Total aplicado</th>
+        <th>Nutriente</th><th class="num">Total aplicado</th><th class="num">kg/ha</th>
       </tr></thead><tbody>
       ${nutrientesOrd.map(k => `<tr>
         <td><strong>${escHtml(NUTRIENTE_LABELS[k])}</strong></td>
         <td class="num">${fmt(nutrientes[k], 1)} kg</td>
+        <td class="num">${areaAdubada > 0 ? fmt(nutrientes[k] / areaAdubada, 2) + ' kg/ha' : '—'}</td>
       </tr>`).join('')}
       </tbody></table></div>
     </div>`;
