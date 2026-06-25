@@ -306,8 +306,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .grafico-misto-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.72rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
 
 /* SELETOR de amostra (lista) */
-.sel-amostra-lista{display:flex;flex-direction:column;gap:6px;}
-.sel-am-item{display:flex;align-items:center;gap:9px;padding:9px;background:#fafafa;border:1px solid var(--cb);border-radius:8px;cursor:pointer;transition:all .15s;}
+.sel-amostra-lista{display:flex;flex-direction:column;gap:0;}
+.sel-busca-wrap{padding:0 0 8px 0;position:sticky;top:-12px;z-index:2;background:white;}
+.sel-busca-input{width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--cb);border-radius:8px;font-size:.88rem;font-family:inherit;outline:none;}
+.sel-busca-input:focus{border-color:var(--v);}
+.sel-faz-grupo{margin-bottom:8px;}
+.sel-faz-header{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;color:var(--ve);text-transform:uppercase;letter-spacing:.05em;padding:8px 4px 3px;border-bottom:2px solid var(--vb);}
+.sel-safra-header{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.72rem;color:var(--c);padding:5px 4px 2px;margin-top:4px;}
+.sel-am-item{display:flex;align-items:center;gap:9px;padding:9px;background:#fafafa;border:1px solid var(--cb);border-radius:8px;cursor:pointer;transition:all .15s;margin-top:4px;}
 .sel-am-item:hover{background:var(--vb);border-color:var(--v);}
 .sel-am-item.ja-sel{opacity:.55;background:var(--cl);cursor:default;}
 .sel-am-tipo{flex-shrink:0;width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.95rem;}
@@ -316,6 +322,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .sel-am-meta{font-size:.7rem;color:var(--c);line-height:1.35;margin-top:1px;}
 .sel-am-arrow{color:var(--cb);font-size:1.3rem;font-weight:700;flex-shrink:0;}
 .sel-am-tag{font-size:.6rem;background:var(--cb);color:var(--c);padding:2px 6px;border-radius:99px;text-transform:uppercase;font-weight:700;letter-spacing:.04em;}
+/* LISTA principal - agrupada por fazenda/safra */
+.lista-faz-grupo{margin-bottom:16px;}
+.lista-faz-header{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.05em;padding:6px 2px;border-bottom:2.5px solid var(--v);margin-bottom:8px;}
+.lista-safra-header{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;padding:8px 2px 4px;margin-top:4px;}
 
 /* FAIXAS */
 .faixas-tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--cb);padding-bottom:9px;}
@@ -853,6 +863,34 @@ function classificar(parametro, valor, tipo, textura) {
 }
 
 // Os pedaços a seguir (forms, renderLista, salvar etc) serão adicionados depois
+function renderAnCard(a) {
+  const amos = amostras.filter(x => x.analiseId === a._docId);
+  const isSolo = a.tipo === 'solo';
+  const sel = diagSelecionadas.has(a._docId);
+  return `<div class="an-card ${a.tipo}" ${sel?'style="outline:2.5px solid var(--v);outline-offset:-1px;"':''}>
+    <div class="an-card-top">
+      <label class="diag-check-wrap" onclick="event.stopPropagation()" title="Selecionar para diagnóstico">
+        <input type="checkbox" class="diag-check" ${sel?'checked':''} onchange="toggleDiagSel('${a._docId}',this.checked)">
+      </label>
+      <div class="an-card-body" onclick="verAnalise('${a._docId}')">
+        <div class="an-card-header">
+          <div style="flex:1;min-width:0;">
+            <div class="an-titulo">${isSolo?'🧪':'🍃'} ${escHtml(a.fazendaVinculada || a.propriedade || '—')}</div>
+            <div class="an-meta">📅 ${formatarData(a.dataLaudo || a.dataEntrada)} · ${escHtml(a.laboratorio || '—')}${a.responsavelTecnico?' · '+escHtml(a.responsavelTecnico):''}</div>
+          </div>
+          <div class="an-badge ${isSolo?'badge-solo':'badge-folha'}">${isSolo?'Solo':'Folha'}</div>
+        </div>
+        <div class="an-card-amostras">📦 <strong>${amos.length}</strong> amostra${amos.length>1?'s':''}${amos.length?': '+amos.slice(0,3).map(x=>escHtml(x.nome+(x.profundidade?' ('+x.profundidade+')':''))).join(', ')+(amos.length>3?' …':''):''}</div>
+      </div>
+    </div>
+    <div class="an-card-acoes" onclick="event.stopPropagation()">
+      <button class="btn-acao primary" onclick="verAnalise('${a._docId}')">👁️ Ver detalhes</button>
+      ${podeEditar()?`<button class="btn-acao" onclick="editarAnalise('${a._docId}')">✏️ Editar</button>`:''}
+      ${isAdmin()?`<button class="btn-acao danger" onclick="excluirAnalise('${a._docId}')">🗑</button>`:''}
+    </div>
+  </div>`;
+}
+
 window.renderLista = function() {
   const cont = document.getElementById('content');
   if (tabAtual !== 'lista') return;
@@ -860,7 +898,6 @@ window.renderLista = function() {
     cont.innerHTML = `<div class="vazio"><div class="ico">🔬</div><p>Nenhuma análise cadastrada ainda.<br><span style="font-size:.78rem;">Toque no botão + para criar a primeira análise.</span></p></div>`;
     return;
   }
-  // FILTRAR
   const tipoFil = document.getElementById('filTipo')?.value || '';
   const fazFil = document.getElementById('filFazenda')?.value || '';
   let lista = [...analises];
@@ -871,33 +908,35 @@ window.renderLista = function() {
     cont.innerHTML = `<div class="vazio"><div class="ico">🔍</div><p>Nenhuma análise encontrada com esses filtros.</p></div>`;
     return;
   }
-  cont.innerHTML = lista.map(a => {
-    const amos = amostras.filter(x => x.analiseId === a._docId);
-    const isSolo = a.tipo === 'solo';
-    const sel = diagSelecionadas.has(a._docId);
-    return `<div class="an-card ${a.tipo}" ${sel?'style="outline:2.5px solid var(--v);outline-offset:-1px;"':''}>
-      <div class="an-card-top">
-        <label class="diag-check-wrap" onclick="event.stopPropagation()" title="Selecionar para diagnóstico">
-          <input type="checkbox" class="diag-check" ${sel?'checked':''} onchange="toggleDiagSel('${a._docId}',this.checked)">
-        </label>
-        <div class="an-card-body" onclick="verAnalise('${a._docId}')">
-          <div class="an-card-header">
-            <div style="flex:1;min-width:0;">
-              <div class="an-titulo">${isSolo?'🧪':'🍃'} ${escHtml(a.fazendaVinculada || a.propriedade || '—')}</div>
-              <div class="an-meta">📅 ${formatarData(a.dataLaudo || a.dataEntrada)} · ${escHtml(a.laboratorio || '—')}${a.responsavelTecnico?' · '+escHtml(a.responsavelTecnico):''}</div>
-            </div>
-            <div class="an-badge ${isSolo?'badge-solo':'badge-folha'}">${isSolo?'Solo':'Folha'}</div>
-          </div>
-          <div class="an-card-amostras">📦 <strong>${amos.length}</strong> amostra${amos.length>1?'s':''}${amos.length?': '+amos.slice(0,3).map(x=>escHtml(x.nome+(x.profundidade?' ('+x.profundidade+')':''))).join(', ')+(amos.length>3?' …':''):''}</div>
-        </div>
-      </div>
-      <div class="an-card-acoes" onclick="event.stopPropagation()">
-        <button class="btn-acao primary" onclick="verAnalise('${a._docId}')">👁️ Ver detalhes</button>
-        ${podeEditar()?`<button class="btn-acao" onclick="editarAnalise('${a._docId}')">✏️ Editar</button>`:''}
-        ${isAdmin()?`<button class="btn-acao danger" onclick="excluirAnalise('${a._docId}')">🗑</button>`:''}
-      </div>
-    </div>`;
-  }).join('');
+  // Build groups: by fazenda (when "Todas") then by year/safra within each group
+  const byFaz = new Map();
+  for (const a of lista) {
+    const faz = a.fazendaVinculada || a.propriedade || '—';
+    if (!byFaz.has(faz)) byFaz.set(faz, []);
+    byFaz.get(faz).push(a);
+  }
+  const fazendas = [...byFaz.keys()].sort((a, b) => a.localeCompare(b, 'pt'));
+  const showFazHeader = !fazFil;
+  let html = '';
+  for (const faz of fazendas) {
+    const fazItens = byFaz.get(faz);
+    const byAno = new Map();
+    for (const a of fazItens) {
+      const data = a.dataLaudo || a.dataEntrada || '';
+      const ano = data ? data.substring(0, 4) : '—';
+      if (!byAno.has(ano)) byAno.set(ano, []);
+      byAno.get(ano).push(a);
+    }
+    const anos = [...byAno.keys()].sort((a, b) => b.localeCompare(a));
+    html += `<div class="lista-faz-grupo">`;
+    if (showFazHeader) html += `<div class="lista-faz-header">🏡 ${escHtml(faz)}</div>`;
+    for (const ano of anos) {
+      html += `<div class="lista-safra-header">📅 Safra ${escHtml(ano)}</div>`;
+      html += byAno.get(ano).map(renderAnCard).join('');
+    }
+    html += `</div>`;
+  }
+  cont.innerHTML = html;
 };
 
 // ━━━━━━━━━━ DIAGNÓSTICO ━━━━━━━━━━
@@ -1454,43 +1493,87 @@ function renderGraficoMisto(selecionadas, paramSolo, paramFolha) {
 }
 
 // ━━━ SELETOR DE AMOSTRA (slot) ━━━
+function renderSeletorItens(itens, busca) {
+  const q = (busca || '').toLowerCase().trim();
+  const filtrados = q
+    ? itens.filter(it => (it.am.nome||'').toLowerCase().includes(q) || (it.an?.fazendaVinculada||'').toLowerCase().includes(q))
+    : itens;
+  if (filtrados.length === 0) {
+    return '<p style="text-align:center;color:var(--c);padding:20px;">Nenhuma amostra encontrada.</p>';
+  }
+  // Group by fazenda
+  const byFaz = new Map();
+  for (const it of filtrados) {
+    const faz = it.an?.fazendaVinculada || '—';
+    if (!byFaz.has(faz)) byFaz.set(faz, []);
+    byFaz.get(faz).push(it);
+  }
+  const fazendas = [...byFaz.keys()].sort((a, b) => a.localeCompare(b, 'pt'));
+  let html = '';
+  for (const faz of fazendas) {
+    const fazItens = byFaz.get(faz);
+    // Sub-group by year (safra) within fazenda
+    const byAno = new Map();
+    for (const it of fazItens) {
+      const data = it.an?.dataLaudo || it.an?.dataEntrada || '';
+      const ano = data ? data.substring(0, 4) : '—';
+      if (!byAno.has(ano)) byAno.set(ano, []);
+      byAno.get(ano).push(it);
+    }
+    const anos = [...byAno.keys()].sort((a, b) => b.localeCompare(a));
+    html += `<div class="sel-faz-grupo"><div class="sel-faz-header">🏡 ${escHtml(faz)}</div>`;
+    for (const ano of anos) {
+      html += `<div class="sel-safra-header">📅 Safra ${escHtml(ano)}</div>`;
+      for (const it of byAno.get(ano)) {
+        const am = it.am, an = it.an;
+        const cls = it.jaSelecionada ? 'sel-am-item ja-sel' : 'sel-am-item';
+        html += `<div class="${cls}" onclick="selecionarAmostraSlot('${am._docId}')">
+          <div class="sel-am-tipo ${am.tipo==='solo'?'badge-solo':'badge-folha'}">${am.tipo==='solo'?'🧪':'🍃'}</div>
+          <div class="sel-am-info">
+            <div class="sel-am-nome">${escHtml(am.nome)}${am.profundidade?' <span style="color:var(--c);font-weight:500;font-size:.78rem;">('+escHtml(am.profundidade)+')</span>':''}</div>
+            <div class="sel-am-meta">${formatarData(an.dataLaudo||an.dataEntrada)}${an.responsavelTecnico?' · '+escHtml(an.responsavelTecnico):''}</div>
+          </div>
+          ${it.jaSelecionada ? '<div class="sel-am-tag">já no slot</div>' : '<div class="sel-am-arrow">›</div>'}
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  return html;
+}
+
+window._seletorItens = [];
+window.filtrarSeletorBusca = function(q) {
+  const cont = document.getElementById('seletorItens');
+  if (cont) cont.innerHTML = renderSeletorItens(window._seletorItens, q);
+};
+
 window.abrirSeletorAmostra = function(slotIdx) {
   window.seletorSlotAlvo = slotIdx;
-  // Ordena: por análise (mais recente primeiro), tipo, profundidade
   const itens = amostras.map(am => {
     const an = analises.find(x => x._docId === am.analiseId);
-    return {
-      am, an,
-      dataOrd: an?.dataLaudo || an?.dataEntrada || '',
-      jaSelecionada: window.slotsComparar.includes(am._docId)
-    };
-  }).sort((a,b) => (b.dataOrd||'').localeCompare(a.dataOrd||''));
+    return { am, an, jaSelecionada: window.slotsComparar.includes(am._docId) };
+  }).filter(it => it.an);
+  window._seletorItens = itens;
   const html = `<div class="sel-amostra-lista">
-    ${itens.length === 0 ? '<p style="text-align:center;color:var(--c);padding:20px;">Nenhuma amostra cadastrada.</p>' : itens.map(it => {
-      const am = it.am, an = it.an;
-      if (!an) return '';
-      const cls = it.jaSelecionada ? 'sel-am-item ja-sel' : 'sel-am-item';
-      return `<div class="${cls}" onclick="selecionarAmostraSlot('${am._docId}')">
-        <div class="sel-am-tipo ${am.tipo==='solo'?'badge-solo':'badge-folha'}">${am.tipo==='solo'?'🧪':'🍃'}</div>
-        <div class="sel-am-info">
-          <div class="sel-am-nome">${escHtml(am.nome)}${am.profundidade?' <span style="color:var(--c);font-weight:500;font-size:.78rem;">('+escHtml(am.profundidade)+')</span>':''}</div>
-          <div class="sel-am-meta">${escHtml(an.fazendaVinculada||'—')} · ${formatarData(an.dataLaudo||an.dataEntrada)}${an.responsavelTecnico?' · '+escHtml(an.responsavelTecnico):''}</div>
-        </div>
-        ${it.jaSelecionada ? '<div class="sel-am-tag">já no slot</div>' : '<div class="sel-am-arrow">›</div>'}
-      </div>`;
-    }).join('')}
+    <div class="sel-busca-wrap">
+      <input type="search" id="seletorBusca" class="sel-busca-input" placeholder="Buscar por nome ou fazenda..." oninput="filtrarSeletorBusca(this.value)" autocomplete="off">
+    </div>
+    <div id="seletorItens">
+      ${itens.length === 0 ? '<p style="text-align:center;color:var(--c);padding:20px;">Nenhuma amostra cadastrada.</p>' : renderSeletorItens(itens, '')}
+    </div>
   </div>`;
-  // Reusa o modal "ver" pra mostrar o seletor (com título adaptado)
   document.getElementById('verTitulo').textContent = `Escolher amostra · Slot ${slotIdx+1}`;
   document.getElementById('verBody').innerHTML = html;
   document.getElementById('overlayVer').classList.add('aberto');
+  setTimeout(() => document.getElementById('seletorBusca')?.focus(), 120);
 };
 
 window.selecionarAmostraSlot = function(amId) {
   const slot = window.seletorSlotAlvo;
   if (slot === null) return;
   // Se já está em outro slot, remove de lá primeiro
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < window.slotsComparar.length; i++) {
     if (window.slotsComparar[i] === amId && i !== slot) {
       window.slotsComparar[i] = null;
     }
