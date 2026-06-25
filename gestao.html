@@ -2315,14 +2315,44 @@ function renderDrench() {
             <span style="font-size:.66rem;padding:2px 7px;border-radius:99px;font-weight:700;background:${st?'#dcfce7':'#fef3c7'};color:${st?'#166534':'#92400e'};">${st?'✅ Realizado':'⏳ Pendente'}</span>
           </div>
           ${alvos.length?`<div style="font-size:.73rem;color:var(--c);margin-bottom:4px;">${alvos.map(a=>'🛡️ '+escHtml(a)).join(' · ')}</div>`:''}
-          <div style="display:flex;flex-wrap:wrap;gap:4px;">
+          <div style="display:flex;flex-direction:column;gap:5px;">
             ${(d.produtos||[]).filter(p=>p.produto?.trim()).map(p => {
-              const total = drTotalProduto(p, t?.area, t?.espacamento);
+              const esp   = t?.espacamento;
+              const area  = parseFloat(String(t?.area||'').replace(',','.')) || 0;
+              const total = drTotalProduto(p, area, esp);
+              const parsed = parseDrEsp(esp);
+              const metodo = d.metodoAplicacao || 'costal';
+              const volP  = parseFloat(String(d.volumePlanta??'').replace(',','.'));
+              const volM  = parseFloat(String(d.volumeMetro??'').replace(',','.'));
               const v = parseFloat(String(p.valor??'').replace(',','.'));
-              return `<span style="font-size:.74rem;background:var(--vb);color:var(--ve);padding:3px 8px;border-radius:99px;font-weight:700;">
-                🧪 ${escHtml(p.produto.trim())}: ${isNaN(v)?'—':fmt(v,2)} ${escHtml(p.unidade||'')}/${p.modo==='ha'?'ha':p.modo==='planta'?'planta':'m linear'}
-                ${total!=null?' → <strong>'+fmt(total,2)+' '+escHtml(p.unidade||'')+'</strong> total':''}
-              </span>`;
+              let chips = [];
+              // /ha
+              if (total != null && area) chips.push({txt:`${fmt(v,2)} ${p.unidade||''}/${p.modo==='ha'?'ha':p.modo==='planta'?'planta':'m linear'} → ${fmt(total,2)} ${p.unidade||''} total/ha`, destaque:false});
+              else chips.push({txt:`${isNaN(v)?'—':fmt(v,2)} ${p.unidade||''}/${p.modo==='ha'?'ha':p.modo==='planta'?'planta':'m linear'}`, destaque:false});
+              // costal
+              if (metodo==='costal' && !isNaN(volP) && volP>0 && parsed) {
+                const fP = (parsed.el * parsed.ep) / 10000;
+                const dosePl = p.modo==='planta' ? v : (p.modo==='ha' ? v*fP : null);
+                if (dosePl!=null) {
+                  const plantasBomba = 20000 / volP;
+                  chips.push({txt:`💪 ${fmt(dosePl,4)} ${p.unidade||''}/planta · ${fmt(dosePl*plantasBomba,2)} ${p.unidade||''}/bomba (${fmt(plantasBomba,0)} plantas/bomba de 20L)`, destaque:true});
+                }
+              }
+              // turbina
+              if (metodo==='turbina' && !isNaN(volM) && volM>0 && parsed) {
+                const metrosPorHa = 10000 / parsed.el;
+                const aguaHaL = (volM * metrosPorHa) / 1000;
+                const doseHa = p.modo==='ha' ? v : (p.modo==='planta' ? v/((parsed.el*parsed.ep)/10000) : null);
+                if (doseHa!=null && aguaHaL>0) {
+                  const doseMlPorMetro = doseHa * (parsed.el/10000);
+                  const prod2000 = doseHa * 2000 / aguaHaL;
+                  chips.push({txt:`⚙️ ${fmt(doseMlPorMetro,4)} ${p.unidade||''}/m · ${fmt(prod2000,2)} ${p.unidade||''} para 2000L (turbina)`, destaque:true});
+                }
+              }
+              return `<div style="font-size:.74rem;display:flex;flex-direction:column;gap:2px;">
+                <strong>🧪 ${escHtml(p.produto.trim())}</strong>
+                ${chips.map(c=>`<span style="padding:2px 8px;border-radius:5px;font-family:'DM Mono',monospace;${c.destaque?'background:#fef3c7;color:#92400e;border:1px solid #f59e0b;font-weight:800;':'background:var(--vb);color:var(--ve);font-weight:700;'}">${c.txt}</span>`).join('')}
+              </div>`;
             }).join('')}
           </div>
           ${st&&d.dataRealizado?`<div style="font-size:.7rem;color:var(--c);margin-top:4px;">✅ Realizado em ${formatarData(d.dataRealizado)}${d.realizadoPor?' · '+escHtml(d.realizadoPor):''}</div>`:''}

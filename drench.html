@@ -275,11 +275,15 @@ window.toggleDrSidebar = function() {
 // ══════════════════════════════
 function iniciarNovoAgendamento() {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
-  novoWIP = {talhoes:new Set(), data:hoje(), alvos:[], obs:'', metodo:'costal', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
+  novoWIP = {talhoes:new Set(), data:hoje(), alvos:[], obs:'', metodo:'costal', volumePlanta:'', volumeMetro:'', produtos:[{produto:'',modo:'ha',valor:'',unidade:'kg'}]};
   document.getElementById('painelDrench').style.display = 'flex';
   document.getElementById('btnNovoAgendamento').style.display = 'none';
   document.getElementById('btnExpandPainel').style.display = 'none';
   document.getElementById('nData').value = novoWIP.data;
+  document.getElementById('nMetodo').value = 'costal';
+  document.getElementById('nVolumePlanta').value = '';
+  document.getElementById('nVolumeMetro').value = '';
+  atualizarCamposMetodoDr('costal', 'n');
   document.getElementById('nAlvoInput').value = '';
   document.getElementById('nObs').value = '';
   renderizarProdutosNovo();
@@ -287,6 +291,16 @@ function iniciarNovoAgendamento() {
   renderizarPainelNovo();
 }
 window.iniciarNovoAgendamento = iniciarNovoAgendamento;
+
+// Mostra/oculta campos de volume conforme o método selecionado
+// prefixo: 'n' (novo) ou 'e' (editar)
+window.atualizarCamposMetodoDr = function(metodo, pref) {
+  const costal = document.getElementById(pref+'CampoVolumeCostal');
+  const metro  = document.getElementById(pref+'CampoVolumeMetro');
+  if (costal) costal.style.display = metodo === 'costal'  ? 'block' : 'none';
+  if (metro)  metro.style.display  = metodo === 'turbina' ? 'block' : 'none';
+};
+function atualizarCamposMetodoDr(metodo, pref) { window.atualizarCamposMetodoDr(metodo, pref); }
 
 // Minimiza o painel para liberar o mapa e poder clicar em mais talhões
 window.toggleMinimizarPainel = function() {
@@ -391,7 +405,10 @@ window.salvarNovoAgendamento = async function() {
       const t = talhoes.find(x=>x.id===talId);
       await addDoc(collection(db,'drenchPrevencao'), {
         grupoId, talhaoId:talId, talhaoNome: t?.nome || talId, fazenda: t?.fazenda || '',
-        data, metodoAplicacao: novoWIP.metodo || 'costal', alvoPrevencao: novoWIP.alvos.slice(), produtos: prodsFS, observacoes: obs,
+        data, metodoAplicacao: novoWIP.metodo || 'costal',
+        volumePlanta: novoWIP.metodo === 'costal' ? (parseFloat(String(novoWIP.volumePlanta).replace(',','.')) || null) : null,
+        volumeMetro: novoWIP.metodo === 'turbina' ? (parseFloat(String(novoWIP.volumeMetro).replace(',','.')) || null) : null,
+        alvoPrevencao: novoWIP.alvos.slice(), produtos: prodsFS, observacoes: obs,
         status: 'pendente', dataRealizado: null, realizadoPor: null, obsRealizacao: '',
         criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       });
@@ -514,6 +531,53 @@ function renderDoseLinha(pr, esp) {
   </div>`;
 }
 
+function renderDrenchDoses(d, esp) {
+  const prods = (d.produtos||[]).map(normalizarProduto);
+  if (!prods.length) return '';
+  const metodo = d.metodoAplicacao || 'costal';
+  const volPlanta = parseFloat(String(d.volumePlanta??'').replace(',','.'));   // ml/planta (costal)
+  const volMetro  = parseFloat(String(d.volumeMetro??'').replace(',','.'));    // ml/metro (turbina)
+  const parsed = parseEspacamento(esp);
+
+  return prods.map(pr => {
+    const conv = converterDoses(pr, esp);
+    const un = sanitizar(pr.unidade||'');
+    const doseHa = conv.doseHa;
+    let chips = [];
+
+    // /ha — sempre mostrado
+    if (doseHa != null) chips.push({label:`${fmtNum(doseHa,2)} ${un}/ha`, cls:'principal'});
+
+    if (metodo === 'costal' && !isNaN(volPlanta) && volPlanta > 0) {
+      const dosePlanta = conv.dosePlanta;
+      if (dosePlanta != null) {
+        chips.push({label:`${fmtNum(dosePlanta,4)} ${un}/planta`});
+        const plantasPorBomba = 20000 / volPlanta;
+        const prodBomba = dosePlanta * plantasPorBomba;
+        chips.push({label:`${fmtNum(prodBomba,2)} ${un}/bomba (20L cobre ${fmtNum(plantasPorBomba,0)} plantas)`, cls:'destaque'});
+      }
+    } else if (metodo === 'turbina' && !isNaN(volMetro) && volMetro > 0 && parsed) {
+      const metrosPorHa = 10000 / parsed.el;
+      const aguaHaL = (volMetro * metrosPorHa) / 1000;   // litros de água por ha
+      if (doseHa != null && aguaHaL > 0) {
+        const doseMl = conv.doseMl;
+        if (doseMl != null) chips.push({label:`${fmtNum(doseMl,4)} ${un}/m linear`});
+        const prod2000L = doseHa * 2000 / aguaHaL;
+        chips.push({label:`${fmtNum(prod2000L,2)} ${un} para 2000L (turbina)`, cls:'destaque'});
+      }
+    } else {
+      // Fertirrigação ou sem volume definido: mostra /planta e /m linear se disponíveis
+      if (conv.dosePlanta != null) chips.push({label:`${fmtNum(conv.dosePlanta,4)} ${un}/planta`});
+      if (conv.doseMl != null) chips.push({label:`${fmtNum(conv.doseMl,4)} ${un}/m linear`});
+    }
+
+    return `<div class="prod-linha">
+      <span class="prod-nome">🧪 ${sanitizar(pr.produto)}</span>
+      <span class="dose-chips">${chips.map(c=>`<span class="dose-chip ${c.cls||''}">${c.label}</span>`).join('')}</span>
+    </div>`;
+  }).join('');
+}
+
 function renderTalhaoItem(d) {
   const adm = isAdmin(), podConf = podeConfirmar();
   const realizado = (d.status||'pendente') === 'realizado';
@@ -535,7 +599,7 @@ function renderTalhaoItem(d) {
       </div>
     </div>
     <div class="pulv-produtos">
-      ${prods.map(pr=>renderDoseLinha(pr, esp)).join('')}
+      ${renderDrenchDoses(d, esp)}
     </div>
     ${realizado?`<div class="pulv-meta">✅ Aplicado em ${formatarData(d.dataRealizado)}${d.realizadoPor?' · '+sanitizar(d.realizadoPor):''}</div>`:''}
     ${realizado && d.obsRealizacao?`<div class="pulv-obs">✅ ${sanitizar(d.obsRealizacao)}</div>`:''}
@@ -563,7 +627,11 @@ window.abrirEditarDrench = function(docId) {
   document.getElementById('editInfo').innerHTML =
     `🌱 <strong>${sanitizar(d.talhaoNome||d.talhaoId||'')}</strong> · ${sanitizar(d.fazenda||'sem fazenda')}`;
   document.getElementById('eData').value = d.data || '';
-  document.getElementById('eMetodo').value = d.metodoAplicacao || 'costal';
+  const eMetodo = d.metodoAplicacao || 'costal';
+  document.getElementById('eMetodo').value = eMetodo;
+  document.getElementById('eVolumePlanta').value = d.volumePlanta != null ? d.volumePlanta : '';
+  document.getElementById('eVolumeMetro').value = d.volumeMetro != null ? d.volumeMetro : '';
+  atualizarCamposMetodoDr(eMetodo, 'e');
   document.getElementById('eAlvoInput').value = '';
   document.getElementById('eObs').value = d.observacoes || '';
   renderizarProdutosEdit();
@@ -608,8 +676,13 @@ window.salvarEditarDrench = async function() {
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
     const metodo = document.getElementById('eMetodo').value;
+    const volP = parseFloat(document.getElementById('eVolumePlanta').value) || null;
+    const volM = parseFloat(document.getElementById('eVolumeMetro').value) || null;
     await updateDoc(doc(db,'drenchPrevencao',docId), {
-      data, metodoAplicacao: metodo, alvoPrevencao: window.editWIP.alvos.slice(), observacoes: obs,
+      data, metodoAplicacao: metodo,
+      volumePlanta: metodo === 'costal' ? volP : null,
+      volumeMetro: metodo === 'turbina' ? volM : null,
+      alvoPrevencao: window.editWIP.alvos.slice(), observacoes: obs,
       produtos: prods.map(p=>({produto:p.produto.trim(), modo:p.modo, valor:p.valor, unidade:p.unidade})),
       editadoEm: new Date().toISOString(), editadoPor: usuarioAtual.email
     });
@@ -789,6 +862,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .dose-chips{display:flex;flex-wrap:wrap;gap:5px;}
 .dose-chip{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:600;color:var(--c);background:var(--cl);border-radius:5px;padding:2px 8px;white-space:nowrap;}
 .dose-chip.principal{color:white;background:var(--v);font-weight:700;}
+.dose-chip.destaque{background:#fef3c7;color:#92400e;border:1px solid #f59e0b;font-weight:800;}
 .pulv-meta{font-size:.72rem;color:var(--c);margin-top:6px;}
 .pulv-obs{font-size:.75rem;color:var(--c);font-style:italic;margin-top:6px;}
 .pulv-acoes{margin-top:8px;padding-top:8px;border-top:1px solid var(--cl);display:flex;flex-wrap:wrap;gap:6px;}
@@ -890,11 +964,27 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
           <div class="campo"><label>Data Prevista</label><input type="date" id="nData" onchange="novoWIP.data=this.value"></div>
           <div class="campo">
             <label>Método de Aplicação</label>
-            <select id="nMetodo" onchange="novoWIP.metodo=this.value">
+            <select id="nMetodo" onchange="novoWIP.metodo=this.value; atualizarCamposMetodoDr(this.value,'n');">
               <option value="costal">💪 Bomba Costal</option>
               <option value="turbina">⚙️ Adaptação na Turbina</option>
               <option value="fertirrigacao">💧 Fertirrigação</option>
             </select>
+          </div>
+          <div class="campo" id="nCampoVolumeCostal">
+            <label>Volume do esguicho por planta</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" inputmode="decimal" id="nVolumePlanta" placeholder="Ex: 50" min="0" oninput="novoWIP.volumePlanta=this.value" style="flex:1;">
+              <span style="font-size:.8rem;color:var(--c);white-space:nowrap;">ml / planta</span>
+            </div>
+            <div style="font-size:.7rem;color:var(--c);margin-top:3px;">Bomba costal = 20 litros. A qtd de plantas por bomba é calculada automaticamente.</div>
+          </div>
+          <div class="campo" id="nCampoVolumeMetro" style="display:none;">
+            <label>Volume do esguicho por metro linear</label>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <input type="number" inputmode="decimal" id="nVolumeMetro" placeholder="Ex: 100" min="0" oninput="novoWIP.volumeMetro=this.value" style="flex:1;">
+              <span style="font-size:.8rem;color:var(--c);white-space:nowrap;">ml / metro</span>
+            </div>
+            <div style="font-size:.7rem;color:var(--c);margin-top:3px;">Turbina = 2000 litros. A dosagem para o tanque é calculada automaticamente.</div>
           </div>
           <div class="campo">
             <label>Alvos de Prevenção (opcional)</label>
@@ -985,11 +1075,27 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div class="campo"><label>Data Prevista</label><input type="date" id="eData"></div>
       <div class="campo">
         <label>Método de Aplicação</label>
-        <select id="eMetodo">
+        <select id="eMetodo" onchange="atualizarCamposMetodoDr(this.value,'e');">
           <option value="costal">💪 Bomba Costal</option>
           <option value="turbina">⚙️ Adaptação na Turbina</option>
           <option value="fertirrigacao">💧 Fertirrigação</option>
         </select>
+      </div>
+      <div class="campo" id="eCampoVolumeCostal" style="display:none;">
+        <label>Volume do esguicho por planta</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="number" inputmode="decimal" id="eVolumePlanta" placeholder="Ex: 50" min="0" style="flex:1;">
+          <span style="font-size:.8rem;color:var(--c);white-space:nowrap;">ml / planta</span>
+        </div>
+        <div style="font-size:.7rem;color:var(--c);margin-top:3px;">Bomba costal = 20 litros</div>
+      </div>
+      <div class="campo" id="eCampoVolumeMetro" style="display:none;">
+        <label>Volume do esguicho por metro linear</label>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <input type="number" inputmode="decimal" id="eVolumeMetro" placeholder="Ex: 100" min="0" style="flex:1;">
+          <span style="font-size:.8rem;color:var(--c);white-space:nowrap;">ml / metro</span>
+        </div>
+        <div style="font-size:.7rem;color:var(--c);margin-top:3px;">Turbina = 2000 litros</div>
       </div>
       <div class="campo">
         <label>Alvos de Prevenção (opcional)</label>
