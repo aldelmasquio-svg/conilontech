@@ -233,7 +233,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .modal-rec-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;}
 
 /* TAG DE FASE DA LAVOURA */
-.fase-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;background:#f59e0b;color:white;}
+.fase-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:.66rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:white;}
+.fase-tag.producao{background:#22c55e;}
+.fase-tag.reforma{background:#f59e0b;}
+.fase-tag.plantio{background:#3b82f6;}
+/* STATUS label talhão no select */
+.sel-talhao-reforma{color:#b45309;}
 </style>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -296,6 +301,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
         <label>Produtividade esperada (sc/ha)</label>
         <input type="text" inputmode="decimal" id="inpProd" placeholder="ex: 80" oninput="onRecalcular()">
         <div class="rec-hist-prod" id="histProd"></div>
+      </div>
+      <div class="rec-sticky-col">
+        <label>Fase da lavoura</label>
+        <select id="selFase" onchange="window.recWIP.fase=this.value; onRecalcular()">
+          <option value="producao">🌿 Produção</option>
+          <option value="reforma">🔄 Reforma</option>
+          <option value="plantio">🌱 Plantio</option>
+        </select>
       </div>
       <div class="rec-sticky-col">
         <label>Manual técnico</label>
@@ -467,6 +480,7 @@ window.recWIP = {
   amostraId: '',
   produtividade: null,
   manual: 'incaper',
+  fase: 'producao',
   // calagem
   metodoCalagem: 'v',     // 'v' (saturação V%) | 'equilibrio' (equilíbrio iônico CTC)
   v2: 60,
@@ -609,13 +623,14 @@ function gerarMenu() {
 function popularTalhoes() {
   const sel = document.getElementById('selTalhao');
   const val = sel.value;
-  // Agrupa por fazenda, ordena por fazenda+nome
+  // Inclui ativo e reforma; exclui colhido
   const ord = [...talhoes]
-    .filter(t => t.status === 'ativo' || !t.status)
+    .filter(t => t.status !== 'colhido')
     .sort((a,b) => (a.fazenda||'').localeCompare(b.fazenda||'') || (a.nome||'').localeCompare(b.nome||''));
-  sel.innerHTML = '<option value="">— selecione —</option>' + ord.map(t =>
-    `<option value="${escAttr(t._docId)}">${escHtml((t.fazenda?t.fazenda+' · ':'') + (t.nome || t.id))}</option>`
-  ).join('');
+  sel.innerHTML = '<option value="">— selecione —</option>' + ord.map(t => {
+    const label = (t.fazenda ? t.fazenda + ' · ' : '') + (t.nome || t.id) + (t.status === 'reforma' ? ' — Reforma' : '');
+    return `<option value="${escAttr(t._docId)}">${escHtml(label)}</option>`;
+  }).join('');
   if (val) sel.value = val;
 }
 
@@ -661,6 +676,12 @@ window.onTrocaTalhao = function() {
     return;
   }
   const t = talhoes.find(x => x._docId === id);
+  // Auto-set fase based on talhão status
+  if (t?.status === 'reforma' && window.recWIP.fase === 'producao') {
+    window.recWIP.fase = 'reforma';
+    const selFase = document.getElementById('selFase');
+    if (selFase) selFase.value = 'reforma';
+  }
   // Histórico de produção
   if (t && t.historico && t.historico.length) {
     const ord = [...t.historico].sort((a,b)=>(b.safra||'').localeCompare(a.safra||''));
@@ -745,8 +766,11 @@ window.renderRecomendacao = function() {
   // Faixa pra ver se está em prod (talhão ativo)
   let html = '';
   // FASE da lavoura (informativo)
+  const _fase = window.recWIP.fase || 'producao';
+  const _faseLabel = {producao:'Lavoura em produção', reforma:'Lavoura em reforma', plantio:'Lavoura em plantio'}[_fase] || 'Lavoura em produção';
+  const _faseIco = {producao:'🌿', reforma:'🔄', plantio:'🌱'}[_fase] || '🌿';
   html += `<div style="display:flex;align-items:center;gap:7px;margin-bottom:2px;">
-    <span class="fase-tag">📌 Lavoura em produção</span>
+    <span class="fase-tag ${_fase}">${_faseIco} ${_faseLabel}</span>
     <span style="font-size:.7rem;color:var(--c);">Tabelas baseadas em Conilon adulto · manutenção</span>
   </div>`;
   // ━━━ CARD 1 — RESUMO DA ANÁLISE ━━━
@@ -1856,7 +1880,7 @@ window.salvarRecomendacao = async function() {
       amostraNome: am?.nome || '',
       analiseId: am?.analiseId || '',
       dataAnalise: analise?.dataLaudo || analise?.dataEntrada || '',
-      fase: 'producao',
+      fase: w.fase || 'producao',
       produtividade: w.produtividade,
       manual: w.manual,
       calagem,
@@ -2020,7 +2044,7 @@ window.renderLista = function() {
         <div style="flex:1;min-width:0;">
           <div class="rec-card-tit">💊 ${escHtml(r.fazenda || '—')} · ${escHtml(r.talhaoNome || '—')} ${temAjuste?`<span class="tag-ajustada" style="margin-left:5px;">✏️</span>`:''}</div>
           <div class="rec-card-meta">
-            📊 ${fmt(r.produtividade,0)} sc/ha · ${escHtml(r.amostraNome || '—')} (${formatarData(r.dataAnalise)})<br>
+            ${r.fase && r.fase !== 'producao' ? `<span class="fase-tag ${r.fase}" style="font-size:.58rem;padding:1px 7px;margin-right:4px;">${r.fase==='reforma'?'🔄 Reforma':'🌱 Plantio'}</span>` : ''}📊 ${fmt(r.produtividade,0)} sc/ha · ${escHtml(r.amostraNome || '—')} (${formatarData(r.dataAnalise)})<br>
             <span style="font-size:.65rem;">📅 ${formatarData((r.atualizadoEm||r.criadoEm||'').slice(0,10))} · ${escHtml(window.METAS_CALAGEM[r.manual]?.nome || r.manual || '—')}</span>
           </div>
         </div>
@@ -2142,6 +2166,7 @@ window.editarRecomendacao = function(id) {
     amostraId: r.amostraId,
     produtividade: r.produtividade,
     manual: r.manual || 'incaper',
+    fase: r.fase || 'producao',
     metodoCalagem: metodo,
     v2: r.calagem?.v2 || 60,
     ca2: r.calagem?.ca2 || 3.0,
@@ -2160,6 +2185,8 @@ window.editarRecomendacao = function(id) {
   document.getElementById('selTalhao').value = r.talhaoId;
   document.getElementById('inpProd').value = r.produtividade;
   document.getElementById('selManual').value = r.manual || 'incaper';
+  const selFase = document.getElementById('selFase');
+  if (selFase) selFase.value = r.fase || 'producao';
   abrirTab('nova');
   onTrocaTalhao();
   toast('✏️ Editando recomendação');
@@ -2195,7 +2222,7 @@ window.excluirRecomendacao = async function(id) {
 window.limparRecomendacao = function() {
   window.editandoId = null;
   window.recWIP = {
-    talhaoId:'', amostraId:'', produtividade:null, manual:'incaper',
+    talhaoId:'', amostraId:'', produtividade:null, manual:'incaper', fase:'producao',
     metodoCalagem:'v', v2:60, ca2:3.0, mg2:1.0, prnt:80, profundidade:20,
     eqCaPct:60, eqMgPct:15, eqKPct:5, eqProdutoCaId:null, eqProdutoMgId:null,
     ajustes: {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
@@ -2208,6 +2235,8 @@ window.limparRecomendacao = function() {
   document.getElementById('inpProd').value = '';
   document.getElementById('histProd').textContent = '';
   document.getElementById('selManual').value = 'incaper';
+  const selFase = document.getElementById('selFase');
+  if (selFase) selFase.value = 'producao';
   onRecalcular();
 };
 
