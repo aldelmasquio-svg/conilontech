@@ -161,10 +161,10 @@ function renderizarItensPedido(){
       </div>
       ${resumoInativo}
       ${ativo?`<div class="ped-item-fields" onclick="event.stopPropagation()">
-        <input type="text" placeholder="Produto / Insumo (ex: Ureia)" value="${item.produto||''}" oninput="pedidoWIP.itens[${i}].produto=this.value" class="ped-inp">
+        <input type="text" placeholder="Produto / Insumo (ex: Ureia)" value="${item.produto||''}" oninput="setPedProduto(${i},this.value)" class="ped-inp">
         <div class="ped-dose-row">
-          <input type="number" inputmode="decimal" step="0.01" min="0" placeholder="Dose por hectare" value="${item.quantidade||''}" oninput="pedidoWIP.itens[${i}].quantidade=this.value;atualizarTotalPed(${i})" class="ped-inp ped-dose-inp-num">
-          <select onchange="pedidoWIP.itens[${i}].unidade=this.value;atualizarTotalPed(${i})" class="ped-und-sel">
+          <input type="number" inputmode="decimal" step="0.01" min="0" placeholder="Dose por hectare" value="${item.quantidade||''}" oninput="setPedQtd(${i},this.value)" class="ped-inp ped-dose-inp-num">
+          <select onchange="setPedUnidade(${i},this.value)" class="ped-und-sel">
             ${['kg','g','L','mL','sc','t'].map(u=>`<option value="${u}" ${(item.unidade||'kg')===u?'selected':''}>${u}/ha</option>`).join('')}
           </select>
         </div>
@@ -201,6 +201,10 @@ window.atualizarTotalPed = function(i) {
   else if (dosePorHa === 0) box.innerHTML = '<span style="color:var(--t4);">Total a pedir aparecerá quando informar a dose</span>';
   else box.innerHTML = `<span class="ped-total-label">Total a pedir:</span> <strong class="ped-total-val">${doseTotal.toLocaleString('pt-BR')} ${unidade}</strong> <span class="ped-total-aux">(${dosePorHa} ${unidade}/ha × ${areaTotal.toLocaleString('pt-BR')} ha)</span>`;
 };
+// Setters expostos no window: handlers inline rodam no escopo global e não enxergam a variável de módulo pedidoWIP
+window.setPedProduto=function(i,v){const it=pedidoWIP?.itens?.[i];if(it)it.produto=v;};
+window.setPedQtd=function(i,v){const it=pedidoWIP?.itens?.[i];if(it){it.quantidade=v;atualizarTotalPed(i);}};
+window.setPedUnidade=function(i,v){const it=pedidoWIP?.itens?.[i];if(it){it.unidade=v;atualizarTotalPed(i);}};
 window.ativarItemPed=function(i){pedItemAtivo=i;renderizarItensPedido();};
 window.remItemPed=function(i){pedidoWIP.itens.splice(i,1);if(!pedidoWIP.itens.length)adicionarItemPedido();else if(pedItemAtivo>=pedidoWIP.itens.length)pedItemAtivo=pedidoWIP.itens.length-1;renderizarItensPedido();};
 window.remTalhaoPed=function(i,id){pedidoWIP.itens[i].talhoes.delete(id);renderizarItensPedido();};
