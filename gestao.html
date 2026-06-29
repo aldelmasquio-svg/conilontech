@@ -2268,32 +2268,39 @@ function renderDrench() {
     return;
   }
 
-  // ── Tabela de produtos necessários ──
+  // ── Cards de produtos necessários ──
   if (totProd.size) {
     const rows = [...totProd.values()].sort((a,b) => a.produto.localeCompare(b.produto,'pt'));
     html += `<div class="secao-bloco" style="margin-top:8px;">
       <div class="secao-tit">📦 Necessidade de Produtos (pendentes)</div>
-      <div class="secao-sub" style="margin-bottom:8px;">Quantidade total calculada por área de talhão para pedido de compra</div>
-      <table class="tab-nutrientes" style="width:100%;">
-        <thead><tr>
-          <th>Produto</th><th style="text-align:right;">Total</th><th>Un</th><th>Fazenda / Talhões</th>
-        </tr></thead>
-        <tbody>
-          ${rows.map(r => {
-            const fazList = [...r.detalhes.entries()].sort((a,b) => a[0].localeCompare(b[0],'pt'));
-            const detalheHtml = fazList.map(([faz, det]) => {
-              const talStr = det.talhoes.map(tt => tt.total!=null ? `${escHtml(tt.nome)} (${fmt(tt.total,2)} ${escHtml(r.unidade)})` : `${escHtml(tt.nome)} ⚠️`).join(', ');
-              return (drenchFiltroFazenda ? '' : `<span style="font-weight:700;color:var(--ve);">${escHtml(faz)}:</span> `) + talStr;
-            }).join('<br>');
-            return `<tr>
-              <td><strong>${escHtml(r.produto)}</strong></td>
-              <td style="text-align:right;font-family:'DM Mono',monospace;font-weight:700;">${r.total>0?fmt(r.total,2):'—'}</td>
-              <td style="color:var(--c);font-size:.8rem;">${escHtml(r.unidade)}</td>
-              <td style="font-size:.73rem;color:var(--c);line-height:1.6;">${detalheHtml}${r.semArea>0?`<br><span style="color:#f59e0b;">⚠️ ${r.semArea} talhão(ões) sem área cadastrada</span>`:''}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
+      <div class="secao-sub" style="margin-bottom:10px;">Quantidade total calculada por área de talhão para pedido de compra</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${rows.map(r => {
+          const fazList = [...r.detalhes.entries()].sort((a,b) => a[0].localeCompare(b[0],'pt'));
+          const fazHtml = fazList.map(([faz, det]) => {
+            const chips = det.talhoes.map(tt =>
+              `<span style="display:inline-flex;align-items:baseline;gap:5px;background:white;border:1px solid var(--cb);border-radius:7px;padding:3px 9px;font-size:.72rem;">
+                 <span style="font-weight:600;color:var(--t);">${escHtml(tt.nome)}</span>
+                 ${tt.total!=null
+                   ? `<span style="font-family:'DM Mono',monospace;color:var(--v);font-weight:700;white-space:nowrap;">${fmt(tt.total,2)} ${escHtml(r.unidade)}</span>`
+                   : `<span style="color:#f59e0b;font-weight:600;">⚠️ sem área</span>`}
+               </span>`
+            ).join('');
+            return `<div style="margin-top:7px;">
+              ${drenchFiltroFazenda ? '' : `<div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ve);margin-bottom:5px;">🏡 ${escHtml(faz)} <span style="color:var(--c);font-weight:600;font-family:'DM Mono',monospace;">· ${fmt(det.total,2)} ${escHtml(r.unidade)}</span></div>`}
+              <div style="display:flex;flex-wrap:wrap;gap:5px;">${chips}</div>
+            </div>`;
+          }).join('');
+          return `<div style="background:#fafafa;border:1px solid var(--cb);border-left:4px solid var(--v);border-radius:10px;padding:12px 14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;border-bottom:1px solid var(--cb);padding-bottom:8px;">
+              <span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.08rem;color:var(--ve);">🧪 ${escHtml(r.produto)}</span>
+              <span style="font-family:'DM Mono',monospace;font-weight:700;font-size:1.18rem;color:var(--v);white-space:nowrap;">${r.total>0?fmt(r.total,2):'—'} <span style="font-size:.8rem;color:var(--c);font-weight:600;">${escHtml(r.unidade)}</span></span>
+            </div>
+            ${r.semArea>0?`<div style="font-size:.7rem;color:#f59e0b;margin-top:6px;">⚠️ ${r.semArea} talhão(ões) sem área cadastrada (não somados ao total)</div>`:''}
+            ${fazHtml}
+          </div>`;
+        }).join('')}
+      </div>
     </div>`;
   }
 
