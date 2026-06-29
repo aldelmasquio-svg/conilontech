@@ -2159,6 +2159,10 @@ function renderCalendario() {
 // ════════════════════════════════════════════════════
 const METODO_DR_LABEL = {costal:'💪 Costal', turbina:'⚙️ Turbina', fertirrigacao:'💧 Fertirrigação'};
 
+// Padroniza unidades para pedido: mL→L e g→kg (divide por 1000); demais ficam como estão.
+function canonUnidadeDr(u){ const x=String(u||'').trim(); if(x==='mL'||x==='ml')return 'L'; if(x==='g')return 'kg'; return x||'un'; }
+function canonValorDr(v,u){ if(v==null)return null; const x=String(u||'').trim(); return (x==='mL'||x==='ml'||x==='g') ? v/1000 : v; }
+
 function parseDrEsp(esp) {
   if (!esp) return null;
   const nums = String(esp).match(/\d+[.,]?\d*/g);
@@ -2215,9 +2219,10 @@ function renderDrench() {
     const talNome = d.talhaoNome || d.talhaoId || '—';
     for (const p of (d.produtos||[])) {
       if (!p.produto?.trim()) continue;
-      const key = `${p.produto.trim()}||${p.unidade||''}`;
-      const total = drTotalProduto(p, area, esp);
-      if (!totProd.has(key)) totProd.set(key, {produto:p.produto.trim(), unidade:p.unidade||'', total:0, semArea:0, fazendas:new Set(), detalhes:new Map()});
+      const unidade = canonUnidadeDr(p.unidade);             // L ou kg padronizado
+      const total = canonValorDr(drTotalProduto(p, area, esp), p.unidade);
+      const key = `${p.produto.trim()}||${unidade}`;
+      if (!totProd.has(key)) totProd.set(key, {produto:p.produto.trim(), unidade, total:0, semArea:0, fazendas:new Set(), detalhes:new Map()});
       const entry = totProd.get(key);
       if (total != null) entry.total += total;
       else entry.semArea++;
@@ -2273,7 +2278,17 @@ function renderDrench() {
     const rows = [...totProd.values()].sort((a,b) => a.produto.localeCompare(b.produto,'pt'));
     html += `<div class="secao-bloco" style="margin-top:8px;">
       <div class="secao-tit">📦 Necessidade de Produtos (pendentes)</div>
-      <div class="secao-sub" style="margin-bottom:10px;">Quantidade total calculada por área de talhão para pedido de compra</div>
+      <div class="secao-sub" style="margin-bottom:10px;">Total para pedido de compra · unidades padronizadas em L e kg</div>
+      <div style="background:var(--ve);border-radius:10px;padding:12px 14px;margin-bottom:12px;">
+        <div style="font-size:.7rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#bbf7d0;margin-bottom:8px;">🛒 Lista de compra — totais</div>
+        <div style="display:flex;flex-direction:column;gap:1px;">
+          ${rows.map(r => `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.12);">
+            <span style="color:white;font-weight:600;font-size:.9rem;">${escHtml(r.produto)}</span>
+            <span style="font-family:'DM Mono',monospace;font-weight:700;color:white;white-space:nowrap;">${r.total>0?fmt(r.total,2):'—'} <span style="font-size:.78rem;color:#bbf7d0;">${escHtml(r.unidade)}</span></span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="secao-sub" style="margin-bottom:8px;">Detalhamento por fazenda e talhão</div>
       <div style="display:flex;flex-direction:column;gap:10px;">
         ${rows.map(r => {
           const fazList = [...r.detalhes.entries()].sort((a,b) => a[0].localeCompare(b[0],'pt'));
