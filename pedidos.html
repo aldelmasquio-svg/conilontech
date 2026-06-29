@@ -124,7 +124,8 @@ window.clicarTalhao=clicarTalhao;
 window.togglePedSidebar=function(){pedSidebarAberta=!pedSidebarAberta;const sb=document.getElementById('pedSidebar'),btn=document.getElementById('btnExpandPedSb');if(sb)sb.style.display=pedSidebarAberta?'flex':'none';if(btn)btn.style.display=pedSidebarAberta?'none':'flex';if(pedMap)setTimeout(()=>pedMap.invalidateSize(),100);};
 function iniciarNovoPedido(){if(!isAdmin()){toast('⛔ Sem permissão.');return;}pedidoWIP={itens:[]};adicionarItemPedido();pedItemAtivo=0;document.getElementById('painelPedido').style.display='flex';document.getElementById('fabNovoPedido').style.display='none';renderizarItensPedido();}
 window.iniciarNovoPedido=iniciarNovoPedido;
-function adicionarItemPedido(){if(!pedidoWIP)return;pedidoWIP.itens.push({produto:'',quantidade:'',unidade:'kg',talhoes:new Set()});pedItemAtivo=pedidoWIP.itens.length-1;renderizarItensPedido();}
+const MODO_APLIC={terrestre:'🚜 Terrestre',aerea:'✈️ Aérea',fertirrigacao:'💧 Fertirrigação',drench:'🌱 Drench'};
+function adicionarItemPedido(){if(!pedidoWIP)return;pedidoWIP.itens.push({produto:'',quantidade:'',unidade:'kg',modo:'terrestre',talhoes:new Set()});pedItemAtivo=pedidoWIP.itens.length-1;renderizarItensPedido();}
 window.adicionarItemPedido=adicionarItemPedido;
 function renderizarItensPedido(){
   if(!pedidoWIP)return;
@@ -147,6 +148,7 @@ function renderizarItensPedido(){
     // Resumo curto para item inativo (não colapsa totalmente, mostra o que tem)
     const resumoInativo = !ativo ? `<div class="ped-item-resumo">
       ${item.produto?`<strong>${item.produto}</strong>`:'<span style="color:var(--t4);">Sem produto</span>'}
+      ${item.modo?` · ${MODO_APLIC[item.modo]||item.modo}`:''}
       ${dosePorHa>0?` · ${dosePorHa} ${unidade}/ha`:''}
       ${nTal>0?` · ${nTal} talhão(ões)`:''}
       ${doseTotal>0?` · <span class="ped-total-mini">${doseTotal.toLocaleString('pt-BR')} ${unidade}</span>`:''}
@@ -162,6 +164,9 @@ function renderizarItensPedido(){
       ${resumoInativo}
       ${ativo?`<div class="ped-item-fields" onclick="event.stopPropagation()">
         <input type="text" placeholder="Produto / Insumo (ex: Ureia)" value="${item.produto||''}" oninput="setPedProduto(${i},this.value)" class="ped-inp">
+        <select onchange="setPedModo(${i},this.value)" class="ped-inp ped-modo-sel">
+          ${Object.entries(MODO_APLIC).map(([k,lab])=>`<option value="${k}" ${(item.modo||'terrestre')===k?'selected':''}>${lab}</option>`).join('')}
+        </select>
         <div class="ped-dose-row">
           <input type="number" inputmode="decimal" step="0.01" min="0" placeholder="Dose por hectare" value="${item.quantidade||''}" oninput="setPedQtd(${i},this.value)" class="ped-inp ped-dose-inp-num">
           <select onchange="setPedUnidade(${i},this.value)" class="ped-und-sel">
@@ -205,6 +210,7 @@ window.atualizarTotalPed = function(i) {
 window.setPedProduto=function(i,v){const it=pedidoWIP?.itens?.[i];if(it)it.produto=v;};
 window.setPedQtd=function(i,v){const it=pedidoWIP?.itens?.[i];if(it){it.quantidade=v;atualizarTotalPed(i);}};
 window.setPedUnidade=function(i,v){const it=pedidoWIP?.itens?.[i];if(it){it.unidade=v;atualizarTotalPed(i);}};
+window.setPedModo=function(i,v){const it=pedidoWIP?.itens?.[i];if(it)it.modo=v;renderizarItensPedido();};
 window.ativarItemPed=function(i){pedItemAtivo=i;renderizarItensPedido();};
 window.remItemPed=function(i){pedidoWIP.itens.splice(i,1);if(!pedidoWIP.itens.length)adicionarItemPedido();else if(pedItemAtivo>=pedidoWIP.itens.length)pedItemAtivo=pedidoWIP.itens.length-1;renderizarItensPedido();};
 window.remTalhaoPed=function(i,id){pedidoWIP.itens[i].talhoes.delete(id);renderizarItensPedido();};
@@ -232,6 +238,7 @@ window.salvarPedidoWIP=async function(){
       const total = dosePorHa * areaTotal;
       return {
         produto: it.produto.trim(),
+        modo: it.modo || 'terrestre',
         dosePorHa,
         unidade,
         areaTotal: Math.round(areaTotal*100)/100,
@@ -288,7 +295,8 @@ function renderizarListaPedidos(){
           const txtBadge = temNovo
             ? `<span class="ped-qtd-badge">${(it.total||0).toLocaleString('pt-BR')} ${it.unidade||''}</span><span class="ped-qtd-aux">${it.dosePorHa} ${it.unidade||''}/ha</span>${recebidoTxt}`
             : (it.quantidade ? `<span class="ped-qtd-badge">${it.quantidade}</span>` : '');
-          return `<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${it.produto}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${txtBadge}<span class="ped-tal-ids">${(it.talhoes||[]).map(t=>t.id).join(', ')}</span></span></div>`;
+          const modoBadge = it.modo ? `<span class="ped-modo-badge">${MODO_APLIC[it.modo]||it.modo}</span>` : '';
+          return `<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${it.produto}${modoBadge}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${txtBadge}<span class="ped-tal-ids">${(it.talhoes||[]).map(t=>t.id).join(', ')}</span></span></div>`;
         }).join('')}
       </div>
     </div>`;
@@ -307,12 +315,13 @@ window.gerarRelatorioPedido=function(docId){
   const dataF=p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—';
   const porFazenda={};
   (p.itens||[]).forEach(it=>{(it.talhoes||[]).forEach(t=>{const f=t.fazenda||'Sem fazenda';if(!porFazenda[f])porFazenda[f]={};if(!porFazenda[f][t.id])porFazenda[f][t.id]={nome:t.nome,itens:[]};porFazenda[f][t.id].itens.push(it);});});
-  document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">PEDIDO DE INSUMOS</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${p.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${(p.itens||[]).length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 RESUMO DO PEDIDO</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:center;">Dose/ha</th><th style="padding:9px 12px;text-align:center;">Área total</th><th style="padding:9px 12px;text-align:center;">TOTAL A PEDIR</th></tr></thead><tbody>${(p.itens||[]).map((it,i)=>{
+  document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">PEDIDO DE INSUMOS</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${p.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${(p.itens||[]).length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 RESUMO DO PEDIDO</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:left;">Modo</th><th style="padding:9px 12px;text-align:center;">Dose/ha</th><th style="padding:9px 12px;text-align:center;">Área total</th><th style="padding:9px 12px;text-align:center;">TOTAL A PEDIR</th></tr></thead><tbody>${(p.itens||[]).map((it,i)=>{
     const temNovo = it.dosePorHa!=null && it.total!=null;
     const dosePh = temNovo ? `${it.dosePorHa} ${it.unidade}/ha` : '—';
     const areaT = temNovo ? `${(it.areaTotal||0).toLocaleString('pt-BR')} ha` : '—';
     const totalT = temNovo ? `${(it.total||0).toLocaleString('pt-BR')} ${it.unidade}` : (it.quantidade||'—');
-    return `<tr style="background:${i%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);color:var(--t4);">${i+1}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-weight:600;">${it.produto}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${dosePh}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${areaT}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--v);font-weight:700;font-size:13px;">${totalT}</td></tr>`;
+    const modoT = it.modo ? (MODO_APLIC[it.modo]||it.modo) : '—';
+    return `<tr style="background:${i%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);color:var(--t4);">${i+1}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-weight:600;">${it.produto}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-size:11px;">${modoT}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${dosePh}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${areaT}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--v);font-weight:700;font-size:13px;">${totalT}</td></tr>`;
   }).join('')}</tbody></table></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">🗺️ DISTRIBUIÇÃO POR FAZENDA</div>${Object.entries(porFazenda).map(([faz,tals])=>`<div style="margin-bottom:16px;"><div style="background:var(--vb);border-left:4px solid var(--v);padding:8px 14px;font-weight:700;font-size:13px;color:var(--ve);">🏡 ${faz}</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--cl);"><th style="padding:7px 14px;text-align:left;">Talhão</th><th style="padding:7px 14px;text-align:left;">Insumos</th></tr></thead><tbody>${Object.entries(tals).map(([tid,td],ti)=>`<tr style="background:${ti%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);font-weight:600;">${tid} · ${td.nome}${td.area?' · '+td.area+'ha':''}</td><td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);">${td.itens.map(it=>{const temNovo=it.dosePorHa!=null;const txt=temNovo?`${it.dosePorHa} ${it.unidade}/ha`:(it.quantidade||'');return `<span style="display:inline-block;background:var(--vb);border-radius:12px;padding:2px 9px;margin:2px;font-size:11px;color:var(--ve);font-weight:600;">${it.produto}${txt?' · '+txt:''}</span>`;}).join('')}</td></tr>`).join('')}</tbody></table></div>`).join('')}</div><div style="font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
   setTimeout(()=>window.print(),200);
 };
@@ -397,6 +406,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .ped-dose-row{display:flex;gap:6px;}
 .ped-dose-inp-num{flex:1;}
 .ped-und-sel{width:88px;border:1.5px solid var(--cb);border-radius:6px;padding:9px 4px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;flex-shrink:0;text-align:center;background:white;}
+.ped-modo-sel{width:100%;background:white;cursor:pointer;}
 .ped-total-box{background:white;border:1.5px dashed var(--v);border-radius:7px;padding:8px 11px;font-size:.82rem;color:var(--t);line-height:1.4;}
 .ped-total-label{color:var(--c);font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
 .ped-total-val{font-family:'DM Mono',monospace;font-size:1.02rem;color:var(--ve);}
@@ -427,6 +437,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .ped-item-lista:last-child{border:none;}
 .ped-item-prod{font-weight:600;flex:1;}
 .ped-qtd-badge{font-family:'DM Mono',monospace;font-size:.75rem;color:var(--v);background:var(--vb);border-radius:10px;padding:1px 8px;white-space:nowrap;}
+.ped-modo-badge{font-size:.66rem;font-weight:700;color:var(--c);background:var(--cl);border-radius:8px;padding:1px 7px;margin-left:6px;white-space:nowrap;}
 .ped-tal-ids{font-size:.7rem;color:var(--c);}
 .vazio{text-align:center;padding:48px 24px;color:var(--c);}
 .vazio .ico{font-size:48px;margin-bottom:12px;opacity:.4;}
