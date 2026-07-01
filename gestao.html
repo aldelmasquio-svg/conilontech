@@ -75,6 +75,19 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .kpi-card.danger .kpi-value{color:var(--danger);}
 .kpi-card.ok .kpi-value{color:var(--ok);}
 .kpi-card.info .kpi-value{color:var(--blue);}
+.kpi-card.clk{cursor:pointer;position:relative;transition:transform .1s ease,box-shadow .15s ease;}
+.kpi-card.clk:hover{box-shadow:0 4px 14px rgba(0,0,0,.1);transform:translateY(-1px);}
+.kpi-card.clk:active{transform:scale(.98);}
+.kpi-card.clk::after{content:'›';position:absolute;top:9px;right:12px;color:#cbd5e1;font-size:1.1rem;font-weight:700;line-height:1;}
+
+/* AÇÕES PENDENTES */
+.acao-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fffdf5;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;cursor:pointer;font-family:'Barlow',sans-serif;transition:background .12s;}
+.acao-row:hover{background:#fef9e7;}
+.acao-row.danger{background:#fef2f2;border-color:#fecaca;}
+.acao-ico{font-size:1.1rem;flex-shrink:0;}
+.acao-txt{flex:1;font-size:.82rem;color:#374151;}
+.acao-txt strong{color:var(--ve);font-family:'DM Mono',monospace;}
+.acao-chev{color:var(--c);font-size:1.25rem;font-weight:700;line-height:1;}
 
 /* SEÇÃO */
 .secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
@@ -681,31 +694,81 @@ function renderGeral() {
   // Gastos (período)
   const gastoDefensivos = calcGastoPorCategoria(movFil, 'defensivo');
   const gastoAdubos = calcGastoPorCategoria(movFil, 'adubo_mineral') + calcGastoPorCategoria(movFil, 'fertilizante_foliar');
-  // Avisos
+  // Avisos / pendências
   const semClassif = produtosEstoque.filter(p => !p.categoria && (!faz || p.fazenda === faz)).length;
   const movSemPreco = movimentacoes.filter(m => m.tipo === 'entrada' && !m.precoUnitario && (!faz || m.fazenda === faz)).length;
+  const drenchPend = drenchPrevencao.filter(d => (d.status||'pendente') === 'pendente' && (!faz || d.fazenda === faz)).length;
+  const talhoesSemArea = talhFil.filter(t => !parseDose(t.area)).length;
   let html = '';
-  if (semClassif > 0 || movSemPreco > 0) {
-    html += `<div class="banner-aviso">
-      <strong>📊 Para liberar todos os indicadores:</strong>
-      ${semClassif > 0 ? `• ${semClassif} produto(s) do estoque ainda sem categoria.<br>` : ''}
-      ${movSemPreco > 0 ? `• ${movSemPreco} entrada(s) sem preço cadastrado.<br>` : ''}
-      Quanto mais dado cadastrado, mais completos os relatórios.
+  // ── Painel de Ações Pendentes (consolidado, clicável) ──
+  const acoes = [
+    {n: pulvPend,       ico:'💧', txt:'pulverização(ões) pendente(s)',        tab:'pulverizacoes', danger:false},
+    {n: adubAtrasadas,  ico:'🧪', txt:'adubação(ões) atrasada(s)',            tab:'adubacao',      danger:true},
+    {n: drenchPend,     ico:'🌱', txt:'agendamento(s) de drench pendente(s)', tab:'drench',        danger:false},
+    {n: semClassif,     ico:'🏬', txt:'produto(s) do estoque sem categoria',  tab:'estoque',       danger:false},
+    {n: movSemPreco,    ico:'💰', txt:'entrada(s) de estoque sem preço',      tab:'estoque',       danger:false},
+    {n: talhoesSemArea, ico:'📐', txt:'talhão(ões) sem área cadastrada',      href:'mapa.html',    danger:false},
+  ].filter(a => a.n > 0);
+  if (acoes.length) {
+    html += `<div class="secao" style="margin-bottom:12px;">
+      <div class="secao-tit">⚡ Ações pendentes</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${acoes.map(a => {
+          const nav = a.href ? `location.href='${a.href}'` : `abrirTab('${a.tab}')`;
+          return `<button onclick="${nav}" class="acao-row${a.danger?' danger':''}">
+            <span class="acao-ico">${a.ico}</span>
+            <span class="acao-txt"><strong>${a.n}</strong> ${a.txt}</span>
+            <span class="acao-chev">›</span>
+          </button>`;
+        }).join('')}
+      </div>
     </div>`;
   }
   html += `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Área gerenciada</div><div class="kpi-value">${fmt(areaTotal,1)}</div><div class="kpi-aux">hectares ${faz?'· '+escHtml(faz):'· '+talhFil.length+' talhões'}</div></div>
-    <div class="kpi-card info"><div class="kpi-label">Produção safra atual</div><div class="kpi-value">${fmt(prodSafraAtual,0)}</div><div class="kpi-aux">sacas${mediaScHaFilial>0?' · média '+fmt(mediaScHaFilial,1)+' sc/ha':''}</div></div>
-    <div class="kpi-card ok"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">no período</div></div>
-    <div class="kpi-card ok"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">no período</div></div>
-    <div class="kpi-card"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}</div></div>
-    <div class="kpi-card"><div class="kpi-label">Gasto c/ adubos</div><div class="kpi-value">${gastoAdubos>0?fmtRS(gastoAdubos):'—'}</div><div class="kpi-aux">${gastoAdubos>0?'no período':'sem preços cadastrados'}</div></div>
-    <div class="kpi-card ${pulvPend>0?'alerta':''}"><div class="kpi-label">Pulverizações pendentes</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">aguardando aplicação</div></div>
-    <div class="kpi-card ${adubAtrasadas>0?'danger':''}"><div class="kpi-label">Adubações atrasadas</div><div class="kpi-value">${adubAtrasadas}</div><div class="kpi-aux">passou da data prevista</div></div>
+    <div class="kpi-card info clk" onclick="abrirTab('produtividade')"><div class="kpi-label">Produção safra atual</div><div class="kpi-value">${fmt(prodSafraAtual,0)}</div><div class="kpi-aux">sacas${mediaScHaFilial>0?' · média '+fmt(mediaScHaFilial,1)+' sc/ha':''}</div></div>
+    <div class="kpi-card ok clk" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card ok clk" onclick="abrirTab('adubacao')"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}</div></div>
+    <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ adubos</div><div class="kpi-value">${gastoAdubos>0?fmtRS(gastoAdubos):'—'}</div><div class="kpi-aux">${gastoAdubos>0?'no período':'sem preços cadastrados'}</div></div>
+    <div class="kpi-card clk ${pulvPend>0?'alerta':''}" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Pulverizações pendentes</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">aguardando aplicação</div></div>
+    <div class="kpi-card clk ${adubAtrasadas>0?'danger':''}" onclick="abrirTab('adubacao')"><div class="kpi-label">Adubações atrasadas</div><div class="kpi-value">${adubAtrasadas}</div><div class="kpi-aux">passou da data prevista</div></div>
   </div>`;
+  // Gráfico de barras por fazenda (só se filtro = todas)
+  if (!faz && fazendas.length > 1) {
+    const dadosGraf = fazendas.map(f => {
+      const tFaz = talhoes.filter(t => t.fazenda === f);
+      return {f, area: tFaz.reduce((s,t)=>s+parseDose(t.area),0), prod: calcProducaoTotalSafraAtual(tFaz)};
+    });
+    const usarProd = dadosGraf.some(d => d.prod > 0);
+    const metric = usarProd ? 'prod' : 'area';
+    const maxV = Math.max(...dadosGraf.map(d => d[metric]), 0);
+    if (maxV > 0) {
+      const und = usarProd ? 'sc' : 'ha';
+      const ord = [...dadosGraf].sort((a,b) => b[metric] - a[metric]);
+      html += `<div class="secao" style="margin-top:12px;">
+        <div class="secao-tit">📊 ${usarProd ? 'Produção por fazenda (safra atual)' : 'Área por fazenda'}</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${ord.map(d => {
+            const pct = maxV > 0 ? (d[metric] / maxV * 100) : 0;
+            return `<div>
+              <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:.82rem;margin-bottom:4px;">
+                <span style="font-weight:600;"><span class="faz-bullet" style="background:${corFazenda(d.f)};"></span>${escHtml(d.f)}</span>
+                <span style="font-family:'DM Mono',monospace;font-weight:700;color:var(--ve);">${fmt(d[metric], usarProd?0:1)} <span style="font-size:.72rem;color:var(--c);">${und}</span></span>
+              </div>
+              <div style="background:var(--cl);border-radius:6px;height:15px;overflow:hidden;">
+                <div style="width:${pct}%;height:100%;background:${corFazenda(d.f)};border-radius:6px;min-width:3px;transition:width .3s;"></div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+  }
+
   // Resumo por fazenda (só se filtro = todas)
   if (!faz && fazendas.length > 1) {
-    html += `<div class="secao">
+    html += `<div class="secao" style="margin-top:12px;">
       <div class="secao-tit">🏡 Resumo por fazenda</div>
       <div class="tbl-wrap"><table class="tbl tbl-resumo"><thead><tr>
         <th>Fazenda</th>
