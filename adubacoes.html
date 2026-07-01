@@ -338,19 +338,56 @@ function renderizarTelaMes() {
   }).join('');
 }
 
+// Fertinox aplica um adubo por vez: quando o modo é Fertinox e há mais de um produto,
+// cada produto vira uma operação confirmável individualmente.
+function ehFertinoxMulti(ap) {
+  return (ap.modo === 'Fertinox') && ((ap.produtos||[]).length > 1);
+}
+// Materializa o estado "feito" por produto, migrando planos antigos onde só a aplicação
+// inteira era marcada (ap.feito=true) sem estado por produto — mantém o já confirmado.
+function materializarProdutos(ap) {
+  return (ap.produtos||[]).map(p => {
+    if (p.feito !== undefined) return p;
+    if (ap.feito) return {...p, feito:true, dataFeito:p.dataFeito||ap.dataFeito, obsFeito:p.obsFeito||ap.obsFeito, feitoPor:p.feitoPor||ap.feitoPor};
+    return p;
+  });
+}
+
 function renderCardAp(ap, planoDocId) {
-  const feito=ap.feito, adm=isAdmin(), podeMark=podeMarcar();
-  const prods=(ap.produtos||[]).map(p=>`
-    <div class="prod-linha">
-      <span class="prod-linha-icone">🧪</span>
+  const adm=isAdmin(), podeMark=podeMarcar();
+  const fmulti = ehFertinoxMulti(ap);
+  const pm = materializarProdutos(ap);
+  const feito = fmulti ? (pm.length>0 && pm.every(p=>p.feito)) : ap.feito;
+  const prods = pm.map((p,pi) => {
+    const base = `<span class="prod-linha-icone">🧪</span>
       <span class="prod-nome">${p.produto}</span>
       <span class="prod-dose">${p.dose} ${p.unidade}/ha</span>
-      ${p.doseFertinox?`<span class="prod-dose" style="background:#2d6a4f;">📍 ${p.doseFertinox} g/m</span>`:''}
-    </div>`).join('');
+      ${p.doseFertinox?`<span class="prod-dose" style="background:#2d6a4f;">📍 ${p.doseFertinox} g/m</span>`:''}`;
+    if (!fmulti) return `<div class="prod-linha">${base}</div>`;
+    // Fertinox com múltiplos adubos: cada um é uma operação separada
+    const pf = p.feito;
+    return `<div class="prod-op ${pf?'feita':''}">
+      <div class="prod-op-hdr">
+        <div class="prod-linha">${base}</div>
+        <span class="badge ${pf?'badge-ok':'badge-pend'}">${pf?'✅ Feita':'⏳ Pendente'}</span>
+      </div>
+      ${podeMark?`<div class="check-area check-area-prod">
+        ${pf?`
+          <div class="check-feito">✅ Realizada em ${p.dataFeito?formatarData(p.dataFeito):'—'} por ${p.feitoPor||'—'}
+            ${p.obsFeito?`<div class="check-obs">💬 ${p.obsFeito}</div>`:''}
+          </div>
+          <button onclick="desmarcarProd('${planoDocId}','${ap.id}',${pi})" class="btn-desfazer">Desfazer</button>
+        `:`
+          <textarea id="obsp-${ap.id}-${pi}" class="obs-inp" placeholder="Observação (opcional)..."></textarea>
+          <button onclick="marcarProdFeito('${planoDocId}','${ap.id}',${pi})" class="btn-feito">✅ Confirmar este adubo</button>
+        `}
+      </div>`:''}
+    </div>`;
+  }).join('');
   return `<div class="aplic-card ${feito?'feita':''}">
     <div class="aplic-top">
       <div style="flex:1;">
-        ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}${ap.doseFertinox?' · <strong>'+ap.doseFertinox+' g/m</strong>':''}</div>`:''}
+        ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}${ap.doseFertinox?' · <strong>'+ap.doseFertinox+' g/m</strong>':''}${fmulti?' · <span style="color:#2d6a4f;">confirmação por adubo</span>':''}</div>`:''}
         <div class="prods-lista">${prods}</div>
         ${ap.obs?`<div class="aplic-obs">💬 ${ap.obs}</div>`:''}
       </div>
@@ -360,7 +397,7 @@ function renderCardAp(ap, planoDocId) {
                <button data-pid="${planoDocId}" data-aid="${ap.id}" onclick="deletarAp(this)" class="btn-ico-sm">🗑</button>`:''}
       </div>
     </div>
-    ${podeMark?`<div class="check-area">
+    ${(!fmulti && podeMark)?`<div class="check-area">
       ${feito?`
         <div class="check-feito">✅ Realizada em ${ap.dataFeito?formatarData(ap.dataFeito):'—'} por ${ap.feitoPor||'—'}
           ${ap.obsFeito?`<div class="check-obs">💬 ${ap.obsFeito}</div>`:''}
@@ -386,6 +423,34 @@ window.desmarcarAp = async function(pid, aid) {
   if(!confirm('Desfazer este registro?')) return;
   const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
   await updateDoc(doc(db,'planosAdubacao',pid),{aplicacoes:pl.aplicacoes.map(a=>{if(a.id!==aid)return a;const{feito,dataFeito,obsFeito,feitoPor,...r}=a;return r;})});
+  toast('↩️ Desfeito.');
+};
+
+// ─── Confirmação por produto (Fertinox com múltiplos adubos) ───
+window.marcarProdFeito = async function(pid, aid, pidx) {
+  const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
+  const obs=document.getElementById(`obsp-${aid}-${pidx}`)?.value.trim()||'';
+  const hojeD=new Date().toISOString().slice(0,10);
+  const aplic = pl.aplicacoes.map(a=>{
+    if(a.id!==aid) return a;
+    const produtos=materializarProdutos(a).map((p,i)=> i!==pidx ? p : {...p, feito:true, dataFeito:hojeD, obsFeito:obs, feitoPor:usuarioAtual.email});
+    const todos = produtos.length>0 && produtos.every(p=>p.feito);
+    return {...a, produtos, feito:todos, ...(todos?{dataFeito:a.dataFeito||hojeD, feitoPor:a.feitoPor||usuarioAtual.email}:{})};
+  });
+  await updateDoc(doc(db,'planosAdubacao',pid),{aplicacoes:aplic});
+  toast('✅ Registrada!');
+};
+
+window.desmarcarProd = async function(pid, aid, pidx) {
+  if(!confirm('Desfazer este registro?')) return;
+  const pl=planosAdubacao.find(p=>p._docId===pid); if(!pl) return;
+  const aplic = pl.aplicacoes.map(a=>{
+    if(a.id!==aid) return a;
+    const produtos=materializarProdutos(a).map((p,i)=>{ if(i!==pidx) return p; const{feito,dataFeito,obsFeito,feitoPor,...r}=p; return r; });
+    const todos = produtos.length>0 && produtos.every(p=>p.feito);
+    return {...a, produtos, feito:todos};
+  });
+  await updateDoc(doc(db,'planosAdubacao',pid),{aplicacoes:aplic});
   toast('↩️ Desfeito.');
 };
 
@@ -1038,6 +1103,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .obs-inp{border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.88rem;font-family:'Barlow',sans-serif;resize:none;min-height:60px;outline:none;width:100%;}
 .obs-inp:focus{border-color:var(--v);}
 .btn-feito{background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;width:100%;}
+.prod-op{border:1px solid var(--cb);border-radius:10px;padding:10px;background:#fff;display:flex;flex-direction:column;gap:8px;}
+.prod-op.feita{background:#f0fdf4;border-color:#bbf7d0;}
+.prod-op-hdr{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;}
+.check-area-prod{border-top:1px dashed var(--cb);padding-top:8px;}
 /* WIZARD */
 .wizard-hdr{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:16px 16px 18px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;box-shadow:0 3px 12px rgba(0,0,0,.25);}
 .wizard-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;letter-spacing:.01em;}
