@@ -56,7 +56,7 @@ const ATIVIDADES_FIXAS = [
 ];
 
 let usuarioAtual = null, perfilAtual = {};
-let todosEmpregados = [], maquinas = [], registros = [], talhoes = [];
+let todosEmpregados = [], maquinas = [], registros = [], talhoes = [], estoqueProdutos = [];
 let telaAtual = 'lista', empregadoSel = null;
 let wip = null, cadastroTab = 'empregados';
 let filtroFazenda = ''; // '' = todas
@@ -143,6 +143,9 @@ function iniciarListeners() {
   onSnapshot(collection(db, 'talhoes'), snap => {
     talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
   });
+  onSnapshot(collection(db, 'estoque_produtos'), snap => {
+    estoqueProdutos = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+  });
 }
 
 // ─── NAVEGAÇÃO ───
@@ -165,20 +168,24 @@ window.irPerfil = (id) => {
   if (!empregadoSel) return;
   telaAtual = 'perfil'; renderizarTela();
 };
-window.irNovaAtividade = (empId) => {
-  empregadoSel = todosEmpregados.find(e => e._docId === empId) || null;
+// Fluxo atividade-primeiro: preenche a atividade uma vez e seleciona vários colaboradores.
+// preEmpId (opcional) já deixa esse colaborador marcado.
+window.irNovaAtividade = (preEmpId) => {
+  const colabs = new Set();
+  if (preEmpId) colabs.add(preEmpId);
   wip = {
-    empregadoId: empId,
-    empregadoNome: empregadoSel?.nome || '',
-    empregadoFazenda: empregadoSel?.fazenda || '',
     data: hoje(),
-    atividade: '', maquinaId: '',
+    atividade: '',
+    tratorId: '', implementoId: '',
+    horimetroIni: '', horimetroFim: '',
     talhaoId: '', talhaoNome: '', talhaoFazenda: '',
-    outraFazenda: false, obsLocal: '',
-    inicio: agora(), fim: '', obs: ''
+    inicio: agora(), fim: '', obs: '',
+    insumos: [],            // [{produtoId, quantidade}]
+    colaboradores: colabs   // Set de _docId de empregados
   };
   telaAtual = 'nova-atividade'; renderizarTela();
 };
+window.irRegistrarAtividade = () => window.irNovaAtividade();
 window.irCadastro = () => { telaAtual = 'cadastro'; renderizarTela(); };
 window.irHistorico = () => { telaAtual = 'historico'; renderizarHistorico(); };
 
@@ -251,6 +258,7 @@ function renderizarLista() {
     <div class="resumo-sep"></div>
     <div class="resumo-item" style="color:var(--c);"><span class="resumo-n">${totalAus}</span>sem reg.</div>
   </div>
+  ${podeReg?`<div class="registrar-bar"><button onclick="irNovaAtividade()" class="btn-registrar-atv">➕ Registrar Atividade</button></div>`:''}
   ${filtroHtml}`;
 
   if (!ativos.length) {
@@ -377,7 +385,9 @@ function renderAtvCard(a) {
       <div style="flex:1;min-width:0;">
         <div class="atv-nome">${a.atividade}</div>
         ${a.maquinaNome ? `<div class="atv-detail">🚜 ${a.maquinaNome}</div>` : ''}
+        ${(a.horimetroIni||a.horimetroFim) ? `<div class="atv-detail">⏱ Horímetro: ${a.horimetroIni||'—'} → ${a.horimetroFim||'—'}${(parseFloat(a.horimetroFim)>parseFloat(a.horimetroIni))?` (${(parseFloat(a.horimetroFim)-parseFloat(a.horimetroIni)).toFixed(1)} h)`:''}</div>` : ''}
         ${a.talhaoNome  ? `<div class="atv-detail">📍 ${a.talhaoNome}${a.talhaoFazenda?' · '+a.talhaoFazenda:''}${a.outraFazenda?' <span class="outra-faz-badge">outra fazenda</span>':''}</div>` : ''}
+        ${(a.insumos&&a.insumos.length) ? `<div class="atv-detail">🧪 ${a.insumos.map(x=>`${x.produtoNome} (${x.quantidade} ${x.unidade||''})`).join(', ')}</div>` : ''}
         ${a.obsLocal    ? `<div class="atv-detail" style="color:#d97706;">📝 ${a.obsLocal}</div>` : ''}
         ${a.obs         ? `<div class="atv-detail">💬 ${a.obs}</div>` : ''}
       </div>
@@ -389,128 +399,206 @@ function renderAtvCard(a) {
   </div>`;
 }
 
-// ─── NOVA ATIVIDADE ───
+// ─── NOVA ATIVIDADE (atividade-primeiro, multi-colaborador) ───
 function renderizarNovaAtividade() {
   if (!wip) return;
-  document.getElementById('novaAtvEmpNome').textContent = wip.empregadoNome + (wip.empregadoFazenda ? ' · '+wip.empregadoFazenda : '');
   document.getElementById('novaAtvData').value = wip.data;
   document.getElementById('novaAtvAtividade').value = wip.atividade;
   document.getElementById('novaAtvInicio').value = wip.inicio;
   document.getElementById('novaAtvFim').value = wip.fim;
   document.getElementById('novaAtvObs').value = wip.obs;
+  document.getElementById('novaAtvHoriIni').value = wip.horimetroIni;
+  document.getElementById('novaAtvHoriFim').value = wip.horimetroFim;
   document.getElementById('atividadesSug').innerHTML = ATIVIDADES_FIXAS.map(a => `<option value="${a}">`).join('');
 
-  // Máquinas
-  document.getElementById('novaAtvMaquina').innerHTML =
-    `<option value="">— Sem máquina —</option>`
-    + maquinas.map(m => `<option value="${m._docId}">${m.nome}${m.tipo?' ('+m.tipo+')':''}</option>`).join('');
-  document.getElementById('novaAtvMaquina').value = wip.maquinaId;
+  // Trator (máquinas que não são implemento) e Implemento (tipo Implemento)
+  const tratores = maquinas.filter(m => m.tipo !== 'Implemento');
+  const implementos = maquinas.filter(m => m.tipo === 'Implemento');
+  const selTrator = document.getElementById('novaAtvTrator');
+  selTrator.innerHTML = `<option value="">— Sem trator/máquina —</option>`
+    + tratores.map(m => `<option value="${m._docId}">${m.nome}${m.tipo?' ('+m.tipo+')':''}</option>`).join('');
+  selTrator.value = wip.tratorId || '';
+  const selImpl = document.getElementById('novaAtvImplemento');
+  selImpl.innerHTML = `<option value="">— Sem implemento —</option>`
+    + implementos.map(m => `<option value="${m._docId}">${m.nome}</option>`).join('');
+  selImpl.value = wip.implementoId || '';
 
-  // Talhões agrupados por fazenda
   _renderTalhaoSelect();
+  renderInsumos();
+  renderColaboradores();
 }
 
+// Guarda o valor dos selects simples no wip ao mudar
+window._syncNovaAtv = function() {
+  if (!wip) return;
+  wip.tratorId = document.getElementById('novaAtvTrator').value;
+  wip.implementoId = document.getElementById('novaAtvImplemento').value;
+  wip.horimetroIni = document.getElementById('novaAtvHoriIni').value;
+  wip.horimetroFim = document.getElementById('novaAtvHoriFim').value;
+};
+
 function _renderTalhaoSelect() {
-  const empFaz = wip?.empregadoFazenda || '';
   const todasFaz = fazendas();
   let opts = `<option value="">— Sem talhão específico —</option>`;
-
-  if (empFaz) {
-    const ts = talhoesDaFazenda(empFaz);
-    if (ts.length) {
-      opts += `<optgroup label="🏡 ${empFaz}">`;
-      opts += ts.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
-      opts += `</optgroup>`;
-    }
-    const outras = todasFaz.filter(f => f !== empFaz);
-    if (outras.length) {
-      outras.forEach(f => {
-        const ts2 = talhoesDaFazenda(f);
-        if (!ts2.length) return;
-        opts += `<optgroup label="↗ Outra fazenda: ${f}">`;
-        opts += ts2.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
-        opts += `</optgroup>`;
-      });
-    }
-  } else {
-    todasFaz.forEach(f => {
-      const ts = talhoesDaFazenda(f);
-      if (!ts.length) return;
-      opts += `<optgroup label="🏡 ${f}">`;
-      opts += ts.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
-      opts += `</optgroup>`;
-    });
-  }
-
+  todasFaz.forEach(f => {
+    const ts = talhoesDaFazenda(f);
+    if (!ts.length) return;
+    opts += `<optgroup label="🏡 ${f}">`;
+    opts += ts.map(t => `<option value="${t.id || t._docId}" data-fazenda="${t.fazenda||''}">${t.nome} (${t.area||'—'} ha)</option>`).join('');
+    opts += `</optgroup>`;
+  });
   const sel = document.getElementById('novaAtvTalhao');
   sel.innerHTML = opts;
   sel.value = wip.talhaoId || '';
-  _atualizarObsLocal(sel);
 }
 
-window._onTalhaoChange = function(sel) { _atualizarObsLocal(sel); };
-
-function _atualizarObsLocal(sel) {
-  if (!sel) { sel = document.getElementById('novaAtvTalhao'); if (!sel) return; }
+window._onTalhaoChange = function(sel) {
+  if (!wip) return;
   const opt = sel.options[sel.selectedIndex];
-  const tFaz = opt?.getAttribute('data-fazenda') || '';
-  const empFaz = wip?.empregadoFazenda || '';
-  const outra = !!tFaz && !!empFaz && tFaz !== empFaz;
-  const wrap = document.getElementById('obsLocalWrap');
-  if (wrap) wrap.style.display = outra ? 'flex' : 'none';
-  if (!outra && document.getElementById('novaAtvObsLocal')) {
-    document.getElementById('novaAtvObsLocal').value = '';
-  }
-  if (wip) {
-    const tid = sel.value;
-    const t = talhoes.find(x => (x.id||x._docId) === tid);
-    wip.talhaoId = tid;
-    wip.talhaoNome = t?.nome || '';
-    wip.talhaoFazenda = tFaz;
-    wip.outraFazenda = outra;
-  }
+  const t = talhoes.find(x => (x.id||x._docId) === sel.value);
+  wip.talhaoId = sel.value;
+  wip.talhaoNome = t?.nome || '';
+  wip.talhaoFazenda = opt?.getAttribute('data-fazenda') || '';
+};
+
+// ─── INSUMOS (opcional, vários; puxam do estoque e dão baixa) ───
+function _estoqueOpts(selectedId) {
+  const porFaz = {};
+  estoqueProdutos.filter(p => fazendaPermitida(p.fazenda||'Sem fazenda'))
+    .forEach(p => { const f=p.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(p); });
+  let opts = `<option value="">Selecione o produto...</option>`;
+  Object.keys(porFaz).sort().forEach(f => {
+    opts += `<optgroup label="🏡 ${f}">`;
+    opts += porFaz[f].sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(p =>
+      `<option value="${p._docId}" ${p._docId===selectedId?'selected':''}>${p.nome} — saldo ${(p.saldo||0)} ${p.unidade||''}</option>`).join('');
+    opts += `</optgroup>`;
+  });
+  return opts;
 }
+
+function renderInsumos() {
+  const cont = document.getElementById('insumosLista');
+  if (!cont) return;
+  if (!wip.insumos.length) {
+    cont.innerHTML = `<div class="insumo-vazio">Nenhum insumo. Opcional — adicione se a atividade usou produtos do estoque.</div>`;
+    return;
+  }
+  cont.innerHTML = wip.insumos.map((it,i) => {
+    const p = estoqueProdutos.find(x => x._docId === it.produtoId);
+    const un = p?.unidade || '';
+    return `<div class="insumo-row">
+      <select class="insumo-sel" onchange="window._setInsumoProd(${i},this.value)">${_estoqueOpts(it.produtoId)}</select>
+      <div class="insumo-qtd-wrap">
+        <input type="number" inputmode="decimal" step="0.01" min="0" class="insumo-qtd" placeholder="Qtd. total" value="${it.quantidade}" oninput="window._setInsumoQtd(${i},this.value)">
+        <span class="insumo-un">${un||'un'}</span>
+      </div>
+      <button class="insumo-rm" onclick="window._remInsumo(${i})" title="Remover">🗑</button>
+    </div>`;
+  }).join('');
+}
+window._addInsumo = function() { wip.insumos.push({produtoId:'',quantidade:''}); renderInsumos(); };
+window._remInsumo = function(i) { wip.insumos.splice(i,1); renderInsumos(); };
+window._setInsumoProd = function(i,v) { if(wip.insumos[i]){ wip.insumos[i].produtoId=v; renderInsumos(); } };
+window._setInsumoQtd = function(i,v) { if(wip.insumos[i]) wip.insumos[i].quantidade=v; };
+
+// ─── COLABORADORES (multi-seleção) ───
+function renderColaboradores() {
+  const cont = document.getElementById('colaboradoresLista');
+  if (!cont) return;
+  const ativos = empregadosAtivos();
+  const cnt = wip.colaboradores.size;
+  document.getElementById('colabCount').textContent = cnt ? `${cnt} selecionado(s)` : 'Nenhum selecionado';
+  if (!ativos.length) { cont.innerHTML = `<div class="insumo-vazio">Nenhum colaborador cadastrado.</div>`; return; }
+  const porFaz = {};
+  ativos.forEach(e => { const f=e.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(e); });
+  cont.innerHTML = Object.keys(porFaz).sort().map(f => `
+    <div class="colab-faz-tit">🏡 ${f}</div>
+    <div class="colab-grid">
+      ${porFaz[f].sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(e => {
+        const sel = wip.colaboradores.has(e._docId);
+        return `<button type="button" class="colab-chip ${sel?'sel':''}" onclick="window._toggleColab('${e._docId}')">
+          <span class="colab-check">${sel?'✅':'⬜'}</span> ${e.nome}
+        </button>`;
+      }).join('')}
+    </div>`).join('');
+}
+window._toggleColab = function(id) {
+  if (wip.colaboradores.has(id)) wip.colaboradores.delete(id);
+  else wip.colaboradores.add(id);
+  renderColaboradores();
+};
 
 window.salvarNovaAtividade = async function() {
+  _syncNovaAtv();
   const atv    = document.getElementById('novaAtvAtividade').value.trim();
   const data   = document.getElementById('novaAtvData').value;
-  const mqId   = document.getElementById('novaAtvMaquina').value;
-  const mqNome = mqId ? (maquinas.find(m => m._docId===mqId)?.nome||'') : '';
   const inicio = document.getElementById('novaAtvInicio').value;
   const fim    = document.getElementById('novaAtvFim').value;
   const obs    = document.getElementById('novaAtvObs').value.trim();
-  const obsLocal = (document.getElementById('novaAtvObsLocal')?.value||'').trim();
 
-  // Talhão info
-  const sel = document.getElementById('novaAtvTalhao');
-  const tid = sel?.value || '';
-  const opt = sel?.options[sel?.selectedIndex];
-  const tFaz = opt?.getAttribute('data-fazenda') || '';
-  const empFaz = wip?.empregadoFazenda || '';
-  const outra = !!tid && !!tFaz && !!empFaz && tFaz !== empFaz;
-  const t = talhoes.find(x => (x.id||x._docId) === tid);
+  const tratorNome = wip.tratorId ? (maquinas.find(m=>m._docId===wip.tratorId)?.nome||'') : '';
+  const implNome   = wip.implementoId ? (maquinas.find(m=>m._docId===wip.implementoId)?.nome||'') : '';
 
-  if (!atv)   { toast('⚠️ Informe a atividade.'); return; }
-  if (!inicio){ toast('⚠️ Informe o horário de início.'); return; }
-  if (outra && !obsLocal) { toast('⚠️ Informe o motivo para trabalho em outra fazenda.'); return; }
+  if (!atv)    { toast('⚠️ Informe a atividade.'); return; }
+  if (!inicio) { toast('⚠️ Informe o horário de início.'); return; }
+  if (!wip.colaboradores.size) { toast('⚠️ Selecione ao menos um colaborador.'); return; }
 
-  const novaAtv = {
-    id: 'atv'+Date.now(),
-    atividade: atv, maquinaId: mqId, maquinaNome: mqNome,
-    talhaoId: tid, talhaoNome: t?.nome||'', talhaoFazenda: tFaz,
-    outraFazenda: outra, obsLocal,
-    inicio, fim, obs
+  // Validar insumos (se preenchidos) contra o estoque
+  const insumosValidos = [];
+  for (const it of wip.insumos) {
+    if (!it.produtoId && !String(it.quantidade).trim()) continue; // linha vazia, ignora
+    const p = estoqueProdutos.find(x => x._docId === it.produtoId);
+    if (!p) { toast('⚠️ Selecione um produto do estoque em todos os insumos.'); return; }
+    const q = parseFloat(String(it.quantidade).replace(',','.'));
+    if (!q || q <= 0) { toast(`⚠️ Informe a quantidade usada de "${p.nome}".`); return; }
+    insumosValidos.push({produtoId:p._docId, produtoNome:p.nome, unidade:p.unidade||'', quantidade:q, fazenda:p.fazenda||'', prodRef:p});
+  }
+
+  // Máquina combinada (retrocompat com telas que exibem maquinaNome)
+  const maquinaNome = [tratorNome, implNome].filter(Boolean).join(' + ');
+  const grupoId = 'grp'+Date.now();
+  const novaAtvBase = {
+    atividade: atv,
+    tratorId: wip.tratorId, tratorNome,
+    implementoId: wip.implementoId, implementoNome: implNome,
+    maquinaId: wip.tratorId, maquinaNome,   // retrocompat
+    horimetroIni: wip.horimetroIni||'', horimetroFim: wip.horimetroFim||'',
+    talhaoId: wip.talhaoId||'', talhaoNome: wip.talhaoNome||'', talhaoFazenda: wip.talhaoFazenda||'',
+    insumos: insumosValidos.map(({produtoId,produtoNome,unidade,quantidade})=>({produtoId,produtoNome,unidade,quantidade})),
+    inicio, fim, obs, grupoId
   };
-  const regExist = registros.find(r => r.empregadoId===wip.empregadoId && r.data===data);
+
+  const btn = document.getElementById('btnSalvarAtv');
+  if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
   try {
-    if (regExist) {
-      await updateDoc(doc(db,'equipeRegistros',regExist._docId), {atividades:[...(regExist.atividades||[]),novaAtv]});
-    } else {
-      await addDoc(collection(db,'equipeRegistros'), {empregadoId:wip.empregadoId,empregadoNome:wip.empregadoNome,empregadoFazenda:wip.empregadoFazenda,data,entrada:'',saida:'',atividades:[novaAtv],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
+    // 1) Gravar a atividade no registro do dia de cada colaborador selecionado
+    for (const empId of wip.colaboradores) {
+      const emp = todosEmpregados.find(e => e._docId === empId);
+      const novaAtv = {...novaAtvBase, id: 'atv'+Date.now()+Math.random().toString(36).slice(2,6)};
+      const regExist = registros.find(r => r.empregadoId===empId && r.data===data);
+      if (regExist) {
+        await updateDoc(doc(db,'equipeRegistros',regExist._docId), {atividades:[...(regExist.atividades||[]),novaAtv]});
+      } else {
+        await addDoc(collection(db,'equipeRegistros'), {empregadoId:empId,empregadoNome:emp?.nome||'',empregadoFazenda:emp?.fazenda||'',data,entrada:'',saida:'',atividades:[novaAtv],criadoPor:usuarioAtual.email,criadoEm:new Date().toISOString()});
+      }
     }
-    toast('✅ Atividade registrada!');
-    telaAtual = 'perfil'; renderizarTela();
-  } catch(e) { toast('❌ Erro: '+e.message); }
+    // 2) Dar baixa no estoque dos insumos utilizados (uma vez por insumo)
+    for (const ins of insumosValidos) {
+      const p = ins.prodRef;
+      await addDoc(collection(db,'estoque_movimentacoes'), {
+        fazenda: p.fazenda||'', produtoId: p._docId, produtoNome: p.nome, unidade: p.unidade||'',
+        tipo: 'saida', quantidade: ins.quantidade, motivo: 'Aplicação no campo',
+        observacao: `Atividade: ${atv}${novaAtvBase.talhaoNome?' · '+novaAtvBase.talhaoNome:''}`,
+        data, criadoPor: usuarioAtual.email, criadoEm: new Date().toISOString()
+      });
+      await updateDoc(doc(db,'estoque_produtos',p._docId), { saldo: (p.saldo||0) - ins.quantidade });
+    }
+    toast(`✅ Atividade registrada para ${wip.colaboradores.size} colaborador(es)!`);
+    telaAtual = 'lista'; renderizarTela();
+  } catch(e) {
+    toast('❌ Erro: '+e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Salvar Atividade'; }
+  }
 };
 
 // ─── JORNADA ───
@@ -706,6 +794,7 @@ function renderizarHistorico() {
             <span class="hist-atv-nome">${a.atividade}</span>
             ${a.maquinaNome ? `<span class="hist-atv-meta">🚜 ${a.maquinaNome}</span>` : ''}
             ${a.talhaoNome  ? `<span class="hist-atv-meta">📍 ${a.talhaoNome}${a.outraFazenda?' ⇄':''}</span>` : ''}
+            ${(a.insumos&&a.insumos.length) ? `<span class="hist-atv-meta">🧪 ${a.insumos.map(x=>`${x.produtoNome} (${x.quantidade} ${x.unidade||''})`).join(', ')}</span>` : ''}
             <span class="hist-atv-hora">${a.inicio}${a.fim?'→'+a.fim:''}</span>
           </div>`).join('')}</div>` : ''}
       </div>`).join('') || '<div class="vazio-sm">Nenhum registro encontrado.</div>'}`;
@@ -831,6 +920,29 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .btn-add,.btn-next-wiz{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;cursor:pointer;letter-spacing:.03em;}
 .wiz-btns{display:flex;gap:10px;padding-top:14px;border-top:1px solid var(--cb);}
 .btn-back-wiz{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;}
+/* REGISTRAR ATIVIDADE (botão global) */
+.registrar-bar{padding:10px 12px 4px;background:white;flex-shrink:0;}
+.btn-registrar-atv{width:100%;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;letter-spacing:.03em;box-shadow:0 2px 8px rgba(26,92,26,.25);}
+.btn-registrar-atv:active{transform:scale(.99);}
+/* SEÇÃO NO FORM (insumos / colaboradores) */
+.secao-form{background:white;border:1.5px solid var(--cb);border-radius:var(--rad);padding:12px;margin-bottom:12px;}
+.secao-form-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;}
+.secao-form-hdr label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--v);font-weight:800;}
+.secao-form-sub{font-size:.68rem;color:var(--c);margin-bottom:10px;line-height:1.35;}
+.btn-add-insumo{background:var(--vb);border:1px solid var(--v);color:var(--v);border-radius:20px;padding:5px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;cursor:pointer;flex-shrink:0;}
+.insumo-vazio{font-size:.74rem;color:var(--c);font-style:italic;padding:4px 2px;}
+.insumo-row{display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap;}
+.insumo-sel{flex:1 1 100%;min-width:0;border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;}
+.insumo-qtd-wrap{display:flex;align-items:center;gap:6px;flex:1 1 auto;min-width:0;}
+.insumo-qtd{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 10px;font-size:.88rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;}
+.insumo-un{font-size:.78rem;font-weight:700;color:var(--c);flex-shrink:0;}
+.insumo-rm{background:none;border:1.5px solid #fca5a5;border-radius:var(--rs);padding:8px 10px;cursor:pointer;font-size:.9rem;flex-shrink:0;}
+.colab-count{font-size:.72rem;font-weight:700;color:var(--v);}
+.colab-faz-tit{font-size:.66rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--c);margin:8px 0 5px;}
+.colab-grid{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;}
+.colab-chip{display:inline-flex;align-items:center;gap:5px;background:var(--cl);border:1.5px solid var(--cb);border-radius:20px;padding:7px 12px;font-family:'Barlow',sans-serif;font-weight:600;font-size:.82rem;color:var(--t);cursor:pointer;transition:.12s;}
+.colab-chip.sel{background:var(--vb);border-color:var(--v);color:var(--v);}
+.colab-check{font-size:.85rem;}
 /* CADASTRO */
 .cad-tabs{display:flex;gap:8px;padding:10px 14px;background:white;border-bottom:1px solid var(--cb);flex-shrink:0;}
 .cad-tab{flex:1;background:var(--cl);border:2px solid var(--cb);border-radius:var(--rs);padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;color:var(--c);transition:.15s;}
@@ -920,10 +1032,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
   <!-- NOVA ATIVIDADE -->
   <div class="tela" id="tela-nova-atividade" style="display:none;">
     <div class="nova-atv-hdr">
-      <button onclick="irPerfil(wip?.empregadoId)" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
+      <button onclick="irLista()" style="background:rgba(255,255,255,.12);border:none;color:white;font-size:18px;width:36px;height:36px;border-radius:8px;cursor:pointer;flex-shrink:0;">←</button>
       <div>
         <div class="nova-atv-tit">Registrar Atividade</div>
-        <div class="nova-atv-sub" id="novaAtvEmpNome"></div>
+        <div class="nova-atv-sub">Preencha a atividade e selecione quem participou</div>
       </div>
     </div>
     <div class="ts" style="overflow-y:auto;flex:1;">
@@ -932,25 +1044,48 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
         <input type="text" id="novaAtvAtividade" placeholder="Selecione ou digite..." list="atividadesSug" autocomplete="off">
         <datalist id="atividadesSug"></datalist>
       </div>
-      <div class="campo"><label>Máquina (opcional)</label><select id="novaAtvMaquina"></select></div>
+      <div class="campo-row">
+        <div class="campo"><label>Trator / Máquina (opcional)</label><select id="novaAtvTrator" onchange="window._syncNovaAtv()"></select></div>
+        <div class="campo"><label>Implemento (opcional)</label><select id="novaAtvImplemento" onchange="window._syncNovaAtv()"></select></div>
+      </div>
+      <div class="campo-row">
+        <div class="campo"><label>Horímetro inicial (opcional)</label><input type="number" inputmode="decimal" step="0.1" min="0" id="novaAtvHoriIni" placeholder="Ex: 1240.5" onchange="window._syncNovaAtv()"></div>
+        <div class="campo"><label>Horímetro final (opcional)</label><input type="number" inputmode="decimal" step="0.1" min="0" id="novaAtvHoriFim" placeholder="Ex: 1246.0" onchange="window._syncNovaAtv()"></div>
+      </div>
       <div class="campo">
         <label>Talhão (opcional)</label>
         <select id="novaAtvTalhao" onchange="window._onTalhaoChange(this)"></select>
-      </div>
-      <!-- Aviso + campo obs aparecem quando talhão é de outra fazenda -->
-      <div id="obsLocalWrap" style="display:none;flex-direction:column;gap:4px;margin-bottom:12px;">
-        <div class="outra-faz-aviso">⚠️ Este talhão pertence a outra fazenda. Informe o motivo abaixo.</div>
-        <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:#c2410c;font-weight:700;">Motivo / Observação de local <span style="color:#ef4444;">*</span></label>
-        <input type="text" id="novaAtvObsLocal" placeholder="Ex: Cobrindo falta de funcionário, manutenção extra...">
       </div>
       <div class="campo-row">
         <div class="campo"><label>Início</label><input type="time" id="novaAtvInicio"></div>
         <div class="campo"><label>Fim (opcional)</label><input type="time" id="novaAtvFim"></div>
       </div>
+
+      <!-- INSUMOS (opcional) -->
+      <div class="secao-form">
+        <div class="secao-form-hdr">
+          <label>🧪 Insumos utilizados (opcional)</label>
+          <button type="button" class="btn-add-insumo" onclick="window._addInsumo()">＋ Adicionar</button>
+        </div>
+        <div class="secao-form-sub">Só produtos do estoque. Informe a quantidade total usada — dá baixa no estoque ao salvar.</div>
+        <div id="insumosLista"></div>
+      </div>
+
       <div class="campo"><label>Observação (opcional)</label><input type="text" id="novaAtvObs" placeholder="Detalhe se necessário..."></div>
+
+      <!-- COLABORADORES -->
+      <div class="secao-form">
+        <div class="secao-form-hdr">
+          <label>👥 Colaboradores <span style="color:#ef4444;">*</span></label>
+          <span class="colab-count" id="colabCount">Nenhum selecionado</span>
+        </div>
+        <div class="secao-form-sub">Toque para marcar quem fez esta atividade hoje (pode ser mais de um).</div>
+        <div id="colaboradoresLista"></div>
+      </div>
+
       <div class="wiz-btns">
-        <button class="btn-back-wiz" onclick="irPerfil(wip?.empregadoId)">Cancelar</button>
-        <button class="btn-next-wiz" onclick="salvarNovaAtividade()">💾 Salvar Atividade</button>
+        <button class="btn-back-wiz" onclick="irLista()">Cancelar</button>
+        <button class="btn-next-wiz" id="btnSalvarAtv" onclick="salvarNovaAtividade()">💾 Salvar Atividade</button>
       </div>
     </div>
   </div>
