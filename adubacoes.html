@@ -386,7 +386,7 @@ function renderCardAp(ap, planoDocId) {
   }).join('');
   return `<div class="aplic-card ${feito?'feita':''}">
     <div class="aplic-top">
-      <div style="flex:1;">
+      <div class="aplic-top-main">
         ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}${ap.doseFertinox?' · <strong>'+ap.doseFertinox+' g/m</strong>':''}${fmulti?' · <span style="color:#2d6a4f;">confirmação por adubo</span>':''}</div>`:''}
         <div class="prods-lista">${prods}</div>
         ${ap.obs?`<div class="aplic-obs">💬 ${ap.obs}</div>`:''}
@@ -1085,12 +1085,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .aplic-card{background:white;border-radius:var(--rad);box-shadow:0 2px 10px rgba(0,0,0,.07);padding:14px;border-left:4px solid var(--cb);}
 .aplic-card.feita{border-left-color:#16a34a;background:#f0fdf4;}
 .aplic-top{display:flex;gap:10px;margin-bottom:10px;}
+.aplic-top-main{flex:1;min-width:0;}
 .aplic-modo{font-size:.72rem;font-weight:700;color:var(--v);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em;}
 .prods-lista{display:flex;flex-direction:column;gap:6px;}
-.prod-linha{display:inline-flex;align-items:center;gap:10px;background:var(--vb);border:1px solid #c8e0c8;border-radius:10px;padding:8px 12px;align-self:flex-start;max-width:100%;}
+.prod-linha{display:flex;flex-wrap:wrap;align-items:center;gap:7px 9px;background:var(--vb);border:1px solid #c8e0c8;border-radius:10px;padding:8px 12px;align-self:stretch;max-width:100%;}
 .prod-linha-icone{flex-shrink:0;font-size:.95rem;}
-.prod-nome{font-weight:700;font-size:.95rem;color:var(--t);}
-.prod-dose{font-family:'DM Mono',monospace;font-size:.92rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.02em;}
+.prod-nome{font-weight:700;font-size:.95rem;color:var(--t);word-break:break-word;flex:1 1 auto;min-width:0;}
+.prod-dose{font-family:'DM Mono',monospace;font-size:.9rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.02em;}
 .aplic-obs{font-size:.72rem;color:var(--c);font-style:italic;margin-top:6px;}
 .badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
 .badge-ok{background:#dcfce7;color:#16a34a;}
@@ -1106,6 +1107,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prod-op{border:1px solid var(--cb);border-radius:10px;padding:10px;background:#fff;display:flex;flex-direction:column;gap:8px;}
 .prod-op.feita{background:#f0fdf4;border-color:#bbf7d0;}
 .prod-op-hdr{display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;}
+.prod-op-hdr .prod-linha{flex:1 1 auto;min-width:0;}
 .check-area-prod{border-top:1px dashed var(--cb);padding-top:8px;}
 /* WIZARD */
 .wizard-hdr{background:linear-gradient(135deg,var(--ve) 0%,#3a7d44 100%);color:white;padding:16px 16px 18px;display:flex;align-items:flex-start;gap:12px;flex-shrink:0;box-shadow:0 3px 12px rgba(0,0,0,.25);}
