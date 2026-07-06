@@ -45,9 +45,9 @@ setTimeout(() => {
 }, 8000);
 
 let perfilAtual = {};
-let talhoes = [], registros = [], planosAdubacao = [], pulverizacoes = [];
+let talhoes = [], planosAdubacao = [], pulverizacoes = [], drenchPrevencao = [], estoqueProdutos = [], pedidos = [];
 let equipeEmpregados = [], equipeRegistros = [];
-let chartStatus = null, chartAtividade = null;
+let chartStatus = null, chartProducao = null, chartGauge = null;
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'login.html'; return; }
@@ -110,17 +110,24 @@ function iniciarListeners() {
     talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
   });
-  onSnapshot(collection(db,'registrosAtividade'), snap => {
-    registros = snap.docs.map(d => ({_docId:d.id,...d.data()}))
-      .sort((a,b) => (b.salvoEm||'').localeCompare(a.salvoEm||''));
-    atualizarDashboard();
-  });
   onSnapshot(collection(db,'planosAdubacao'), snap => {
     planosAdubacao = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
   });
   onSnapshot(collection(db,'pulverizacoes'), snap => {
     pulverizacoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
+  });
+  onSnapshot(collection(db,'drenchPrevencao'), snap => {
+    drenchPrevencao = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
+  });
+  onSnapshot(collection(db,'estoque_produtos'), snap => {
+    estoqueProdutos = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarDashboard();
+  });
+  onSnapshot(collection(db,'pedidos'), snap => {
+    pedidos = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
   });
   onSnapshot(collection(db,'equipeEmpregados'), snap => {
@@ -136,23 +143,25 @@ function iniciarListeners() {
 function atualizarDashboard() {
   atualizarKPIs();
   atualizarEquipeKPI();
+  atualizarGaugeAdubacao();
+  atualizarProducaoSafra();
   atualizarGraficoStatus();
-  atualizarAtividadesRecentes();
+  atualizarFazendaStatus();
   atualizarProximasOps();
-  atualizarProducaoPorSafra();
 }
 
 function atualizarKPIs() {
   document.querySelectorAll('.kpi-val').forEach(el => el.classList.remove('loading'));
   document.getElementById('kpiTalhoes').textContent = talhoes.length;
   document.getElementById('kpiAtivos').textContent = talhoes.filter(t => t.status === 'ativo').length;
-  const totalAps = planosAdubacao.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
-  const feitasAps = planosAdubacao.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
-  document.getElementById('kpiAdubacoes').textContent = totalAps ? `${feitasAps}/${totalAps}` : '—';
-  const totalReg = registros.length;
-  const totalCarreiras = registros.reduce((s,r) => s + Object.keys(r.atribuicoes||{}).length, 0);
-  document.getElementById('kpiRegistros').textContent = totalReg;
-  document.getElementById('kpiCarreiras').textContent = totalCarreiras.toLocaleString('pt-BR');
+  const pendPedidos = pedidos.filter(p => ['solicitado','em_andamento'].includes(p.status||'solicitado')).length;
+  document.getElementById('kpiPedidos').textContent = pendPedidos;
+  const kpiPedidosCard = document.getElementById('kpiPedidosCard');
+  if (kpiPedidosCard) kpiPedidosCard.classList.toggle('alerta', pendPedidos > 0);
+  const baixoEstoque = estoqueProdutos.filter(p => (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).length;
+  document.getElementById('kpiEstoque').textContent = baixoEstoque;
+  const kpiEstoqueCard = document.getElementById('kpiEstoqueCard');
+  if (kpiEstoqueCard) kpiEstoqueCard.classList.toggle('alerta', baixoEstoque > 0);
 }
 
 function atualizarEquipeKPI() {
@@ -161,6 +170,127 @@ function atualizarEquipeKPI() {
   const ativos = equipeEmpregados.filter(e => e.ativo !== false).length;
   const hoje = equipeRegistros.filter(r => r.data === hj && r.entrada).length;
   el.textContent = ativos ? `${hoje}/${ativos}` : '—';
+}
+
+// ── GAUGE — % da adubação confirmada NESTE mês (não a safra toda, pra refletir o ritmo atual) ──
+function atualizarGaugeAdubacao() {
+  const hoje = new Date();
+  const mesIdx = hoje.getMonth(), ano = hoje.getFullYear();
+  const planosMes = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano);
+  const total = planosMes.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
+  const feitas = planosMes.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
+  const pct = total ? Math.round(feitas/total*100) : 0;
+  const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f59e0b' : '#dc2626';
+
+  const valEl = document.getElementById('gaugeValor');
+  const subEl = document.getElementById('gaugeSub');
+  if (valEl) { valEl.textContent = total ? `${pct}%` : '—'; valEl.style.color = total ? cor : 'var(--c)'; }
+  if (subEl) subEl.textContent = total ? `${feitas}/${total} confirmadas` : 'Sem plano para este mês';
+
+  const el = document.getElementById('chartGauge');
+  if (!el) return;
+  if (chartGauge) chartGauge.destroy();
+  chartGauge = new Chart(el, {
+    type: 'doughnut',
+    data: { datasets: [{ data: total ? [pct, 100-pct] : [0,100], backgroundColor: [total?cor:'var(--cb)', '#e5e0d3'], borderWidth: 0 }] },
+    options: {
+      circumference: 180, rotation: 270, cutout: '78%',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false }, tooltip: { enabled:false } },
+    }
+  });
+}
+
+// ── PRODUÇÃO POR SAFRA — gráfico de área com gradiente + variação vs safra anterior ──
+function calcProducaoPorSafra() {
+  const safrasAll = [...new Set(talhoes.flatMap(t => (t.historico||[]).map(h => h.safra)).filter(Boolean))].sort();
+  return safrasAll.map(safra => {
+    let totalSacas = 0, totalArea = 0;
+    talhoes.forEach(t => {
+      const area = parseFloat(t.area) || 0;
+      if (area <= 0 || !t.historico || !t.historico.length) return;
+      const hist = t.historico.find(h => h.safra === safra);
+      if (!hist) return;
+      const m = String(hist.valor||'').replace(',','.').match(/([\d.]+)/);
+      const scHa = m ? parseFloat(m[1]) : 0;
+      if (scHa <= 0) return;
+      totalSacas += scHa * area;
+      totalArea += area;
+    });
+    return { safra, totalSacas, mediaScHa: totalArea > 0 ? totalSacas/totalArea : 0 };
+  });
+}
+
+function atualizarProducaoSafra() {
+  const dados = calcProducaoPorSafra();
+  const safraBar = document.getElementById('safraBarDash');
+  const secProd = document.getElementById('secProdSafra');
+  if (!dados.length) {
+    if (safraBar) safraBar.style.display = 'none';
+    if (secProd) secProd.style.display = 'none';
+    return;
+  }
+  if (safraBar) safraBar.style.display = 'flex';
+  if (secProd) secProd.style.display = 'block';
+
+  const sel = document.getElementById('selSafra');
+  const currentVal = sel ? sel.value : '';
+  const safrasDesc = [...dados].reverse();
+  if (sel) {
+    sel.innerHTML = '<option value="">Última cadastrada</option>' + safrasDesc.map(d => `<option value="${d.safra}">${d.safra}</option>`).join('');
+    if (currentVal && safrasDesc.some(d => d.safra === currentVal)) sel.value = currentVal;
+  }
+  const safraEscolhida = sel ? sel.value : '';
+  const atual = safraEscolhida ? dados.find(d => d.safra === safraEscolhida) : dados[dados.length-1];
+  if (!atual) return;
+  const idxAtual = dados.findIndex(d => d.safra === atual.safra);
+  const anterior = idxAtual > 0 ? dados[idxAtual-1] : null;
+
+  const kpiTotal = document.getElementById('kpiProdTotal');
+  const kpiMedia = document.getElementById('kpiProdMedia');
+  const lblSafra = document.getElementById('lblSafraSel');
+  const trendEl = document.getElementById('prodTrend');
+  if (kpiTotal) kpiTotal.textContent = atual.totalSacas > 0 ? Math.round(atual.totalSacas).toLocaleString('pt-BR') : '—';
+  if (kpiMedia) kpiMedia.textContent = atual.mediaScHa > 0 ? atual.mediaScHa.toFixed(1).replace('.',',') : '—';
+  if (lblSafra) lblSafra.textContent = atual.safra ? '· '+atual.safra : '';
+  if (trendEl) {
+    if (anterior && anterior.totalSacas > 0 && atual.totalSacas > 0) {
+      const variacao = ((atual.totalSacas - anterior.totalSacas) / anterior.totalSacas) * 100;
+      const sinal = variacao >= 0 ? '+' : '';
+      trendEl.textContent = `${sinal}${variacao.toFixed(1)}% vs ${anterior.safra}`;
+      trendEl.className = 'trend-badge ' + (variacao >= 0 ? 'trend-up' : 'trend-down');
+      trendEl.style.display = 'inline-flex';
+    } else {
+      trendEl.style.display = 'none';
+    }
+  }
+
+  const ctxEl = document.getElementById('chartProducao');
+  if (!ctxEl) return;
+  const ctx = ctxEl.getContext('2d');
+  const gradient = ctx.createLinearGradient(0,0,0,200);
+  gradient.addColorStop(0, 'rgba(26,92,26,.35)');
+  gradient.addColorStop(1, 'rgba(26,92,26,0)');
+  if (chartProducao) chartProducao.destroy();
+  chartProducao = new Chart(ctxEl, {
+    type: 'line',
+    data: {
+      labels: dados.map(d => d.safra),
+      datasets: [{
+        data: dados.map(d => Math.round(d.totalSacas)),
+        borderColor: '#1a5c1a', backgroundColor: gradient, fill: true, tension: .35,
+        pointRadius: 3, pointBackgroundColor: '#1a5c1a', pointBorderColor: 'white', pointBorderWidth: 1.5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display:false }, tooltip: { callbacks: { label: c => c.parsed.y.toLocaleString('pt-BR')+' sacas' } } },
+      scales: {
+        y: { beginAtZero:true, ticks:{ font:{size:10, family:'Barlow'}, color:'#5a6b48' }, grid:{ color:'#f0ece3' } },
+        x: { ticks:{ font:{size:10, family:'Barlow'}, color:'#5a6b48' }, grid:{ display:false } }
+      }
+    }
+  });
 }
 
 function atualizarGraficoStatus() {
@@ -182,99 +312,89 @@ function atualizarGraficoStatus() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Barlow', size: 11 }, padding: 12 } } },
+      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Barlow', size: 11 }, padding: 12, boxWidth: 10 } } },
       cutout: '65%'
     }
   });
 }
 
-function atualizarAtividadesRecentes() {
-  const lista = document.getElementById('listaAtivRecentes');
-  const recentes = registros.slice(0, 5);
-  if (!recentes.length) { lista.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma atividade registrada.</div>`; return; }
-  lista.innerHTML = recentes.map(r => {
-    const tot = (r.quadras||[]).reduce((s,q)=>s+q.carreiras,0);
-    const at = Object.keys(r.atribuicoes||{}).length;
-    const pct = tot ? Math.round(at/tot*100) : 0;
-    return `<a href="atividades.html" class="atv-item">
-      <div class="atv-item-info">
-        <div class="atv-item-nome">🌾 ${r.atividade||'Atividade'} · ${r.talhaoNome||''}</div>
-        <div class="atv-item-meta">${r.fazenda||''} · ${r.data?formatarData(r.data):''}</div>
+// ── PENDÊNCIAS POR FAZENDA (heatmap compacto) ──
+// Drench é contado só do MÊS ATUAL — fora da janela de aplicação (2-3x/safra) não é "pendência real".
+function calcFazendaStatus() {
+  const hoje = new Date();
+  const mesIdx = hoje.getMonth(), ano = hoje.getFullYear();
+  const hojeYM = hoje.toISOString().slice(0,7);
+  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+
+  return fazendas.map(faz => {
+    let adubAtrasada = 0, adubPendenteMes = 0;
+    planosAdubacao.filter(p => p.fazenda === faz).forEach(p => {
+      const pend = (p.aplicacoes||[]).filter(a => !a.feito).length;
+      if (!pend) return;
+      const passado = (p.ano < ano) || (p.ano === ano && p.mesIdx < mesIdx);
+      if (passado) adubAtrasada += pend; else if (p.ano === ano && p.mesIdx === mesIdx) adubPendenteMes += pend;
+    });
+    const adubStatus = adubAtrasada > 0 ? 'red' : (adubPendenteMes > 0 ? 'yellow' : 'green');
+
+    const pulvPend = pulverizacoes.filter(p => p.fazenda === faz && !p.realizada).length;
+    const pulvStatus = pulvPend > 0 ? 'yellow' : 'green';
+
+    const drenchPendMes = drenchPrevencao.filter(d => d.fazenda === faz && (d.status||'pendente') === 'pendente' && (d.data||'').slice(0,7) === hojeYM).length;
+    const drenchStatus = drenchPendMes > 0 ? 'yellow' : 'green';
+
+    const estBaixo = estoqueProdutos.filter(p => p.fazenda === faz && (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).length;
+    const estStatus = estBaixo > 0 ? 'red' : 'green';
+
+    return { faz, adubStatus, adubAtrasada, adubPendenteMes, pulvStatus, pulvPend, drenchStatus, drenchPendMes, estStatus, estBaixo };
+  });
+}
+
+function atualizarFazendaStatus() {
+  const cont = document.getElementById('listaFazendaStatus');
+  if (!cont) return;
+  const dados = calcFazendaStatus();
+  if (!dados.length) { cont.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma fazenda cadastrada.</div>`; return; }
+  const chip = (status, href, ico, titulo, detalhe) =>
+    `<a href="${href}" class="fs-chip fs-${status}" title="${titulo}${detalhe?' — '+detalhe:''}">${ico}</a>`;
+  cont.innerHTML = dados.map(d => `
+    <div class="faz-status-row">
+      <div class="faz-status-nome">🏡 ${d.faz}</div>
+      <div class="faz-status-chips">
+        ${chip(d.adubStatus, 'adubacoes.html', '🧪', 'Adubação', d.adubAtrasada?`${d.adubAtrasada} atrasada(s)`:(d.adubPendenteMes?`${d.adubPendenteMes} pendente(s) no mês`:'em dia'))}
+        ${chip(d.pulvStatus, 'pulverizacoes.html', '💧', 'Pulverização', d.pulvPend?`${d.pulvPend} pendente(s)`:'em dia')}
+        ${chip(d.drenchStatus, 'drench.html', '🌱', 'Drench (mês)', d.drenchPendMes?`${d.drenchPendMes} pendente(s) este mês`:'em dia')}
+        ${chip(d.estStatus, 'estoque.html', '🏬', 'Estoque', d.estBaixo?`${d.estBaixo} abaixo do mínimo`:'em dia')}
       </div>
-      <div class="atv-item-pct">${pct}%</div>
-    </a>`;
-  }).join('');
+    </div>`).join('');
 }
 
 function atualizarProximasOps() {
   const lista = document.getElementById('listaProximasOps');
-  const hoje = new Date();
   const ops = [];
+  const hojeYM = new Date().toISOString().slice(0,7);
 
-  // Adubações pendentes
   planosAdubacao.forEach(p => {
     (p.aplicacoes||[]).filter(a => !a.feito).forEach(a => {
       ops.push({ tipo: '🧪', label: `Adubação · ${p.talhaoNome}`, sub: a.semana || p.mesAno, link: 'adubacoes.html' });
     });
   });
-
-  // Pulverizações pendentes
   pulverizacoes.filter(p => !p.realizada).forEach(p => {
     ops.push({ tipo: '💧', label: `Pulverização · ${p.talhaoNome||''}`, sub: p.dataFormatada || p.data, link: 'pulverizacoes.html' });
   });
+  drenchPrevencao.filter(d => (d.status||'pendente') === 'pendente' && (d.data||'').slice(0,7) === hojeYM).forEach(d => {
+    ops.push({ tipo: '🌱', label: `Drench · ${d.talhaoNome||''}`, sub: formatarData(d.data), link: 'drench.html' });
+  });
+  estoqueProdutos.filter(p => (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).forEach(p => {
+    ops.push({ tipo: '🏬', label: `Estoque baixo · ${p.nome||''}`, sub: `${p.saldo||0} ${p.unidade||''} (mín. ${p.estoqueMinimo})`, link: 'estoque.html' });
+  });
 
   if (!ops.length) { lista.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma operação pendente.</div>`; return; }
-  lista.innerHTML = ops.slice(0, 6).map(op => `
+  lista.innerHTML = ops.slice(0, 8).map(op => `
     <a href="${op.link}" class="op-item">
       <span class="op-ico">${op.tipo}</span>
       <div class="op-info"><div class="op-nome">${op.label}</div><div class="op-sub">${op.sub||'—'}</div></div>
       <span class="op-seta">›</span>
     </a>`).join('');
-}
-
-function atualizarProducaoPorSafra() {
-  if (!talhoes.length) return;
-  const safrasAll = [...new Set(talhoes.flatMap(t => (t.historico||[]).map(h => h.safra)).filter(Boolean))].sort().reverse();
-  const safraBar = document.getElementById('safraBarDash');
-  const secProd = document.getElementById('secProdSafra');
-  if (!safrasAll.length) {
-    if (safraBar) safraBar.style.display = 'none';
-    if (secProd) secProd.style.display = 'none';
-    return;
-  }
-  if (safraBar) safraBar.style.display = 'flex';
-  if (secProd) secProd.style.display = 'block';
-  const sel = document.getElementById('selSafra');
-  const currentVal = sel ? sel.value : '';
-  if (sel) {
-    sel.innerHTML = '<option value="">Última cadastrada</option>' + safrasAll.map(s => `<option value="${s}">${s}</option>`).join('');
-    if (currentVal && safrasAll.includes(currentVal)) sel.value = currentVal;
-  }
-  const safraEscolhida = sel ? sel.value : '';
-  let totalSacas = 0, totalArea = 0;
-  talhoes.forEach(t => {
-    const area = parseFloat(t.area) || 0;
-    if (area <= 0 || !t.historico || !t.historico.length) return;
-    let hist;
-    if (safraEscolhida) {
-      hist = t.historico.find(h => h.safra === safraEscolhida);
-    } else {
-      hist = [...t.historico].sort((a,b) => (b.safra||'').localeCompare(a.safra||''))[0];
-    }
-    if (!hist) return;
-    const m = String(hist.valor||'').replace(',','.').match(/([\d.]+)/);
-    const scHa = m ? parseFloat(m[1]) : 0;
-    if (scHa <= 0) return;
-    totalSacas += scHa * area;
-    totalArea += area;
-  });
-  const mediaScHa = totalArea > 0 ? totalSacas / totalArea : 0;
-  const kpiTotal = document.getElementById('kpiProdTotal');
-  const kpiMedia = document.getElementById('kpiProdMedia');
-  const lblSafra = document.getElementById('lblSafraSel');
-  if (kpiTotal) kpiTotal.textContent = totalSacas > 0 ? Math.round(totalSacas).toLocaleString('pt-BR') : '—';
-  if (kpiMedia) kpiMedia.textContent = mediaScHa > 0 ? mediaScHa.toFixed(1).replace('.',',') : '—';
-  if (lblSafra) lblSafra.textContent = safraEscolhida || (safrasAll[0] ? '· '+safrasAll[0] : '');
 }
 
 function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return`${dd}/${m}/${a}`; }
@@ -320,40 +440,66 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
 /* CONTEÚDO */
 .app-main{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch;}
+/* ATALHOS MÓDULOS */
+.atalhos-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
+.atalho-btn{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;color:var(--t);transition:.15s;}
+.atalho-btn:active{transform:scale(.97);}
+.atalho-ico{font-size:20px;}
+.atalho-label{font-size:.62rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.03em;}
 /* KPIs */
-.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
-.kpi-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;display:flex;flex-direction:column;gap:4px;}
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+.kpi-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;display:flex;flex-direction:column;gap:4px;border-left:3px solid transparent;transition:.15s;}
+.kpi-card.alerta{border-left-color:#f59e0b;}
 .kpi-ico{font-size:22px;margin-bottom:4px;}
 .kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.8rem;color:var(--ve);line-height:1;}
+.kpi-card.alerta .kpi-val{color:#d97706;}
 .kpi-label{font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.08em;}
+.kpi-full{margin-bottom:16px;}
+.kpi-full .kpi-card{flex-direction:row;align-items:center;gap:12px;}
 /* SEÇÕES */
 .sec-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
 .sec-link{font-size:.72rem;color:var(--v);font-weight:600;text-decoration:none;}
 .sec-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:16px;}
-/* GRÁFICO */
-.chart-wrap{padding:16px;height:220px;display:flex;align-items:center;justify-content:center;}
-/* ATIVIDADES */
-.atv-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--cl);cursor:pointer;text-decoration:none;color:var(--t);}
-.atv-item:last-child{border:none;}
-.atv-item:active{background:var(--cl);}
-.atv-item-nome{font-size:.85rem;font-weight:600;margin-bottom:2px;}
-.atv-item-meta{font-size:.72rem;color:var(--c);}
-.atv-item-pct{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--v);flex-shrink:0;margin-left:10px;}
+.sec-sub{font-size:.68rem;color:var(--c);padding:0 14px;margin-top:-4px;margin-bottom:8px;line-height:1.4;}
+/* GAUGE */
+.gauge-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
+.gauge-hdr{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.gauge-wrap{position:relative;height:110px;display:flex;align-items:flex-end;justify-content:center;}
+.gauge-wrap canvas{max-height:110px;}
+.gauge-overlay{position:absolute;bottom:2px;left:0;right:0;text-align:center;pointer-events:none;}
+.gauge-valor{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.9rem;line-height:1;}
+.gauge-sub{font-size:.7rem;color:var(--c);margin-top:2px;}
+/* PRODUÇÃO / GRÁFICO ÁREA */
+.prod-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
+.prod-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+.prod-hdr-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
+.prod-kpis{display:flex;gap:18px;margin-bottom:10px;flex-wrap:wrap;}
+.prod-kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;}
+.prod-kpi-lbl{font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+.trend-badge{display:none;align-items:center;font-size:.7rem;font-weight:700;border-radius:20px;padding:3px 9px;}
+.trend-up{background:#dcfce7;color:#16a34a;}
+.trend-down{background:#fee2e2;color:#dc2626;}
+.chart-area-wrap{height:170px;}
+/* GRÁFICO DONUT STATUS */
+.chart-wrap{padding:16px;height:200px;display:flex;align-items:center;justify-content:center;}
+/* FAZENDA STATUS (heatmap compacto) */
+.faz-status-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--cl);gap:10px;}
+.faz-status-row:last-child{border:none;}
+.faz-status-nome{font-size:.85rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.faz-status-chips{display:flex;gap:5px;flex-shrink:0;}
+.fs-chip{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.85rem;text-decoration:none;}
+.fs-green{background:#dcfce7;color:#16a34a;}
+.fs-yellow{background:#fef3c7;color:#d97706;}
+.fs-red{background:#fee2e2;color:#dc2626;}
 /* PRÓXIMAS OPS */
 .op-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--cl);cursor:pointer;text-decoration:none;color:var(--t);}
 .op-item:last-child{border:none;}
 .op-item:active{background:var(--cl);}
 .op-ico{font-size:1.2rem;flex-shrink:0;}
-.op-info{flex:1;}
+.op-info{flex:1;min-width:0;}
 .op-nome{font-size:.85rem;font-weight:600;}
 .op-sub{font-size:.72rem;color:var(--c);margin-top:1px;}
 .op-seta{font-size:1.4rem;color:var(--cb);}
-/* ATALHOS MÓDULOS */
-.atalhos-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
-.atalho-btn{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px 8px;display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:var(--t);transition:.15s;}
-.atalho-btn:active{transform:scale(.97);}
-.atalho-ico{font-size:22px;}
-.atalho-label{font-size:.68rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.05em;}
 /* OFFLINE BADGE */
 .offline-badge{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;border-radius:20px;padding:5px 14px;font-size:.72rem;font-weight:700;z-index:500;display:none;}
 .kpi-val.loading{color:transparent!important;background:linear-gradient(90deg,var(--cl) 25%,var(--cb) 50%,var(--cl) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;display:inline-block;min-width:50px;}
@@ -403,23 +549,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <!-- Atalhos rápidos -->
     <div class="atalhos-grid">
       <a href="mapa.html" class="atalho-btn"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
-      <a href="atividades.html" class="atalho-btn"><span class="atalho-ico">🌾</span><span class="atalho-label">Atividades</span></a>
-      <a href="equipe.html" class="atalho-btn"><span class="atalho-ico">👥</span><span class="atalho-label">Equipe</span></a>
       <a href="adubacoes.html" class="atalho-btn"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
-      <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulverizações</span></a>
-      <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
+      <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulveriz.</span></a>
+      <a href="drench.html" class="atalho-btn"><span class="atalho-ico">🌱</span><span class="atalho-label">Drench</span></a>
+      <a href="equipe.html" class="atalho-btn"><span class="atalho-ico">👥</span><span class="atalho-label">Equipe</span></a>
       <a href="estoque.html" class="atalho-btn"><span class="atalho-ico">🏬</span><span class="atalho-label">Estoque</span></a>
-      <a href="gestao.html" class="atalho-btn"><span class="atalho-ico">📊</span><span class="atalho-label">Gestão</span></a>
-      <a href="analises.html" class="atalho-btn"><span class="atalho-ico">🔬</span><span class="atalho-label">Análises</span></a>
-      <a href="recomendacoes.html" class="atalho-btn"><span class="atalho-ico">💊</span><span class="atalho-label">Recomendações</span></a>
-      <a href="planejamento.html" class="atalho-btn"><span class="atalho-ico">🗓️</span><span class="atalho-label">Planejamento</span></a>
-      <a href="admin.html" class="atalho-btn"><span class="atalho-ico">⚙️</span><span class="atalho-label">Admin</span></a>
-    </div>
-
-    <!-- Filtro por safra (mostrado quando há histórico de produção) -->
-    <div id="safraBarDash" style="display:none;background:white;border-radius:var(--rad);box-shadow:var(--s);padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;">
-      <span style="font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;text-transform:uppercase;color:var(--c);letter-spacing:.08em;flex-shrink:0;">🌾 Safra</span>
-      <select id="selSafra" onchange="atualizarDashboard()" style="flex:1;border:1.5px solid var(--cb);border-radius:7px;padding:7px 10px;font-size:.88rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;"></select>
+      <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
+      <a href="gestao.html" class="atalho-btn"><span class="atalho-ico">📈</span><span class="atalho-label">Gestão</span></a>
     </div>
 
     <!-- KPIs -->
@@ -434,44 +570,59 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
         <span class="kpi-val" id="kpiAtivos">—</span>
         <span class="kpi-label">Ativos</span>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-ico">🧪</span>
-        <span class="kpi-val" id="kpiAdubacoes">—</span>
-        <span class="kpi-label">Adubações</span>
+      <div class="kpi-card" id="kpiPedidosCard" onclick="window.location.href='pedidos.html'" style="cursor:pointer;">
+        <span class="kpi-ico">📦</span>
+        <span class="kpi-val" id="kpiPedidos">—</span>
+        <span class="kpi-label">Pedidos pendentes</span>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-ico">🌾</span>
-        <span class="kpi-val" id="kpiRegistros">—</span>
-        <span class="kpi-label">Atividades</span>
-      </div>
-      <div class="kpi-card" onclick="window.location.href='equipe.html'" style="cursor:pointer;">
-        <span class="kpi-ico">👥</span>
-        <span class="kpi-val loading" id="kpiEquipe">—</span>
-        <span class="kpi-label">Equipe hoje</span>
+      <div class="kpi-card" id="kpiEstoqueCard" onclick="window.location.href='estoque.html'" style="cursor:pointer;">
+        <span class="kpi-ico">🏬</span>
+        <span class="kpi-val" id="kpiEstoque">—</span>
+        <span class="kpi-label">Estoque baixo</span>
       </div>
     </div>
-    <div class="kpi-grid" style="grid-template-columns:1fr;margin-bottom:16px;">
-      <div class="kpi-card" style="flex-direction:row;align-items:center;gap:12px;">
-        <span class="kpi-ico">🌱</span>
-        <div><span class="kpi-val" id="kpiCarreiras">—</span><span class="kpi-label" style="display:block;">Carreiras conferidas</span></div>
+    <div class="kpi-grid kpi-full">
+      <div class="kpi-card" onclick="window.location.href='equipe.html'" style="cursor:pointer;grid-column:1/-1;">
+        <span class="kpi-ico">👥</span>
+        <div><span class="kpi-val loading" id="kpiEquipe">—</span><span class="kpi-label" style="display:block;">Equipe presente hoje</span></div>
       </div>
     </div>
 
-    <!-- Produção por safra (aparece quando há dados) -->
-    <div id="secProdSafra" style="display:none;">
-      <div class="sec-title">📦 Produção da Safra<span id="lblSafraSel" style="font-size:.72rem;font-weight:500;color:var(--c);margin-left:8px;"></span></div>
-      <div class="kpi-grid" style="margin-bottom:16px;">
-        <div class="kpi-card">
-          <span class="kpi-ico">📦</span>
-          <span class="kpi-val" id="kpiProdTotal">—</span>
-          <span class="kpi-label">Sacas totais</span>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-ico">📏</span>
-          <span class="kpi-val" id="kpiProdMedia">—</span>
-          <span class="kpi-label">sc/ha média</span>
+    <!-- Gauge: Adubação do mês -->
+    <div class="gauge-card">
+      <div class="gauge-hdr">🧪 Adubação do Mês</div>
+      <div class="gauge-wrap">
+        <canvas id="chartGauge"></canvas>
+        <div class="gauge-overlay">
+          <div class="gauge-valor" id="gaugeValor">—</div>
+          <div class="gauge-sub" id="gaugeSub">Carregando...</div>
         </div>
       </div>
+    </div>
+
+    <!-- Produção por safra -->
+    <div id="secProdSafra" style="display:none;">
+      <div class="prod-card">
+        <div class="prod-hdr">
+          <span class="prod-hdr-tit">📈 Produção por Safra</span>
+          <span class="trend-badge" id="prodTrend"></span>
+        </div>
+        <div id="safraBarDash" style="margin-bottom:10px;align-items:center;gap:8px;display:flex;">
+          <select id="selSafra" onchange="atualizarProducaoSafra()" style="flex:1;border:1.5px solid var(--cb);border-radius:7px;padding:6px 9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;"></select>
+        </div>
+        <div class="prod-kpis">
+          <div><div class="prod-kpi-val" id="kpiProdTotal">—</div><div class="prod-kpi-lbl">Sacas totais <span id="lblSafraSel"></span></div></div>
+          <div><div class="prod-kpi-val" id="kpiProdMedia">—</div><div class="prod-kpi-lbl">sc/ha média</div></div>
+        </div>
+        <div class="chart-area-wrap"><canvas id="chartProducao"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Pendências por fazenda -->
+    <div class="sec-title">🚦 Pendências por Fazenda</div>
+    <div class="sec-sub">🧪 Adubação · 💧 Pulverização · 🌱 Drench (mês) · 🏬 Estoque</div>
+    <div class="sec-card" style="margin-bottom:16px;">
+      <div id="listaFazendaStatus"></div>
     </div>
 
     <!-- Gráfico status talhões -->
@@ -482,14 +633,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 
     <!-- Próximas operações -->
     <div class="sec-title">📅 Operações Pendentes<a href="adubacoes.html" class="sec-link">Ver todas →</a></div>
-    <div class="sec-card" style="margin-bottom:16px;">
-      <div id="listaProximasOps"></div>
-    </div>
-
-    <!-- Atividades recentes -->
-    <div class="sec-title">🕐 Atividades Recentes<a href="atividades.html" class="sec-link">Ver todas →</a></div>
     <div class="sec-card" style="margin-bottom:80px;">
-      <div id="listaAtivRecentes"></div>
+      <div id="listaProximasOps"></div>
     </div>
 
   </main>
