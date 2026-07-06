@@ -48,6 +48,7 @@ let perfilAtual = {};
 let talhoes = [], planosAdubacao = [], pulverizacoes = [], drenchPrevencao = [], estoqueProdutos = [], pedidos = [];
 let equipeEmpregados = [], equipeRegistros = [];
 let chartStatus = null, chartProducao = null, chartGauge = null;
+const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'login.html'; return; }
@@ -145,7 +146,9 @@ function atualizarDashboard() {
   atualizarEquipeKPI();
   atualizarGaugeAdubacao();
   atualizarProducaoSafra();
+  atualizarBarraFazendas();
   atualizarGraficoStatus();
+  atualizarHeatmapAdub();
   atualizarFazendaStatus();
   atualizarProximasOps();
 }
@@ -173,19 +176,38 @@ function atualizarEquipeKPI() {
 }
 
 // ── GAUGE — % da adubação confirmada NESTE mês (não a safra toda, pra refletir o ritmo atual) ──
+function pctPlanosMes(mesIdx, ano) {
+  const planos = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano);
+  const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
+  const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
+  return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
+}
+
 function atualizarGaugeAdubacao() {
   const hoje = new Date();
   const mesIdx = hoje.getMonth(), ano = hoje.getFullYear();
-  const planosMes = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano);
-  const total = planosMes.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
-  const feitas = planosMes.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
-  const pct = total ? Math.round(feitas/total*100) : 0;
+  const { total, feitas, pct } = pctPlanosMes(mesIdx, ano);
   const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f59e0b' : '#dc2626';
+
+  const mesAntIdx = mesIdx === 0 ? 11 : mesIdx - 1, mesAntAno = mesIdx === 0 ? ano - 1 : ano;
+  const anterior = pctPlanosMes(mesAntIdx, mesAntAno);
 
   const valEl = document.getElementById('gaugeValor');
   const subEl = document.getElementById('gaugeSub');
+  const trendEl = document.getElementById('gaugeTrend');
   if (valEl) { valEl.textContent = total ? `${pct}%` : '—'; valEl.style.color = total ? cor : 'var(--c)'; }
   if (subEl) subEl.textContent = total ? `${feitas}/${total} confirmadas` : 'Sem plano para este mês';
+  if (trendEl) {
+    if (total && anterior.total) {
+      const dif = pct - anterior.pct;
+      const sinal = dif >= 0 ? '+' : '';
+      trendEl.textContent = `${sinal}${dif}pp vs mês anterior`;
+      trendEl.className = 'trend-badge ' + (dif >= 0 ? 'trend-up' : 'trend-down');
+      trendEl.style.display = 'inline-flex';
+    } else {
+      trendEl.style.display = 'none';
+    }
+  }
 
   const el = document.getElementById('chartGauge');
   if (!el) return;
@@ -293,6 +315,42 @@ function atualizarProducaoSafra() {
   });
 }
 
+// ── PRODUÇÃO POR FAZENDA — ranking em barras horizontais (última safra cadastrada de cada talhão) ──
+function calcProducaoPorFazenda() {
+  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))];
+  return fazendas.map(faz => {
+    let totalSacas = 0;
+    talhoes.filter(t => t.fazenda === faz).forEach(t => {
+      const area = parseFloat(t.area) || 0;
+      if (area <= 0 || !t.historico || !t.historico.length) return;
+      const hist = [...t.historico].sort((a,b) => (b.safra||'').localeCompare(a.safra||''))[0];
+      if (!hist) return;
+      const m = String(hist.valor||'').replace(',','.').match(/([\d.]+)/);
+      const scHa = m ? parseFloat(m[1]) : 0;
+      if (scHa > 0) totalSacas += scHa * area;
+    });
+    return { faz, totalSacas };
+  }).filter(d => d.totalSacas > 0).sort((a,b) => b.totalSacas - a.totalSacas);
+}
+
+function atualizarBarraFazendas() {
+  const cont = document.getElementById('barraFazendas');
+  const sec = document.getElementById('secBarraFazendas');
+  if (!cont) return;
+  const dados = calcProducaoPorFazenda();
+  if (!dados.length) { if (sec) sec.style.display = 'none'; return; }
+  if (sec) sec.style.display = 'block';
+  const max = Math.max(...dados.map(d => d.totalSacas));
+  cont.innerHTML = dados.map(d => {
+    const pct = max > 0 ? Math.round(d.totalSacas/max*100) : 0;
+    return `<div class="rank-bar-row">
+      <div class="rank-bar-lbl">${d.faz}</div>
+      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%;"></div></div>
+      <div class="rank-bar-val">${Math.round(d.totalSacas).toLocaleString('pt-BR')}</div>
+    </div>`;
+  }).join('');
+}
+
 function atualizarGraficoStatus() {
   const ativo = talhoes.filter(t => t.status === 'ativo').length;
   const reforma = talhoes.filter(t => t.status === 'reforma').length;
@@ -316,6 +374,56 @@ function atualizarGraficoStatus() {
       cutout: '65%'
     }
   });
+}
+
+// ── HEATMAP — % de adubação concluída, fazenda × mês (últimos 4 meses) ──
+function calcHeatmapAdub() {
+  const hoje = new Date();
+  const meses = [];
+  for (let i = 3; i >= 0; i--) {
+    let m = hoje.getMonth() - i, a = hoje.getFullYear();
+    while (m < 0) { m += 12; a -= 1; }
+    meses.push({ mesIdx: m, ano: a, label: MESES_ABREV[m] });
+  }
+  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const linhas = fazendas.map(faz => {
+    const planosFaz = planosAdubacao.filter(p => p.fazenda === faz);
+    const celulas = meses.map(({mesIdx,ano}) => {
+      const planos = planosFaz.filter(p => p.mesIdx === mesIdx && p.ano === ano);
+      const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
+      const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
+      return { total, feitas, pct: total ? Math.round(feitas/total*100) : null };
+    });
+    return { faz, celulas };
+  });
+  return { meses, linhas };
+}
+
+function atualizarHeatmapAdub() {
+  const cont = document.getElementById('heatmapAdub');
+  const sec = document.getElementById('secHeatmapAdub');
+  if (!cont) return;
+  const { meses, linhas } = calcHeatmapAdub();
+  if (!linhas.length) { if (sec) sec.style.display = 'none'; return; }
+  if (sec) sec.style.display = 'block';
+  const corCel = (c) => {
+    if (c.pct === null) return { bg:'#f3f0e8', fg:'var(--c)', txt:'—' };
+    if (c.pct >= 80) return { bg:'#16a34a', fg:'white', txt:c.pct+'%' };
+    if (c.pct >= 40) return { bg:'#f59e0b', fg:'white', txt:c.pct+'%' };
+    return { bg:'#dc2626', fg:'white', txt:c.pct+'%' };
+  };
+  cont.innerHTML = `
+    <div class="heatmap-scroll">
+      <table class="heatmap-tbl">
+        <thead><tr><th></th>${meses.map(m => `<th>${m.label}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${linhas.map(l => `<tr>
+            <td class="heatmap-faz">${l.faz}</td>
+            ${l.celulas.map(c => { const cor = corCel(c); return `<td><span class="heatmap-cel" style="background:${cor.bg};color:${cor.fg};" title="${c.total?c.feitas+'/'+c.total+' confirmadas':'sem plano'}">${cor.txt}</span></td>`; }).join('')}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 // ── PENDÊNCIAS POR FAZENDA (heatmap compacto) ──
@@ -451,7 +559,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .kpi-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;display:flex;flex-direction:column;gap:4px;border-left:3px solid transparent;transition:.15s;}
 .kpi-card.alerta{border-left-color:#f59e0b;}
 .kpi-ico{font-size:22px;margin-bottom:4px;}
-.kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.8rem;color:var(--ve);line-height:1;}
+.kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:2.1rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
 .kpi-card.alerta .kpi-val{color:#d97706;}
 .kpi-label{font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.08em;}
 .kpi-full{margin-bottom:16px;}
@@ -463,12 +571,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .sec-sub{font-size:.68rem;color:var(--c);padding:0 14px;margin-top:-4px;margin-bottom:8px;line-height:1.4;}
 /* GAUGE */
 .gauge-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
-.gauge-hdr{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.gauge-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.gauge-hdr{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
 .gauge-wrap{position:relative;height:110px;display:flex;align-items:flex-end;justify-content:center;}
 .gauge-wrap canvas{max-height:110px;}
 .gauge-overlay{position:absolute;bottom:2px;left:0;right:0;text-align:center;pointer-events:none;}
-.gauge-valor{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.9rem;line-height:1;}
+.gauge-valor{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:2.2rem;line-height:1;}
 .gauge-sub{font-size:.7rem;color:var(--c);margin-top:2px;}
+/* RANKING POR FAZENDA (barras horizontais) */
+.rank-bar-row{display:flex;align-items:center;gap:8px;padding:9px 14px;}
+.rank-bar-lbl{font-size:.75rem;font-weight:700;color:var(--ve);width:88px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rank-bar-track{flex:1;height:16px;background:var(--cl);border-radius:8px;overflow:hidden;}
+.rank-bar-fill{height:100%;background:linear-gradient(90deg,#1a5c1a,#4a9d4a);border-radius:8px;transition:width .4s;}
+.rank-bar-val{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:700;color:var(--v);width:56px;text-align:right;flex-shrink:0;}
+/* HEATMAP ADUBAÇÃO (fazenda x mês) */
+.heatmap-scroll{overflow-x:auto;padding:14px;-webkit-overflow-scrolling:touch;}
+.heatmap-tbl{border-collapse:separate;border-spacing:5px;width:100%;}
+.heatmap-tbl th{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding-bottom:2px;}
+.heatmap-faz{font-size:.76rem;font-weight:700;color:var(--ve);white-space:nowrap;padding-right:8px;text-align:left;}
+.heatmap-cel{display:flex;align-items:center;justify-content:center;min-width:42px;height:32px;border-radius:6px;font-family:'DM Mono',monospace;font-size:.68rem;font-weight:700;}
 /* PRODUÇÃO / GRÁFICO ÁREA */
 .prod-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
 .prod-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
@@ -590,7 +711,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 
     <!-- Gauge: Adubação do mês -->
     <div class="gauge-card">
-      <div class="gauge-hdr">🧪 Adubação do Mês</div>
+      <div class="gauge-hdr-row">
+        <span class="gauge-hdr">🧪 Adubação do Mês</span>
+        <span class="trend-badge" id="gaugeTrend"></span>
+      </div>
       <div class="gauge-wrap">
         <canvas id="chartGauge"></canvas>
         <div class="gauge-overlay">
@@ -615,6 +739,23 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
           <div><div class="prod-kpi-val" id="kpiProdMedia">—</div><div class="prod-kpi-lbl">sc/ha média</div></div>
         </div>
         <div class="chart-area-wrap"><canvas id="chartProducao"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Produção por fazenda (ranking) -->
+    <div id="secBarraFazendas" style="display:none;">
+      <div class="sec-title">🌾 Produção por Fazenda<span style="font-size:.68rem;font-weight:500;color:var(--c);text-transform:none;letter-spacing:0;">última safra · sacas</span></div>
+      <div class="sec-card" style="margin-bottom:16px;">
+        <div id="barraFazendas" style="padding:6px 0;"></div>
+      </div>
+    </div>
+
+    <!-- Heatmap: adubação por fazenda x mês -->
+    <div id="secHeatmapAdub" style="display:none;">
+      <div class="sec-title">🗓️ Adubação — Últimos 4 Meses</div>
+      <div class="sec-sub">% de aplicações confirmadas por fazenda em cada mês</div>
+      <div class="sec-card" style="margin-bottom:16px;">
+        <div id="heatmapAdub"></div>
       </div>
     </div>
 
