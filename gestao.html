@@ -7,8 +7,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 :root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--purple:#a855f7;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -282,7 +280,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -351,16 +349,6 @@ window.setDrFaz    = function(v) { drenchFiltroFazenda = v; renderTab(); };
 window.setDrStatus = function(v) { drenchFiltroStatus  = v; renderTab(); };
 window.setDrDe     = function(v) { drenchFiltroDe = v; renderTab(); };
 window.setDrAte    = function(v) { drenchFiltroAte = v; renderTab(); };
-// Janelas de datas de cada aplicação da safra (ex: 1ª jul-ago, 2ª out-nov, 3ª jan-fev — datas variam
-// ano a ano, por isso são configuráveis). Persistidas em configDrench/geral pra não precisar
-// redefinir toda vez que alguém abrir o relatório.
-let drenchJanelas = {1:{de:'',ate:''}, 2:{de:'',ate:''}, 3:{de:'',ate:''}};
-window.setDrJanela = function(n, campo, valor) {
-  drenchJanelas[n] = {...drenchJanelas[n], [campo]:valor};
-  renderTab();
-  setDoc(doc(db,'configDrench','geral'), {janelas:drenchJanelas, atualizadoPor:usuarioAtual.email, atualizadoEm:new Date().toISOString()}, {merge:true}).catch(()=>{});
-};
-let drenchCobMaps = {1:null, 2:null, 3:null}; // instâncias Leaflet do mapa de cobertura (uma por aplicação)
 
 // Meses do ano (mesmo formato usado em adubacoes.html: "Mês/Ano")
 const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -451,13 +439,6 @@ onAuthStateChanged(auth, async (user) => {
   });
   onSnapshot(doc(db,'configAdubacao','geral'), snap => {
     if (snap.exists()) configAdubacao = snap.data();
-    renderTab();
-  });
-  onSnapshot(doc(db,'configDrench','geral'), snap => {
-    if (snap.exists()) {
-      const janelas = snap.data().janelas || {};
-      Object.keys(drenchJanelas).forEach(n => { if (janelas[n]) drenchJanelas[n] = janelas[n]; });
-    }
     renderTab();
   });
 });
@@ -2279,25 +2260,6 @@ function renderDrench() {
   const fazendas = [...new Set(drenchPrevencao.map(d => d.fazenda || '—'))].sort((a,b) => a.localeCompare(b,'pt'));
   const fazOpts = `<option value="">Todas</option>` + fazendas.map(f => `<option value="${escHtml(f)}" ${drenchFiltroFazenda===f?'selected':''}>${escHtml(f)}</option>`).join('');
 
-  // Calcula a cobertura de UMA aplicação (rodada) dentro da sua janela de datas própria.
-  // Retorna Map talhaoId -> {count, datas:[{data,status}]} considerando qualquer status
-  // (agendado ou realizado conta como "já programado").
-  function calcCoberturaJanela(de, ate, fazendaFiltro) {
-    const mapa = new Map();
-    if (!de || !ate) return mapa; // janela ainda não definida
-    drenchPrevencao.forEach(d => {
-      if (!d.talhaoId) return;
-      if (fazendaFiltro && (d.fazenda||'—') !== fazendaFiltro) return;
-      if ((d.data||'') < de || (d.data||'') > ate) return;
-      if (!mapa.has(d.talhaoId)) mapa.set(d.talhaoId, {count:0, datas:[]});
-      const e = mapa.get(d.talhaoId);
-      e.count++;
-      e.datas.push({data:d.data, status:d.status||'pendente'});
-    });
-    mapa.forEach(e => e.datas.sort((a,b) => (a.data||'').localeCompare(b.data||'')));
-    return mapa;
-  }
-
   // ── Aplicar filtros ──
   let lista = [...drenchPrevencao];
   if (drenchFiltroFazenda) lista = lista.filter(d => (d.fazenda||'—') === drenchFiltroFazenda);
@@ -2368,49 +2330,9 @@ function renderDrench() {
     </div>
   </div>`;
 
-  // ── Mapa de Cobertura por aplicação (1ª/2ª/3ª) — cada uma com sua própria janela de datas,
-  // já que na prática elas acontecem em épocas bem diferentes (ex: jul/ago, out/nov, jan/fev). ──
-  const ROUND_LABEL = {1:'1ª Aplicação', 2:'2ª Aplicação', 3:'3ª Aplicação (opcional)'};
-  const coberturasPorRodada = {};
-  [1,2,3].forEach(n => { coberturasPorRodada[n] = calcCoberturaJanela(drenchJanelas[n].de, drenchJanelas[n].ate, drenchFiltroFazenda); });
-
-  {
-    const fazendasEscopo = drenchFiltroFazenda
-      ? [drenchFiltroFazenda]
-      : [...new Set(talhoes.map(t => t.fazenda || '—'))].sort((a,b) => a.localeCompare(b,'pt'));
-    const talhoesEscopo = talhoes.filter(t => fazendasEscopo.includes(t.fazenda || '—'));
-
-    html += `<div class="secao-bloco" style="margin-top:10px;">
-      <div class="secao-tit">🗺️ Cobertura por Aplicação</div>
-      <div class="secao-sub" style="margin-bottom:8px;">Defina o período de cada aplicação da safra (as datas variam ano a ano) — 🟢 já programada/realizada nessa janela · 🔴 ainda falta.</div>
-      ${[1,2,3].map(n => {
-        const jan = drenchJanelas[n];
-        const cob = coberturasPorRodada[n];
-        const definida = !!(jan.de && jan.ate);
-        const cobertos = definida ? talhoesEscopo.filter(t => cob.has(t.id)).length : 0;
-        return `<div style="margin-top:${n>1?'16px':'0'};padding-top:${n>1?'14px':'0'};border-top:${n>1?'1px solid var(--cb)':'none'};">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px;">
-            <span style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);">${ROUND_LABEL[n]}</span>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <input type="date" class="filtro-sel" value="${jan.de}" onchange="setDrJanela(${n},'de',this.value)" style="padding:6px 8px;font-size:.78rem;">
-              <span style="color:var(--c);font-size:.78rem;">até</span>
-              <input type="date" class="filtro-sel" value="${jan.ate}" onchange="setDrJanela(${n},'ate',this.value)" style="padding:6px 8px;font-size:.78rem;">
-            </div>
-          </div>
-          ${definida
-            ? `<div class="secao-sub" style="margin-bottom:6px;">${cobertos}/${talhoesEscopo.length} talhões cobertos nesta janela</div>
-               <div id="drenchCobMapEl${n}" style="height:300px;border-radius:10px;overflow:hidden;background:var(--cl);"></div>`
-            : `<div class="vazio-sm" style="padding:14px;background:var(--cl);border-radius:8px;">Defina as datas "de" e "até" acima pra ver o mapa desta aplicação.</div>`
-          }
-        </div>`;
-      }).join('')}
-    </div>`;
-  }
-
   if (!lista.length) {
     html += `<div class="vazio"><div class="ico">🌱</div><p>Nenhum agendamento de drench encontrado com esses filtros.</p></div>`;
     cont.innerHTML = html;
-    [1,2,3].forEach(n => renderDrenchCobMapa(n, coberturasPorRodada[n], drenchFiltroFazenda));
     return;
   }
 
@@ -2458,45 +2380,6 @@ function renderDrench() {
         }).join('')}
       </div>
     </div>`;
-  }
-
-  // ── Cobertura de talhões em texto, por aplicação: ✅ dentro da janela x ⬜ ainda falta (mesma lógica dos mapas acima) ──
-  {
-    const fazendasEscopo = drenchFiltroFazenda
-      ? [drenchFiltroFazenda]
-      : [...new Set(talhoes.map(t => t.fazenda || '—'))].sort((a,b) => a.localeCompare(b,'pt'));
-    const STATUS_TAG = {reforma:" · 🟧 reforma", colhido:" · 🟥 colhido"};
-    const chipCob = (t, ok, cob) => {
-      const qtdTxt = cob ? ` (${cob.count}x)` : '';
-      return `<span style="display:inline-flex;align-items:center;gap:4px;border-radius:7px;padding:3px 9px;font-size:.72rem;font-weight:600;${ok?'background:var(--vb);color:var(--ve);border:1px solid var(--v);':'background:#fff;color:var(--c);border:1px dashed var(--cb);'}">${ok?'✅':'⬜'} ${escHtml(t.nome||t.id)}${qtdTxt}${STATUS_TAG[t.status]||''}</span>`;
-    };
-    [1,2,3].forEach(n => {
-      const jan = drenchJanelas[n];
-      if (!jan.de || !jan.ate) return; // só lista rodadas com janela definida
-      const cobMap = coberturasPorRodada[n];
-      let covHtml = '';
-      for (const faz of fazendasEscopo) {
-        const tsFaz = talhoes.filter(t => (t.fazenda||'—') === faz);
-        if (!tsFaz.length) continue;
-        const ord = (a,b) => String(a.nome||a.id).localeCompare(String(b.nome||b.id),'pt');
-        const cobertos = tsFaz.filter(t => cobMap.has(t.id)).sort(ord);
-        const faltando = tsFaz.filter(t => !cobMap.has(t.id)).sort(ord);
-        covHtml += `<div style="margin-top:10px;">
-          <div style="font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--ve);margin-bottom:6px;">🏡 ${escHtml(faz)} <span style="color:var(--c);font-weight:600;">· ${cobertos.length}/${tsFaz.length} cobertos</span></div>
-          ${cobertos.length?`<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:${faltando.length?'7px':'0'};">${cobertos.map(t=>chipCob(t,true,cobMap.get(t.id))).join('')}</div>`:''}
-          ${faltando.length
-            ? `<div style="display:flex;flex-wrap:wrap;gap:5px;">${faltando.map(t=>chipCob(t,false,null)).join('')}</div>`
-            : `<div style="font-size:.72rem;color:var(--v);font-weight:600;">✓ Todos os talhões da fazenda já foram cobertos nesta janela.</div>`}
-        </div>`;
-      }
-      if (covHtml) {
-        html += `<div class="secao-bloco" style="margin-top:10px;">
-          <div class="secao-tit">📋 ${ROUND_LABEL[n]} — Cobertura (lista)</div>
-          <div class="secao-sub" style="margin-bottom:2px;">✅ dentro da janela (${formatarData(jan.de)} a ${formatarData(jan.ate)}) · ⬜ ainda falta</div>
-          ${covHtml}
-        </div>`;
-      }
-    });
   }
 
   // ── Por Fazenda ──
@@ -2580,38 +2463,6 @@ function renderDrench() {
   }
 
   cont.innerHTML = html;
-  [1,2,3].forEach(n => renderDrenchCobMapa(n, coberturasPorRodada[n], drenchFiltroFazenda));
-}
-
-// Mapa interativo de cobertura de UMA aplicação (rodada n): verde = tem registro dentro da
-// janela de datas dessa rodada · vermelho = ainda falta. Recriado a cada render porque o
-// container é destruído/reconstruído junto do innerHTML da aba.
-function renderDrenchCobMapa(n, coberturaPorTalhao, fazendaFiltro) {
-  const el = document.getElementById('drenchCobMapEl'+n);
-  if (!el) { if (drenchCobMaps[n]) { drenchCobMaps[n].remove(); drenchCobMaps[n] = null; } return; }
-  if (drenchCobMaps[n]) { drenchCobMaps[n].remove(); drenchCobMaps[n] = null; }
-  const map = L.map(el, {center:[-18.7166,-40.4000], zoom:14});
-  drenchCobMaps[n] = map;
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {attribution:'© Esri', maxZoom:19}).addTo(map);
-
-  const tsEscopo = talhoes.filter(t => (!fazendaFiltro || t.fazenda === fazendaFiltro) && t.coordenadas?.length >= 3);
-  const bounds = [];
-  tsEscopo.forEach(t => {
-    const latlngs = t.coordenadas.map(c => Array.isArray(c) ? c : [c.lat, c.lng]);
-    const cob = coberturaPorTalhao.get(t.id);
-    const coberto = !!cob;
-    const cor = coberto
-      ? {color:'#16a34a', weight:2, fillColor:'#22c55e', fillOpacity:.55}
-      : {color:'#dc2626', weight:2, fillColor:'#ef4444', fillOpacity:.45};
-    const poly = L.polygon(latlngs, cor).addTo(map);
-    const datasTxt = cob?.datas?.length
-      ? cob.datas.map(d => `${formatarData(d.data)}${d.status==='realizado'?' ✅':' ⏳'}`).join('<br>')
-      : 'Sem registro nesta janela.';
-    poly.bindTooltip(`<b>${escHtml(t.nome||t.id)}</b><br>${coberto?'✅ Coberto':'🔴 Ainda falta'}<br>${datasTxt}`, {sticky:true, direction:'top'});
-    latlngs.forEach(ll => bounds.push(ll));
-  });
-  if (bounds.length) map.fitBounds(bounds, {padding:[20,20]});
-  setTimeout(() => map?.invalidateSize(), 200);
 }
 
 // ════════════════════════════════════════════════════
