@@ -47,7 +47,7 @@ setTimeout(() => {
 let perfilAtual = {};
 let talhoes = [], planosAdubacao = [], pulverizacoes = [], drenchPrevencao = [], estoqueProdutos = [], pedidos = [];
 let equipeEmpregados = [], equipeRegistros = [];
-let chartStatus = null, chartProducao = null, chartGauge = null;
+let chartStatus = null, chartProducao = null;
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 onAuthStateChanged(auth, async (user) => {
@@ -165,6 +165,19 @@ function atualizarKPIs() {
   document.getElementById('kpiEstoque').textContent = baixoEstoque;
   const kpiEstoqueCard = document.getElementById('kpiEstoqueCard');
   if (kpiEstoqueCard) kpiEstoqueCard.classList.toggle('alerta', baixoEstoque > 0);
+  const areaPulvEl = document.getElementById('kpiAreaPulv');
+  if (areaPulvEl) areaPulvEl.textContent = Math.round(calcAreaPulverizadaMes()).toLocaleString('pt-BR');
+}
+
+// Soma a área dos talhões cujas pulverizações foram concluídas dentro do mês atual
+function calcAreaPulverizadaMes() {
+  const hojeYM = new Date().toISOString().slice(0,7);
+  let total = 0;
+  pulverizacoes.filter(p => p.realizada && (p.dataRealizada||p.data||'').slice(0,7) === hojeYM).forEach(p => {
+    const t = talhoes.find(x => x.id === p.talhaoId);
+    total += parseFloat(t?.area) || 0;
+  });
+  return total;
 }
 
 function atualizarEquipeKPI() {
@@ -183,23 +196,28 @@ function pctPlanosMes(mesIdx, ano) {
   return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
 }
 
+// % concluído do mês, filtrado por fazenda (ou geral quando fazenda é null)
+function pctPlanosMesFazenda(mesIdx, ano, fazenda) {
+  const planos = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano && (!fazenda || p.fazenda === fazenda));
+  const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
+  const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
+  return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
+}
+
 function atualizarGaugeAdubacao() {
   const hoje = new Date();
   const mesIdx = hoje.getMonth(), ano = hoje.getFullYear();
-  const { total, feitas, pct } = pctPlanosMes(mesIdx, ano);
-  const cor = pct >= 80 ? '#16a34a' : pct >= 40 ? '#f59e0b' : '#dc2626';
-
   const mesAntIdx = mesIdx === 0 ? 11 : mesIdx - 1, mesAntAno = mesIdx === 0 ? ano - 1 : ano;
-  const anterior = pctPlanosMes(mesAntIdx, mesAntAno);
 
-  const valEl = document.getElementById('gaugeValor');
+  // Resumo geral (texto compacto no cabeçalho, não é mais um gauge sozinho)
+  const geral = pctPlanosMes(mesIdx, ano);
+  const anterior = pctPlanosMes(mesAntIdx, mesAntAno);
   const subEl = document.getElementById('gaugeSub');
   const trendEl = document.getElementById('gaugeTrend');
-  if (valEl) { valEl.textContent = total ? `${pct}%` : '—'; valEl.style.color = total ? cor : 'var(--c)'; }
-  if (subEl) subEl.textContent = total ? `${feitas}/${total} confirmadas` : 'Sem plano para este mês';
+  if (subEl) subEl.textContent = geral.total ? `Geral: ${geral.pct}% (${geral.feitas}/${geral.total})` : 'Sem plano para este mês';
   if (trendEl) {
-    if (total && anterior.total) {
-      const dif = pct - anterior.pct;
+    if (geral.total && anterior.total) {
+      const dif = geral.pct - anterior.pct;
       const sinal = dif >= 0 ? '+' : '';
       trendEl.textContent = `${sinal}${dif}pp vs mês anterior`;
       trendEl.className = 'trend-badge ' + (dif >= 0 ? 'trend-up' : 'trend-down');
@@ -209,18 +227,19 @@ function atualizarGaugeAdubacao() {
     }
   }
 
-  const el = document.getElementById('chartGauge');
-  if (!el) return;
-  if (chartGauge) chartGauge.destroy();
-  chartGauge = new Chart(el, {
-    type: 'doughnut',
-    data: { datasets: [{ data: total ? [pct, 100-pct] : [0,100], backgroundColor: [total?cor:'var(--cb)', '#e5e0d3'], borderWidth: 0 }] },
-    options: {
-      circumference: 180, rotation: 270, cutout: '78%',
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display:false }, tooltip: { enabled:false } },
-    }
-  });
+  // Um anel por fazenda — mostra quem já tá em dia e quem tá ficando pra trás
+  const cont = document.getElementById('gaugeFazendas');
+  if (!cont) return;
+  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  if (!fazendas.length) { cont.innerHTML = ''; return; }
+  cont.innerHTML = fazendas.map(faz => {
+    const { total, feitas, pct } = pctPlanosMesFazenda(mesIdx, ano, faz);
+    const cor = !total ? 'var(--cb)' : pct >= 80 ? '#16a34a' : pct >= 40 ? '#f59e0b' : '#dc2626';
+    return `<a href="adubacoes.html" class="faz-gauge-item" title="${faz}: ${total?feitas+'/'+total+' confirmadas':'sem plano este mês'}">
+      <div class="faz-gauge-ring" style="--p:${pct};--cor:${cor};"><span class="faz-gauge-val">${total?pct+'%':'—'}</span></div>
+      <div class="faz-gauge-lbl">${faz}</div>
+    </a>`;
+  }).join('');
 }
 
 // ── PRODUÇÃO POR SAFRA — gráfico de área com gradiente + variação vs safra anterior ──
@@ -556,8 +575,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .atalho-ico{font-size:20px;}
 .atalho-label{font-size:.62rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.03em;}
 /* KPIs — faixa única e compacta */
-.stats-strip{background:white;border-radius:var(--rad);box-shadow:var(--s);display:flex;align-items:stretch;margin-bottom:16px;overflow:hidden;}
-.stat-mini{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 3px;gap:2px;min-width:0;cursor:pointer;}
+.stats-strip{background:white;border-radius:var(--rad);box-shadow:var(--s);display:flex;align-items:stretch;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.stat-mini{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 10px;gap:2px;min-width:58px;cursor:pointer;}
 .stat-mini-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
 .stat-mini.alerta .stat-mini-val{color:#d97706;}
 .stat-mini-lbl{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.02em;text-align:center;white-space:nowrap;margin-top:2px;}
@@ -568,14 +587,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .sec-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:16px;}
 .sec-sub{font-size:.68rem;color:var(--c);padding:0 14px;margin-top:-4px;margin-bottom:8px;line-height:1.4;}
 /* GAUGE */
-.gauge-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
-.gauge-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;}
+.gauge-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px 0 10px;margin-bottom:16px;}
+.gauge-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;padding:0 16px;}
 .gauge-hdr{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
-.gauge-wrap{position:relative;height:110px;display:flex;align-items:flex-end;justify-content:center;}
-.gauge-wrap canvas{max-height:110px;}
-.gauge-overlay{position:absolute;bottom:2px;left:0;right:0;text-align:center;pointer-events:none;}
-.gauge-valor{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:2.2rem;line-height:1;}
-.gauge-sub{font-size:.7rem;color:var(--c);margin-top:2px;}
+.gauge-sub{font-size:.7rem;color:var(--c);padding:0 16px;}
+/* Anéis de adubação por fazenda (linha rolável) */
+.faz-gauge-scroll{display:flex;gap:16px;overflow-x:auto;padding:12px 16px 4px;-webkit-overflow-scrolling:touch;}
+.faz-gauge-item{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;flex-shrink:0;}
+.faz-gauge-ring{width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--cor) calc(var(--p)*1%), var(--cl) 0);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
+.faz-gauge-ring::before{content:'';position:absolute;width:40px;height:40px;border-radius:50%;background:white;}
+.faz-gauge-val{position:relative;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.72rem;color:var(--ve);}
+.faz-gauge-lbl{font-size:.6rem;font-weight:700;color:var(--c);text-align:center;max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* RANKING POR FAZENDA (barras horizontais) */
 .rank-bar-row{display:flex;align-items:center;gap:8px;padding:9px 14px;}
 .rank-bar-lbl{font-size:.75rem;font-weight:700;color:var(--ve);width:88px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -703,21 +725,21 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
         <span class="stat-mini-val loading" id="kpiEquipe">—</span>
         <span class="stat-mini-lbl">Equipe</span>
       </div>
+      <div class="stat-sep"></div>
+      <div class="stat-mini" onclick="window.location.href='pulverizacoes.html'" title="Área com pulverização concluída este mês">
+        <span class="stat-mini-val" id="kpiAreaPulv">—</span>
+        <span class="stat-mini-lbl">ha/mês</span>
+      </div>
     </div>
 
-    <!-- Gauge: Adubação do mês -->
+    <!-- Adubação do mês, por fazenda -->
     <div class="gauge-card">
       <div class="gauge-hdr-row">
         <span class="gauge-hdr">🧪 Adubação do Mês</span>
         <span class="trend-badge" id="gaugeTrend"></span>
       </div>
-      <div class="gauge-wrap">
-        <canvas id="chartGauge"></canvas>
-        <div class="gauge-overlay">
-          <div class="gauge-valor" id="gaugeValor">—</div>
-          <div class="gauge-sub" id="gaugeSub">Carregando...</div>
-        </div>
-      </div>
+      <div class="gauge-sub" id="gaugeSub">Carregando...</div>
+      <div class="faz-gauge-scroll" id="gaugeFazendas"></div>
     </div>
 
     <!-- Produção por safra -->
