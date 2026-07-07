@@ -106,7 +106,7 @@ function gerarMenu() {
 }
 
 function iniciarListeners() {
-  document.querySelectorAll('.kpi-val').forEach(el => el.classList.add('loading'));
+  document.querySelectorAll('.stat-mini-val').forEach(el => el.classList.add('loading'));
   onSnapshot(collection(db,'talhoes'), snap => {
     talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
@@ -154,7 +154,7 @@ function atualizarDashboard() {
 }
 
 function atualizarKPIs() {
-  document.querySelectorAll('.kpi-val').forEach(el => el.classList.remove('loading'));
+  document.querySelectorAll('.stat-mini-val').forEach(el => el.classList.remove('loading'));
   document.getElementById('kpiTalhoes').textContent = talhoes.length;
   document.getElementById('kpiAtivos').textContent = talhoes.filter(t => t.status === 'ativo').length;
   const pendPedidos = pedidos.filter(p => ['solicitado','em_andamento'].includes(p.status||'solicitado')).length;
@@ -555,16 +555,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .atalho-btn:active{transform:scale(.97);}
 .atalho-ico{font-size:20px;}
 .atalho-label{font-size:.62rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.03em;}
-/* KPIs */
-.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
-.kpi-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;display:flex;flex-direction:column;gap:4px;border-left:3px solid transparent;transition:.15s;}
-.kpi-card.alerta{border-left-color:#f59e0b;}
-.kpi-ico{font-size:22px;margin-bottom:4px;}
-.kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:2.1rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
-.kpi-card.alerta .kpi-val{color:#d97706;}
-.kpi-label{font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.08em;}
-.kpi-full{margin-bottom:16px;}
-.kpi-full .kpi-card{flex-direction:row;align-items:center;gap:12px;}
+/* KPIs — faixa única e compacta */
+.stats-strip{background:white;border-radius:var(--rad);box-shadow:var(--s);display:flex;align-items:stretch;margin-bottom:16px;overflow:hidden;}
+.stat-mini{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 3px;gap:2px;min-width:0;cursor:pointer;}
+.stat-mini-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
+.stat-mini.alerta .stat-mini-val{color:#d97706;}
+.stat-mini-lbl{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.02em;text-align:center;white-space:nowrap;margin-top:2px;}
+.stat-sep{width:1px;flex-shrink:0;background:var(--cl);margin:10px 0;}
 /* SEÇÕES */
 .sec-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
 .sec-link{font-size:.72rem;color:var(--v);font-weight:600;text-decoration:none;}
@@ -624,7 +621,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .op-seta{font-size:1.4rem;color:var(--cb);}
 /* OFFLINE BADGE */
 .offline-badge{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;border-radius:20px;padding:5px 14px;font-size:.72rem;font-weight:700;z-index:500;display:none;}
-.kpi-val.loading{color:transparent!important;background:linear-gradient(90deg,var(--cl) 25%,var(--cb) 50%,var(--cl) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;display:inline-block;min-width:50px;}
+.stat-mini-val.loading{color:transparent!important;background:linear-gradient(90deg,var(--cl) 25%,var(--cb) 50%,var(--cl) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;display:inline-block;min-width:34px;}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -680,33 +677,31 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <a href="gestao.html" class="atalho-btn"><span class="atalho-ico">📈</span><span class="atalho-label">Gestão</span></a>
     </div>
 
-    <!-- KPIs -->
-    <div class="kpi-grid">
-      <div class="kpi-card">
-        <span class="kpi-ico">🗺️</span>
-        <span class="kpi-val" id="kpiTalhoes">—</span>
-        <span class="kpi-label">Talhões</span>
+    <!-- KPIs — faixa única e compacta (5 números, 1 linha) -->
+    <div class="stats-strip">
+      <div class="stat-mini">
+        <span class="stat-mini-val" id="kpiTalhoes">—</span>
+        <span class="stat-mini-lbl">Talhões</span>
       </div>
-      <div class="kpi-card">
-        <span class="kpi-ico">✅</span>
-        <span class="kpi-val" id="kpiAtivos">—</span>
-        <span class="kpi-label">Ativos</span>
+      <div class="stat-sep"></div>
+      <div class="stat-mini">
+        <span class="stat-mini-val" id="kpiAtivos">—</span>
+        <span class="stat-mini-lbl">Ativos</span>
       </div>
-      <div class="kpi-card" id="kpiPedidosCard" onclick="window.location.href='pedidos.html'" style="cursor:pointer;">
-        <span class="kpi-ico">📦</span>
-        <span class="kpi-val" id="kpiPedidos">—</span>
-        <span class="kpi-label">Pedidos pendentes</span>
+      <div class="stat-sep"></div>
+      <div class="stat-mini" id="kpiPedidosCard" onclick="window.location.href='pedidos.html'">
+        <span class="stat-mini-val" id="kpiPedidos">—</span>
+        <span class="stat-mini-lbl">Pedidos</span>
       </div>
-      <div class="kpi-card" id="kpiEstoqueCard" onclick="window.location.href='estoque.html'" style="cursor:pointer;">
-        <span class="kpi-ico">🏬</span>
-        <span class="kpi-val" id="kpiEstoque">—</span>
-        <span class="kpi-label">Estoque baixo</span>
+      <div class="stat-sep"></div>
+      <div class="stat-mini" id="kpiEstoqueCard" onclick="window.location.href='estoque.html'">
+        <span class="stat-mini-val" id="kpiEstoque">—</span>
+        <span class="stat-mini-lbl">Estoque</span>
       </div>
-    </div>
-    <div class="kpi-grid kpi-full">
-      <div class="kpi-card" onclick="window.location.href='equipe.html'" style="cursor:pointer;grid-column:1/-1;">
-        <span class="kpi-ico">👥</span>
-        <div><span class="kpi-val loading" id="kpiEquipe">—</span><span class="kpi-label" style="display:block;">Equipe presente hoje</span></div>
+      <div class="stat-sep"></div>
+      <div class="stat-mini" onclick="window.location.href='equipe.html'">
+        <span class="stat-mini-val loading" id="kpiEquipe">—</span>
+        <span class="stat-mini-lbl">Equipe</span>
       </div>
     </div>
 
