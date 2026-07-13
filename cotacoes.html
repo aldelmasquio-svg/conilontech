@@ -3,18 +3,22 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>ConilonTech · Pedidos de Insumos</title>
+<title>ConilonTech · Cotações</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 enableIndexedDbPersistence(db).catch(()=>{});
+// NOTA: este módulo foi clonado de pedidos.html — a máquina de mapa/seleção de talhões é a mesma
+// (variáveis/funções mantêm o prefixo "ped" por reuso). A diferença é o resultado: em vez de um
+// pedido com workflow de status, gera uma COTAÇÃO que recebe propostas de fornecedores na aba Cotação.
 let usuarioAtual=null,perfilAtual={},talhoes=[],pedidos=[],pedidoWIP=null,pedItemAtivo=null,pedMapIniciado=false,pedMap,pedPolMap={},pedSidebarAberta=true,tabAtual='mapa';
+let cotacaoAberta=null, fornecedoresWIP=[]; // estado da aba Cotação (execução)
 const PED_CORES={ativo:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'},colhido:{border:'rgba(196,133,90,.9)',fill:'rgba(139,94,60,.4)'}};
 onAuthStateChanged(auth,async(user)=>{
   if(!user){window.location.href='login.html';return;}
@@ -22,7 +26,7 @@ onAuthStateChanged(auth,async(user)=>{
   const snap=await getDoc(doc(db,'usuarios',user.uid));
   if(!snap.exists()){await signOut(auth);return;}
   perfilAtual=snap.data();
-  if(!perfilAtual.modulos&&perfilAtual.perfil==='admin')perfilAtual.modulos={mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  if(!perfilAtual.modulos&&perfilAtual.perfil==='admin')perfilAtual.modulos={mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',cotacoes:'admin',admin:'admin'};
   document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserEmail').textContent=user.email;
@@ -31,7 +35,7 @@ onAuthStateChanged(auth,async(user)=>{
   gerarMenu();
   if(!isAdmin())document.getElementById('fabNovoPedido').style.display='none';
   onSnapshot(collection(db,'talhoes'),snap=>{talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(pedMapIniciado)renderizarPedPoligonos();});
-  onSnapshot(collection(db,'pedidos'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarListaPedidos();});
+  onSnapshot(collection(db,'cotacoes'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarCotacoes();if(cotacaoAberta)sincronizarModal();});
   setTimeout(iniciarMapaPedidos,200);
 });
 function isAdmin(){return Object.values(perfilAtual.modulos||{}).includes('admin')||perfilAtual.perfil==='admin';}
@@ -218,7 +222,7 @@ window.remItemPed=function(i){pedidoWIP.itens.splice(i,1);if(!pedidoWIP.itens.le
 window.remTalhaoPed=function(i,id){pedidoWIP.itens[i].talhoes.delete(id);renderizarItensPedido();};
 window.pedSelTodos=function(){if(pedItemAtivo===null||!pedidoWIP)return;talhoes.forEach(t=>{if(t.coordenadas?.length>=3)pedidoWIP.itens[pedItemAtivo].talhoes.add(t.id);});renderizarItensPedido();};
 window.pedLimparSel=function(){if(pedItemAtivo===null||!pedidoWIP)return;pedidoWIP.itens[pedItemAtivo].talhoes.clear();renderizarItensPedido();};
-window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar o pedido?'))return;pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar esta cotação?'))return;pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
 window.salvarPedidoWIP=async function(){
   if(!pedidoWIP)return;
   const itensValidos=pedidoWIP.itens.filter(it=>it.produto.trim());
@@ -237,7 +241,7 @@ window.salvarPedidoWIP=async function(){
       const areaTotal = talhoesArr.reduce((s,t)=>s+t.area, 0);
       const dosePorHa = parseDose(it.quantidade)||0;
       const unidade = it.unidade || 'kg';
-      const total = dosePorHa * areaTotal;
+      const total = dosePorHa * areaTotal; // quantidade total necessária do insumo
       return {
         produto: it.produto.trim(),
         modo: it.modo || 'terrestre',
@@ -245,89 +249,210 @@ window.salvarPedidoWIP=async function(){
         unidade,
         areaTotal: Math.round(areaTotal*100)/100,
         total: Math.round(total*100)/100,
-        // Mantém o campo "quantidade" legível para retrocompat (já existem pedidos no Firestore que usam ele)
         quantidade: `${total.toLocaleString('pt-BR')} ${unidade} (${dosePorHa} ${unidade}/ha × ${areaTotal.toLocaleString('pt-BR')} ha)`,
         talhoes: talhoesArr
       };
     });
-    await addDoc(collection(db,'pedidos'),{itens:itensFS,status:'solicitado',criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
-    window.cancelarPedido();toast('✅ Pedido salvo!');
+    // Cotação nasce "aberta", sem fornecedores; as propostas entram na aba Cotação
+    await addDoc(collection(db,'cotacoes'),{itens:itensFS,status:'aberta',fornecedores:[],criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
+    window.cancelarPedido();toast('✅ Cotação criada! Agora adicione os fornecedores na aba Cotação.');
     abrirTab('lista',document.getElementById('ptab-lista'));
   }catch(e){toast('❌ Erro: '+e.message);}
-  btn.disabled=false;btn.textContent='💾 Salvar Pedido';
+  btn.disabled=false;btn.textContent='💾 Salvar Cotação';
 };
-function renderizarListaPedidos(){
+// ══════════════════════════════════════════════════════════════
+// ABA COTAÇÃO (execução) — lista de cotações + comparador de fornecedores
+// ══════════════════════════════════════════════════════════════
+const STATUS_COT = { aberta:{lab:'📥 Aberta',cor:'#f59e0b'}, fechada:{lab:'✅ Fechada',cor:'#22c55e'} };
+function fmtRS(n){ return 'R$ ' + (Math.round((n||0)*100)/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function sanitizar(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+// Comparativo dado {itens, fornecedores}: total por fornecedor (só itens cotados), melhor completo, melhor por item
+function calcComparativo(c){
+  const itens=c.itens||[], forns=c.fornecedores||[];
+  const linhas=forns.map((f,fi)=>{
+    let total=0, cotouTudo=true, nCotados=0;
+    itens.forEach((it,ii)=>{
+      const p=parseDose(f.precos?.[ii]);
+      if(p>0){ total+=p*(it.total||0); nCotados++; } else { cotouTudo=false; }
+    });
+    return {fi, nome:(f.nome||'').trim()||`Fornecedor ${fi+1}`, total, cotouTudo:cotouTudo&&itens.length>0, nCotados};
+  });
+  const completos=linhas.filter(l=>l.cotouTudo && l.nCotados>0);
+  const melhorFornecedor = completos.length ? completos.reduce((a,b)=>b.total<a.total?b:a) : null;
+  const melhorPorItem=itens.map((it,ii)=>{
+    let best=null;
+    forns.forEach((f,fi)=>{ const p=parseDose(f.precos?.[ii]); if(p>0 && (best===null||p<best.preco)) best={fi,nome:(f.nome||'').trim()||`Fornecedor ${fi+1}`,preco:p}; });
+    return best ? {...best, sub:best.preco*(it.total||0)} : null;
+  });
+  const minTotal = melhorPorItem.reduce((s,m)=>s+(m?m.sub:0),0);
+  return {linhas, melhorFornecedor, melhorPorItem, minTotal, todosCotados: itens.length>0 && melhorPorItem.every(Boolean)};
+}
+
+function renderizarCotacoes(){
   const lista=document.getElementById('listaPedidosApp');if(!lista)return;
-  document.getElementById('totalPedidos').textContent=pedidos.length+' pedido(s)';
-  if(!pedidos.length){lista.innerHTML=`<div class="vazio"><div class="ico">📋</div><p>Nenhum pedido criado ainda.<br>Vá para <strong>Mapa</strong> e clique em <strong>+ Novo Pedido</strong>.</p></div>`;return;}
-  const STATUS_OPS = [
-    {id:'solicitado', lab:'⏳ Solicitado', cor:'#f59e0b'},
-    {id:'em_andamento', lab:'🚚 Em andamento', cor:'#3b82f6'},
-    {id:'recebido', lab:'✅ Recebido', cor:'#22c55e'},
-    {id:'recebido_parcial', lab:'🔶 Parcial', cor:'#a855f7'},
-    {id:'cancelado', lab:'❌ Cancelado', cor:'var(--c)'},
-  ];
-  lista.innerHTML=pedidos.map(p=>{
-    const dataF=p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—';
-    const fazendas=[...new Set((p.itens||[]).flatMap(it=>(it.talhoes||[]).map(t=>t.fazenda||'Sem fazenda')))].join(' · ');
-    const stAtual = p.status || 'solicitado';
-    const stInfo = STATUS_OPS.find(s => s.id===stAtual) || STATUS_OPS[0];
-    const podeAlterar = isAdmin() || (perfilAtual.modulos?.pedidos === 'encarregado');
-    const selStatus = podeAlterar
-      ? `<select class="ped-status-sel" onchange="alterarStatusPedido('${p._docId}',this.value)" style="border-color:${stInfo.cor};color:${stInfo.cor};">
-          ${STATUS_OPS.map(s=>`<option value="${s.id}" ${stAtual===s.id?'selected':''}>${s.lab}</option>`).join('')}
-        </select>`
-      : `<span class="ped-status-badge" style="background:${stInfo.cor};">${stInfo.lab}</span>`;
+  document.getElementById('totalPedidos').textContent=pedidos.length+' cotação(ões)';
+  if(!pedidos.length){lista.innerHTML=`<div class="vazio"><div class="ico">💰</div><p>Nenhuma cotação ainda.<br>Vá em <strong>Planejamento</strong>, selecione as áreas e crie uma cotação.</p></div>`;return;}
+  lista.innerHTML=pedidos.map(c=>{
+    const dataF=c.criadoEm?formatarData(c.criadoEm.slice(0,10)):'—';
+    const fazendas=[...new Set((c.itens||[]).flatMap(it=>(it.talhoes||[]).map(t=>t.fazenda||'Sem fazenda')))].join(' · ');
+    const st=STATUS_COT[c.status||'aberta']||STATUS_COT.aberta;
+    const forns=c.fornecedores||[];
+    const comp=calcComparativo(c);
+    const melhor=comp.melhorFornecedor;
     return `<div class="ped-card">
       <div class="ped-card-hdr">
-        <div><div class="ped-card-tit">📦 Pedido de Insumos</div><div class="ped-card-meta">📅 ${dataF} · 🏡 ${fazendas}</div><div class="ped-card-meta">👤 ${p.criadoPor||'—'}</div></div>
+        <div>
+          <div class="ped-card-tit">💰 Cotação de Insumos</div>
+          <div class="ped-card-meta">📅 ${dataF}${fazendas?' · 🏡 '+fazendas:''}</div>
+          <div class="ped-card-meta">👤 ${c.criadoPor||'—'}</div>
+        </div>
         <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start;">
-          <button onclick="gerarRelatorioPedido('${p._docId}')" class="btn-pdf">📄 PDF</button>
-          ${isAdmin()?`<button class="btn-del-ped" data-doc="${p._docId}" onclick="excluirPedido(this)">🗑</button>`:''}
+          <span class="ped-status-badge" style="background:${st.cor};">${st.lab}</span>
+          ${isAdmin()?`<button class="btn-del-ped" data-doc="${c._docId}" onclick="excluirCotacao(this)">🗑</button>`:''}
         </div>
       </div>
-      <div style="padding:6px 14px 0;">${selStatus}</div>
       <div class="ped-card-itens">
-        ${(p.itens||[]).map(it=>{
-          // Retrocompat: pedidos novos têm dosePorHa+total; antigos só têm quantidade (string)
-          const temNovo = it.dosePorHa != null && it.total != null;
-          const recebidoTxt = it.totalRecebido != null && it.totalRecebido > 0
-            ? `<span class="ped-recebido-aux">✓ ${(it.totalRecebido||0).toLocaleString('pt-BR')} ${it.unidade||''} recebido</span>`
-            : '';
-          const txtBadge = temNovo
-            ? `<span class="ped-qtd-badge">${(it.total||0).toLocaleString('pt-BR')} ${it.unidade||''}</span><span class="ped-qtd-aux">${it.dosePorHa} ${it.unidade||''}/ha</span>${recebidoTxt}`
-            : (it.quantidade ? `<span class="ped-qtd-badge">${it.quantidade}</span>` : '');
-          const modoBadge = it.modo ? `<span class="ped-modo-badge">${MODO_APLIC[it.modo]||it.modo}</span>` : '';
-          return `<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${it.produto}${modoBadge}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${txtBadge}<span class="ped-tal-ids">${(it.talhoes||[]).map(t=>t.id).join(', ')}</span></span></div>`;
-        }).join('')}
+        ${(c.itens||[]).map(it=>`<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${sanitizar(it.produto)}</span><span class="ped-qtd-badge">${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')}</span></div>`).join('')}
+      </div>
+      <div class="cot-card-acoes">
+        <button class="btn-cotar" onclick="abrirCotacao('${c._docId}')">💰 ${forns.length?`Cotação (${forns.length} fornecedor${forns.length>1?'es':''})`:'Adicionar fornecedores'}</button>
+        <button class="btn-pdf" onclick="gerarRelatorioCotacao('${c._docId}')">📄 PDF</button>
+        ${melhor?`<span class="melhor-badge">🏆 ${sanitizar(melhor.nome)} · ${fmtRS(melhor.total)}</span>`:''}
       </div>
     </div>`;
   }).join('');
 }
 
-window.alterarStatusPedido = async function(docId, novoStatus) {
-  try {
-    await updateDoc(doc(db,'pedidos',docId), {status: novoStatus, statusAtualizadoEm: new Date().toISOString(), statusAtualizadoPor: usuarioAtual.email});
-    toast('✅ Status atualizado.');
-  } catch(e) { toast('❌ Erro: '+e.message); }
+window.excluirCotacao=async function(btn){const docId=btn.dataset.doc;if(!confirm('Excluir esta cotação?'))return;btn.disabled=true;await deleteDoc(doc(db,'cotacoes',docId));toast('🗑 Excluída.');};
+
+// ─── MODAL DE COTAÇÃO (fornecedores + comparação) ───
+function novoForn(){ return {nome:'',contato:'',obs:'',precos:{},escolhido:false}; }
+function cotacaoAtualDoc(){ return pedidos.find(x=>x._docId===cotacaoAberta); }
+
+window.abrirCotacao=function(docId){
+  const c=pedidos.find(x=>x._docId===docId); if(!c)return;
+  cotacaoAberta=docId;
+  fornecedoresWIP=JSON.parse(JSON.stringify(c.fornecedores||[]));
+  if(!fornecedoresWIP.length) fornecedoresWIP.push(novoForn());
+  renderModal();
+  document.getElementById('cotOverlay').classList.add('open');
 };
-window.excluirPedido=async function(btn){const docId=btn.dataset.doc;if(!confirm('Excluir?'))return;btn.disabled=true;await deleteDoc(doc(db,'pedidos',docId));toast('🗑 Excluído.');};
-window.gerarRelatorioPedido=function(docId){
-  const p=pedidos.find(x=>x._docId===docId);if(!p)return;
-  const dataF=p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—';
-  const porFazenda={};
-  (p.itens||[]).forEach(it=>{(it.talhoes||[]).forEach(t=>{const f=t.fazenda||'Sem fazenda';if(!porFazenda[f])porFazenda[f]={};if(!porFazenda[f][t.id])porFazenda[f][t.id]={nome:t.nome,itens:[]};porFazenda[f][t.id].itens.push(it);});});
-  document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">PEDIDO DE INSUMOS</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${p.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${(p.itens||[]).length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 RESUMO DO PEDIDO</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:left;">Modo</th><th style="padding:9px 12px;text-align:center;">Dose/ha</th><th style="padding:9px 12px;text-align:center;">Área total</th><th style="padding:9px 12px;text-align:center;">TOTAL A PEDIR</th></tr></thead><tbody>${(p.itens||[]).map((it,i)=>{
-    const temNovo = it.dosePorHa!=null && it.total!=null;
-    const dosePh = temNovo ? `${it.dosePorHa} ${it.unidade}/ha` : '—';
-    const areaT = temNovo ? `${(it.areaTotal||0).toLocaleString('pt-BR')} ha` : '—';
-    const totalT = temNovo ? `${(it.total||0).toLocaleString('pt-BR')} ${it.unidade}` : (it.quantidade||'—');
-    const modoT = it.modo ? (MODO_APLIC[it.modo]||it.modo) : '—';
-    return `<tr style="background:${i%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);color:var(--t4);">${i+1}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-weight:600;">${it.produto}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-size:11px;">${modoT}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${dosePh}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;">${areaT}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--v);font-weight:700;font-size:13px;">${totalT}</td></tr>`;
-  }).join('')}</tbody></table></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">🗺️ DISTRIBUIÇÃO POR FAZENDA</div>${Object.entries(porFazenda).map(([faz,tals])=>`<div style="margin-bottom:16px;"><div style="background:var(--vb);border-left:4px solid var(--v);padding:8px 14px;font-weight:700;font-size:13px;color:var(--ve);">🏡 ${faz}</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--cl);"><th style="padding:7px 14px;text-align:left;">Talhão</th><th style="padding:7px 14px;text-align:left;">Insumos</th></tr></thead><tbody>${Object.entries(tals).map(([tid,td],ti)=>`<tr style="background:${ti%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);font-weight:600;">${tid} · ${td.nome}${td.area?' · '+td.area+'ha':''}</td><td style="padding:8px 14px;border-bottom:1px solid var(--bd-l);">${td.itens.map(it=>{const temNovo=it.dosePorHa!=null;const txt=temNovo?`${it.dosePorHa} ${it.unidade}/ha`:(it.quantidade||'');return `<span style="display:inline-block;background:var(--vb);border-radius:12px;padding:2px 9px;margin:2px;font-size:11px;color:var(--ve);font-weight:600;">${it.produto}${txt?' · '+txt:''}</span>`;}).join('')}</td></tr>`).join('')}</tbody></table></div>`).join('')}</div><div style="font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
+window.fecharCotacao=function(){ cotacaoAberta=null; fornecedoresWIP=[]; document.getElementById('cotOverlay').classList.remove('open'); };
+function sincronizarModal(){ /* dados atualizaram no Firestore enquanto o modal está aberto — mantém o WIP do usuário */ }
+
+window.addForn=function(){ fornecedoresWIP.push(novoForn()); renderModal(); };
+window.remForn=function(i){ fornecedoresWIP.splice(i,1); if(!fornecedoresWIP.length)fornecedoresWIP.push(novoForn()); renderModal(); };
+window.setFornNome=function(i,v){ if(fornecedoresWIP[i])fornecedoresWIP[i].nome=v; renderModalResumo(); };
+window.setFornContato=function(i,v){ if(fornecedoresWIP[i])fornecedoresWIP[i].contato=v; };
+window.setFornObs=function(i,v){ if(fornecedoresWIP[i])fornecedoresWIP[i].obs=v; };
+window.setFornPreco=function(fi,ii,v){ if(fornecedoresWIP[fi]){ fornecedoresWIP[fi].precos=fornecedoresWIP[fi].precos||{}; fornecedoresWIP[fi].precos[ii]=v; atualizarCalculos(); } };
+window.marcarEscolhido=function(fi,val){ fornecedoresWIP.forEach((f,i)=>f.escolhido=(i===fi&&val)); renderModal(); };
+
+function renderModal(){
+  const c=cotacaoAtualDoc(); if(!c){window.fecharCotacao();return;}
+  document.getElementById('cotModalData').textContent = `Cotação · ${c.criadoEm?formatarData(c.criadoEm.slice(0,10)):''} · ${(c.itens||[]).length} insumo(s)`;
+  const itens=c.itens||[];
+  document.getElementById('cotFornecedores').innerHTML = fornecedoresWIP.map((f,fi)=>`
+    <div class="forn-card ${f.escolhido?'escolhido':''}">
+      <div class="forn-hdr">
+        <input class="forn-nome" placeholder="Fornecedor ${fi+1}" value="${escAttr(f.nome)}" oninput="setFornNome(${fi},this.value)">
+        <button class="forn-rm" onclick="remForn(${fi})" title="Remover">🗑</button>
+      </div>
+      <input class="forn-contato" placeholder="Contato (telefone / e-mail)" value="${escAttr(f.contato)}" oninput="setFornContato(${fi},this.value)">
+      <div class="forn-itens">
+        ${itens.map((it,ii)=>`
+          <div class="forn-item">
+            <div class="forn-item-nome">${sanitizar(it.produto)}<span class="forn-item-qtd">${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')}</span></div>
+            <div class="forn-item-preco">
+              <span class="forn-rs">R$</span>
+              <input type="number" inputmode="decimal" step="0.01" min="0" class="forn-preco-inp" placeholder="por ${sanitizar(it.unidade||'un')}" value="${f.precos?.[ii]??''}" oninput="setFornPreco(${fi},${ii},this.value)">
+              <span class="forn-sub" id="sub-${fi}-${ii}">—</span>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="forn-total-row">Total do fornecedor: <strong class="forn-total" id="ftot-${fi}">—</strong></div>
+      <input class="forn-obs" placeholder="Observação (prazo de entrega, frete, condição de pagamento...)" value="${escAttr(f.obs)}" oninput="setFornObs(${fi},this.value)">
+      <label class="forn-escolher"><input type="checkbox" ${f.escolhido?'checked':''} onchange="marcarEscolhido(${fi},this.checked)"> 🏆 Fornecedor escolhido</label>
+    </div>`).join('');
+  atualizarCalculos();
+}
+
+// Atualiza subtotais/totais/resumo sem re-renderizar os inputs (não perde o foco enquanto digita)
+function atualizarCalculos(){
+  const c=cotacaoAtualDoc(); if(!c)return; const itens=c.itens||[];
+  fornecedoresWIP.forEach((f,fi)=>{
+    let total=0;
+    itens.forEach((it,ii)=>{
+      const p=parseDose(f.precos?.[ii]); const sub=p>0?p*(it.total||0):0;
+      const el=document.getElementById(`sub-${fi}-${ii}`); if(el) el.textContent = p>0?('= '+fmtRS(sub)):'—';
+      if(p>0) total+=sub;
+    });
+    const tel=document.getElementById(`ftot-${fi}`); if(tel) tel.textContent = total>0?fmtRS(total):'—';
+  });
+  renderModalResumo();
+}
+
+function renderModalResumo(){
+  const c=cotacaoAtualDoc(); if(!c)return;
+  const comp=calcComparativo({itens:c.itens, fornecedores:fornecedoresWIP});
+  const el=document.getElementById('cotResumo'); if(!el)return;
+  const ranking=[...comp.linhas].filter(l=>l.nCotados>0).sort((a,b)=>a.total-b.total);
+  el.innerHTML = `<div class="resumo-tit">📊 Comparativo</div>
+    ${ranking.length?ranking.map((l,idx)=>`<div class="resumo-row ${idx===0&&l.cotouTudo?'melhor':''}">
+      <span>${idx===0&&l.cotouTudo?'🏆 ':''}${sanitizar(l.nome)}${!l.cotouTudo?' <span class="parc">(parcial)</span>':''}</span>
+      <strong>${fmtRS(l.total)}</strong>
+    </div>`).join(''):'<div class="resumo-vazio">Informe os preços para comparar os fornecedores.</div>'}
+    ${comp.todosCotados&&comp.melhorPorItem.length?`<div class="resumo-row minrow"><span>💡 Comprando o melhor de cada fornecedor</span><strong>${fmtRS(comp.minTotal)}</strong></div>`:''}`;
+}
+
+window.salvarCotacaoForn=async function(){
+  const c=cotacaoAtualDoc(); if(!c)return;
+  const btn=document.getElementById('btnSalvarCot'); btn.disabled=true; btn.textContent='Salvando...';
+  try{
+    const limpos=fornecedoresWIP
+      .filter(f=>(f.nome||'').trim() || Object.values(f.precos||{}).some(v=>parseDose(v)>0))
+      .map(f=>({
+        nome:(f.nome||'').trim(),
+        contato:(f.contato||'').trim(),
+        obs:(f.obs||'').trim(),
+        precos:Object.fromEntries(Object.entries(f.precos||{}).filter(([k,v])=>parseDose(v)>0).map(([k,v])=>[k,parseDose(v)])),
+        escolhido:!!f.escolhido
+      }));
+    await updateDoc(doc(db,'cotacoes',cotacaoAberta), {fornecedores:limpos, atualizadoEm:new Date().toISOString(), atualizadoPor:usuarioAtual.email});
+    toast('✅ Cotação salva!'); window.fecharCotacao();
+  }catch(e){ toast('❌ Erro: '+e.message); }
+  btn.disabled=false; btn.textContent='💾 Salvar';
+};
+
+window.alternarStatusCotacao=async function(){
+  const c=cotacaoAtualDoc(); if(!c)return;
+  const novo = (c.status||'aberta')==='fechada' ? 'aberta' : 'fechada';
+  try{ await updateDoc(doc(db,'cotacoes',cotacaoAberta), {status:novo}); toast(novo==='fechada'?'✅ Cotação fechada.':'📥 Cotação reaberta.'); }
+  catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+window.gerarRelatorioCotacao=function(docId){
+  const c=pedidos.find(x=>x._docId===docId);if(!c)return;
+  const dataF=c.criadoEm?formatarData(c.criadoEm.slice(0,10)):'—';
+  const itens=c.itens||[]; const forns=c.fornecedores||[];
+  const comp=calcComparativo(c);
+  const linhasReq = itens.map((it,i)=>`<tr style="background:${i%2===0?'white':'var(--surface-2)'}"><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);color:var(--t4);">${i+1}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);font-weight:600;">${sanitizar(it.produto)}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;font-family:monospace;color:var(--v);font-weight:700;">${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')}</td><td style="padding:8px 12px;border-bottom:1px solid var(--bd-l);text-align:center;">R$ ______</td></tr>`).join('');
+  let comparativoHtml='';
+  if(forns.length){
+    const cab = forns.map(f=>`<th style="padding:8px 10px;text-align:center;">${sanitizar((f.nome||'').trim()||'Fornecedor')}</th>`).join('');
+    const linhas = itens.map((it,ii)=>{
+      const cels = forns.map((f)=>{ const p=parseDose(f.precos?.[ii]); const melhor=comp.melhorPorItem[ii]; const eBest=melhor&&forns[melhor.fi]===f; return `<td style="padding:7px 10px;text-align:center;font-family:monospace;${eBest?'background:#dcfce7;font-weight:700;color:#166534;':''}">${p>0?fmtRS(p*(it.total||0)):'—'}</td>`; }).join('');
+      return `<tr><td style="padding:7px 10px;font-weight:600;">${sanitizar(it.produto)} <span style="color:var(--t4);font-size:10px;">(${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')})</span></td>${cels}</tr>`;
+    }).join('');
+    const totais = forns.map((f,fi)=>{ const l=comp.linhas[fi]; const eBest=comp.melhorFornecedor&&comp.melhorFornecedor.fi===fi; return `<td style="padding:8px 10px;text-align:center;font-family:monospace;font-weight:800;${eBest?'background:#166534;color:white;':'color:var(--ve);'}">${l&&l.nCotados?fmtRS(l.total):'—'}</td>`; }).join('');
+    comparativoHtml = `<div style="margin-bottom:22px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📊 COMPARATIVO DE FORNECEDORES</div><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:8px 10px;text-align:left;">Produto (qtd)</th>${cab}</tr></thead><tbody>${linhas}<tr style="background:var(--cl);"><td style="padding:8px 10px;font-weight:800;">TOTAL</td>${totais}</tr></tbody></table>${comp.melhorFornecedor?`<div style="margin-top:8px;font-size:12px;color:#166534;font-weight:700;">🏆 Menor total completo: ${sanitizar(comp.melhorFornecedor.nome)} — ${fmtRS(comp.melhorFornecedor.total)}</div>`:''}</div>`;
+  }
+  document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">SOLICITAÇÃO DE COTAÇÃO</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${c.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${itens.length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 PRODUTOS E QUANTIDADES</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:center;">Quantidade</th><th style="padding:9px 12px;text-align:center;">Preço unit. (R$)</th></tr></thead><tbody>${linhasReq}</tbody></table></div>${comparativoHtml}<div style="font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
   setTimeout(()=>window.print(),200);
 };
-window.abrirTab=function(tab,btn){tabAtual=tab;document.querySelectorAll('.ped-tab').forEach(b=>b.classList.remove('ativo'));if(btn)btn.classList.add('ativo');document.getElementById('pmod-mapa').style.display=tab==='mapa'?'flex':'none';document.getElementById('pmod-lista').style.display=tab==='lista'?'flex':'none';if(tab==='mapa')iniciarMapaPedidos();if(tab==='lista')renderizarListaPedidos();};
+window.abrirTab=function(tab,btn){tabAtual=tab;document.querySelectorAll('.ped-tab').forEach(b=>b.classList.remove('ativo'));if(btn)btn.classList.add('ativo');document.getElementById('pmod-mapa').style.display=tab==='mapa'?'flex':'none';document.getElementById('pmod-lista').style.display=tab==='lista'?'flex':'none';if(tab==='mapa')iniciarMapaPedidos();if(tab==='lista')renderizarCotacoes();};
 function formatarData(d){if(!d)return'—';const[a,m,dd]=d.split('-');return`${dd}/${m}/${a}`;}
 function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
 window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
@@ -446,6 +571,53 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .vazio p{font-size:.88rem;line-height:1.7;}
 #area-impressao{display:none;}
 @media print{body>*:not(#area-impressao){display:none!important;}#area-impressao{display:block!important;}}
+/* Ações do card de cotação */
+.cot-card-acoes{padding:8px 14px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.btn-cotar{background:var(--v);border:none;color:white;border-radius:8px;padding:8px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;cursor:pointer;}
+.melhor-badge{font-size:.72rem;font-weight:700;color:#166534;background:#dcfce7;border-radius:20px;padding:4px 10px;}
+/* MODAL COTAÇÃO */
+.cot-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:4000;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.cot-overlay.open{opacity:1;pointer-events:all;}
+.cot-modal{background:var(--bg,#e9e5db);width:100%;max-width:620px;max-height:92vh;border-radius:16px 16px 0 0;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.1,.64,1);}
+.cot-overlay.open .cot-modal{transform:translateY(0);}
+.cot-modal-hdr{background:var(--ve);color:white;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;border-radius:16px 16px 0 0;}
+.cot-modal-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
+.cot-modal-sub{font-size:.72rem;opacity:.75;margin-top:2px;}
+.cot-close{background:rgba(255,255,255,.15);border:none;color:white;width:32px;height:32px;border-radius:8px;font-size:1rem;cursor:pointer;flex-shrink:0;}
+.cot-modal-body{flex:1;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch;}
+.cot-modal-footer{padding:10px 14px max(12px,env(safe-area-inset-bottom));border-top:1.5px solid var(--cb);display:flex;gap:8px;flex-shrink:0;background:white;}
+.btn-fechar-cot{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--c);border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;}
+.btn-salvar-cot{flex:2;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;}
+.cot-resumo{background:white;border:1.5px solid var(--cb);border-radius:var(--rad);padding:11px 13px;margin-bottom:12px;}
+.resumo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+.resumo-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.85rem;padding:5px 0;border-bottom:1px solid var(--cl);}
+.resumo-row:last-child{border:none;}
+.resumo-row strong{font-family:'DM Mono',monospace;color:var(--ve);}
+.resumo-row.melhor{color:#166534;font-weight:700;}
+.resumo-row.melhor strong{color:#166534;}
+.resumo-row.minrow{color:var(--c);font-style:italic;font-size:.78rem;border-top:1.5px dashed var(--cb);}
+.resumo-row .parc{font-size:.68rem;color:#d97706;}
+.resumo-vazio{font-size:.8rem;color:var(--c);font-style:italic;}
+.forn-card{background:white;border:1.5px solid var(--cb);border-radius:var(--rad);padding:12px;margin-bottom:10px;}
+.forn-card.escolhido{border-color:#16a34a;box-shadow:0 0 0 2px #dcfce7;}
+.forn-hdr{display:flex;gap:8px;align-items:center;margin-bottom:7px;}
+.forn-nome{flex:1;border:1.5px solid var(--cb);border-radius:6px;padding:9px 11px;font-size:.92rem;font-weight:700;font-family:'Barlow',sans-serif;outline:none;color:var(--ve);}
+.forn-rm{background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:6px;padding:7px 10px;cursor:pointer;font-size:.85rem;flex-shrink:0;}
+.forn-contato{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:8px 11px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;margin-bottom:8px;}
+.forn-itens{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;}
+.forn-item{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+.forn-item-nome{font-size:.82rem;font-weight:600;flex:1;min-width:120px;}
+.forn-item-qtd{display:block;font-size:.68rem;color:var(--c);font-family:'DM Mono',monospace;font-weight:400;}
+.forn-item-preco{display:flex;align-items:center;gap:5px;}
+.forn-rs{font-size:.72rem;color:var(--c);font-weight:700;}
+.forn-preco-inp{width:88px;border:1.5px solid var(--cb);border-radius:6px;padding:7px 8px;font-size:.85rem;font-family:'DM Mono',monospace;outline:none;text-align:right;-webkit-appearance:none;}
+.forn-preco-inp:focus{border-color:var(--v);}
+.forn-sub{font-size:.7rem;color:var(--v);font-family:'DM Mono',monospace;font-weight:700;min-width:70px;text-align:right;}
+.forn-total-row{font-size:.8rem;color:var(--c);text-align:right;padding:6px 0;border-top:1px solid var(--cl);}
+.forn-total{font-family:'DM Mono',monospace;font-size:1rem;color:var(--ve);}
+.forn-obs{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:8px 11px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;margin-top:8px;}
+.forn-escolher{display:flex;align-items:center;gap:7px;font-size:.82rem;color:var(--ve);font-weight:600;margin-top:9px;cursor:pointer;}
+.btn-add-forn{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:11px;font-size:.85rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-bottom:8px;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
@@ -456,7 +628,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 <div id="area-impressao"></div>
 <div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
 <header class="app-header">
-  <div class="hdr-logo"><button class="btn-menu" onclick="toggleMenu()">☰</button><div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Pedidos de Insumos</span></div></div>
+  <div class="hdr-logo"><button class="btn-menu" onclick="toggleMenu()">☰</button><div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Cotações</span></div></div>
   <div class="hdr-user" id="userNome"></div>
 </header>
 <div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
@@ -468,8 +640,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 <div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
   <div class="app-main">
     <div class="ped-tabs">
-      <button class="ped-tab ativo" id="ptab-mapa" onclick="abrirTab('mapa',this)">🗺️ Mapa</button>
-      <button class="ped-tab" id="ptab-lista" onclick="abrirTab('lista',this)">📋 Pedidos</button>
+      <button class="ped-tab ativo" id="ptab-mapa" onclick="abrirTab('mapa',this)">🗺️ Planejamento</button>
+      <button class="ped-tab" id="ptab-lista" onclick="abrirTab('lista',this)">💰 Cotação</button>
     </div>
     <div id="pmod-mapa" style="display:flex;">
       <div id="pedidosMap"></div>
@@ -486,22 +658,44 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
         <div class="leg-item"><div class="leg-cor" style="background:rgba(245,200,66,.55);border:2px solid #f5c842;"></div>Selecionado</div>
       </div>
       <div class="painel-pedido" id="painelPedido" style="display:none;">
-        <div class="painel-hdr"><div class="painel-tit">📦 Novo Pedido</div><div class="painel-res" id="pedResumo">0 insumos</div></div>
-        <div class="painel-scroll"><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Insumos do Pedido</div><div id="itensPedido"></div><button class="btn-add-item" onclick="adicionarItemPedido()">＋ Adicionar outro insumo</button></div>
+        <div class="painel-hdr"><div class="painel-tit">📝 Nova Cotação</div><div class="painel-res" id="pedResumo">0 insumos</div></div>
+        <div class="painel-scroll"><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Insumos da Cotação</div><div id="itensPedido"></div><button class="btn-add-item" onclick="adicionarItemPedido()">＋ Adicionar outro insumo</button></div>
         <div class="painel-footer">
           <div class="painel-sel-row"><button class="painel-sel-btn" onclick="pedSelTodos()">Selec. todos</button><button class="painel-sel-btn" onclick="pedLimparSel()">Limpar seleção</button></div>
-          <button class="btn-salvar-ped" id="btnSalvarPed" onclick="salvarPedidoWIP()">💾 Salvar Pedido</button>
+          <button class="btn-salvar-ped" id="btnSalvarPed" onclick="salvarPedidoWIP()">💾 Salvar Cotação</button>
           <button class="btn-cancelar-ped" onclick="cancelarPedido()">Cancelar</button>
         </div>
       </div>
-      <button id="fabNovoPedido" onclick="iniciarNovoPedido()">＋ Novo Pedido</button>
+      <button id="fabNovoPedido" onclick="iniciarNovoPedido()">＋ Nova Cotação</button>
     </div>
     <div id="pmod-lista">
-      <div class="lista-hdr"><span class="lista-hdr-tit">📋 Pedidos de Insumos</span><span style="font-size:.72rem;color:var(--c);" id="totalPedidos"></span></div>
+      <div class="lista-hdr"><span class="lista-hdr-tit">💰 Cotações</span><span style="font-size:.72rem;color:var(--c);" id="totalPedidos"></span></div>
       <div class="lista-scroll" id="listaPedidosApp"></div>
     </div>
   </div>
 </div>
+<!-- MODAL COTAÇÃO (fornecedores + comparação) -->
+<div class="cot-overlay" id="cotOverlay" onclick="if(event.target===this)fecharCotacao()">
+  <div class="cot-modal">
+    <div class="cot-modal-hdr">
+      <div>
+        <div class="cot-modal-tit">💰 Cotação de Insumos</div>
+        <div class="cot-modal-sub" id="cotModalData">—</div>
+      </div>
+      <button class="cot-close" onclick="fecharCotacao()">✕</button>
+    </div>
+    <div class="cot-modal-body">
+      <div class="cot-resumo" id="cotResumo"></div>
+      <div id="cotFornecedores"></div>
+      <button class="btn-add-forn" onclick="addForn()">＋ Adicionar fornecedor</button>
+    </div>
+    <div class="cot-modal-footer">
+      <button class="btn-fechar-cot" onclick="alternarStatusCotacao()">🔒 Fechar/Reabrir</button>
+      <button class="btn-salvar-cot" id="btnSalvarCot" onclick="salvarCotacaoForn()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 </body>
 </html>
