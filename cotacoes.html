@@ -19,6 +19,7 @@ enableIndexedDbPersistence(db).catch(()=>{});
 // pedido com workflow de status, gera uma COTAÇÃO que recebe propostas de fornecedores na aba Cotação.
 let usuarioAtual=null,perfilAtual={},talhoes=[],pedidos=[],pedidoWIP=null,pedItemAtivo=null,pedMapIniciado=false,pedMap,pedPolMap={},pedSidebarAberta=true,tabAtual='mapa';
 let cotacaoAberta=null, fornecedoresWIP=[]; // estado da aba Cotação (execução)
+let garantias=[], garantiasWIP={}; // aba Comparar: garantias/composição por produto (coleção garantiasProdutos)
 const PED_CORES={ativo:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'},colhido:{border:'rgba(196,133,90,.9)',fill:'rgba(139,94,60,.4)'}};
 onAuthStateChanged(auth,async(user)=>{
   if(!user){window.location.href='login.html';return;}
@@ -35,7 +36,8 @@ onAuthStateChanged(auth,async(user)=>{
   gerarMenu();
   if(!isAdmin())document.getElementById('fabNovoPedido').style.display='none';
   onSnapshot(collection(db,'talhoes'),snap=>{talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(pedMapIniciado)renderizarPedPoligonos();});
-  onSnapshot(collection(db,'cotacoes'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarCotacoes();if(cotacaoAberta)sincronizarModal();});
+  onSnapshot(collection(db,'cotacoes'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarCotacoes();if(tabAtual==='comparar')renderComparar();if(cotacaoAberta)sincronizarModal();});
+  onSnapshot(collection(db,'garantiasProdutos'),snap=>{garantias=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(tabAtual==='comparar')renderComparar();});
   setTimeout(iniciarMapaPedidos,200);
 });
 function isAdmin(){return Object.values(perfilAtual.modulos||{}).includes('admin')||perfilAtual.perfil==='admin';}
@@ -267,6 +269,8 @@ const STATUS_COT = { aberta:{lab:'📥 Aberta',cor:'#f59e0b'}, fechada:{lab:'✅
 function fmtRS(n){ return 'R$ ' + (Math.round((n||0)*100)/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function sanitizar(s){ return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+// Escapa string p/ argumento JS entre aspas simples dentro de atributo HTML (onclick="fn('...')")
+function escJs(s){ return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
 // Comparativo dado {itens, fornecedores}: total por fornecedor (só itens cotados), melhor completo, melhor por item
 function calcComparativo(c){
@@ -483,7 +487,140 @@ window.gerarRelatorioCotacao=function(docId){
   document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">SOLICITAÇÃO DE COTAÇÃO</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${c.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${itens.length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 PRODUTOS E QUANTIDADES</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:center;">Quantidade</th><th style="padding:9px 12px;text-align:center;">Preço unit. (R$)</th></tr></thead><tbody>${linhasReq}</tbody></table></div>${comparativoHtml}<div style="font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
   setTimeout(()=>window.print(),200);
 };
-window.abrirTab=function(tab,btn){tabAtual=tab;document.querySelectorAll('.ped-tab').forEach(b=>b.classList.remove('ativo'));if(btn)btn.classList.add('ativo');document.getElementById('pmod-mapa').style.display=tab==='mapa'?'flex':'none';document.getElementById('pmod-lista').style.display=tab==='lista'?'flex':'none';if(tab==='mapa')iniciarMapaPedidos();if(tab==='lista')renderizarCotacoes();};
+// ══════════════════════════════════════════════════════════════
+// ABA COMPARAR — custo × princípio ativo (garantias), preços puxados das cotações
+// ══════════════════════════════════════════════════════════════
+function normalizar(s){ return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+const UN_TEOR = ['%','g/kg','g/L']; // como o teor de cada componente é informado
+function fmtNum(n){ n=parseDose(n); return n.toLocaleString('pt-BR',{maximumFractionDigits:2}); }
+
+// Junta todos os produtos que aparecem nas cotações (itens + alternativas) com o MENOR preço unitário cotado
+function precosDosProdutos(){
+  const map={};
+  const reg=(nome,unidade,preco,forn)=>{
+    if(!(nome||'').trim()||!(preco>0))return;
+    const k=normalizar(nome);
+    if(!map[k]){ map[k]={nomeNorm:k, produto:nome.trim(), unidade:(unidade||'').trim(), melhorPreco:preco, fornecedor:(forn||'').trim(), nCotacoes:1}; }
+    else { map[k].nCotacoes++; if(preco<map[k].melhorPreco){ map[k].melhorPreco=preco; map[k].fornecedor=(forn||'').trim(); } if(!map[k].unidade&&unidade) map[k].unidade=(unidade||'').trim(); }
+  };
+  pedidos.forEach(c=>{
+    (c.fornecedores||[]).forEach(f=>{
+      (c.itens||[]).forEach((it,ii)=>{ reg(it.produto, it.unidade, parseDose(f.precos?.[ii]), f.nome); });
+      (f.extras||[]).forEach(ex=>{ reg(ex.produto, ex.unidade, parseDose(ex.preco), f.nome); });
+    });
+  });
+  return map;
+}
+
+// Garantia atual (WIP em edição, ou salva) de um produto
+function componentesDe(nomeNorm){
+  if(garantiasWIP[nomeNorm]) return garantiasWIP[nomeNorm];
+  const g=garantias.find(x=>x.nomeNormalizado===nomeNorm);
+  return g?.componentes ? JSON.parse(JSON.stringify(g.componentes)) : [];
+}
+
+// R$ por kg de princípio ativo, dado preço unitário do produto, teor e unidade do teor
+function custoPorKgAtivo(precoUnit, teor, unidadeTeor){
+  teor=parseDose(teor); if(!(precoUnit>0)||!(teor>0)) return null;
+  let kgAtivoPorUn; // kg de componente por unidade (kg ou L) do produto
+  if(unidadeTeor==='%') kgAtivoPorUn=teor/100;
+  else if(unidadeTeor==='g/kg'||unidadeTeor==='g/L') kgAtivoPorUn=teor/1000;
+  else return null;
+  if(kgAtivoPorUn<=0) return null;
+  return precoUnit/kgAtivoPorUn;
+}
+
+function renderComparar(){
+  const cont=document.getElementById('compararConteudo'); if(!cont) return;
+  const precoMap=precosDosProdutos();
+  const produtos=Object.values(precoMap).sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'));
+
+  if(!produtos.length){
+    cont.innerHTML=`<div class="vazio"><div class="ico">⚖️</div><p>Nenhum produto com preço ainda.<br>Informe preços de fornecedores na aba <strong>Cotação</strong> para comparar aqui.</p></div>`;
+    return;
+  }
+
+  // ── Comparação por componente (o coração da ferramenta) ──
+  const porComponente={}; // nomeCompNorm -> {nome, itens:[{produto, custo, teor, unidadeTeor, preco}]}
+  produtos.forEach(p=>{
+    componentesDe(p.nomeNorm).forEach(comp=>{
+      const custo=custoPorKgAtivo(p.melhorPreco, comp.teor, comp.unidade);
+      if(custo==null || !(comp.nome||'').trim()) return;
+      const ck=normalizar(comp.nome);
+      if(!porComponente[ck]) porComponente[ck]={nome:comp.nome.trim(), itens:[]};
+      porComponente[ck].itens.push({produto:p.produto, custo, teor:comp.teor, unidadeTeor:comp.unidade, preco:p.melhorPreco, unidade:p.unidade});
+    });
+  });
+  const gruposComp=Object.values(porComponente).filter(g=>g.itens.length).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+
+  let compHtml='';
+  if(gruposComp.length){
+    compHtml=`<div class="cmp-secao-tit">🏅 Melhor custo por princípio ativo</div>` + gruposComp.map(g=>{
+      const itens=[...g.itens].sort((a,b)=>a.custo-b.custo);
+      return `<div class="cmp-grupo">
+        <div class="cmp-grupo-tit">${sanitizar(g.nome)}</div>
+        ${itens.map((it,idx)=>`<div class="cmp-linha ${idx===0?'melhor':''}">
+          <span class="cmp-prod">${idx===0?'🏆 ':''}${sanitizar(it.produto)} <span class="cmp-teor">${fmtNum(it.teor)}${sanitizar(it.unidadeTeor)}</span></span>
+          <span class="cmp-custo">${fmtRS(it.custo)}<span class="cmp-un">/kg</span></span>
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+  } else {
+    compHtml=`<div class="cmp-aviso">💡 Cadastre as garantias (composição) dos produtos abaixo para ver o ranking de custo por princípio ativo.</div>`;
+  }
+
+  // ── Cards de produtos: preço puxado + editor de garantias ──
+  const cardsHtml=`<div class="cmp-secao-tit" style="margin-top:16px;">🧪 Produtos e garantias</div>` + produtos.map(p=>{
+    const comps=componentesDe(p.nomeNorm);
+    const salvo=garantias.find(x=>x.nomeNormalizado===p.nomeNorm);
+    return `<div class="cmp-card">
+      <div class="cmp-card-hdr">
+        <div class="cmp-card-nome">🧪 ${sanitizar(p.produto)}</div>
+        <div class="cmp-card-preco">${fmtRS(p.melhorPreco)}<span class="cmp-un">/${sanitizar(p.unidade||'un')}</span></div>
+      </div>
+      <div class="cmp-card-sub">Menor preço cotado${p.fornecedor?' · '+sanitizar(p.fornecedor):''} · ${p.nCotacoes} cotação(ões)</div>
+      <div class="cmp-comps">
+        ${comps.length?comps.map((comp,ci)=>`
+          <div class="cmp-comp-row">
+            <input class="cmp-comp-nome" placeholder="Componente (ex: Nitrogênio)" value="${escAttr(comp.nome)}" oninput="setCompCampo('${escJs(p.nomeNorm)}',${ci},'nome',this.value)">
+            <input type="number" inputmode="decimal" step="0.01" min="0" class="cmp-comp-teor" placeholder="teor" value="${comp.teor??''}" oninput="setCompCampo('${escJs(p.nomeNorm)}',${ci},'teor',this.value)">
+            <select class="cmp-comp-un" onchange="setCompCampo('${escJs(p.nomeNorm)}',${ci},'unidade',this.value)">
+              ${UN_TEOR.map(u=>`<option value="${u}" ${((comp.unidade||'%')===u)?'selected':''}>${u}</option>`).join('')}
+            </select>
+            <button class="cmp-comp-rm" onclick="remComp('${escJs(p.nomeNorm)}',${ci})" title="Remover">✕</button>
+          </div>`).join('')
+        :'<div class="cmp-sem-garantia">Sem garantia cadastrada.</div>'}
+      </div>
+      <div class="cmp-card-acoes">
+        <button class="btn-add-comp" onclick="addComp('${escJs(p.nomeNorm)}')">＋ Componente</button>
+        <button class="btn-salvar-comp" onclick="salvarGarantias('${escJs(p.nomeNorm)}','${escJs(p.produto)}','${escJs(p.unidade)}')">💾 Salvar garantias</button>
+        ${salvo?'<span class="cmp-salvo">✔ salvo</span>':''}
+      </div>
+    </div>`;
+  }).join('');
+
+  cont.innerHTML = compHtml + cardsHtml;
+}
+
+// Edição das garantias (WIP em memória até salvar)
+function garantirWIP(k){ if(!garantiasWIP[k]) garantiasWIP[k]=componentesDe(k); return garantiasWIP[k]; }
+window.addComp=function(k){ garantirWIP(k).push({nome:'',teor:'',unidade:'%'}); renderComparar(); };
+window.remComp=function(k,ci){ const arr=garantirWIP(k); arr.splice(ci,1); renderComparar(); };
+window.setCompCampo=function(k,ci,campo,v){ const arr=garantirWIP(k); if(arr[ci]) arr[ci][campo]=v; };
+
+window.salvarGarantias=async function(k,produto,unidade){
+  const comps=(garantiasWIP[k]||[]).filter(c=>(c.nome||'').trim()&&parseDose(c.teor)>0)
+    .map(c=>({nome:(c.nome||'').trim(), teor:parseDose(c.teor), unidade:c.unidade||'%'}));
+  try{
+    const existente=garantias.find(x=>x.nomeNormalizado===k);
+    const dados={produto, nomeNormalizado:k, unidade:unidade||'', componentes:comps, atualizadoEm:new Date().toISOString(), atualizadoPor:usuarioAtual.email};
+    if(existente) await updateDoc(doc(db,'garantiasProdutos',existente._docId), dados);
+    else await addDoc(collection(db,'garantiasProdutos'), {...dados, criadoEm:new Date().toISOString()});
+    delete garantiasWIP[k];
+    toast('✅ Garantias salvas!');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.abrirTab=function(tab,btn){tabAtual=tab;document.querySelectorAll('.ped-tab').forEach(b=>b.classList.remove('ativo'));if(btn)btn.classList.add('ativo');document.getElementById('pmod-mapa').style.display=tab==='mapa'?'flex':'none';document.getElementById('pmod-lista').style.display=tab==='lista'?'flex':'none';document.getElementById('pmod-comparar').style.display=tab==='comparar'?'flex':'none';if(tab==='mapa')iniciarMapaPedidos();if(tab==='lista')renderizarCotacoes();if(tab==='comparar')renderComparar();};
 function formatarData(d){if(!d)return'—';const[a,m,dd]=d.split('-');return`${dd}/${m}/${a}`;}
 function toast(msg,dur=3000){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),dur);}
 window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
@@ -662,6 +799,37 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .forn-extra-sub{font-size:.72rem;color:var(--v);font-family:'DM Mono',monospace;font-weight:700;margin-top:4px;}
 .btn-add-extra{width:100%;background:none;border:1px dashed var(--cb);color:var(--c);border-radius:6px;padding:7px;font-size:.76rem;font-family:'Barlow',sans-serif;cursor:pointer;}
 .alt-tag{font-size:.66rem;color:#7c4f0a;background:#fef3c7;border-radius:8px;padding:1px 6px;font-weight:700;}
+/* ABA COMPARAR */
+#pmod-comparar{flex:1;overflow:hidden;flex-direction:column;display:none;}
+.cmp-secao-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 8px;}
+.cmp-aviso{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:.8rem;color:#92400e;margin-bottom:12px;}
+.cmp-grupo{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:8px;}
+.cmp-grupo-tit{background:var(--vb);color:var(--ve);font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;padding:8px 12px;text-transform:uppercase;letter-spacing:.04em;}
+.cmp-linha{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--cl);}
+.cmp-linha:last-child{border:none;}
+.cmp-linha.melhor{background:#f0fdf4;}
+.cmp-prod{font-size:.85rem;font-weight:600;}
+.cmp-linha.melhor .cmp-prod{color:#166534;font-weight:700;}
+.cmp-teor{font-size:.68rem;color:var(--c);font-family:'DM Mono',monospace;font-weight:400;}
+.cmp-custo{font-family:'DM Mono',monospace;font-weight:700;font-size:.9rem;color:var(--ve);white-space:nowrap;}
+.cmp-linha.melhor .cmp-custo{color:#166534;}
+.cmp-un{font-size:.66rem;color:var(--c);}
+.cmp-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;margin-bottom:8px;}
+.cmp-card-hdr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;}
+.cmp-card-nome{font-weight:700;font-size:.95rem;color:var(--ve);}
+.cmp-card-preco{font-family:'DM Mono',monospace;font-weight:700;color:var(--v);white-space:nowrap;}
+.cmp-card-sub{font-size:.68rem;color:var(--c);margin-top:2px;margin-bottom:8px;}
+.cmp-comps{display:flex;flex-direction:column;gap:6px;}
+.cmp-comp-row{display:flex;gap:5px;align-items:center;}
+.cmp-comp-nome{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:6px;padding:7px 9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;}
+.cmp-comp-teor{width:70px;border:1.5px solid var(--cb);border-radius:6px;padding:7px 8px;font-size:.82rem;font-family:'DM Mono',monospace;outline:none;text-align:right;-webkit-appearance:none;}
+.cmp-comp-un{width:66px;border:1.5px solid var(--cb);border-radius:6px;padding:7px 4px;font-size:.78rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;flex-shrink:0;}
+.cmp-comp-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:4px;flex-shrink:0;}
+.cmp-sem-garantia{font-size:.76rem;color:var(--c);font-style:italic;}
+.cmp-card-acoes{display:flex;gap:8px;align-items:center;margin-top:10px;}
+.btn-add-comp{background:var(--cl);border:1px dashed var(--cb);color:var(--c);border-radius:6px;padding:7px 12px;font-size:.78rem;font-family:'Barlow',sans-serif;cursor:pointer;}
+.btn-salvar-comp{background:var(--v);border:none;color:white;border-radius:6px;padding:7px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;}
+.cmp-salvo{font-size:.72rem;color:#16a34a;font-weight:700;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
@@ -686,6 +854,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="ped-tabs">
       <button class="ped-tab ativo" id="ptab-mapa" onclick="abrirTab('mapa',this)">🗺️ Planejamento</button>
       <button class="ped-tab" id="ptab-lista" onclick="abrirTab('lista',this)">💰 Cotação</button>
+      <button class="ped-tab" id="ptab-comparar" onclick="abrirTab('comparar',this)">⚖️ Comparar</button>
     </div>
     <div id="pmod-mapa" style="display:flex;">
       <div id="pedidosMap"></div>
@@ -715,6 +884,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div id="pmod-lista">
       <div class="lista-hdr"><span class="lista-hdr-tit">💰 Cotações</span><span style="font-size:.72rem;color:var(--c);" id="totalPedidos"></span></div>
       <div class="lista-scroll" id="listaPedidosApp"></div>
+    </div>
+    <div id="pmod-comparar" style="display:none;">
+      <div class="lista-hdr"><span class="lista-hdr-tit">⚖️ Comparar produtos</span><span style="font-size:.7rem;color:var(--c);">custo × princípio ativo</span></div>
+      <div class="lista-scroll" id="compararConteudo"></div>
     </div>
   </div>
 </div>
