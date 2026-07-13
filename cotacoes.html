@@ -277,7 +277,10 @@ function calcComparativo(c){
       const p=parseDose(f.precos?.[ii]);
       if(p>0){ total+=p*(it.total||0); nCotados++; } else { cotouTudo=false; }
     });
-    return {fi, nome:(f.nome||'').trim()||`Fornecedor ${fi+1}`, total, cotouTudo:cotouTudo&&itens.length>0, nCotados};
+    // Produtos alternativos oferecidos pelo fornecedor entram no total dele
+    let nExtras=0;
+    (f.extras||[]).forEach(ex=>{ const p=parseDose(ex.preco), q=parseDose(ex.quantidade); if(p>0&&q>0){ total+=p*q; nExtras++; } });
+    return {fi, nome:(f.nome||'').trim()||`Fornecedor ${fi+1}`, total, cotouTudo:cotouTudo&&itens.length>0, nCotados, nExtras};
   });
   const completos=linhas.filter(l=>l.cotouTudo && l.nCotados>0);
   const melhorFornecedor = completos.length ? completos.reduce((a,b)=>b.total<a.total?b:a) : null;
@@ -328,7 +331,7 @@ function renderizarCotacoes(){
 window.excluirCotacao=async function(btn){const docId=btn.dataset.doc;if(!confirm('Excluir esta cotação?'))return;btn.disabled=true;await deleteDoc(doc(db,'cotacoes',docId));toast('🗑 Excluída.');};
 
 // ─── MODAL DE COTAÇÃO (fornecedores + comparação) ───
-function novoForn(){ return {nome:'',contato:'',obs:'',precos:{},escolhido:false}; }
+function novoForn(){ return {nome:'',contato:'',obs:'',precos:{},extras:[],escolhido:false}; }
 function cotacaoAtualDoc(){ return pedidos.find(x=>x._docId===cotacaoAberta); }
 
 window.abrirCotacao=function(docId){
@@ -349,6 +352,10 @@ window.setFornContato=function(i,v){ if(fornecedoresWIP[i])fornecedoresWIP[i].co
 window.setFornObs=function(i,v){ if(fornecedoresWIP[i])fornecedoresWIP[i].obs=v; };
 window.setFornPreco=function(fi,ii,v){ if(fornecedoresWIP[fi]){ fornecedoresWIP[fi].precos=fornecedoresWIP[fi].precos||{}; fornecedoresWIP[fi].precos[ii]=v; atualizarCalculos(); } };
 window.marcarEscolhido=function(fi,val){ fornecedoresWIP.forEach((f,i)=>f.escolhido=(i===fi&&val)); renderModal(); };
+// Produtos alternativos (extras) oferecidos por um fornecedor
+window.addFornExtra=function(fi){ if(fornecedoresWIP[fi]){ (fornecedoresWIP[fi].extras=fornecedoresWIP[fi].extras||[]).push({produto:'',quantidade:'',unidade:'',preco:''}); renderModal(); } };
+window.remFornExtra=function(fi,ei){ if(fornecedoresWIP[fi]?.extras){ fornecedoresWIP[fi].extras.splice(ei,1); renderModal(); } };
+window.setFornExtra=function(fi,ei,campo,v){ const ex=fornecedoresWIP[fi]?.extras?.[ei]; if(ex){ ex[campo]=v; atualizarCalculos(); } };
 
 function renderModal(){
   const c=cotacaoAtualDoc(); if(!c){window.fecharCotacao();return;}
@@ -372,6 +379,22 @@ function renderModal(){
             </div>
           </div>`).join('')}
       </div>
+      <div class="forn-extras">
+        <div class="forn-extras-tit">🔁 Alternativas oferecidas por este fornecedor</div>
+        ${(f.extras||[]).map((ex,ei)=>`
+          <div class="forn-extra">
+            <input class="forn-extra-nome" placeholder="Produto alternativo (ex: outro que ele tem)" value="${escAttr(ex.produto)}" oninput="setFornExtra(${fi},${ei},'produto',this.value)">
+            <div class="forn-extra-linha">
+              <input type="number" inputmode="decimal" step="0.01" min="0" class="forn-extra-qtd" placeholder="Qtd" value="${ex.quantidade??''}" oninput="setFornExtra(${fi},${ei},'quantidade',this.value)">
+              <input class="forn-extra-un" placeholder="un" value="${escAttr(ex.unidade||'')}" oninput="setFornExtra(${fi},${ei},'unidade',this.value)">
+              <span class="forn-rs">R$</span>
+              <input type="number" inputmode="decimal" step="0.01" min="0" class="forn-extra-preco" placeholder="preço" value="${ex.preco??''}" oninput="setFornExtra(${fi},${ei},'preco',this.value)">
+              <button class="forn-extra-rm" onclick="remFornExtra(${fi},${ei})" title="Remover">✕</button>
+            </div>
+            <div class="forn-extra-sub" id="exsub-${fi}-${ei}"></div>
+          </div>`).join('')}
+        <button class="btn-add-extra" onclick="addFornExtra(${fi})">＋ Adicionar alternativa</button>
+      </div>
       <div class="forn-total-row">Total do fornecedor: <strong class="forn-total" id="ftot-${fi}">—</strong></div>
       <input class="forn-obs" placeholder="Observação (prazo de entrega, frete, condição de pagamento...)" value="${escAttr(f.obs)}" oninput="setFornObs(${fi},this.value)">
       <label class="forn-escolher"><input type="checkbox" ${f.escolhido?'checked':''} onchange="marcarEscolhido(${fi},this.checked)"> 🏆 Fornecedor escolhido</label>
@@ -389,6 +412,11 @@ function atualizarCalculos(){
       const el=document.getElementById(`sub-${fi}-${ii}`); if(el) el.textContent = p>0?('= '+fmtRS(sub)):'—';
       if(p>0) total+=sub;
     });
+    (f.extras||[]).forEach((ex,ei)=>{
+      const p=parseDose(ex.preco), q=parseDose(ex.quantidade); const sub=(p>0&&q>0)?p*q:0;
+      const el=document.getElementById(`exsub-${fi}-${ei}`); if(el) el.textContent = sub>0?('= '+fmtRS(sub)+(q?` (${q.toLocaleString('pt-BR')} ${sanitizar(ex.unidade||'')})`:'')):'';
+      if(sub>0) total+=sub;
+    });
     const tel=document.getElementById(`ftot-${fi}`); if(tel) tel.textContent = total>0?fmtRS(total):'—';
   });
   renderModalResumo();
@@ -401,7 +429,7 @@ function renderModalResumo(){
   const ranking=[...comp.linhas].filter(l=>l.nCotados>0).sort((a,b)=>a.total-b.total);
   el.innerHTML = `<div class="resumo-tit">📊 Comparativo</div>
     ${ranking.length?ranking.map((l,idx)=>`<div class="resumo-row ${idx===0&&l.cotouTudo?'melhor':''}">
-      <span>${idx===0&&l.cotouTudo?'🏆 ':''}${sanitizar(l.nome)}${!l.cotouTudo?' <span class="parc">(parcial)</span>':''}</span>
+      <span>${idx===0&&l.cotouTudo?'🏆 ':''}${sanitizar(l.nome)}${!l.cotouTudo?' <span class="parc">(parcial)</span>':''}${l.nExtras?` <span class="alt-tag">+${l.nExtras} alt.</span>`:''}</span>
       <strong>${fmtRS(l.total)}</strong>
     </div>`).join(''):'<div class="resumo-vazio">Informe os preços para comparar os fornecedores.</div>'}
     ${comp.todosCotados&&comp.melhorPorItem.length?`<div class="resumo-row minrow"><span>💡 Comprando o melhor de cada fornecedor</span><strong>${fmtRS(comp.minTotal)}</strong></div>`:''}`;
@@ -412,12 +440,13 @@ window.salvarCotacaoForn=async function(){
   const btn=document.getElementById('btnSalvarCot'); btn.disabled=true; btn.textContent='Salvando...';
   try{
     const limpos=fornecedoresWIP
-      .filter(f=>(f.nome||'').trim() || Object.values(f.precos||{}).some(v=>parseDose(v)>0))
+      .filter(f=>(f.nome||'').trim() || Object.values(f.precos||{}).some(v=>parseDose(v)>0) || (f.extras||[]).some(ex=>(ex.produto||'').trim()&&parseDose(ex.preco)>0))
       .map(f=>({
         nome:(f.nome||'').trim(),
         contato:(f.contato||'').trim(),
         obs:(f.obs||'').trim(),
         precos:Object.fromEntries(Object.entries(f.precos||{}).filter(([k,v])=>parseDose(v)>0).map(([k,v])=>[k,parseDose(v)])),
+        extras:(f.extras||[]).filter(ex=>(ex.produto||'').trim()&&parseDose(ex.preco)>0).map(ex=>({produto:(ex.produto||'').trim(),unidade:(ex.unidade||'').trim(),quantidade:parseDose(ex.quantidade),preco:parseDose(ex.preco)})),
         escolhido:!!f.escolhido
       }));
     await updateDoc(doc(db,'cotacoes',cotacaoAberta), {fornecedores:limpos, atualizadoEm:new Date().toISOString(), atualizadoPor:usuarioAtual.email});
@@ -447,7 +476,9 @@ window.gerarRelatorioCotacao=function(docId){
       return `<tr><td style="padding:7px 10px;font-weight:600;">${sanitizar(it.produto)} <span style="color:var(--t4);font-size:10px;">(${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')})</span></td>${cels}</tr>`;
     }).join('');
     const totais = forns.map((f,fi)=>{ const l=comp.linhas[fi]; const eBest=comp.melhorFornecedor&&comp.melhorFornecedor.fi===fi; return `<td style="padding:8px 10px;text-align:center;font-family:monospace;font-weight:800;${eBest?'background:#166534;color:white;':'color:var(--ve);'}">${l&&l.nCotados?fmtRS(l.total):'—'}</td>`; }).join('');
-    comparativoHtml = `<div style="margin-bottom:22px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📊 COMPARATIVO DE FORNECEDORES</div><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:8px 10px;text-align:left;">Produto (qtd)</th>${cab}</tr></thead><tbody>${linhas}<tr style="background:var(--cl);"><td style="padding:8px 10px;font-weight:800;">TOTAL</td>${totais}</tr></tbody></table>${comp.melhorFornecedor?`<div style="margin-top:8px;font-size:12px;color:#166534;font-weight:700;">🏆 Menor total completo: ${sanitizar(comp.melhorFornecedor.nome)} — ${fmtRS(comp.melhorFornecedor.total)}</div>`:''}</div>`;
+    const altBlocos = forns.map((f,fi)=>{ const exs=(f.extras||[]).filter(ex=>(ex.produto||'').trim()&&parseDose(ex.preco)>0); if(!exs.length)return''; return `<div style="margin-top:5px;font-size:11px;"><strong>${sanitizar((f.nome||'').trim()||'Fornecedor '+(fi+1))}:</strong> ${exs.map(ex=>{const q=parseDose(ex.quantidade),p=parseDose(ex.preco);return `${sanitizar(ex.produto)} — ${q.toLocaleString('pt-BR')} ${sanitizar(ex.unidade||'')} × ${fmtRS(p)} = <strong>${fmtRS(p*q)}</strong>`;}).join('; ')}</div>`; }).filter(Boolean).join('');
+    const altHtml = altBlocos ? `<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;"><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:#92400e;margin-bottom:4px;">🔁 ALTERNATIVAS OFERECIDAS</div>${altBlocos}</div>` : '';
+    comparativoHtml = `<div style="margin-bottom:22px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📊 COMPARATIVO DE FORNECEDORES</div><table style="width:100%;border-collapse:collapse;font-size:11px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:8px 10px;text-align:left;">Produto (qtd)</th>${cab}</tr></thead><tbody>${linhas}<tr style="background:var(--cl);"><td style="padding:8px 10px;font-weight:800;">TOTAL</td>${totais}</tr></tbody></table>${comp.melhorFornecedor?`<div style="margin-top:8px;font-size:12px;color:#166534;font-weight:700;">🏆 Menor total completo: ${sanitizar(comp.melhorFornecedor.nome)} — ${fmtRS(comp.melhorFornecedor.total)}</div>`:''}${altHtml}</div>`;
   }
   document.getElementById('area-impressao').innerHTML=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:28px;color:#111;"><div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid var(--v);padding-bottom:14px;margin-bottom:22px;"><div><div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--t4);margin-bottom:4px;">Conilon Tech · Gestão Agrícola</div><div style="font-size:24px;font-weight:900;color:var(--ve);">SOLICITAÇÃO DE COTAÇÃO</div><div style="font-size:12px;color:var(--c);margin-top:3px;">Data: ${dataF} · ${c.criadoPor||'—'}</div></div><div style="font-size:11px;color:var(--t4);">${itens.length} insumo(s)</div></div><div style="margin-bottom:24px;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.1em;color:var(--v);margin-bottom:10px;padding-bottom:5px;border-bottom:1px solid var(--bd-l);">📦 PRODUTOS E QUANTIDADES</div><table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="background:var(--ve);color:white;"><th style="padding:9px 12px;text-align:left;">#</th><th style="padding:9px 12px;text-align:left;">Produto</th><th style="padding:9px 12px;text-align:center;">Quantidade</th><th style="padding:9px 12px;text-align:center;">Preço unit. (R$)</th></tr></thead><tbody>${linhasReq}</tbody></table></div>${comparativoHtml}<div style="font-size:10px;color:var(--t4);text-align:right;border-top:1px solid var(--bd-l);padding-top:10px;">Gerado em ${new Date().toLocaleString('pt-BR')} · ConilonTech</div></div>`;
   setTimeout(()=>window.print(),200);
@@ -618,6 +649,19 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .forn-obs{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:8px 11px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;margin-top:8px;}
 .forn-escolher{display:flex;align-items:center;gap:7px;font-size:.82rem;color:var(--ve);font-weight:600;margin-top:9px;cursor:pointer;}
 .btn-add-forn{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:11px;font-size:.85rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-bottom:8px;}
+/* Alternativas (extras) do fornecedor */
+.forn-extras{border-top:1px dashed var(--cb);margin-top:6px;padding-top:8px;}
+.forn-extras-tit{font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);font-weight:700;margin-bottom:6px;}
+.forn-extra{background:var(--cl);border-radius:8px;padding:8px;margin-bottom:6px;}
+.forn-extra-nome{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:7px 9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;margin-bottom:6px;}
+.forn-extra-linha{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.forn-extra-qtd{width:64px;border:1.5px solid var(--cb);border-radius:6px;padding:6px 7px;font-size:.8rem;font-family:'DM Mono',monospace;outline:none;text-align:right;-webkit-appearance:none;}
+.forn-extra-un{width:52px;border:1.5px solid var(--cb);border-radius:6px;padding:6px 7px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;text-align:center;}
+.forn-extra-preco{width:82px;border:1.5px solid var(--cb);border-radius:6px;padding:6px 7px;font-size:.8rem;font-family:'DM Mono',monospace;outline:none;text-align:right;-webkit-appearance:none;}
+.forn-extra-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.9rem;padding:4px;margin-left:auto;}
+.forn-extra-sub{font-size:.72rem;color:var(--v);font-family:'DM Mono',monospace;font-weight:700;margin-top:4px;}
+.btn-add-extra{width:100%;background:none;border:1px dashed var(--cb);color:var(--c);border-radius:6px;padding:7px;font-size:.76rem;font-family:'Barlow',sans-serif;cursor:pointer;}
+.alt-tag{font-size:.66rem;color:#7c4f0a;background:#fef3c7;border-radius:8px;padding:1px 6px;font-weight:700;}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
