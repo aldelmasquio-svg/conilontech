@@ -365,29 +365,50 @@ function renderModal(){
   const c=cotacaoAtualDoc(); if(!c){window.fecharCotacao();return;}
   document.getElementById('cotModalData').textContent = `Cotação · ${c.criadoEm?formatarData(c.criadoEm.slice(0,10)):''} · ${(c.itens||[]).length} insumo(s)`;
   const itens=c.itens||[];
-  document.getElementById('cotFornecedores').innerHTML = fornecedoresWIP.map((f,fi)=>`
-    <div class="forn-card ${f.escolhido?'escolhido':''}">
-      <div class="forn-hdr">
-        <input class="forn-nome" placeholder="Fornecedor ${fi+1}" value="${escAttr(f.nome)}" oninput="setFornNome(${fi},this.value)">
-        <button class="forn-rm" onclick="remForn(${fi})" title="Remover">🗑</button>
-      </div>
+  const forns=fornecedoresWIP;
+
+  // ── MATRIZ: linhas = produtos, colunas = fornecedores (preenchimento tipo planilha) ──
+  const matriz = `
+    <div class="cot-matrix-wrap">
+      <table class="cot-matrix">
+        <thead>
+          <tr>
+            <th class="cot-mx-corner">Produto</th>
+            ${forns.map((f,fi)=>`<th class="cot-mx-forn ${f.escolhido?'escolhido':''}">
+              <input class="cot-mx-forn-nome" placeholder="Empresa ${fi+1}" value="${escAttr(f.nome)}" oninput="setFornNome(${fi},this.value)">
+              <button class="cot-mx-forn-rm" onclick="remForn(${fi})" title="Remover empresa">🗑</button>
+            </th>`).join('')}
+            <th class="cot-mx-addcol"><button onclick="addForn()" title="Adicionar empresa">＋</button></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itens.map((it,ii)=>`<tr>
+            <td class="cot-mx-prod"><span class="cot-mx-prod-nome">${sanitizar(it.produto)}</span><span class="cot-mx-prod-qtd">${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')}</span></td>
+            ${forns.map((f,fi)=>`<td class="cot-mx-cell">
+              <div class="cot-mx-in"><span class="cot-mx-rs">R$</span><input type="number" inputmode="decimal" step="0.01" min="0" class="cot-mx-preco" value="${f.precos?.[ii]??''}" oninput="setFornPreco(${fi},${ii},this.value)"></div>
+              <span class="cot-mx-sub" id="sub-${fi}-${ii}">—</span>
+            </td>`).join('')}
+            <td></td>
+          </tr>`).join('')}
+          <tr class="cot-mx-totalrow">
+            <td class="cot-mx-prod">TOTAL</td>
+            ${forns.map((f,fi)=>`<td class="cot-mx-cell"><strong class="cot-mx-total" id="ftot-${fi}">—</strong></td>`).join('')}
+            <td></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>`;
+
+  // ── META por fornecedor (contato, alternativas, obs, escolher) — abaixo da matriz ──
+  const meta = `<div class="cot-meta-lista">${forns.map((f,fi)=>`
+    <div class="forn-meta-card ${f.escolhido?'escolhido':''}">
+      <div class="forn-meta-tit">🏢 ${sanitizar((f.nome||'').trim()||('Empresa '+(fi+1)))}</div>
       <input class="forn-contato" placeholder="Contato (telefone / e-mail)" value="${escAttr(f.contato)}" oninput="setFornContato(${fi},this.value)">
-      <div class="forn-itens">
-        ${itens.map((it,ii)=>`
-          <div class="forn-item">
-            <div class="forn-item-nome">${sanitizar(it.produto)}<span class="forn-item-qtd">${(it.total||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')}</span></div>
-            <div class="forn-item-preco">
-              <span class="forn-rs">R$</span>
-              <input type="number" inputmode="decimal" step="0.01" min="0" class="forn-preco-inp" placeholder="por ${sanitizar(it.unidade||'un')}" value="${f.precos?.[ii]??''}" oninput="setFornPreco(${fi},${ii},this.value)">
-              <span class="forn-sub" id="sub-${fi}-${ii}">—</span>
-            </div>
-          </div>`).join('')}
-      </div>
       <div class="forn-extras">
-        <div class="forn-extras-tit">🔁 Alternativas oferecidas por este fornecedor</div>
+        <div class="forn-extras-tit">🔁 Alternativas oferecidas</div>
         ${(f.extras||[]).map((ex,ei)=>`
           <div class="forn-extra">
-            <input class="forn-extra-nome" placeholder="Produto alternativo (ex: outro que ele tem)" value="${escAttr(ex.produto)}" oninput="setFornExtra(${fi},${ei},'produto',this.value)">
+            <input class="forn-extra-nome" placeholder="Produto alternativo" value="${escAttr(ex.produto)}" oninput="setFornExtra(${fi},${ei},'produto',this.value)">
             <div class="forn-extra-linha">
               <input type="number" inputmode="decimal" step="0.01" min="0" class="forn-extra-qtd" placeholder="Qtd" value="${ex.quantidade??''}" oninput="setFornExtra(${fi},${ei},'quantidade',this.value)">
               <input class="forn-extra-un" placeholder="un" value="${escAttr(ex.unidade||'')}" oninput="setFornExtra(${fi},${ei},'unidade',this.value)">
@@ -399,10 +420,11 @@ function renderModal(){
           </div>`).join('')}
         <button class="btn-add-extra" onclick="addFornExtra(${fi})">＋ Adicionar alternativa</button>
       </div>
-      <div class="forn-total-row">Total do fornecedor: <strong class="forn-total" id="ftot-${fi}">—</strong></div>
-      <input class="forn-obs" placeholder="Observação (prazo de entrega, frete, condição de pagamento...)" value="${escAttr(f.obs)}" oninput="setFornObs(${fi},this.value)">
+      <input class="forn-obs" placeholder="Observação (prazo, frete, condição de pagamento...)" value="${escAttr(f.obs)}" oninput="setFornObs(${fi},this.value)">
       <label class="forn-escolher"><input type="checkbox" ${f.escolhido?'checked':''} onchange="marcarEscolhido(${fi},this.checked)"> 🏆 Fornecedor escolhido</label>
-    </div>`).join('');
+    </div>`).join('')}</div>`;
+
+  document.getElementById('cotFornecedores').innerHTML = matriz + `<div class="cot-meta-tit-sec">📇 Detalhes por empresa</div>` + meta;
   atualizarCalculos();
 }
 
@@ -422,6 +444,12 @@ function atualizarCalculos(){
       if(sub>0) total+=sub;
     });
     const tel=document.getElementById(`ftot-${fi}`); if(tel) tel.textContent = total>0?fmtRS(total):'—';
+  });
+  // Destaca a coluna vencedora (menor total completo) na linha de TOTAL
+  const comp=calcComparativo({itens, fornecedores:fornecedoresWIP});
+  fornecedoresWIP.forEach((f,fi)=>{
+    const cell=document.getElementById(`ftot-${fi}`)?.closest('td');
+    if(cell) cell.classList.toggle('cot-mx-vencedor', !!comp.melhorFornecedor && comp.melhorFornecedor.fi===fi);
   });
   renderModalResumo();
 }
@@ -807,6 +835,36 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .forn-extra-sub{font-size:.72rem;color:var(--v);font-family:'DM Mono',monospace;font-weight:700;margin-top:4px;}
 .btn-add-extra{width:100%;background:none;border:1px dashed var(--cb);color:var(--c);border-radius:6px;padding:7px;font-size:.76rem;font-family:'Barlow',sans-serif;cursor:pointer;}
 .alt-tag{font-size:.66rem;color:#7c4f0a;background:#fef3c7;border-radius:8px;padding:1px 6px;font-weight:700;}
+/* MATRIZ DE COTAÇÃO (produtos × empresas) */
+.cot-matrix-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1.5px solid var(--cb);border-radius:var(--rad);background:white;margin-bottom:14px;}
+.cot-matrix{border-collapse:separate;border-spacing:0;min-width:100%;}
+.cot-matrix th,.cot-matrix td{border-bottom:1px solid var(--cl);border-right:1px solid var(--cl);}
+.cot-mx-corner{position:sticky;left:0;z-index:3;background:var(--ve);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;padding:8px 10px;text-align:left;min-width:120px;}
+.cot-mx-forn{background:var(--vb);padding:6px 8px;min-width:130px;vertical-align:top;}
+.cot-mx-forn.escolhido{background:#dcfce7;}
+.cot-mx-forn-nome{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-size:.82rem;font-weight:700;font-family:'Barlow',sans-serif;outline:none;color:var(--ve);}
+.cot-mx-forn-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:.78rem;padding:2px;margin-top:2px;}
+.cot-mx-addcol{background:var(--vb);padding:4px;}
+.cot-mx-addcol button{background:var(--v);border:none;color:white;border-radius:6px;width:30px;height:30px;font-size:1rem;cursor:pointer;}
+.cot-mx-prod{position:sticky;left:0;z-index:2;background:white;padding:8px 10px;min-width:120px;box-shadow:2px 0 4px -2px rgba(0,0,0,.15);}
+.cot-mx-prod-nome{display:block;font-weight:700;font-size:.82rem;color:var(--ve);}
+.cot-mx-prod-qtd{display:block;font-size:.66rem;color:var(--c);font-family:'DM Mono',monospace;}
+.cot-mx-cell{padding:6px 8px;text-align:center;vertical-align:top;}
+.cot-mx-in{display:flex;align-items:center;gap:3px;justify-content:center;}
+.cot-mx-rs{font-size:.66rem;color:var(--c);font-weight:700;}
+.cot-mx-preco{width:82px;border:1.5px solid var(--cb);border-radius:6px;padding:7px 6px;font-size:.85rem;font-family:'DM Mono',monospace;outline:none;text-align:right;-webkit-appearance:none;}
+.cot-mx-preco:focus{border-color:var(--v);}
+.cot-mx-sub{display:block;font-size:.66rem;color:var(--v);font-family:'DM Mono',monospace;font-weight:700;margin-top:2px;}
+.cot-mx-totalrow .cot-mx-prod{background:var(--cl);font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);}
+.cot-mx-totalrow td{background:var(--cl);}
+.cot-mx-total{font-family:'DM Mono',monospace;font-size:.9rem;color:var(--ve);}
+.cot-mx-cell.cot-mx-vencedor{background:#166534;}
+.cot-mx-cell.cot-mx-vencedor .cot-mx-total{color:white;}
+.cot-mx-cell.cot-mx-vencedor::after{content:' 🏆';}
+.cot-meta-tit-sec{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.8rem;color:var(--c);text-transform:uppercase;letter-spacing:.06em;margin:4px 0 8px;}
+.forn-meta-card{background:white;border:1.5px solid var(--cb);border-radius:var(--rad);padding:11px;margin-bottom:9px;}
+.forn-meta-card.escolhido{border-color:#16a34a;box-shadow:0 0 0 2px #dcfce7;}
+.forn-meta-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;color:var(--ve);margin-bottom:7px;}
 /* ABA COMPARAR */
 #pmod-comparar{flex:1;overflow:hidden;flex-direction:column;display:none;}
 .cmp-secao-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;color:var(--ve);text-transform:uppercase;letter-spacing:.05em;margin:2px 0 8px;}
