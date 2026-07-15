@@ -194,6 +194,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .btn-limpar{background:none;color:var(--danger);border:1px solid #fca5a5;flex:0 0 auto !important;padding:9px 14px !important;}
 
 /* LISTA DE RECOMENDAÇÕES SALVAS */
+.busca-salvas-wrap{display:flex;align-items:center;gap:8px;background:white;border:1.5px solid var(--cb);border-radius:var(--rad);box-shadow:var(--s);padding:9px 12px;margin-bottom:12px;position:sticky;top:0;z-index:5;}
+.busca-salvas-ico{font-size:.95rem;flex-shrink:0;opacity:.7;}
+.busca-salvas-input{flex:1;min-width:0;border:none;outline:none;font-size:.9rem;font-family:'Barlow',sans-serif;background:transparent;color:var(--t);}
+.busca-salvas-limpar{background:var(--cl);border:none;color:var(--c);width:26px;height:26px;border-radius:50%;font-size:.8rem;cursor:pointer;flex-shrink:0;}
+#listaSalvasItens > *{margin-bottom:10px;}
+#listaSalvasItens > *:last-child{margin-bottom:0;}
 .rec-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:11px 13px;border-left:4px solid var(--v);}
 .rec-card-status-rascunho{border-left-color:var(--c);}
 .rec-card-status-aprovada{border-left-color:var(--blue);}
@@ -465,6 +471,7 @@ const METAS_CALAGEM_DEFAULT = {
 let usuarioAtual=null, perfilAtual={};
 let talhoes=[], analises=[], amostras=[], recomendacoes=[], catalogoAdubos=[];
 let tabAtual='nova';
+let buscaSalvas=''; // filtro de texto da aba SALVAS
 
 // Tabelas em uso (default + override custom do admin)
 window.TABELA_N_K = TABELA_N_K_PRODUCAO_DEFAULT;
@@ -1782,11 +1789,6 @@ function produtosCorretivosDoCatalogo() {
   return (catalogoAdubos || []).filter(p => (p.ca && p.ca > 0) || (p.mg && p.mg > 0));
 }
 
-window.renderLista = function() {
-  const cont = document.getElementById('content');
-  cont.innerHTML = '<div style="padding:30px;text-align:center;color:var(--c);">📋 Lista de recomendações salvas (Bloco 3)</div>';
-};
-
 window.salvarRecomendacao = async function() {
   if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
   const w = window.recWIP;
@@ -2018,6 +2020,8 @@ Gerado em ${formatarData(hoje())} via Conilon Tech`;
 
 // ━━━━━━━━━━ LISTA DE RECOMENDAÇÕES SALVAS ━━━━━━━━━━
 
+window.filtrarSalvas = function(v) { buscaSalvas = v; renderListaItens(); };
+
 window.renderLista = function() {
   const cont = document.getElementById('content');
   if (!recomendacoes.length) {
@@ -2025,8 +2029,27 @@ window.renderLista = function() {
       <span style="font-size:.78rem;">Vá em "🧮 Nova" pra calcular.</span></p></div>`;
     return;
   }
-  const lista = [...recomendacoes].sort((a,b) => (b.atualizadoEm||b.criadoEm||'').localeCompare(a.atualizadoEm||a.criadoEm||''));
-  cont.innerHTML = lista.map(r => {
+  cont.innerHTML = `
+    <div class="busca-salvas-wrap">
+      <span class="busca-salvas-ico">🔎</span>
+      <input type="text" id="buscaSalvas" class="busca-salvas-input" placeholder="Buscar por talhão, fazenda ou análise..." value="${escHtml(buscaSalvas)}" oninput="filtrarSalvas(this.value)" autocomplete="off">
+      ${buscaSalvas ? `<button class="busca-salvas-limpar" onclick="filtrarSalvas('');document.getElementById('buscaSalvas').value='';document.getElementById('buscaSalvas').focus();">✕</button>` : ''}
+    </div>
+    <div id="listaSalvasItens"></div>`;
+  renderListaItens();
+};
+
+function renderListaItens() {
+  const el = document.getElementById('listaSalvasItens');
+  if (!el) return;
+  const termo = buscaSalvas.trim().toLowerCase();
+  let lista = [...recomendacoes].sort((a,b) => (b.atualizadoEm||b.criadoEm||'').localeCompare(a.atualizadoEm||a.criadoEm||''));
+  if (termo) lista = lista.filter(r => [r.talhaoNome, r.fazenda, r.amostraNome].some(x => String(x||'').toLowerCase().includes(termo)));
+  if (!lista.length) {
+    el.innerHTML = `<div class="vazio-sm" style="padding:24px;text-align:center;color:var(--c);">Nenhuma recomendação encontrada para "<strong>${escHtml(buscaSalvas)}</strong>".</div>`;
+    return;
+  }
+  el.innerHTML = lista.map(r => {
     const dosesItens = [];
     const ajust = (val, sug) => (sug !== null && sug !== undefined && Number(val) !== Number(sug));
     if (r.n) dosesItens.push({lab:`N: ${r.n}`, ajustada: ajust(r.n, r.n_sugerido)});
@@ -2065,7 +2088,7 @@ window.renderLista = function() {
       </div>
     </div>`;
   }).join('');
-};
+}
 
 window.verRecomendacao = function(id) {
   const r = recomendacoes.find(x => x._docId === id);
