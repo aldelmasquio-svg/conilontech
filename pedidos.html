@@ -10,11 +10,11 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 enableIndexedDbPersistence(db).catch(()=>{});
-let usuarioAtual=null,perfilAtual={},talhoes=[],pedidos=[],pedidoWIP=null,pedItemAtivo=null,pedMapIniciado=false,pedMap,pedPolMap={},pedSidebarAberta=true,tabAtual='mapa';
+let usuarioAtual=null,perfilAtual={},talhoes=[],pedidos=[],pedidoWIP=null,pedItemAtivo=null,pedMapIniciado=false,pedMap,pedPolMap={},pedSidebarAberta=true,tabAtual='mapa',pedidoEditandoId=null;
 const PED_CORES={ativo:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'},colhido:{border:'rgba(196,133,90,.9)',fill:'rgba(139,94,60,.4)'}};
 onAuthStateChanged(auth,async(user)=>{
   if(!user){window.location.href='login.html';return;}
@@ -124,7 +124,28 @@ function clicarTalhao(id){
 }
 window.clicarTalhao=clicarTalhao;
 window.togglePedSidebar=function(){pedSidebarAberta=!pedSidebarAberta;const sb=document.getElementById('pedSidebar'),btn=document.getElementById('btnExpandPedSb');if(sb)sb.style.display=pedSidebarAberta?'flex':'none';if(btn)btn.style.display=pedSidebarAberta?'none':'flex';if(pedMap)setTimeout(()=>pedMap.invalidateSize(),100);};
-function iniciarNovoPedido(){if(!isAdmin()){toast('⛔ Sem permissão.');return;}pedidoWIP={itens:[]};adicionarItemPedido();pedItemAtivo=0;document.getElementById('painelPedido').style.display='flex';document.getElementById('fabNovoPedido').style.display='none';renderizarItensPedido();}
+function iniciarNovoPedido(){if(!isAdmin()){toast('⛔ Sem permissão.');return;}pedidoEditandoId=null;pedidoWIP={itens:[]};adicionarItemPedido();pedItemAtivo=0;document.getElementById('painelTit').textContent='📦 Novo Pedido';document.getElementById('btnSalvarPed').textContent='💾 Salvar Pedido';document.getElementById('painelPedido').style.display='flex';document.getElementById('fabNovoPedido').style.display='none';renderizarItensPedido();}
+// Carrega um pedido existente de volta no painel de planejamento para edição
+window.editarPedido=function(docId){
+  if(!isAdmin()){toast('⛔ Sem permissão.');return;}
+  const p=pedidos.find(x=>x._docId===docId); if(!p){toast('⚠️ Pedido não encontrado.');return;}
+  pedidoEditandoId=docId;
+  pedidoWIP={itens:(p.itens||[]).map(it=>({
+    produto: it.produto||'',
+    quantidade: it.dosePorHa!=null ? String(it.dosePorHa) : '',
+    unidade: it.unidade||'kg',
+    modo: it.modo||'terrestre',
+    talhoes: new Set((it.talhoes||[]).map(t=>t.id).filter(Boolean))
+  }))};
+  if(!pedidoWIP.itens.length) adicionarItemPedido();
+  pedItemAtivo=0;
+  document.getElementById('painelTit').textContent='✏️ Editar Pedido';
+  document.getElementById('btnSalvarPed').textContent='💾 Salvar Alterações';
+  document.getElementById('painelPedido').style.display='flex';
+  document.getElementById('fabNovoPedido').style.display='none';
+  abrirTab('mapa',document.getElementById('ptab-mapa'));
+  renderizarItensPedido();renderizarPedPoligonos();
+};
 window.iniciarNovoPedido=iniciarNovoPedido;
 const MODO_APLIC={terrestre:'🚜 Terrestre',aerea:'✈️ Aérea',fertirrigacao:'💧 Fertirrigação',drench:'🌱 Drench'};
 function adicionarItemPedido(){if(!pedidoWIP)return;pedidoWIP.itens.push({produto:'',quantidade:'',unidade:'kg',modo:'terrestre',talhoes:new Set()});pedItemAtivo=pedidoWIP.itens.length-1;renderizarItensPedido();}
@@ -218,7 +239,7 @@ window.remItemPed=function(i){pedidoWIP.itens.splice(i,1);if(!pedidoWIP.itens.le
 window.remTalhaoPed=function(i,id){pedidoWIP.itens[i].talhoes.delete(id);renderizarItensPedido();};
 window.pedSelTodos=function(){if(pedItemAtivo===null||!pedidoWIP)return;talhoes.forEach(t=>{if(t.coordenadas?.length>=3)pedidoWIP.itens[pedItemAtivo].talhoes.add(t.id);});renderizarItensPedido();};
 window.pedLimparSel=function(){if(pedItemAtivo===null||!pedidoWIP)return;pedidoWIP.itens[pedItemAtivo].talhoes.clear();renderizarItensPedido();};
-window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar o pedido?'))return;pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+window.cancelarPedido=function(){if(pedidoWIP&&!confirm(pedidoEditandoId?'Descartar as alterações?':'Cancelar o pedido?'))return;pedidoWIP=null;pedItemAtivo=null;pedidoEditandoId=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
 window.salvarPedidoWIP=async function(){
   if(!pedidoWIP)return;
   const itensValidos=pedidoWIP.itens.filter(it=>it.produto.trim());
@@ -250,11 +271,16 @@ window.salvarPedidoWIP=async function(){
         talhoes: talhoesArr
       };
     });
-    await addDoc(collection(db,'pedidos'),{itens:itensFS,status:'solicitado',criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
-    window.cancelarPedido();toast('✅ Pedido salvo!');
+    if(pedidoEditandoId){
+      await updateDoc(doc(db,'pedidos',pedidoEditandoId),{itens:itensFS,editadoEm:new Date().toISOString(),editadoPor:usuarioAtual.email});
+      window.cancelarPedido();toast('✅ Pedido atualizado!');
+    }else{
+      await addDoc(collection(db,'pedidos'),{itens:itensFS,status:'solicitado',criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
+      window.cancelarPedido();toast('✅ Pedido salvo!');
+    }
     abrirTab('lista',document.getElementById('ptab-lista'));
   }catch(e){toast('❌ Erro: '+e.message);}
-  btn.disabled=false;btn.textContent='💾 Salvar Pedido';
+  btn.disabled=false;btn.textContent=pedidoEditandoId?'💾 Salvar Alterações':'💾 Salvar Pedido';
 };
 function renderizarListaPedidos(){
   const lista=document.getElementById('listaPedidosApp');if(!lista)return;
@@ -283,6 +309,7 @@ function renderizarListaPedidos(){
         <div><div class="ped-card-tit">📦 Pedido de Insumos</div><div class="ped-card-meta">📅 ${dataF} · 🏡 ${fazendas}</div><div class="ped-card-meta">👤 ${p.criadoPor||'—'}</div></div>
         <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start;">
           <button onclick="gerarRelatorioPedido('${p._docId}')" class="btn-pdf">📄 PDF</button>
+          ${isAdmin()?`<button onclick="editarPedido('${p._docId}')" class="btn-editar-ped">✏️ Editar</button>`:''}
           ${isAdmin()?`<button class="btn-del-ped" data-doc="${p._docId}" onclick="excluirPedido(this)">🗑</button>`:''}
         </div>
       </div>
@@ -430,6 +457,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .ped-card-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
 .ped-card-meta{font-size:.7rem;color:var(--c);margin-top:2px;}
 .btn-pdf{background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:6px;padding:7px 10px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+.btn-editar-ped{background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;border-radius:6px;padding:7px 10px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
 .btn-del-ped{background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:6px;padding:7px 10px;font-size:.8rem;cursor:pointer;}
 .ped-card-itens{padding:10px 14px;display:flex;flex-direction:column;gap:7px;}
 .ped-status-sel{border:2px solid;background:white;border-radius:99px;padding:5px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;cursor:pointer;outline:none;-webkit-appearance:none;text-align:center;text-align-last:center;}
@@ -486,7 +514,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
         <div class="leg-item"><div class="leg-cor" style="background:rgba(245,200,66,.55);border:2px solid #f5c842;"></div>Selecionado</div>
       </div>
       <div class="painel-pedido" id="painelPedido" style="display:none;">
-        <div class="painel-hdr"><div class="painel-tit">📦 Novo Pedido</div><div class="painel-res" id="pedResumo">0 insumos</div></div>
+        <div class="painel-hdr"><div class="painel-tit" id="painelTit">📦 Novo Pedido</div><div class="painel-res" id="pedResumo">0 insumos</div></div>
         <div class="painel-scroll"><div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;margin-bottom:8px;">Insumos do Pedido</div><div id="itensPedido"></div><button class="btn-add-item" onclick="adicionarItemPedido()">＋ Adicionar outro insumo</button></div>
         <div class="painel-footer">
           <div class="painel-sel-row"><button class="painel-sel-btn" onclick="pedSelTodos()">Selec. todos</button><button class="painel-sel-btn" onclick="pedLimparSel()">Limpar seleção</button></div>
