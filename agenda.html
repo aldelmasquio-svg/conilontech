@@ -51,6 +51,8 @@ onAuthStateChanged(auth, async (user) => {
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin')
     perfilAtual.modulos = { mapa:'admin', adubacao:'admin', pulverizacao:'admin', equipe:'admin', estoque:'admin', pedidos:'admin', gestao:'admin', admin:'admin' };
+  // Agenda é aberta a todos por padrão; só bloqueia se o admin definir explicitamente 'nenhum'
+  if (perfilAtual.modulos?.agenda === 'nenhum') { window.location.href = 'index.html'; return; }
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserEmail').textContent = user.email;
@@ -83,10 +85,14 @@ function gerarMenu() {
   const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
   const pg = (window.location.pathname.split('/').pop() || 'index.html');
   function nivelAcesso(mod) {
-    if (perfilAtual.modulos?.[mod]) return perfilAtual.modulos[mod];
-    if (perfilAtual.perfil === 'admin') return 'admin';
-    return 'nenhum';
-  }
+  const _mods = perfilAtual.modulos || {};
+  if (_mods[mod]) return _mods[mod];
+  // Ferramentas derivadas herdam do módulo-pai quando não definidas explicitamente (retrocompat)
+  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
+  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
+  if (perfilAtual.perfil === 'admin') return 'admin';
+  return 'nenhum';
+}
   const secoes = [
     { label: 'Principal', items: [
       { href:'index.html',         ico:'📊', label:'Dashboard' },
@@ -94,12 +100,12 @@ function gerarMenu() {
       { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
       { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
       { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
-      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'pulverizacao' },
+      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
       { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
       { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
       { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
       { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
-      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'pedidos' },
+      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
     ]},
     { label: 'Análise', items: [
       { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },

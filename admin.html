@@ -65,7 +65,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',estoque:'admin',gestao:'admin',analises:'admin',admin:'admin',equipe:'admin'};
+    perfilAtual.modulos = {agenda:'admin',mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
   }
   const isAdmin = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil === 'admin';
   if (!isAdmin) { window.location.href = 'index.html'; return; }
@@ -98,12 +98,12 @@ function gerarMenu() {
       { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
       { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
       { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
-      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'pulverizacao' },
+      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
       { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
       { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
       { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
       { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
-      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'pedidos' },
+      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
     ]},
     { label: 'Análise', items: [
       { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
@@ -137,12 +137,15 @@ function renderizarUsuarios() {
   const filtrados = busca ? usuarios.filter(u => (u.nome+u.email).toLowerCase().includes(busca)) : usuarios;
 
   const MODS = [
+    {id:'agenda',label:'Agenda'},
     {id:'mapa',label:'Mapa'},
     {id:'atividades',label:'Atividades'},
     {id:'equipe',label:'Equipe'},
     {id:'adubacao',label:'Adubação'},
     {id:'pulverizacao',label:'Pulverização'},
+    {id:'drench',label:'Drench Preventivo'},
     {id:'pedidos',label:'Pedidos'},
+    {id:'cotacoes',label:'Cotações'},
     {id:'estoque',label:'Estoque'},
     {id:'gestao',label:'Gestão'},
     {id:'analises',label:'Análises'},
@@ -223,12 +226,15 @@ window.abrirFazendasUsuario = function(uid) {
     return;
   }
   const MODS_LOCAL = [
+    {id:'agenda',label:'Agenda',ico:'📅'},
     {id:'mapa',label:'Mapa',ico:'🗺️'},
     {id:'atividades',label:'Atividades',ico:'🌾'},
     {id:'equipe',label:'Equipe',ico:'👥'},
     {id:'adubacao',label:'Adubação',ico:'🧪'},
     {id:'pulverizacao',label:'Pulverização',ico:'💧'},
+    {id:'drench',label:'Drench Preventivo',ico:'🌱'},
     {id:'pedidos',label:'Pedidos',ico:'📦'},
+    {id:'cotacoes',label:'Cotações',ico:'💰'},
     {id:'estoque',label:'Estoque',ico:'🏬'},
     {id:'gestao',label:'Gestão',ico:'📊'},
     {id:'analises',label:'Análises',ico:'🔬'},
@@ -279,12 +285,15 @@ window.salvarFazendasUsuario = async function() {
   if (!_fazUidAlvo) return;
   const u = usuarios.find(x => x.uid===_fazUidAlvo); if (!u) return;
   const novo = {};
-  ['mapa','atividades','adubacao','pulverizacao','pedidos','estoque','gestao'].forEach(mid => {
+  // Percorre todos os módulos efetivamente renderizados no modal (não uma lista fixa),
+  // pra nunca descartar seleções de módulos novos silenciosamente.
+  document.querySelectorAll('#fazModulosLista [id^="fmchips-"]').forEach(cont => {
+    const mid = cont.id.replace('fmchips-', '');
     const cabChk = document.querySelector(`.faz-mod-todas input[onchange*="'${mid}'"]`);
     if (cabChk && cabChk.checked) {
       // Todas → não grava entrada (significa "todas permitidas")
     } else {
-      const chips = document.querySelectorAll(`#fmchips-${mid} input[type=checkbox]:checked`);
+      const chips = cont.querySelectorAll('input[type=checkbox]:checked');
       const fazs = [...chips].map(c => c.dataset.faz);
       if (fazs.length) novo[mid] = fazs;
       else novo[mid] = []; // marcar explicitamente como vazio = "nenhuma fazenda"
