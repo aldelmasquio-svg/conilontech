@@ -36,6 +36,7 @@ let map, mapaIniciado=false, talhaoLayers=[], setorLayers={}, setorSel=null;
 let drawControl, drawnItems, modoDesenho=false, setorEditandoCoords=null, _setorRedesenhoId=null;
 let filtroFazenda='todas', sidebarAberta=true;
 let talhoesExpandidos=new Set(); // talhões abertos no accordion da sidebar
+let turnoDuracao=8; // duração prevista (horas) do turno em edição
 let locWatchId=null, locMarker=null, locAccCircle=null;
 
 // ─── AUTH ───
@@ -185,6 +186,7 @@ function renderizarTalhoesFundo(){
 function hojeISO(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
 function agoraHM(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
 function calcDuracao(hi,hf){ if(!hi||!hf)return null; const[a,b]=hi.split(':').map(Number); const[c,e]=hf.split(':').map(Number); let mi=a*60+b, mf=c*60+e; if(mf<mi)mf+=1440; return mf-mi; }
+function addHoras(hm,horas){ if(!hm)return''; const[a,b]=hm.split(':').map(Number); let t=(a*60+b)+Math.round(horas*60); t=((t%1440)+1440)%1440; const p=n=>String(n).padStart(2,'0'); return `${p(Math.floor(t/60))}:${p(t%60)}`; }
 function fmtDur(min){ if(min==null)return''; const h=Math.floor(min/60),m=min%60; return h?`${h}h${m?' '+m+'min':''}`:`${m}min`; }
 function diasDesde(dataISO){ if(!dataISO)return null; const hoje=new Date(hojeISO()+'T00:00:00'); const d=new Date(dataISO+'T00:00:00'); return Math.round((hoje-d)/86400000); }
 function labelRecencia(dias){ if(dias==null)return 'Nunca irrigado'; if(dias===0)return 'Irrigado hoje'; if(dias===1)return 'Irrigado ontem'; return `Há ${dias} dias`; }
@@ -232,6 +234,7 @@ function setoresVisiveis(){
 }
 
 window.selecionarSetor=function(id){
+  if(setorSel!==id) turnoDuracao=8; // ao trocar de setor, volta pra duração padrão
   setorSel=id;
   const s=setores.find(x=>x._docId===id);
   if(s) talhoesExpandidos.add(s.talhaoId||'__sem__'); // abre o talhão do setor na lista
@@ -266,35 +269,50 @@ function abrirPainelSetor(id){
   if(podeRegistrar()){
     if(aberto){
       const decorr=tempoDecorrido(aberto.data,aberto.horaInicio);
+      const prev=aberto.horaFimPrevista||'';
       blocoTurno=`
         <div class="turno-box andamento">
           <div class="turno-status"><span class="pulse-dot"></span> Turno em andamento</div>
           <div class="turno-sub">Iniciado ${formatarData(aberto.data)} às <b>${aberto.horaInicio}</b>${decorr!=null?` · há <b>${fmtDur(decorr)}</b>`:''}</div>
-          <button class="btn-turno finalizar" onclick="finalizarTurnoAgora('${aberto._docId}')">⏹️ Finalizar agora · ${agoraHM()}</button>
-          <div class="turno-links">
-            <button class="link-btn" onclick="toggleFinManual()">ajustar horário de término</button>
-            <button class="link-btn danger" onclick="cancelarTurnoAberto('${aberto._docId}')">cancelar turno</button>
-          </div>
-          <div id="finManual" class="turno-extra" style="display:none;">
-            <div class="reg-grid2">
-              <div class="fg"><label>Horário de término</label><input type="time" id="finHora" value="${agoraHM()}"></div>
-            </div>
-            <div class="fg" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="finObs" value="${sanitizar(aberto.obs||'')}" placeholder="Ex: pressão baixa..."></div>
-            <button class="btn-turno finalizar" style="margin-top:10px;" onclick="finalizarTurnoManual('${aberto._docId}')">Salvar término</button>
-          </div>
+          ${prev?`<div class="prev-box">Término previsto <b>${prev}</b>${aberto.duracaoPrevistaH?` · ${aberto.duracaoPrevistaH}h`:''}</div>`:''}
+          <div class="fg"><label>Hora final executada</label><input type="time" id="finHora" value="${agoraHM()}"></div>
+          <div class="fg"><label>Observação (opcional)</label><input type="text" id="finObs" value="${sanitizar(aberto.obs||'')}" placeholder="Ex: pressão baixa..."></div>
+          <button class="btn-turno finalizar" onclick="finalizarTurnoManual('${aberto._docId}')">⏹️ Finalizar turno</button>
+          <button class="link-btn danger center" onclick="cancelarTurnoAberto('${aberto._docId}')">cancelar turno</button>
         </div>`;
     }else{
+      const fimPrev=addHoras(agoraHM(),turnoDuracao);
       blocoTurno=`
         <div class="turno-box iniciar">
-          <button class="btn-turno iniciar" onclick="iniciarTurno('${id}')">▶️ Iniciar turno agora · ${agoraHM()}</button>
-          <button class="link-btn center" onclick="toggleManual()">registrar um turno já concluído</button>
+          <div class="turno-cab">💧 Turno de rega</div>
+          <div class="reg-grid2col">
+            <div class="fg"><label>Data</label><input type="date" id="regData" value="${hojeISO()}" onchange="recalcPrevisto()"></div>
+            <div class="fg"><label>Hora inicial</label><input type="time" id="regIni" value="${agoraHM()}" onchange="recalcPrevisto()"></div>
+          </div>
+          <div class="dur-wrap">
+            <label>Duração prevista do turno</label>
+            <div class="dur-ctrl">
+              <button class="dur-btn" onclick="setDuracao(-1)">−</button>
+              <div class="dur-val"><span id="durH">${turnoDuracao}</span><small>horas</small></div>
+              <button class="dur-btn" onclick="setDuracao(1)">+</button>
+            </div>
+            <div class="dur-quick">
+              <button class="${turnoDuracao===4?'on':''}" onclick="setDuracaoVal(4)">4h</button>
+              <button class="${turnoDuracao===6?'on':''}" onclick="setDuracaoVal(6)">6h</button>
+              <button class="${turnoDuracao===8?'on':''}" onclick="setDuracaoVal(8)">8h</button>
+              <button class="${turnoDuracao===12?'on':''}" onclick="setDuracaoVal(12)">12h</button>
+            </div>
+          </div>
+          <div class="prev-box">Hora final prevista <b id="prevFim">${fimPrev}</b></div>
+          <button class="btn-turno iniciar" onclick="iniciarTurno('${id}')">▶️ Iniciar turno</button>
+          <button class="link-btn center" onclick="toggleManual()">registrar turno já concluído</button>
           <div id="regManual" class="turno-extra" style="display:none;">
             <div class="reg-grid">
-              <div class="fg"><label>Data</label><input type="date" id="regData" value="${hojeISO()}"></div>
-              <div class="fg"><label>Início</label><input type="time" id="regIni" value="${agoraHM()}"></div>
-              <div class="fg"><label>Fim</label><input type="time" id="regFim"></div>
+              <div class="fg"><label>Data</label><input type="date" id="regDataM" value="${hojeISO()}"></div>
+              <div class="fg"><label>Início</label><input type="time" id="regIniM" value="${agoraHM()}"></div>
+              <div class="fg"><label>Fim</label><input type="time" id="regFimM"></div>
             </div>
-            <div class="fg" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="regObs" placeholder="Ex: pressão baixa, vazamento..."></div>
+            <div class="fg" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="regObsM" placeholder="Ex: pressão baixa, vazamento..."></div>
             <button class="btn-turno" style="margin-top:10px;" onclick="registrarManual('${id}')">Salvar turno</button>
           </div>
         </div>`;
@@ -303,7 +321,7 @@ function abrirPainelSetor(id){
 
   // ── Última irrigação concluída ──
   const ultTxt = ult
-    ? `<b>${formatarData(ult.data)}</b> &nbsp;·&nbsp; ${ult.horaInicio} → ${ult.horaFim}${ult.duracaoMin!=null?` &nbsp;·&nbsp; ${fmtDur(ult.duracaoMin)}`:''}`
+    ? `<b>${formatarData(ult.data)}</b> &nbsp;·&nbsp; ${ult.horaInicio} → ${ult.horaFim}${ult.duracaoMin!=null?` &nbsp;·&nbsp; ${fmtDur(ult.duracaoMin)}`:''}${ult.horaFimPrevista&&ult.horaFimPrevista!==ult.horaFim?`<div class="prev-exec">Previsto <b>${ult.horaFimPrevista}</b> · executado <b>${ult.horaFim}</b></div>`:''}`
     : 'Nenhum turno concluído ainda.';
 
   // ── Histórico ──
@@ -344,40 +362,50 @@ window.fecharPainel=function(){
   document.getElementById('hintBar').style.display='block';
 };
 window.toggleManual=function(){ const el=document.getElementById('regManual'); if(el)el.style.display=el.style.display==='none'?'block':'none'; };
-window.toggleFinManual=function(){ const el=document.getElementById('finManual'); if(el)el.style.display=el.style.display==='none'?'block':'none'; };
+// Seletor de duração prevista → recalcula a hora final prevista em tempo real
+window.setDuracao=function(delta){ turnoDuracao=Math.min(24,Math.max(1,turnoDuracao+delta)); atualizarDuracaoUI(); };
+window.setDuracaoVal=function(h){ turnoDuracao=h; atualizarDuracaoUI(); };
+function atualizarDuracaoUI(){
+  const el=document.getElementById('durH'); if(el)el.textContent=turnoDuracao;
+  document.querySelectorAll('.dur-quick button').forEach(b=>b.classList.toggle('on', b.textContent===turnoDuracao+'h'));
+  recalcPrevisto();
+}
+window.recalcPrevisto=function(){
+  const ini=document.getElementById('regIni')?.value||'';
+  const el=document.getElementById('prevFim'); if(el)el.textContent=ini?addHoras(ini,turnoDuracao):'—';
+};
 
-// ─── TURNO DE REGA (iniciar agora → finalizar depois; um só registro) ───
+// ─── TURNO DE REGA (inicia com previsão → finaliza com hora executada; um só registro) ───
 window.iniciarTurno=async function(setorId){
   if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
   const s=setores.find(x=>x._docId===setorId); if(!s)return;
   if(turnoAbertoDoSetor(setorId)){ toast('⚠️ Este setor já tem um turno em andamento.'); return; }
+  const data=document.getElementById('regData')?.value || hojeISO();
+  const horaInicio=document.getElementById('regIni')?.value || '';
+  if(!horaInicio){ toast('⚠️ Informe a hora inicial.'); return; }
+  const horaFimPrevista=addHoras(horaInicio,turnoDuracao);
   try{
     await addDoc(collection(db,'irrigacaoRegistros'),{
       setorId, setorNome:s.nome||'', fazenda:s.fazenda||'', talhaoId:s.talhaoId||'', talhaoNome:s.talhaoNome||'',
-      data:hojeISO(), horaInicio:agoraHM(), horaFim:'', duracaoMin:null, obs:'', status:'aberto',
+      data, horaInicio, duracaoPrevistaH:turnoDuracao, horaFimPrevista,
+      horaFim:'', duracaoMin:null, obs:'', status:'aberto',
       criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
     });
-    toast('▶️ Turno iniciado! Volte e finalize quando terminar a rega.',4500);
+    toast('▶️ Turno iniciado! Finalize quando terminar a rega.',4500);
   }catch(e){ toast('❌ Erro: '+e.message); }
 };
-window.finalizarTurnoAgora=function(regId){ finalizarTurno(regId, agoraHM(), null); };
-window.finalizarTurnoManual=function(regId){
-  const hf=document.getElementById('finHora')?.value;
-  const obs=document.getElementById('finObs')?document.getElementById('finObs').value:null;
-  if(!hf){ toast('⚠️ Informe o horário de término.'); return; }
-  finalizarTurno(regId, hf, obs);
-};
-async function finalizarTurno(regId, horaFim, obs){
+window.finalizarTurnoManual=async function(regId){
   if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
   const r=registros.find(x=>x._docId===regId); if(!r)return;
+  const horaFim=document.getElementById('finHora')?.value;
+  if(!horaFim){ toast('⚠️ Informe a hora final executada.'); return; }
+  const obs=document.getElementById('finObs')?document.getElementById('finObs').value:r.obs;
   const duracaoMin=calcDuracao(r.horaInicio, horaFim);
-  const upd={ horaFim, duracaoMin, status:'concluido', finalizadoEm:new Date().toISOString() };
-  if(obs!=null) upd.obs=(obs||'').trim();
   try{
-    await updateDoc(doc(db,'irrigacaoRegistros',regId), upd);
+    await updateDoc(doc(db,'irrigacaoRegistros',regId),{ horaFim, duracaoMin, status:'concluido', obs:(obs||'').trim(), finalizadoEm:new Date().toISOString() });
     toast(`✅ Turno finalizado!${duracaoMin!=null?' Duração: '+fmtDur(duracaoMin)+'.':''}`,4000);
   }catch(e){ toast('❌ Erro: '+e.message); }
-}
+};
 window.cancelarTurnoAberto=async function(regId){
   if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
   if(!confirm('Cancelar o turno em andamento? O registro será excluído.'))return;
@@ -387,10 +415,10 @@ window.cancelarTurnoAberto=async function(regId){
 window.registrarManual=async function(setorId){
   if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
   const s=setores.find(x=>x._docId===setorId); if(!s)return;
-  const data=document.getElementById('regData').value || hojeISO();
-  const horaInicio=document.getElementById('regIni').value || '';
-  const horaFim=document.getElementById('regFim').value || '';
-  const obs=(document.getElementById('regObs').value||'').trim();
+  const data=document.getElementById('regDataM').value || hojeISO();
+  const horaInicio=document.getElementById('regIniM').value || '';
+  const horaFim=document.getElementById('regFimM').value || '';
+  const obs=(document.getElementById('regObsM').value||'').trim();
   if(!horaInicio){ toast('⚠️ Informe o horário inicial.'); return; }
   const duracaoMin=calcDuracao(horaInicio,horaFim);
   try{
@@ -844,8 +872,26 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .btn-turno.finalizar{background:var(--agua);}
 .turno-links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
 .turno-extra{border-top:1px dashed #bae6fd;padding-top:11px;}
+.turno-cab{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;color:var(--agua);}
 .reg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
 .reg-grid2{display:grid;grid-template-columns:1fr;gap:8px;}
+.reg-grid2col{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+/* Seletor de duração do turno */
+.dur-wrap{display:flex;flex-direction:column;gap:7px;}
+.dur-wrap>label{font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
+.dur-ctrl{display:flex;align-items:center;justify-content:center;gap:14px;}
+.dur-btn{width:38px;height:38px;border-radius:50%;border:1.5px solid #93c5fd;background:white;color:var(--agua);font-size:1.4rem;font-weight:700;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;}
+.dur-btn:active{background:#dbeafe;}
+.dur-val{display:flex;flex-direction:column;align-items:center;min-width:64px;}
+.dur-val span{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:2rem;color:var(--t);line-height:1;}
+.dur-val small{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;}
+.dur-quick{display:flex;gap:6px;justify-content:center;}
+.dur-quick button{flex:1;background:var(--cl);border:1.5px solid var(--cb);color:var(--c);border-radius:7px;padding:6px 0;font-size:.74rem;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;}
+.dur-quick button.on{background:var(--agua);border-color:var(--agua);color:white;}
+.prev-box{background:#dbeafe;border-radius:8px;padding:9px 12px;font-size:.8rem;color:#1e40af;display:flex;justify-content:space-between;align-items:center;}
+.prev-box b{font-family:'DM Mono',monospace;font-size:.95rem;}
+.prev-exec{font-size:.72rem;color:var(--c);margin-top:4px;}
+.prev-exec b{font-family:'DM Mono',monospace;color:var(--t);}
 .fg{display:flex;flex-direction:column;gap:4px;}
 .fg label{font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
 .fg input,.fg select{border:1.5px solid var(--cb);border-radius:8px;padding:9px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;}
