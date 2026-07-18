@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Irrigação</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(()=>{});
+
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], setores=[], registros=[];
+let map, mapaIniciado=false, talhaoLayers=[], setorLayers={}, setorSel=null;
+let drawControl, drawnItems, modoDesenho=false, setorEditandoCoords=null, _setorRedesenhoId=null;
+let filtroFazenda='todas', sidebarAberta=true;
+let locWatchId=null, locMarker=null, locAccCircle=null;
+
+// ─── AUTH ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual=user;
+  const snap=await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual=snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') perfilAtual.modulos={mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  // Bloqueia acesso quando o admin não liberou o módulo Irrigação (admins do sistema sempre entram)
+  if (!ehAdminSistema() && nivelAcesso('irrigacao')==='nenhum') { window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserEmail').textContent=user.email;
+  gerarMenu();
+  if (podeGerenciar()) document.getElementById('btnNovoSetor').style.display='flex';
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appContent').style.display='flex';
+  iniciarMapa();
+  iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  const _mods = perfilAtual.modulos || {};
+  if (_mods[mod]) return _mods[mod];
+  // Ferramentas derivadas herdam do módulo-pai quando não definidas explicitamente (retrocompat)
+  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
+  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
+  if (perfilAtual.perfil === 'admin') return 'admin';
+  return 'nenhum';
+}
+function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+// Desenhar/editar/excluir setores é operação de configuração → admin
+function podeGerenciar(){ return ehAdminSistema() || nivelAcesso('irrigacao')==='admin'; }
+// Registrar turno de rega → qualquer usuário com acesso ao módulo (o irrigador)
+function podeRegistrar(){ return podeGerenciar() || ['gerente','encarregado','operador'].includes(nivelAcesso('irrigacao')); }
+// Restringe setores às fazendas liberadas para o usuário
+function fazendaPermitida(fazenda){
+  if (ehAdminSistema()) return true;
+  const permitidas = perfilAtual.fazendasModulo?.irrigacao;
+  if (!permitidas || !permitidas.length) return true;
+  return permitidas.includes(fazenda);
+}
+
+function gerarMenu() {
+  const isAdm = ehAdminSistema();
+  const pg = (window.location.pathname.split('/').pop() || 'index.html');
+  const secoes = [
+    { label: 'Principal', items: [
+      { href:'index.html',         ico:'📊', label:'Dashboard' },
+      { href:'agenda.html',        ico:'📅', label:'Agenda' },
+      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
+      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
+      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
+      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
+      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
+      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
+      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
+      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
+      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
+    ]},
+    { label: 'Análise', items: [
+      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
+      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
+      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
+      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
+      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
+    ]},
+  ];
+  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
+    const html = s.items.map(m => {
+      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
+      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
+    }).filter(Boolean).join('');
+    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
+  }).join('');
+}
+
+// ─── DADOS ───
+function iniciarListeners(){
+  onSnapshot(collection(db,'talhoes'), snap => {
+    talhoes = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (mapaIniciado) { renderizarTalhoesFundo(); preencherFazendasFiltro(); }
+  });
+  onSnapshot(collection(db,'irrigacaoSetores'), snap => {
+    setores = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (mapaIniciado) { renderizarSetores(); renderizarSidebar(); if(setorSel)abrirPainelSetor(setorSel); }
+  });
+  onSnapshot(collection(db,'irrigacaoRegistros'), snap => {
+    registros = snap.docs.map(d=>({_docId:d.id,...d.data()}));
+    if (mapaIniciado) { renderizarSetores(); renderizarSidebar(); if(setorSel)abrirPainelSetor(setorSel); }
+  });
+}
+
+// ─── MAPA ───
+function iniciarMapa(){
+  if(mapaIniciado)return; mapaIniciado=true;
+  map=L.map('map',{center:[-18.7166,-40.4000],zoom:14});
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}).addTo(map);
+  drawnItems=new L.FeatureGroup().addTo(map);
+  drawControl=new L.Control.Draw({draw:{polygon:{shapeOptions:{color:'#38bdf8',fillColor:'rgba(56,189,248,.35)',fillOpacity:1,weight:2}},polyline:false,rectangle:false,circle:false,marker:false,circlemarker:false},edit:false});
+  map.on(L.Draw.Event.CREATED, function(e){
+    if(!modoDesenho)return;
+    const coords=e.layer.getLatLngs()[0].map(p=>({lat:p.lat,lng:p.lng}));
+    map.removeControl(drawControl); modoDesenho=false;
+    document.getElementById('hintDesenho').style.display='none';
+    setorEditandoCoords=coords;
+    // Se for redesenho, reabre o modal já preenchido com os dados do setor existente
+    const existente = _setorRedesenhoId ? setores.find(x=>x._docId===_setorRedesenhoId) : null;
+    abrirModalSetor(coords, existente);
+  });
+  map.on('click',()=>{ if(!modoDesenho) fecharPainel(); });
+  requestAnimationFrame(()=>map.invalidateSize());
+  setTimeout(()=>map.invalidateSize(),300);
+  setTimeout(()=>map.invalidateSize(),800);
+  renderizarTalhoesFundo();
+}
+
+// Converte coordenadas em vários formatos para [lat,lng]
+function normLatLngs(coords){
+  return (coords||[]).map(c=>{
+    if(Array.isArray(c)) return [c[0],c[1]];
+    if(c.lat!==undefined) return [c.lat,c.lng];
+    if(c.latitude!==undefined) return [c.latitude,c.longitude];
+    return c;
+  });
+}
+
+// Talhões cadastrados desenhados como fundo (contexto), não interativos
+function renderizarTalhoesFundo(){
+  if(!map)return;
+  talhaoLayers.forEach(l=>map.removeLayer(l)); talhaoLayers=[];
+  talhoes.forEach(t=>{
+    if(!t.coordenadas || t.coordenadas.length<3) return;
+    if(!fazendaPermitida(t.fazenda)) return;
+    const poly=L.polygon(normLatLngs(t.coordenadas),{color:'#ffffff',weight:1,opacity:.55,fillColor:'#ffffff',fillOpacity:.04,interactive:false,dashArray:'4,4'}).addTo(map);
+    poly.bindTooltip(`${t.id||''} · ${t.nome||''}`,{sticky:true,direction:'top',opacity:.8});
+    talhaoLayers.push(poly);
+  });
+  // setores por cima
+  Object.values(setorLayers).forEach(l=>l.bringToFront&&l.bringToFront());
+}
+
+// ─── RECÊNCIA / CÁLCULOS ───
+function hojeISO(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function agoraHM(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
+function calcDuracao(hi,hf){ if(!hi||!hf)return null; const[a,b]=hi.split(':').map(Number); const[c,e]=hf.split(':').map(Number); let mi=a*60+b, mf=c*60+e; if(mf<mi)mf+=1440; return mf-mi; }
+function fmtDur(min){ if(min==null)return''; const h=Math.floor(min/60),m=min%60; return h?`${h}h${m?' '+m+'min':''}`:`${m}min`; }
+function diasDesde(dataISO){ if(!dataISO)return null; const hoje=new Date(hojeISO()+'T00:00:00'); const d=new Date(dataISO+'T00:00:00'); return Math.round((hoje-d)/86400000); }
+function labelRecencia(dias){ if(dias==null)return 'Nunca irrigado'; if(dias===0)return 'Irrigado hoje'; if(dias===1)return 'Irrigado ontem'; return `Há ${dias} dias`; }
+function corRecencia(dias){
+  if(dias==null) return {fill:'rgba(148,163,184,.35)',border:'#94a3b8',dot:'#94a3b8'};
+  if(dias===0)   return {fill:'rgba(37,99,235,.45)', border:'#2563eb',dot:'#2563eb'};
+  if(dias<=2)    return {fill:'rgba(34,197,94,.45)', border:'#22c55e',dot:'#22c55e'};
+  if(dias<=4)    return {fill:'rgba(234,179,8,.45)', border:'#eab308',dot:'#eab308'};
+  if(dias<=6)    return {fill:'rgba(249,115,22,.45)',border:'#f97316',dot:'#f97316'};
+  return                {fill:'rgba(239,68,68,.5)',  border:'#ef4444',dot:'#ef4444'};
+}
+// Registros de um setor, mais recente primeiro
+function registrosDoSetor(setorId){
+  return registros.filter(r=>r.setorId===setorId)
+    .sort((a,b)=>(b.data+(b.horaInicio||'')).localeCompare(a.data+(a.horaInicio||'')));
+}
+function ultimoRegistro(setorId){ return registrosDoSetor(setorId)[0]||null; }
+
+// ─── SETORES NO MAPA ───
+function renderizarSetores(){
+  if(!map)return;
+  Object.values(setorLayers).forEach(l=>map.removeLayer(l)); setorLayers={};
+  setoresVisiveis().forEach(s=>{
+    if(!s.coordenadas || s.coordenadas.length<3) return;
+    const ult=ultimoRegistro(s._docId);
+    const dias=ult?diasDesde(ult.data):null;
+    const cor=corRecencia(dias);
+    const poly=L.polygon(normLatLngs(s.coordenadas),{color:setorSel===s._docId?'#fff':cor.border,weight:setorSel===s._docId?4:2.5,fillColor:cor.fill,fillOpacity:1}).addTo(map);
+    poly.bindTooltip(`<b>${sanitizar(s.nome)}</b><br>${labelRecencia(dias)}`,{sticky:true,direction:'top'});
+    poly.on('click',ev=>{ L.DomEvent.stopPropagation(ev); selecionarSetor(s._docId); });
+    setorLayers[s._docId]=poly;
+  });
+}
+function setoresVisiveis(){
+  return setores.filter(s=>fazendaPermitida(s.fazenda) && (filtroFazenda==='todas'||s.fazenda===filtroFazenda));
+}
+
+window.selecionarSetor=function(id){
+  setorSel=id;
+  renderizarSetores();
+  renderizarSidebar();
+  abrirPainelSetor(id);
+  const ly=setorLayers[id];
+  if(ly){ try{ map.fitBounds(ly.getBounds(),{maxZoom:17,padding:[60,60]}); }catch(e){} ly.bringToFront(); }
+};
+
+// ─── PAINEL DO SETOR ───
+function abrirPainelSetor(id){
+  const s=setores.find(x=>x._docId===id);
+  if(!s){ fecharPainel(); return; }
+  const regs=registrosDoSetor(id);
+  const ult=regs[0]||null;
+  const dias=ult?diasDesde(ult.data):null;
+  const cor=corRecencia(dias);
+  document.getElementById('pNome').textContent='💦 '+(s.nome||'Setor');
+  document.getElementById('pFaz').textContent=(s.fazenda||'—')+(s.talhaoNome?' · '+s.talhaoNome:'');
+  const badge=document.getElementById('pRecencia');
+  badge.textContent=labelRecencia(dias);
+  badge.style.background=cor.fill; badge.style.color=cor.border; badge.style.borderColor=cor.border;
+
+  const ultTxt = ult
+    ? `${formatarData(ult.data)} · ${ult.horaInicio||'—'}${ult.horaFim?'→'+ult.horaFim:''}${ult.duracaoMin!=null?' ('+fmtDur(ult.duracaoMin)+')':''}`
+    : 'Nenhum turno registrado ainda.';
+
+  let regForm='';
+  if(podeRegistrar()){
+    regForm=`
+      <div class="reg-box">
+        <div class="reg-tit">💧 Registrar turno de rega</div>
+        <div class="reg-grid">
+          <div class="fg"><label>Data</label><input type="date" id="regData" value="${hojeISO()}"></div>
+          <div class="fg"><label>Início</label><input type="time" id="regIni" value="${agoraHM()}"></div>
+          <div class="fg"><label>Fim</label><input type="time" id="regFim"></div>
+        </div>
+        <div class="fg" style="margin-top:6px;"><label>Observação (opcional)</label><input type="text" id="regObs" placeholder="Ex: pressão baixa, vazamento..."></div>
+        <button class="btn-registrar" onclick="registrarTurno('${id}')">💦 Registrar irrigação</button>
+      </div>`;
+  }
+
+  const histRows = regs.slice(0,6).map(r=>`
+    <div class="hist-row">
+      <div class="hist-data">${formatarData(r.data)}</div>
+      <div class="hist-hora">${r.horaInicio||'—'}${r.horaFim?' → '+r.horaFim:''}</div>
+      <div class="hist-dur">${r.duracaoMin!=null?fmtDur(r.duracaoMin):''}</div>
+      ${podeGerenciar()?`<button class="hist-del" title="Excluir registro" onclick="excluirRegistro('${r._docId}')">✕</button>`:''}
+    </div>
+    ${r.obs?`<div class="hist-obs">${sanitizar(r.obs)}</div>`:''}`).join('');
+
+  document.getElementById('pBody').innerHTML=`
+    <div class="ult-box">
+      <label>Última irrigação</label>
+      <div class="ult-val">${ultTxt}</div>
+    </div>
+    ${regForm}
+    <div class="hist-wrap">
+      <div class="hist-head"><span>Últimos turnos</span>${regs.length>6?`<button class="link-btn" onclick="abrirHistorico('${id}')">ver todos (${regs.length})</button>`:''}</div>
+      ${regs.length?histRows:'<div class="hist-vazio">Sem histórico.</div>'}
+    </div>`;
+
+  document.getElementById('panelActions').innerHTML = podeGerenciar()
+    ? `<button class="btn-edit" onclick="renomearSetor('${id}')">✏️ Renomear</button>
+       <button class="btn-edit" onclick="redesenharSetor('${id}')">📐 Redesenhar</button>
+       <button class="btn-del-panel" onclick="excluirSetor('${id}')">🗑</button>`
+    : '';
+
+  document.getElementById('infoPanel').classList.add('visible');
+  document.getElementById('hintBar').style.display='none';
+}
+window.fecharPainel=function(){
+  document.getElementById('infoPanel').classList.remove('visible');
+  setorSel=null; renderizarSetores(); renderizarSidebar();
+  document.getElementById('hintBar').style.display='block';
+};
+
+// ─── REGISTRO DE TURNO ───
+window.registrarTurno=async function(setorId){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const s=setores.find(x=>x._docId===setorId); if(!s)return;
+  const data=document.getElementById('regData').value || hojeISO();
+  const horaInicio=document.getElementById('regIni').value || '';
+  const horaFim=document.getElementById('regFim').value || '';
+  const obs=(document.getElementById('regObs').value||'').trim();
+  if(!horaInicio){ toast('⚠️ Informe o horário inicial.'); return; }
+  const duracaoMin=calcDuracao(horaInicio,horaFim);
+  try{
+    await addDoc(collection(db,'irrigacaoRegistros'),{
+      setorId, setorNome:s.nome||'', fazenda:s.fazenda||'', talhaoId:s.talhaoId||'', talhaoNome:s.talhaoNome||'',
+      data, horaInicio, horaFim, duracaoMin, obs,
+      criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
+    });
+    toast('💦 Turno de rega registrado!');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.excluirRegistro=async function(id){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  if(!confirm('Excluir este registro de irrigação?'))return;
+  try{ await deleteDoc(doc(db,'irrigacaoRegistros',id)); toast('🗑️ Registro excluído.'); }
+  catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+// ─── SETORES (CRIAR / EDITAR / EXCLUIR) ───
+window.abrirNovoSetor=function(){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  fecharPainel();
+  setorEditandoCoords=null;
+  _setorRedesenhoId=null;
+  iniciarDesenho();
+};
+function iniciarDesenho(){
+  if(modoDesenho)return;
+  map.addControl(drawControl);
+  new L.Draw.Polygon(map,drawControl.options.draw.polygon).enable();
+  modoDesenho=true;
+  document.getElementById('hintDesenho').style.display='block';
+  toast('Toque nos cantos do setor. Toque duplo (ou no 1º ponto) para fechar.',5000);
+}
+window.redesenharSetor=function(id){
+  if(!podeGerenciar())return;
+  _setorRedesenhoId=id;
+  setorEditandoCoords=null;
+  fecharPainel();
+  iniciarDesenho();
+};
+
+// Ponto dentro do polígono (ray casting) — pré-sugere talhão/fazenda ao criar setor
+function pontoNoPoligono(lat,lng,coords){
+  const pts=normLatLngs(coords); let dentro=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const yi=pts[i][0],xi=pts[i][1],yj=pts[j][0],xj=pts[j][1];
+    const inter=((yi>lat)!==(yj>lat)) && (lng < (xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi);
+    if(inter)dentro=!dentro;
+  }
+  return dentro;
+}
+function talhaoQueContem(coords){
+  const pts=normLatLngs(coords);
+  const cLat=pts.reduce((a,p)=>a+p[0],0)/pts.length;
+  const cLng=pts.reduce((a,p)=>a+p[1],0)/pts.length;
+  return talhoes.find(t=>t.coordenadas&&t.coordenadas.length>=3&&pontoNoPoligono(cLat,cLng,t.coordenadas));
+}
+
+function abrirModalSetor(coords, setorExistente){
+  const sug = setorExistente ? null : talhaoQueContem(coords);
+  const fazendas=[...new Set(talhoes.map(t=>t.fazenda).filter(Boolean))].sort();
+  const fazSel = setorExistente?.fazenda || sug?.fazenda || '';
+  document.getElementById('modalSetorTitle').textContent = setorExistente ? 'Editar Setor' : 'Novo Setor';
+  document.getElementById('sNome').value = setorExistente?.nome || (sug? '' : '');
+  const selFaz=document.getElementById('sFazenda');
+  selFaz.innerHTML = `<option value="">Selecione a fazenda...</option>` + fazendas.map(f=>`<option value="${sanitizar(f)}" ${f===fazSel?'selected':''}>${sanitizar(f)}</option>`).join('');
+  atualizarTalhoesDoModal(setorExistente?.talhaoId || sug?.id || '');
+  selFaz.onchange=()=>atualizarTalhoesDoModal('');
+  document.getElementById('overlaySetor').classList.add('open');
+  document.getElementById('sNome').focus();
+}
+function atualizarTalhoesDoModal(talhaoIdSel){
+  const faz=document.getElementById('sFazenda').value;
+  const lista=talhoes.filter(t=>!faz||t.fazenda===faz);
+  document.getElementById('sTalhao').innerHTML = `<option value="">— (opcional) —</option>` +
+    lista.map(t=>`<option value="${sanitizar(t.id||'')}" ${t.id===talhaoIdSel?'selected':''}>${sanitizar((t.id||'')+' · '+(t.nome||''))}</option>`).join('');
+}
+window.checarFazendaModal=function(){ atualizarTalhoesDoModal(''); };
+
+window.salvarSetor=async function(){
+  const nome=(document.getElementById('sNome').value||'').trim();
+  const fazenda=document.getElementById('sFazenda').value;
+  const talhaoId=document.getElementById('sTalhao').value;
+  const talhao=talhoes.find(t=>t.id===talhaoId);
+  if(!nome){ toast('⚠️ Dê um nome ao setor.'); return; }
+  if(!fazenda){ toast('⚠️ Selecione a fazenda.'); return; }
+  try{
+    if(_setorRedesenhoId){
+      // Redesenho: mantém dados, troca coordenadas
+      await updateDoc(doc(db,'irrigacaoSetores',_setorRedesenhoId),{
+        nome, fazenda, talhaoId:talhaoId||'', talhaoNome:talhao?.nome||'', coordenadas:setorEditandoCoords||[]
+      });
+      _setorRedesenhoId=null;
+      toast('✅ Setor atualizado!');
+    }else{
+      const ref=await addDoc(collection(db,'irrigacaoSetores'),{
+        nome, fazenda, talhaoId:talhaoId||'', talhaoNome:talhao?.nome||'',
+        coordenadas:setorEditandoCoords||[], criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
+      });
+      toast('✅ Setor cadastrado!');
+      setTimeout(()=>selecionarSetor(ref.id),500);
+    }
+    fecharModalSetor();
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.fecharModalSetor=function(){
+  document.getElementById('overlaySetor').classList.remove('open');
+  setorEditandoCoords=null; _setorRedesenhoId=null;
+};
+window.overlaySetorClick=function(e){ if(e.target.id==='overlaySetor') fecharModalSetor(); };
+
+window.renomearSetor=function(id){
+  const s=setores.find(x=>x._docId===id); if(!s)return;
+  setorEditandoCoords=s.coordenadas||[];
+  _setorRedesenhoId=id;
+  abrirModalSetor(s.coordenadas, s);
+};
+window.excluirSetor=async function(id){
+  if(!podeGerenciar())return;
+  const s=setores.find(x=>x._docId===id); if(!s)return;
+  const n=registrosDoSetor(id).length;
+  if(!confirm(`Excluir o setor "${s.nome}"?${n?`\n\nEle tem ${n} registro(s) de irrigação no histórico — o histórico será mantido, mas o setor deixará de aparecer no mapa.`:''}`))return;
+  try{ await deleteDoc(doc(db,'irrigacaoSetores',id)); fecharPainel(); toast('🗑️ Setor excluído.'); }
+  catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+// ─── HISTÓRICO COMPLETO (modal) ───
+window.abrirHistorico=function(setorId){
+  const s=setores.find(x=>x._docId===setorId);
+  const regs=registrosDoSetor(setorId);
+  document.getElementById('histModalTitle').textContent='💦 '+(s?.nome||'Setor')+' — histórico';
+  document.getElementById('histModalBody').innerHTML = regs.length? regs.map(r=>`
+    <div class="hm-row">
+      <div class="hm-data">${formatarData(r.data)}</div>
+      <div class="hm-hora">${r.horaInicio||'—'}${r.horaFim?' → '+r.horaFim:''} ${r.duracaoMin!=null?'· '+fmtDur(r.duracaoMin):''}</div>
+      ${r.obs?`<div class="hm-obs">📝 ${sanitizar(r.obs)}</div>`:''}
+      <div class="hm-meta">${r.criadoPor||''}</div>
+    </div>`).join('') : '<div class="hist-vazio">Sem registros.</div>';
+  document.getElementById('overlayHist').classList.add('open');
+};
+window.fecharHistorico=function(){ document.getElementById('overlayHist').classList.remove('open'); };
+window.overlayHistClick=function(e){ if(e.target.id==='overlayHist') fecharHistorico(); };
+
+// ─── SIDEBAR ───
+function preencherFazendasFiltro(){
+  const fazendas=[...new Set(setores.filter(s=>fazendaPermitida(s.fazenda)).map(s=>s.fazenda).filter(Boolean))].sort();
+  const sel=document.getElementById('filtroFaz');
+  const atual=filtroFazenda;
+  sel.innerHTML=`<option value="todas">Todas as fazendas</option>`+fazendas.map(f=>`<option value="${sanitizar(f)}" ${f===atual?'selected':''}>${sanitizar(f)}</option>`).join('');
+}
+window.setFiltroFaz=function(v){ filtroFazenda=v; renderizarSetores(); renderizarSidebar(); };
+
+function renderizarSidebar(){
+  const lista=document.getElementById('sidebarList');
+  const vis=setoresVisiveis().map(s=>{
+    const ult=ultimoRegistro(s._docId);
+    const dias=ult?diasDesde(ult.data):null;
+    return {...s, _dias:dias, _ord:(dias==null?99999:dias)};
+  });
+  document.getElementById('sidebarCount').textContent=vis.length+' setor'+(vis.length!==1?'es':'');
+  if(!vis.length){
+    lista.innerHTML=`<div style="padding:22px 14px;text-align:center;color:var(--c);font-size:.78rem;">${setores.length?'Nenhum setor nesta fazenda.':'Nenhum setor cadastrado ainda.'}${podeGerenciar()?'<br><br>Use <b>＋ Novo setor</b> para desenhar o primeiro.':''}</div>`;
+    return;
+  }
+  // agrupa por fazenda; dentro do grupo, mais atrasado (ou nunca) primeiro
+  const grupos={};
+  vis.forEach(s=>{ const f=s.fazenda||'Sem fazenda'; (grupos[f]=grupos[f]||[]).push(s); });
+  lista.innerHTML=Object.keys(grupos).sort().map(f=>{
+    const itens=grupos[f].sort((a,b)=>b._ord-a._ord);
+    return `<div class="sb-fazenda">${sanitizar(f)}</div>`+itens.map(s=>{
+      const cor=corRecencia(s._dias);
+      return `<div class="msb-item ${setorSel===s._docId?'active':''}" onclick="selecionarSetor('${s._docId}')">
+        <div class="msb-dot" style="background:${cor.dot}"></div>
+        <div class="msb-info">
+          <div class="msb-nome">${sanitizar(s.nome)}</div>
+          <div class="msb-sub" style="color:${cor.border};font-weight:600;">${labelRecencia(s._dias)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }).join('');
+}
+
+window.setFiltroFazSel=function(sel){ setFiltroFaz(sel.value); };
+window.toggleSidebar=function(){
+  sidebarAberta=!sidebarAberta;
+  document.getElementById('mapaSidebar').style.display=sidebarAberta?'flex':'none';
+  document.getElementById('btnExpandSb').style.display=sidebarAberta?'none':'block';
+  setTimeout(()=>map&&map.invalidateSize(),50);
+};
+
+// ─── HELPERS ───
+function formatarData(d){ if(!d)return'—'; const[a,m,dd]=d.split('-'); return `${dd}/${m}/${a}`; }
+function sanitizar(str){ return String(str==null?'':str).replace(/[<>&"']/g,ch=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
+function toast(msg,dur=3000){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
+window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
+window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
+window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
+
+// ─── LOCALIZAÇÃO ───
+function iniciarLocalizacao(){
+  if(!navigator.geolocation){toast('❌ Geolocalização não suportada.');return;}
+  const btn=document.getElementById('btnLocalizacao'); btn.classList.add('ativo');
+  locWatchId=navigator.geolocation.watchPosition(pos=>{
+    const{latitude:lat,longitude:lng,accuracy}=pos.coords; const latlng=[lat,lng];
+    if(!locMarker){
+      const icon=L.divIcon({className:'',html:'<div class="loc-pulse"><div class="loc-dot"></div></div>',iconSize:[20,20],iconAnchor:[10,10]});
+      locMarker=L.marker(latlng,{icon,zIndexOffset:1000}).addTo(map);
+      locAccCircle=L.circle(latlng,{radius:accuracy,color:'#4285f4',fillColor:'#4285f4',fillOpacity:.1,weight:1}).addTo(map);
+      map.setView(latlng,16); toast('📍 Localização ativa!');
+    }else{ locMarker.setLatLng(latlng); locAccCircle.setLatLng(latlng); locAccCircle.setRadius(accuracy); }
+  },err=>{ pararLocalizacao(); toast(err.code===1?'❌ Permissão de localização negada.':'❌ Não foi possível obter a localização.'); },
+  {enableHighAccuracy:true,maximumAge:5000,timeout:15000});
+}
+function pararLocalizacao(){
+  if(locWatchId!==null){navigator.geolocation.clearWatch(locWatchId);locWatchId=null;}
+  if(locMarker){map.removeLayer(locMarker);locMarker=null;}
+  if(locAccCircle){map.removeLayer(locAccCircle);locAccCircle=null;}
+  document.getElementById('btnLocalizacao').classList.remove('ativo');
+}
+window.toggleLocalizacao=function(){ if(locWatchId!==null)pararLocalizacao(); else iniciarLocalizacao(); };
+</script>
+
+<style>
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;--bg:#f4f1ea;--agua:#2563eb;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--agua);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+.menu-secao{font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.35);padding:12px 12px 4px;font-weight:700;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+#appContent{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.mapa-wrap{flex:1;position:relative;overflow:hidden;min-height:0;height:100%;}
+#map{width:100%;height:100%;}
+/* SIDEBAR */
+.mapa-sidebar{position:absolute;top:14px;left:14px;width:212px;height:calc(100% - 28px);max-height:calc(100% - 28px);background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);display:flex;flex-direction:column;overflow:hidden;}
+.msb-header{padding:9px 11px;border-bottom:1px solid var(--cl);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.msb-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--agua);font-weight:700;}
+.msb-filter{padding:6px 10px;border-bottom:1px solid var(--cl);flex-shrink:0;}
+.msb-filter select{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:5px 8px;font-size:.72rem;font-family:'Barlow',sans-serif;color:var(--t);outline:none;background:white;}
+#sidebarList{overflow-y:auto;flex:1;min-height:0;}
+.sb-fazenda{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;padding:7px 11px 3px;background:var(--cl);}
+.msb-item{padding:8px 11px;border-bottom:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;}
+.msb-item:hover{background:var(--cl);}
+.msb-item.active{background:var(--vb);border-left:3px solid var(--agua);}
+.msb-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px rgba(0,0,0,.06);}
+.msb-info{flex:1;min-width:0;}
+.msb-nome{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;line-height:1.3;font-weight:600;}
+.msb-sub{font-size:.66rem;}
+/* PAINEL INFO */
+.info-panel{position:absolute;top:14px;right:14px;width:300px;max-width:calc(100vw - 28px);max-height:calc(100% - 28px);overflow-y:auto;background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);transform:translateX(330px);opacity:0;transition:transform .35s cubic-bezier(.34,1.4,.64,1),opacity .3s;}
+.info-panel.visible{transform:translateX(0);opacity:1;}
+.panel-header{padding:14px 40px 10px 14px;border-bottom:1px solid var(--cl);position:relative;}
+.panel-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.35rem;line-height:1.1;}
+.panel-faz{font-size:.75rem;color:var(--c);margin-top:2px;}
+.panel-close{position:absolute;top:12px;right:12px;background:var(--cl);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;color:var(--c);}
+.recencia-bar{padding:9px 14px;border-bottom:1px solid var(--cl);}
+.recencia-tag{display:inline-flex;align-items:center;border:1.5px solid;border-radius:20px;padding:3px 12px;font-size:.72rem;font-weight:700;}
+.panel-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px;}
+.ult-box{background:var(--cl);border-radius:8px;padding:10px 11px;}
+.ult-box label{font-size:.56rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);display:block;margin-bottom:3px;font-weight:700;}
+.ult-val{font-size:.82rem;color:var(--t);font-family:'DM Mono',monospace;}
+.reg-box{border:1.5px solid #bae6fd;background:#f0f9ff;border-radius:10px;padding:11px;}
+.reg-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;color:var(--agua);margin-bottom:8px;}
+.reg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+.fg{display:flex;flex-direction:column;gap:3px;}
+.fg label{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
+.fg input,.fg select{border:1.5px solid var(--cb);border-radius:7px;padding:7px 8px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;}
+.fg input:focus,.fg select:focus{border-color:var(--agua);}
+.btn-registrar{width:100%;margin-top:9px;background:var(--agua);border:none;color:white;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.92rem;cursor:pointer;}
+.btn-registrar:active{transform:scale(.98);}
+.hist-wrap{border-top:1px solid var(--cl);padding-top:8px;}
+.hist-head{display:flex;justify-content:space-between;align-items:center;font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;margin-bottom:6px;}
+.link-btn{background:none;border:none;color:var(--agua);font-size:.66rem;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:600;}
+.hist-row{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--cl);font-size:.76rem;}
+.hist-data{font-weight:700;font-family:'DM Mono',monospace;width:64px;flex-shrink:0;}
+.hist-hora{flex:1;color:var(--c);font-family:'DM Mono',monospace;font-size:.72rem;}
+.hist-dur{color:var(--agua);font-weight:600;font-size:.7rem;}
+.hist-del{background:#fee2e2;color:var(--danger);border:none;border-radius:5px;width:20px;height:20px;font-size:.6rem;cursor:pointer;flex-shrink:0;}
+.hist-obs{font-size:.68rem;color:#6b7280;font-style:italic;padding:0 2px 6px 66px;border-bottom:1px solid var(--cl);}
+.hist-vazio{font-size:.74rem;color:var(--c);text-align:center;padding:10px;}
+.panel-actions{display:flex;gap:6px;padding:0 14px 12px;flex-wrap:wrap;}
+.btn-edit{flex:1;min-width:90px;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:7px;padding:8px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+.btn-del-panel{background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:7px;padding:8px 12px;font-size:.72rem;cursor:pointer;}
+/* LEGENDA */
+.legenda{position:absolute;bottom:20px;left:14px;background:rgba(255,255,255,.95);border-radius:10px;padding:8px 11px;z-index:999;box-shadow:var(--sf);font-size:.62rem;}
+.legenda-tit{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;margin-bottom:5px;}
+.leg-row{display:flex;align-items:center;gap:6px;margin-bottom:2px;color:var(--t);}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);border-radius:20px;padding:6px 14px;font-size:.72rem;color:rgba(255,255,255,.9);z-index:999;pointer-events:none;white-space:nowrap;}
+.hint-desenho{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:var(--agua);border-radius:20px;padding:8px 18px;font-size:.78rem;color:white;z-index:1002;font-weight:600;display:none;box-shadow:var(--sf);}
+#btnNovoSetor{display:none;position:absolute;bottom:20px;right:16px;background:var(--agua);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
+#btnExpandSb{display:none;position:absolute;top:14px;left:14px;z-index:1001;background:white;border:none;border-radius:10px;padding:9px 13px;cursor:pointer;box-shadow:var(--sf);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--agua);}
+#btnLocalizacao{position:absolute;bottom:76px;right:16px;width:44px;height:44px;background:white;border:none;border-radius:50%;cursor:pointer;box-shadow:var(--sf);z-index:1000;display:flex;align-items:center;justify-content:center;font-size:20px;}
+#btnLocalizacao.ativo{background:#e8f0fe;}
+.loc-pulse{width:20px;height:20px;display:flex;align-items:center;justify-content:center;position:relative;}
+.loc-dot{width:14px;height:14px;background:#4285f4;border:2.5px solid white;border-radius:50%;animation:locpulse 2s infinite;}
+@keyframes locpulse{0%{box-shadow:0 0 0 0 rgba(66,133,244,.4);}70%{box-shadow:0 0 0 12px rgba(66,133,244,0);}100%{box-shadow:0 0 0 0 rgba(66,133,244,0);}}
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2500;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;padding:16px;}
+.overlay.open{opacity:1;pointer-events:all;}
+.modal{background:white;border-radius:16px;width:460px;max-width:96vw;max-height:90vh;overflow-y:auto;box-shadow:0 30px 80px rgba(0,0,0,.4);}
+.modal-header{padding:16px 18px 12px;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;}
+.modal-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;}
+.modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:11px;}
+.modal-body label{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--v);font-weight:700;display:block;margin-bottom:4px;}
+.modal-body input,.modal-body select{width:100%;border:1.5px solid var(--cb);border-radius:8px;padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;}
+.modal-body input:focus,.modal-body select:focus{border-color:var(--agua);}
+.modal-footer{padding:10px 18px 16px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--cb);}
+.btn-cancel{background:var(--cl);border:1px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:9px 18px;font-size:.8rem;cursor:pointer;font-family:'Barlow',sans-serif;}
+.btn-save{background:var(--agua);border:none;color:white;border-radius:var(--rs);padding:9px 22px;font-size:.8rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+.hm-row{padding:9px 2px;border-bottom:1px solid var(--cl);}
+.hm-data{font-weight:700;font-family:'DM Mono',monospace;font-size:.82rem;}
+.hm-hora{font-size:.76rem;color:var(--c);font-family:'DM Mono',monospace;}
+.hm-obs{font-size:.72rem;color:#6b7280;font-style:italic;margin-top:2px;}
+.hm-meta{font-size:.6rem;color:var(--cb);margin-top:2px;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
+@media(max-width:520px){.info-panel{width:calc(100vw - 28px);}.mapa-sidebar{width:170px;}}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Gestão de Irrigação</span></div>
+  </div>
+  <div class="hdr-user" id="userNome"></div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+  <div class="mapa-wrap">
+    <div id="map"></div>
+    <div class="mapa-sidebar" id="mapaSidebar">
+      <div class="msb-header">
+        <span class="msb-title">💦 Setores</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:.6rem;color:var(--c)" id="sidebarCount"></span>
+          <button onclick="toggleSidebar()" style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--c);padding:2px 4px;">◀</button>
+        </div>
+      </div>
+      <div class="msb-filter">
+        <select id="filtroFaz" onchange="setFiltroFazSel(this)"><option value="todas">Todas as fazendas</option></select>
+      </div>
+      <div id="sidebarList"></div>
+    </div>
+    <button id="btnExpandSb" onclick="toggleSidebar()">▶ Setores</button>
+
+    <div class="info-panel" id="infoPanel">
+      <div class="panel-header">
+        <div class="panel-nome" id="pNome"></div>
+        <div class="panel-faz" id="pFaz"></div>
+        <button class="panel-close" onclick="fecharPainel()">✕</button>
+      </div>
+      <div class="recencia-bar"><span class="recencia-tag" id="pRecencia"></span></div>
+      <div class="panel-body" id="pBody"></div>
+      <div class="panel-actions" id="panelActions"></div>
+    </div>
+
+    <div class="legenda">
+      <div class="legenda-tit">Última irrigação</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#2563eb"></span>Hoje</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#22c55e"></span>1–2 dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#eab308"></span>3–4 dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#f97316"></span>5–6 dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#ef4444"></span>7+ dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#94a3b8"></span>Nunca</div>
+    </div>
+
+    <div class="hint" id="hintBar">Toque em um setor para registrar a rega</div>
+    <div class="hint-desenho" id="hintDesenho">✏️ Desenhe o setor no mapa</div>
+    <button id="btnLocalizacao" onclick="toggleLocalizacao()" title="Minha localização">📍</button>
+    <button id="btnNovoSetor" onclick="abrirNovoSetor()">＋ Novo setor</button>
+  </div>
+</div>
+
+<!-- MODAL NOVO/EDITAR SETOR -->
+<div class="overlay" id="overlaySetor" onclick="overlaySetorClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="modalSetorTitle">Novo Setor</div><button class="panel-close" onclick="fecharModalSetor()">✕</button></div>
+    <div class="modal-body">
+      <div><label>Nome do setor</label><input type="text" id="sNome" placeholder="Ex: Setor 3, Turno Norte..."></div>
+      <div><label>Fazenda</label><select id="sFazenda" onchange="checarFazendaModal()"></select></div>
+      <div><label>Talhão (opcional)</label><select id="sTalhao"></select></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharModalSetor()">Cancelar</button>
+      <button class="btn-save" onclick="salvarSetor()">Salvar Setor</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL HISTÓRICO COMPLETO -->
+<div class="overlay" id="overlayHist" onclick="overlayHistClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title" id="histModalTitle">Histórico</div><button class="panel-close" onclick="fecharHistorico()">✕</button></div>
+    <div class="modal-body" id="histModalBody"></div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="fecharHistorico()">Fechar</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
