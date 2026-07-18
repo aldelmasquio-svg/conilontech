@@ -34,6 +34,7 @@ let talhoes=[], setores=[], registros=[];
 let map, mapaIniciado=false, talhaoLayers=[], setorLayers={}, setorSel=null;
 let drawControl, drawnItems, modoDesenho=false, setorEditandoCoords=null, _setorRedesenhoId=null;
 let filtroFazenda='todas', sidebarAberta=true;
+let talhoesExpandidos=new Set(); // talhões abertos no accordion da sidebar
 let locWatchId=null, locMarker=null, locAccCircle=null;
 
 // ─── AUTH ───
@@ -222,6 +223,8 @@ function setoresVisiveis(){
 
 window.selecionarSetor=function(id){
   setorSel=id;
+  const s=setores.find(x=>x._docId===id);
+  if(s) talhoesExpandidos.add(s.talhaoId||'__sem__'); // abre o talhão do setor na lista
   renderizarSetores();
   renderizarSidebar();
   abrirPainelSetor(id);
@@ -371,7 +374,7 @@ function abrirModalSetor(coords, setorExistente){
   document.getElementById('modalSetorTitle').textContent = setorExistente ? 'Editar Setor' : 'Novo Setor';
   document.getElementById('sNome').value = setorExistente?.nome || (sug? '' : '');
   const selFaz=document.getElementById('sFazenda');
-  selFaz.innerHTML = `<option value="">Selecione a fazenda...</option>` + fazendas.map(f=>`<option value="${sanitizar(f)}" ${f===fazSel?'selected':''}>${sanitizar(f)}</option>`).join('');
+  selFaz.innerHTML = `<option value="">Todas as fazendas</option>` + fazendas.map(f=>`<option value="${sanitizar(f)}" ${f===fazSel?'selected':''}>${sanitizar(f)}</option>`).join('');
   atualizarTalhoesDoModal(setorExistente?.talhaoId || sug?.id || '');
   selFaz.onchange=()=>atualizarTalhoesDoModal('');
   document.getElementById('overlaySetor').classList.add('open');
@@ -380,31 +383,32 @@ function abrirModalSetor(coords, setorExistente){
 function atualizarTalhoesDoModal(talhaoIdSel){
   const faz=document.getElementById('sFazenda').value;
   const lista=talhoes.filter(t=>!faz||t.fazenda===faz);
-  document.getElementById('sTalhao').innerHTML = `<option value="">— (opcional) —</option>` +
+  document.getElementById('sTalhao').innerHTML = `<option value="">Selecione o talhão...</option>` +
     lista.map(t=>`<option value="${sanitizar(t.id||'')}" ${t.id===talhaoIdSel?'selected':''}>${sanitizar((t.id||'')+' · '+(t.nome||''))}</option>`).join('');
 }
 window.checarFazendaModal=function(){ atualizarTalhoesDoModal(''); };
 
 window.salvarSetor=async function(){
   const nome=(document.getElementById('sNome').value||'').trim();
-  const fazenda=document.getElementById('sFazenda').value;
   const talhaoId=document.getElementById('sTalhao').value;
   const talhao=talhoes.find(t=>t.id===talhaoId);
   if(!nome){ toast('⚠️ Dê um nome ao setor.'); return; }
-  if(!fazenda){ toast('⚠️ Selecione a fazenda.'); return; }
+  if(!talhao){ toast('⚠️ Selecione o talhão do setor.'); return; }
+  const fazenda=talhao.fazenda||''; // fazenda derivada do talhão (mantém a hierarquia consistente)
   try{
     if(_setorRedesenhoId){
       // Redesenho: mantém dados, troca coordenadas
       await updateDoc(doc(db,'irrigacaoSetores',_setorRedesenhoId),{
-        nome, fazenda, talhaoId:talhaoId||'', talhaoNome:talhao?.nome||'', coordenadas:setorEditandoCoords||[]
+        nome, fazenda, talhaoId, talhaoNome:talhao.nome||'', coordenadas:setorEditandoCoords||[]
       });
       _setorRedesenhoId=null;
       toast('✅ Setor atualizado!');
     }else{
       const ref=await addDoc(collection(db,'irrigacaoSetores'),{
-        nome, fazenda, talhaoId:talhaoId||'', talhaoNome:talhao?.nome||'',
+        nome, fazenda, talhaoId, talhaoNome:talhao.nome||'',
         coordenadas:setorEditandoCoords||[], criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
       });
+      talhoesExpandidos.add(talhaoId);
       toast('✅ Setor cadastrado!');
       setTimeout(()=>selecionarSetor(ref.id),500);
     }
@@ -470,23 +474,62 @@ function renderizarSidebar(){
     lista.innerHTML=`<div style="padding:22px 14px;text-align:center;color:var(--c);font-size:.78rem;">${setores.length?'Nenhum setor nesta fazenda.':'Nenhum setor cadastrado ainda.'}${podeGerenciar()?'<br><br>Use <b>＋ Novo setor</b> para desenhar o primeiro.':''}</div>`;
     return;
   }
-  // agrupa por fazenda; dentro do grupo, mais atrasado (ou nunca) primeiro
-  const grupos={};
-  vis.forEach(s=>{ const f=s.fazenda||'Sem fazenda'; (grupos[f]=grupos[f]||[]).push(s); });
-  lista.innerHTML=Object.keys(grupos).sort().map(f=>{
-    const itens=grupos[f].sort((a,b)=>b._ord-a._ord);
-    return `<div class="sb-fazenda">${sanitizar(f)}</div>`+itens.map(s=>{
-      const cor=corRecencia(s._dias);
-      return `<div class="msb-item ${setorSel===s._docId?'active':''}" onclick="selecionarSetor('${s._docId}')">
-        <div class="msb-dot" style="background:${cor.dot}"></div>
-        <div class="msb-info">
-          <div class="msb-nome">${sanitizar(s.nome)}</div>
-          <div class="msb-sub" style="color:${cor.border};font-weight:600;">${labelRecencia(s._dias)}</div>
+  // Hierarquia: Fazenda → Talhão (accordion) → Setores
+  const porFaz={};
+  vis.forEach(s=>{
+    const f=s.fazenda||'Sem fazenda';
+    const tKey=s.talhaoId||'__sem__';
+    porFaz[f]=porFaz[f]||{};
+    porFaz[f][tKey]=porFaz[f][tKey] || {id:s.talhaoId||'', nome:s.talhaoNome||s.talhaoId||'Sem talhão', setores:[]};
+    porFaz[f][tKey].setores.push(s);
+  });
+  lista.innerHTML=Object.keys(porFaz).sort().map(f=>{
+    // talhões da fazenda ordenados pelo mais urgente (pior recência) primeiro
+    const talhaoArr=Object.values(porFaz[f]).map(t=>{
+      const temNunca=t.setores.some(s=>s._dias==null);
+      const piorDias=t.setores.reduce((a,s)=>s._dias==null?a:Math.max(a??0,s._dias),null);
+      return {...t, _urg: temNunca?99999:(piorDias??-1), _cor: temNunca?corRecencia(null):corRecencia(piorDias)};
+    }).sort((a,b)=>b._urg-a._urg);
+    return `<div class="sb-fazenda">${sanitizar(f)}</div>`+talhaoArr.map(t=>{
+      const tKey=t.id||'__sem__';
+      const aberto=talhoesExpandidos.has(tKey);
+      const n=t.setores.length;
+      const setoresHtml=aberto ? t.setores.slice().sort((a,b)=>b._ord-a._ord).map(s=>{
+        const cor=corRecencia(s._dias);
+        return `<div class="msb-setor ${setorSel===s._docId?'active':''}" onclick="selecionarSetor('${s._docId}')">
+          <div class="msb-dot" style="background:${cor.dot}"></div>
+          <div class="msb-info">
+            <div class="msb-nome">${sanitizar(s.nome)}</div>
+            <div class="msb-sub" style="color:${cor.border};font-weight:600;">${labelRecencia(s._dias)}</div>
+          </div>
+        </div>`;
+      }).join('') : '';
+      return `<div class="sb-talhao-bloco">
+        <div class="sb-talhao ${aberto?'aberto':''}" onclick="toggleTalhao('${tKey}')">
+          <span class="sb-caret">${aberto?'▾':'▸'}</span>
+          <div class="msb-dot" style="background:${t._cor.dot}"></div>
+          <div class="msb-info">
+            <div class="sb-tal-nome">${sanitizar(t.nome)}</div>
+            <div class="sb-tal-sub">${n} setor${n!==1?'es':''}</div>
+          </div>
         </div>
+        <div class="sb-setores">${setoresHtml}</div>
       </div>`;
     }).join('');
   }).join('');
 }
+window.toggleTalhao=function(key){
+  if(talhoesExpandidos.has(key)){ talhoesExpandidos.delete(key); }
+  else{
+    talhoesExpandidos.add(key);
+    // ao abrir um talhão, dá zoom nele no mapa para o funcionário se localizar
+    const t=talhoes.find(x=>x.id===key);
+    if(t && t.coordenadas && t.coordenadas.length>=3){
+      try{ map.fitBounds(L.polygon(normLatLngs(t.coordenadas)).getBounds(),{maxZoom:17,padding:[50,50]}); }catch(e){}
+    }
+  }
+  renderizarSidebar();
+};
 
 window.setFiltroFazSel=function(sel){ setFiltroFaz(sel.value); };
 window.toggleSidebar=function(){
@@ -573,6 +616,19 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .msb-info{flex:1;min-width:0;}
 .msb-nome{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;line-height:1.3;font-weight:600;}
 .msb-sub{font-size:.66rem;}
+/* ACCORDION TALHÃO → SETORES */
+.sb-talhao-bloco{border-bottom:1px solid var(--cl);}
+.sb-talhao{padding:9px 10px;cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;background:white;}
+.sb-talhao:hover{background:var(--cl);}
+.sb-talhao.aberto{background:var(--vb);}
+.sb-caret{font-size:.7rem;color:var(--c);width:12px;flex-shrink:0;}
+.sb-tal-nome{font-size:.82rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
+.sb-tal-sub{font-size:.62rem;color:var(--c);}
+.sb-setores{background:#fafcff;}
+.sb-setores:empty{display:none;}
+.msb-setor{padding:8px 11px 8px 24px;border-top:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;}
+.msb-setor:hover{background:var(--cl);}
+.msb-setor.active{background:var(--vb);border-left:3px solid var(--agua);padding-left:21px;}
 /* PAINEL INFO */
 .info-panel{position:absolute;top:14px;right:14px;width:300px;max-width:calc(100vw - 28px);max-height:calc(100% - 28px);overflow-y:auto;background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);transform:translateX(330px);opacity:0;transition:transform .35s cubic-bezier(.34,1.4,.64,1),opacity .3s;}
 .info-panel.visible{transform:translateX(0);opacity:1;}
@@ -719,9 +775,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
   <div class="modal">
     <div class="modal-header"><div class="modal-title" id="modalSetorTitle">Novo Setor</div><button class="panel-close" onclick="fecharModalSetor()">✕</button></div>
     <div class="modal-body">
+      <div><label>Talhão</label><select id="sTalhao"></select><div style="font-size:.62rem;color:var(--c);margin-top:3px;">O setor pertence a este talhão. A fazenda é definida automaticamente por ele.</div></div>
+      <div><label>Fazenda (filtro)</label><select id="sFazenda" onchange="checarFazendaModal()"></select></div>
       <div><label>Nome do setor</label><input type="text" id="sNome" placeholder="Ex: Setor 3, Turno Norte..."></div>
-      <div><label>Fazenda</label><select id="sFazenda" onchange="checarFazendaModal()"></select></div>
-      <div><label>Talhão (opcional)</label><select id="sTalhao"></select></div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharModalSetor()">Cancelar</button>
