@@ -189,12 +189,21 @@ function fmtDur(min){ if(min==null)return''; const h=Math.floor(min/60),m=min%60
 function diasDesde(dataISO){ if(!dataISO)return null; const hoje=new Date(hojeISO()+'T00:00:00'); const d=new Date(dataISO+'T00:00:00'); return Math.round((hoje-d)/86400000); }
 function labelRecencia(dias){ if(dias==null)return 'Nunca irrigado'; if(dias===0)return 'Irrigado hoje'; if(dias===1)return 'Irrigado ontem'; return `Há ${dias} dias`; }
 function corRecencia(dias){
-  if(dias==null) return {fill:'rgba(148,163,184,.35)',border:'#94a3b8',dot:'#94a3b8'};
-  if(dias===0)   return {fill:'rgba(37,99,235,.45)', border:'#2563eb',dot:'#2563eb'};
-  if(dias<=2)    return {fill:'rgba(34,197,94,.45)', border:'#22c55e',dot:'#22c55e'};
-  if(dias<=4)    return {fill:'rgba(234,179,8,.45)', border:'#eab308',dot:'#eab308'};
-  if(dias<=6)    return {fill:'rgba(249,115,22,.45)',border:'#f97316',dot:'#f97316'};
-  return                {fill:'rgba(239,68,68,.5)',  border:'#ef4444',dot:'#ef4444'};
+  if(dias==null) return {fill:'rgba(148,163,184,.35)',border:'#94a3b8',dot:'#94a3b8'}; // nunca
+  if(dias===0)   return {fill:'rgba(37,99,235,.45)', border:'#2563eb',dot:'#2563eb'}; // hoje
+  if(dias<=4)    return {fill:'rgba(34,197,94,.45)', border:'#22c55e',dot:'#22c55e'}; // 1-4 dias
+  if(dias<=7)    return {fill:'rgba(234,179,8,.45)', border:'#eab308',dot:'#eab308'}; // 5-7 dias
+  if(dias<=9)    return {fill:'rgba(249,115,22,.45)',border:'#f97316',dot:'#f97316'}; // 8-9 dias
+  return                {fill:'rgba(239,68,68,.5)',  border:'#ef4444',dot:'#ef4444'}; // 10+ dias
+}
+// Turno "em aberto" = iniciado mas ainda sem hora de término
+function turnoAbertoDoSetor(setorId){ return registrosDoSetor(setorId).find(r=>r.horaInicio && !r.horaFim) || null; }
+// Minutos decorridos desde o início do turno (para "em andamento há Xh")
+function tempoDecorrido(data,horaInicio){
+  if(!data||!horaInicio)return null;
+  const ini=new Date(data+'T'+horaInicio+':00');
+  const diff=Math.floor((new Date()-ini)/60000);
+  return diff>=0?diff:null;
 }
 // Registros de um setor, mais recente primeiro
 function registrosDoSetor(setorId){
@@ -238,51 +247,85 @@ function abrirPainelSetor(id){
   const s=setores.find(x=>x._docId===id);
   if(!s){ fecharPainel(); return; }
   const regs=registrosDoSetor(id);
-  const ult=regs[0]||null;
-  const dias=ult?diasDesde(ult.data):null;
+  const ultQualquer=regs[0]||null;                 // define a recência (cor) — turno em andamento hoje já conta
+  const dias=ultQualquer?diasDesde(ultQualquer.data):null;
   const cor=corRecencia(dias);
+  const aberto=turnoAbertoDoSetor(id);             // turno iniciado e ainda não finalizado
+  const concluidos=regs.filter(r=>r.horaFim);
+  const ult=concluidos[0]||null;                   // última irrigação concluída
+
   document.getElementById('pNome').textContent='💦 '+(s.nome||'Setor');
   document.getElementById('pFaz').textContent=(s.fazenda||'—')+(s.talhaoNome?' · '+s.talhaoNome:'');
   const badge=document.getElementById('pRecencia');
-  badge.textContent=labelRecencia(dias);
-  badge.style.background=cor.fill; badge.style.color=cor.border; badge.style.borderColor=cor.border;
+  badge.textContent=aberto?'💧 Irrigando agora':labelRecencia(dias);
+  const cb=aberto?corRecencia(0):cor;
+  badge.style.background=cb.fill; badge.style.color=cb.border; badge.style.borderColor=cb.border;
 
-  const ultTxt = ult
-    ? `${formatarData(ult.data)} · ${ult.horaInicio||'—'}${ult.horaFim?'→'+ult.horaFim:''}${ult.duracaoMin!=null?' ('+fmtDur(ult.duracaoMin)+')':''}`
-    : 'Nenhum turno registrado ainda.';
-
-  let regForm='';
+  // ── Bloco de turno (ação principal do irrigador) ──
+  let blocoTurno='';
   if(podeRegistrar()){
-    regForm=`
-      <div class="reg-box">
-        <div class="reg-tit">💧 Registrar turno de rega</div>
-        <div class="reg-grid">
-          <div class="fg"><label>Data</label><input type="date" id="regData" value="${hojeISO()}"></div>
-          <div class="fg"><label>Início</label><input type="time" id="regIni" value="${agoraHM()}"></div>
-          <div class="fg"><label>Fim</label><input type="time" id="regFim"></div>
-        </div>
-        <div class="fg" style="margin-top:6px;"><label>Observação (opcional)</label><input type="text" id="regObs" placeholder="Ex: pressão baixa, vazamento..."></div>
-        <button class="btn-registrar" onclick="registrarTurno('${id}')">💦 Registrar irrigação</button>
-      </div>`;
+    if(aberto){
+      const decorr=tempoDecorrido(aberto.data,aberto.horaInicio);
+      blocoTurno=`
+        <div class="turno-box andamento">
+          <div class="turno-status"><span class="pulse-dot"></span> Turno em andamento</div>
+          <div class="turno-sub">Iniciado ${formatarData(aberto.data)} às <b>${aberto.horaInicio}</b>${decorr!=null?` · há <b>${fmtDur(decorr)}</b>`:''}</div>
+          <button class="btn-turno finalizar" onclick="finalizarTurnoAgora('${aberto._docId}')">⏹️ Finalizar agora · ${agoraHM()}</button>
+          <div class="turno-links">
+            <button class="link-btn" onclick="toggleFinManual()">ajustar horário de término</button>
+            <button class="link-btn danger" onclick="cancelarTurnoAberto('${aberto._docId}')">cancelar turno</button>
+          </div>
+          <div id="finManual" class="turno-extra" style="display:none;">
+            <div class="reg-grid2">
+              <div class="fg"><label>Horário de término</label><input type="time" id="finHora" value="${agoraHM()}"></div>
+            </div>
+            <div class="fg" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="finObs" value="${sanitizar(aberto.obs||'')}" placeholder="Ex: pressão baixa..."></div>
+            <button class="btn-turno finalizar" style="margin-top:10px;" onclick="finalizarTurnoManual('${aberto._docId}')">Salvar término</button>
+          </div>
+        </div>`;
+    }else{
+      blocoTurno=`
+        <div class="turno-box iniciar">
+          <button class="btn-turno iniciar" onclick="iniciarTurno('${id}')">▶️ Iniciar turno agora · ${agoraHM()}</button>
+          <button class="link-btn center" onclick="toggleManual()">registrar um turno já concluído</button>
+          <div id="regManual" class="turno-extra" style="display:none;">
+            <div class="reg-grid">
+              <div class="fg"><label>Data</label><input type="date" id="regData" value="${hojeISO()}"></div>
+              <div class="fg"><label>Início</label><input type="time" id="regIni" value="${agoraHM()}"></div>
+              <div class="fg"><label>Fim</label><input type="time" id="regFim"></div>
+            </div>
+            <div class="fg" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="regObs" placeholder="Ex: pressão baixa, vazamento..."></div>
+            <button class="btn-turno" style="margin-top:10px;" onclick="registrarManual('${id}')">Salvar turno</button>
+          </div>
+        </div>`;
+    }
   }
 
-  const histRows = regs.slice(0,6).map(r=>`
-    <div class="hist-row">
-      <div class="hist-data">${formatarData(r.data)}</div>
-      <div class="hist-hora">${r.horaInicio||'—'}${r.horaFim?' → '+r.horaFim:''}</div>
-      <div class="hist-dur">${r.duracaoMin!=null?fmtDur(r.duracaoMin):''}</div>
-      ${podeGerenciar()?`<button class="hist-del" title="Excluir registro" onclick="excluirRegistro('${r._docId}')">✕</button>`:''}
-    </div>
-    ${r.obs?`<div class="hist-obs">${sanitizar(r.obs)}</div>`:''}`).join('');
+  // ── Última irrigação concluída ──
+  const ultTxt = ult
+    ? `<b>${formatarData(ult.data)}</b> &nbsp;·&nbsp; ${ult.horaInicio} → ${ult.horaFim}${ult.duracaoMin!=null?` &nbsp;·&nbsp; ${fmtDur(ult.duracaoMin)}`:''}`
+    : 'Nenhum turno concluído ainda.';
+
+  // ── Histórico ──
+  const histRows = regs.slice(0,6).map(r=>{
+    const emAberto = r.horaInicio && !r.horaFim;
+    return `<div class="hist-row">
+        <div class="hist-data">${formatarData(r.data)}</div>
+        <div class="hist-hora">${r.horaInicio||'—'}${r.horaFim?' → '+r.horaFim:(emAberto?' → <span class="tag-andamento">em andamento</span>':'')}</div>
+        <div class="hist-dur">${r.duracaoMin!=null?fmtDur(r.duracaoMin):''}</div>
+        ${podeGerenciar()?`<button class="hist-del" title="Excluir registro" onclick="excluirRegistro('${r._docId}')">✕</button>`:''}
+      </div>
+      ${r.obs?`<div class="hist-obs">${sanitizar(r.obs)}</div>`:''}`;
+  }).join('');
 
   document.getElementById('pBody').innerHTML=`
-    <div class="ult-box">
-      <label>Última irrigação</label>
+    ${blocoTurno}
+    <div class="secao">
+      <div class="secao-tit">Última irrigação</div>
       <div class="ult-val">${ultTxt}</div>
     </div>
-    ${regForm}
-    <div class="hist-wrap">
-      <div class="hist-head"><span>Últimos turnos</span>${regs.length>6?`<button class="link-btn" onclick="abrirHistorico('${id}')">ver todos (${regs.length})</button>`:''}</div>
+    <div class="secao">
+      <div class="secao-tit hist-head"><span>Últimos turnos</span>${regs.length>6?`<button class="link-btn" onclick="abrirHistorico('${id}')">ver todos (${regs.length})</button>`:''}</div>
       ${regs.length?histRows:'<div class="hist-vazio">Sem histórico.</div>'}
     </div>`;
 
@@ -300,9 +343,48 @@ window.fecharPainel=function(){
   setorSel=null; renderizarSetores(); renderizarSidebar();
   document.getElementById('hintBar').style.display='block';
 };
+window.toggleManual=function(){ const el=document.getElementById('regManual'); if(el)el.style.display=el.style.display==='none'?'block':'none'; };
+window.toggleFinManual=function(){ const el=document.getElementById('finManual'); if(el)el.style.display=el.style.display==='none'?'block':'none'; };
 
-// ─── REGISTRO DE TURNO ───
-window.registrarTurno=async function(setorId){
+// ─── TURNO DE REGA (iniciar agora → finalizar depois; um só registro) ───
+window.iniciarTurno=async function(setorId){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const s=setores.find(x=>x._docId===setorId); if(!s)return;
+  if(turnoAbertoDoSetor(setorId)){ toast('⚠️ Este setor já tem um turno em andamento.'); return; }
+  try{
+    await addDoc(collection(db,'irrigacaoRegistros'),{
+      setorId, setorNome:s.nome||'', fazenda:s.fazenda||'', talhaoId:s.talhaoId||'', talhaoNome:s.talhaoNome||'',
+      data:hojeISO(), horaInicio:agoraHM(), horaFim:'', duracaoMin:null, obs:'', status:'aberto',
+      criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
+    });
+    toast('▶️ Turno iniciado! Volte e finalize quando terminar a rega.',4500);
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.finalizarTurnoAgora=function(regId){ finalizarTurno(regId, agoraHM(), null); };
+window.finalizarTurnoManual=function(regId){
+  const hf=document.getElementById('finHora')?.value;
+  const obs=document.getElementById('finObs')?document.getElementById('finObs').value:null;
+  if(!hf){ toast('⚠️ Informe o horário de término.'); return; }
+  finalizarTurno(regId, hf, obs);
+};
+async function finalizarTurno(regId, horaFim, obs){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const r=registros.find(x=>x._docId===regId); if(!r)return;
+  const duracaoMin=calcDuracao(r.horaInicio, horaFim);
+  const upd={ horaFim, duracaoMin, status:'concluido', finalizadoEm:new Date().toISOString() };
+  if(obs!=null) upd.obs=(obs||'').trim();
+  try{
+    await updateDoc(doc(db,'irrigacaoRegistros',regId), upd);
+    toast(`✅ Turno finalizado!${duracaoMin!=null?' Duração: '+fmtDur(duracaoMin)+'.':''}`,4000);
+  }catch(e){ toast('❌ Erro: '+e.message); }
+}
+window.cancelarTurnoAberto=async function(regId){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  if(!confirm('Cancelar o turno em andamento? O registro será excluído.'))return;
+  try{ await deleteDoc(doc(db,'irrigacaoRegistros',regId)); toast('Turno cancelado.'); }
+  catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.registrarManual=async function(setorId){
   if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
   const s=setores.find(x=>x._docId===setorId); if(!s)return;
   const data=document.getElementById('regData').value || hojeISO();
@@ -314,10 +396,10 @@ window.registrarTurno=async function(setorId){
   try{
     await addDoc(collection(db,'irrigacaoRegistros'),{
       setorId, setorNome:s.nome||'', fazenda:s.fazenda||'', talhaoId:s.talhaoId||'', talhaoNome:s.talhaoNome||'',
-      data, horaInicio, horaFim, duracaoMin, obs,
+      data, horaInicio, horaFim, duracaoMin, obs, status:horaFim?'concluido':'aberto',
       criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
     });
-    toast('💦 Turno de rega registrado!');
+    toast('💦 Turno registrado!');
   }catch(e){ toast('❌ Erro: '+e.message); }
 };
 window.excluirRegistro=async function(id){
@@ -741,32 +823,46 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .panel-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.35rem;line-height:1.1;}
 .panel-faz{font-size:.75rem;color:var(--c);margin-top:2px;}
 .panel-close{position:absolute;top:12px;right:12px;background:var(--cl);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;color:var(--c);}
-.recencia-bar{padding:9px 14px;border-bottom:1px solid var(--cl);}
-.recencia-tag{display:inline-flex;align-items:center;border:1.5px solid;border-radius:20px;padding:3px 12px;font-size:.72rem;font-weight:700;}
-.panel-body{padding:12px 14px;display:flex;flex-direction:column;gap:12px;}
-.ult-box{background:var(--cl);border-radius:8px;padding:10px 11px;}
-.ult-box label{font-size:.56rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);display:block;margin-bottom:3px;font-weight:700;}
-.ult-val{font-size:.82rem;color:var(--t);font-family:'DM Mono',monospace;}
-.reg-box{border:1.5px solid #bae6fd;background:#f0f9ff;border-radius:10px;padding:11px;}
-.reg-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;color:var(--agua);margin-bottom:8px;}
-.reg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
-.fg{display:flex;flex-direction:column;gap:3px;}
-.fg label{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
-.fg input,.fg select{border:1.5px solid var(--cb);border-radius:7px;padding:7px 8px;font-size:.8rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;}
+.recencia-bar{padding:10px 16px;border-bottom:1px solid var(--cl);}
+.recencia-tag{display:inline-flex;align-items:center;border:1.5px solid;border-radius:20px;padding:4px 13px;font-size:.74rem;font-weight:700;}
+.panel-body{padding:16px;display:flex;flex-direction:column;gap:18px;}
+/* Seções com respiro */
+.secao{display:flex;flex-direction:column;gap:7px;}
+.secao-tit{font-size:.6rem;text-transform:uppercase;letter-spacing:.11em;color:var(--c);font-weight:700;}
+.ult-val{font-size:.86rem;color:var(--t);background:var(--cl);border-radius:9px;padding:11px 13px;line-height:1.5;}
+/* Bloco de turno */
+.turno-box{border-radius:12px;padding:14px;}
+.turno-box.iniciar{border:1.5px solid #bae6fd;background:#f0f9ff;display:flex;flex-direction:column;gap:10px;}
+.turno-box.andamento{border:1.5px solid #93c5fd;background:linear-gradient(180deg,#eff6ff,#f0f9ff);display:flex;flex-direction:column;gap:9px;}
+.turno-status{display:flex;align-items:center;gap:8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--agua);}
+.pulse-dot{width:11px;height:11px;border-radius:50%;background:var(--agua);box-shadow:0 0 0 0 rgba(37,99,235,.5);animation:pulseDot 1.6s infinite;flex-shrink:0;}
+@keyframes pulseDot{0%{box-shadow:0 0 0 0 rgba(37,99,235,.5);}70%{box-shadow:0 0 0 9px rgba(37,99,235,0);}100%{box-shadow:0 0 0 0 rgba(37,99,235,0);}}
+.turno-sub{font-size:.8rem;color:var(--t);line-height:1.5;}
+.btn-turno{width:100%;background:var(--agua);border:none;color:white;border-radius:9px;padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;letter-spacing:.01em;}
+.btn-turno:active{transform:scale(.98);}
+.btn-turno.iniciar{background:#16a34a;}
+.btn-turno.finalizar{background:var(--agua);}
+.turno-links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.turno-extra{border-top:1px dashed #bae6fd;padding-top:11px;}
+.reg-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.reg-grid2{display:grid;grid-template-columns:1fr;gap:8px;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
+.fg input,.fg select{border:1.5px solid var(--cb);border-radius:8px;padding:9px 10px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:white;}
 .fg input:focus,.fg select:focus{border-color:var(--agua);}
-.btn-registrar{width:100%;margin-top:9px;background:var(--agua);border:none;color:white;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.92rem;cursor:pointer;}
-.btn-registrar:active{transform:scale(.98);}
-.hist-wrap{border-top:1px solid var(--cl);padding-top:8px;}
-.hist-head{display:flex;justify-content:space-between;align-items:center;font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;margin-bottom:6px;}
-.link-btn{background:none;border:none;color:var(--agua);font-size:.66rem;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:600;}
-.hist-row{display:flex;align-items:center;gap:8px;padding:6px 2px;border-bottom:1px solid var(--cl);font-size:.76rem;}
-.hist-data{font-weight:700;font-family:'DM Mono',monospace;width:64px;flex-shrink:0;}
-.hist-hora{flex:1;color:var(--c);font-family:'DM Mono',monospace;font-size:.72rem;}
-.hist-dur{color:var(--agua);font-weight:600;font-size:.7rem;}
-.hist-del{background:#fee2e2;color:var(--danger);border:none;border-radius:5px;width:20px;height:20px;font-size:.6rem;cursor:pointer;flex-shrink:0;}
-.hist-obs{font-size:.68rem;color:#6b7280;font-style:italic;padding:0 2px 6px 66px;border-bottom:1px solid var(--cl);}
-.hist-vazio{font-size:.74rem;color:var(--c);text-align:center;padding:10px;}
-.panel-actions{display:flex;gap:6px;padding:0 14px 12px;flex-wrap:wrap;}
+.hist-head{display:flex;justify-content:space-between;align-items:center;}
+.link-btn{background:none;border:none;color:var(--agua);font-size:.72rem;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:600;padding:2px;}
+.link-btn.center{align-self:center;}
+.link-btn.danger{color:var(--danger);}
+.tag-andamento{color:var(--agua);font-weight:700;font-style:normal;}
+.hist-row{display:flex;align-items:center;gap:10px;padding:9px 2px;border-bottom:1px solid var(--cl);font-size:.78rem;}
+.hist-data{font-weight:700;font-family:'DM Mono',monospace;width:66px;flex-shrink:0;}
+.hist-hora{flex:1;color:var(--c);font-family:'DM Mono',monospace;font-size:.74rem;}
+.hist-dur{color:var(--agua);font-weight:600;font-size:.72rem;}
+.hist-del{background:#fee2e2;color:var(--danger);border:none;border-radius:6px;width:22px;height:22px;font-size:.62rem;cursor:pointer;flex-shrink:0;}
+.hist-obs{font-size:.7rem;color:#6b7280;font-style:italic;padding:0 2px 8px 68px;border-bottom:1px solid var(--cl);}
+.hist-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:12px;}
+.panel-actions{display:flex;gap:7px;padding:4px 16px 16px;flex-wrap:wrap;}
 .btn-edit{flex:1;min-width:90px;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:7px;padding:8px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
 .btn-del-panel{background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:7px;padding:8px 12px;font-size:.72rem;cursor:pointer;}
 /* LEGENDA */
@@ -864,10 +960,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="legenda">
       <div class="legenda-tit">Última irrigação</div>
       <div class="leg-row"><span class="leg-dot" style="background:#2563eb"></span>Hoje</div>
-      <div class="leg-row"><span class="leg-dot" style="background:#22c55e"></span>1–2 dias</div>
-      <div class="leg-row"><span class="leg-dot" style="background:#eab308"></span>3–4 dias</div>
-      <div class="leg-row"><span class="leg-dot" style="background:#f97316"></span>5–6 dias</div>
-      <div class="leg-row"><span class="leg-dot" style="background:#ef4444"></span>7+ dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#22c55e"></span>1–4 dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#eab308"></span>5–7 dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#f97316"></span>8–9 dias</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#ef4444"></span>10+ dias</div>
       <div class="leg-row"><span class="leg-dot" style="background:#94a3b8"></span>Nunca</div>
     </div>
 
