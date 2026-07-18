@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -51,7 +52,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserEmail').textContent=user.email;
   gerarMenu();
-  if (podeGerenciar()) document.getElementById('btnNovoSetor').style.display='flex';
+  if (podeGerenciar()) { document.getElementById('btnNovoSetor').style.display='flex'; document.getElementById('btnImportarWrap').style.display='block'; }
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('appContent').style.display='flex';
   iniciarMapa();
@@ -421,6 +422,98 @@ window.fecharModalSetor=function(){
 };
 window.overlaySetorClick=function(e){ if(e.target.id==='overlaySetor') fecharModalSetor(); };
 
+// ─── IMPORTAR SETORES (KML/KMZ do Google Earth) ───
+let importCandidatos=[];
+// Busca elementos por nome local, independente de namespace do KML
+function byTag(root,name){ return Array.from(root.getElementsByTagName('*')).filter(el=>el.localName===name); }
+function parseCoords(txt){
+  return String(txt||'').trim().split(/\s+/).map(tok=>{
+    const p=tok.split(','); const lng=parseFloat(p[0]), lat=parseFloat(p[1]);
+    if(isNaN(lat)||isNaN(lng)) return null;
+    return {lat,lng};
+  }).filter(Boolean);
+}
+function parseKMLText(text){
+  const xml=new DOMParser().parseFromString(text,'application/xml');
+  if(xml.getElementsByTagName('parsererror').length) throw new Error('arquivo KML inválido');
+  const out=[];
+  byTag(xml,'Placemark').forEach(pm=>{
+    const nome=(byTag(pm,'name')[0]?.textContent||'').trim();
+    const polys=byTag(pm,'Polygon');
+    polys.forEach((poly,idx)=>{
+      const outer=byTag(poly,'outerBoundaryIs')[0]||poly;
+      const coordEl=byTag(outer,'coordinates')[0];
+      if(!coordEl) return;
+      let coords=parseCoords(coordEl.textContent);
+      // KML costuma repetir o 1º ponto no fim — remove pra fechar limpo
+      if(coords.length>3){ const a=coords[0], b=coords[coords.length-1]; if(a.lat===b.lat&&a.lng===b.lng) coords=coords.slice(0,-1); }
+      if(coords.length>=3) out.push({nome: nome + (polys.length>1?` (${idx+1})`:''), coords});
+    });
+  });
+  return out;
+}
+window.abrirImportador=function(){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  const inp=document.getElementById('inpKML'); inp.value=''; inp.click();
+};
+window.onArquivoKML=async function(ev){
+  const file=ev.target.files&&ev.target.files[0]; if(!file) return;
+  try{
+    let text;
+    if(file.name.toLowerCase().endsWith('.kmz')){
+      if(typeof JSZip==='undefined'){ toast('❌ Leitor de KMZ indisponível. Exporte como KML.'); return; }
+      const zip=await JSZip.loadAsync(await file.arrayBuffer());
+      const kmlName=Object.keys(zip.files).find(n=>n.toLowerCase().endsWith('.kml'));
+      if(!kmlName){ toast('❌ O KMZ não contém um arquivo KML.'); return; }
+      text=await zip.files[kmlName].async('string');
+    }else{
+      text=await file.text();
+    }
+    const cands=parseKMLText(text);
+    if(!cands.length){ toast('⚠️ Nenhum polígono encontrado no arquivo.'); return; }
+    abrirModalImport(cands);
+  }catch(e){ toast('❌ Erro ao ler o arquivo: '+e.message); }
+};
+function abrirModalImport(cands){
+  importCandidatos=cands.map(c=>{ const t=talhaoQueContem(c.coords); return {...c, talhaoSug:t?.id||''}; });
+  const optTalhoes=t=>`<option value="">— selecione o talhão —</option>`+
+    talhoes.slice().sort((a,b)=>String(a.id||'').localeCompare(String(b.id||''))).map(x=>`<option value="${sanitizar(x.id||'')}" ${x.id===t?'selected':''}>${sanitizar((x.id||'')+' · '+(x.nome||''))}</option>`).join('');
+  const rows=importCandidatos.map((c,i)=>`
+    <div class="imp-row">
+      <input type="checkbox" id="imp-chk-${i}" checked>
+      <div class="imp-fields">
+        <input type="text" id="imp-nome-${i}" value="${sanitizar(c.nome||('Setor '+(i+1)))}" placeholder="Nome do setor">
+        <select id="imp-tal-${i}">${optTalhoes(c.talhaoSug)}</select>
+        ${c.talhaoSug?'<div class="imp-hint ok">✓ talhão sugerido pela posição</div>':'<div class="imp-hint warn">⚠ escolha o talhão manualmente</div>'}
+      </div>
+    </div>`).join('');
+  document.getElementById('impBody').innerHTML=`<div class="imp-info">Encontramos <b>${importCandidatos.length}</b> área(s) no arquivo. Confira o <b>nome</b> e o <b>talhão</b> de cada setor. Desmarque os que não quiser importar.</div>${rows}`;
+  document.getElementById('overlayImport').classList.add('open');
+}
+window.confirmarImportacao=async function(){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  let ok=0, pulados=0;
+  for(let i=0;i<importCandidatos.length;i++){
+    const chk=document.getElementById('imp-chk-'+i);
+    if(!chk||!chk.checked) continue;
+    const nome=(document.getElementById('imp-nome-'+i).value||'').trim();
+    const talhaoId=document.getElementById('imp-tal-'+i).value;
+    const talhao=talhoes.find(t=>t.id===talhaoId);
+    if(!nome||!talhao){ pulados++; continue; }
+    try{
+      await addDoc(collection(db,'irrigacaoSetores'),{
+        nome, fazenda:talhao.fazenda||'', talhaoId, talhaoNome:talhao.nome||'',
+        coordenadas:importCandidatos[i].coords, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||'', origem:'kml'
+      });
+      talhoesExpandidos.add(talhaoId); ok++;
+    }catch(e){ pulados++; }
+  }
+  fecharImport();
+  toast(`✅ ${ok} setor(es) importado(s).${pulados?` ${pulados} ignorado(s) (sem nome ou talhão).`:''}`, 4500);
+};
+window.fecharImport=function(){ document.getElementById('overlayImport').classList.remove('open'); importCandidatos=[]; };
+window.overlayImportClick=function(e){ if(e.target.id==='overlayImport') fecharImport(); };
+
 window.renomearSetor=function(id){
   const s=setores.find(x=>x._docId===id); if(!s)return;
   setorEditandoCoords=s.coordenadas||[];
@@ -629,6 +722,18 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .msb-setor{padding:8px 11px 8px 24px;border-top:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;}
 .msb-setor:hover{background:var(--cl);}
 .msb-setor.active{background:var(--vb);border-left:3px solid var(--agua);padding-left:21px;}
+.btn-importar{width:100%;background:#eff6ff;border:1.5px dashed #93c5fd;color:var(--agua);border-radius:8px;padding:8px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+.btn-importar:hover{background:#dbeafe;}
+/* MODAL IMPORTAR */
+.imp-info{font-size:.78rem;color:var(--c);line-height:1.5;background:var(--cl);border-radius:8px;padding:10px 11px;}
+.imp-row{display:flex;align-items:flex-start;gap:9px;padding:9px 2px;border-bottom:1px solid var(--cl);}
+.imp-row input[type=checkbox]{width:18px;height:18px;margin-top:8px;flex-shrink:0;accent-color:var(--agua);}
+.imp-fields{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;}
+.imp-fields input[type=text],.imp-fields select{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:7px 9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
+.imp-fields input[type=text]:focus,.imp-fields select:focus{border-color:var(--agua);}
+.imp-hint{font-size:.62rem;}
+.imp-hint.ok{color:#16a34a;}
+.imp-hint.warn{color:#d97706;}
 /* PAINEL INFO */
 .info-panel{position:absolute;top:14px;right:14px;width:300px;max-width:calc(100vw - 28px);max-height:calc(100% - 28px);overflow-y:auto;background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);transform:translateX(330px);opacity:0;transition:transform .35s cubic-bezier(.34,1.4,.64,1),opacity .3s;}
 .info-panel.visible{transform:translateX(0);opacity:1;}
@@ -738,6 +843,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div class="msb-filter">
         <select id="filtroFaz" onchange="setFiltroFazSel(this)"><option value="todas">Todas as fazendas</option></select>
       </div>
+      <div id="btnImportarWrap" style="display:none;padding:0 10px 6px;">
+        <button class="btn-importar" onclick="abrirImportador()">📥 Importar do Google Earth (KML/KMZ)</button>
+      </div>
       <div id="sidebarList"></div>
     </div>
     <button id="btnExpandSb" onclick="toggleSidebar()">▶ Setores</button>
@@ -792,6 +900,20 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="modal-header"><div class="modal-title" id="histModalTitle">Histórico</div><button class="panel-close" onclick="fecharHistorico()">✕</button></div>
     <div class="modal-body" id="histModalBody"></div>
     <div class="modal-footer"><button class="btn-cancel" onclick="fecharHistorico()">Fechar</button></div>
+  </div>
+</div>
+
+<input type="file" id="inpKML" accept=".kml,.kmz,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" style="display:none;" onchange="onArquivoKML(event)">
+
+<!-- MODAL IMPORTAR KML/KMZ -->
+<div class="overlay" id="overlayImport" onclick="overlayImportClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">📥 Importar setores</div><button class="panel-close" onclick="fecharImport()">✕</button></div>
+    <div class="modal-body" id="impBody"></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharImport()">Cancelar</button>
+      <button class="btn-save" onclick="confirmarImportacao()">Importar setores</button>
+    </div>
   </div>
 </div>
 
