@@ -686,18 +686,20 @@ function renderizarSidebar(){
     porFaz[f][tKey]=porFaz[f][tKey] || {id:s.talhaoId||'', nome:s.talhaoNome||s.talhaoId||'Sem talhão', setores:[]};
     porFaz[f][tKey].setores.push(s);
   });
-  lista.innerHTML=Object.keys(porFaz).sort().map(f=>{
-    // talhões da fazenda ordenados pelo mais urgente (pior recência) primeiro
+  // Ordenação natural por nome: "Setor 2" antes de "Setor 10"
+  const cmpNat=(a,b)=>String(a||'').localeCompare(String(b||''),'pt',{numeric:true,sensitivity:'base'});
+  lista.innerHTML=Object.keys(porFaz).sort(cmpNat).map(f=>{
+    // talhões da fazenda em ordem (nome/código), depois os setores em ordem
     const talhaoArr=Object.values(porFaz[f]).map(t=>{
       const temNunca=t.setores.some(s=>s._dias==null);
       const piorDias=t.setores.reduce((a,s)=>s._dias==null?a:Math.max(a??0,s._dias),null);
-      return {...t, _urg: temNunca?99999:(piorDias??-1), _cor: temNunca?corRecencia(null):corRecencia(piorDias)};
-    }).sort((a,b)=>b._urg-a._urg);
+      return {...t, _cor: temNunca?corRecencia(null):corRecencia(piorDias)};
+    }).sort((a,b)=>cmpNat(a.nome,b.nome));
     return `<div class="sb-fazenda">${sanitizar(f)}</div>`+talhaoArr.map(t=>{
       const tKey=t.id||'__sem__';
       const aberto=talhoesExpandidos.has(tKey);
       const n=t.setores.length;
-      const setoresHtml=aberto ? t.setores.slice().sort((a,b)=>b._ord-a._ord).map(s=>{
+      const setoresHtml=aberto ? t.setores.slice().sort((a,b)=>cmpNat(a.nome,b.nome)).map(s=>{
         const cor=corRecencia(s._dias);
         return `<div class="msb-setor ${setorSel===s._docId?'active':''}" onclick="selecionarSetor('${s._docId}')">
           <div class="msb-dot" style="background:${cor.dot}"></div>
