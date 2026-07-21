@@ -60,6 +60,7 @@ const SEMANAS = ['1ª Semana','2ª Semana','3ª Semana','4ª Semana'];
 
 let usuarioAtual = null, perfilAtual = {};
 let talhoes = [], planosAdubacao = [], configAdubacao = {}, planejamentosSafra = [];
+let setoresIrrig = []; // setores de irrigação (para converter kg/ha em kg por setor na fertirrigação)
 let telaAtual = 'lista', talhaoSel = null, mesSel = null;
 let planoWIP = null, etapa = 1, semanaAtiva = 0;
 
@@ -145,6 +146,10 @@ function iniciarListeners() {
   });
   onSnapshot(collection(db,'planejamentos_safra'), snap => {
     planejamentosSafra = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+  });
+  onSnapshot(collection(db,'irrigacaoSetores'), snap => {
+    setoresIrrig = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    if (telaAtual==='talhao'||telaAtual==='mes') renderizarTela();
   });
   onSnapshot(doc(db,'configAdubacao','geral'), snap => {
     if (snap.exists()) configAdubacao = snap.data();
@@ -360,6 +365,55 @@ function materializarProdutos(ap) {
   });
 }
 
+// ─── FERTIRRIGAÇÃO: kg por setor (dose kg/ha × área de cada setor do talhão) ───
+function normLatLngs(coords){
+  return (coords||[]).map(c=>{
+    if(Array.isArray(c)) return [c[0],c[1]];
+    if(c.lat!==undefined) return [c.lat,c.lng];
+    if(c.latitude!==undefined) return [c.latitude,c.longitude];
+    return c;
+  });
+}
+function areaHectares(coords){
+  const pts=normLatLngs(coords);
+  if(!pts||pts.length<3) return 0;
+  const R=6378137, rad=Math.PI/180; let a=0;
+  for(let i=0;i<pts.length;i++){
+    const p1=pts[i], p2=pts[(i+1)%pts.length];
+    a += (p2[1]-p1[1])*rad * (2 + Math.sin(p1[0]*rad) + Math.sin(p2[0]*rad));
+  }
+  return Math.abs(a*R*R/2)/10000;
+}
+function areaDoSetor(s){
+  if(s && s.areaHa!=null && s.areaHa!=='' && !isNaN(s.areaHa)) return Number(s.areaHa);
+  return s && s.coordenadas ? areaHectares(s.coordenadas) : 0;
+}
+function fmtHa(ha){ if(ha==null||isNaN(ha))return'—'; return (ha>=10?ha.toFixed(1):ha.toFixed(2)).replace('.',',')+' ha'; }
+function fmtNum(n){ if(n==null||isNaN(n))return'0'; return (Math.round(n*10)/10).toString().replace('.',','); }
+function setoresDoTalhao(talhaoId){
+  return setoresIrrig.filter(s=>s.talhaoId===talhaoId)
+    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt',{numeric:true,sensitivity:'base'}));
+}
+function blocoKgPorSetor(dose, unidade, talhaoId){
+  if(!talhaoId) return '';
+  const sets=setoresDoTalhao(talhaoId);
+  const un=(unidade||'kg');
+  if(!sets.length){
+    return `<div class="setor-kg-box vazio">💧 <b>kg por setor:</b> nenhum setor de irrigação cadastrado neste talhão. Cadastre os setores em <b>Irrigação</b> para ver a dose por setor.</div>`;
+  }
+  const d=parseFloat(String(dose).replace(',','.'))||0;
+  const linhas=sets.map(s=>{
+    const a=areaDoSetor(s);
+    return `<div class="setor-kg-linha"><span class="setor-kg-nome">${sanitizar(s.nome)}</span><span class="setor-kg-area">${fmtHa(a)}</span><span class="setor-kg-val">${fmtNum(d*a)} ${un}</span></div>`;
+  }).join('');
+  const areaTot=sets.reduce((x,s)=>x+areaDoSetor(s),0);
+  return `<div class="setor-kg-box">
+    <div class="setor-kg-tit">💧 kg por setor <span class="setor-kg-hint">${fmtNum(d)} ${un}/ha × área</span></div>
+    ${linhas}
+    <div class="setor-kg-linha total"><span class="setor-kg-nome">Total · ${sets.length} setor${sets.length!==1?'es':''}</span><span class="setor-kg-area">${fmtHa(areaTot)}</span><span class="setor-kg-val">${fmtNum(d*areaTot)} ${un}</span></div>
+  </div>`;
+}
+
 function renderCardAp(ap, planoDocId) {
   const adm=isAdmin(), podeMark=podeMarcar();
   const fmulti = ehFertinoxMulti(ap);
@@ -370,7 +424,7 @@ function renderCardAp(ap, planoDocId) {
       <span class="prod-nome">${p.produto}</span>
       <span class="prod-dose">${p.dose} ${p.unidade}/ha</span>
       ${p.doseFertinox?`<span class="prod-dose" style="background:#2d6a4f;">📍 ${p.doseFertinox} g/m</span>`:''}`;
-    if (!fmulti) return `<div class="prod-linha">${base}</div>`;
+    if (!fmulti) return `<div class="prod-linha">${base}</div>${ap.modo==='Fertirrigação'?blocoKgPorSetor(p.dose,p.unidade,talhaoSel?.id):''}`;
     // Fertinox com múltiplos adubos: cada um é uma operação separada
     const pf = p.feito;
     return `<div class="prod-op ${pf?'feita':''}">
@@ -1100,6 +1154,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prod-nome{font-weight:700;font-size:.95rem;color:var(--t);word-break:break-word;flex:1 1 auto;min-width:0;}
 .prod-dose{font-family:'DM Mono',monospace;font-size:.9rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.02em;}
 .aplic-obs{font-size:.72rem;color:var(--c);font-style:italic;margin-top:6px;}
+/* Fertirrigação: kg por setor */
+.setor-kg-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:9px 11px;margin:6px 0 2px;}
+.setor-kg-box.vazio{font-size:.72rem;color:#1e40af;line-height:1.45;}
+.setor-kg-tit{font-size:.68rem;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.setor-kg-hint{font-weight:600;text-transform:none;letter-spacing:0;color:#60a5fa;font-size:.66rem;font-family:'DM Mono',monospace;}
+.setor-kg-linha{display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid #dbeafe;font-size:.78rem;}
+.setor-kg-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.setor-kg-area{color:var(--c);font-size:.7rem;font-family:'DM Mono',monospace;flex-shrink:0;}
+.setor-kg-val{font-weight:700;color:#1e40af;font-family:'DM Mono',monospace;flex-shrink:0;min-width:64px;text-align:right;}
+.setor-kg-linha.total{border-top:1.5px solid #93c5fd;font-weight:700;margin-top:2px;}
+.setor-kg-linha.total .setor-kg-nome{font-weight:700;}
 .badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
 .badge-ok{background:#dcfce7;color:#16a34a;}
 .badge-pend{background:var(--cl);color:var(--c);}
