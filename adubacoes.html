@@ -490,6 +490,40 @@ window.salvarSetoresConfig = async function(){
   }catch(e){ toast('❌ Erro: '+e.message); }
 };
 
+// Tabela "kg por setor" para o relatório de impressão (só em aplicações via Fertirrigação)
+function tabelaKgSetorImpressao(ap, talhaoId){
+  if(!ap || ap.modo!=='Fertirrigação' || !talhaoId) return '';
+  const sets = setoresDoTalhao(talhaoId);
+  const prods = (ap.produtos||[]).filter(p=>p&&p.produto);
+  if(!sets.length || !prods.length) return '';
+  const th='padding:5px 9px;font-size:10px;border:1px solid #93c5fd;';
+  const td='padding:5px 9px;text-align:center;font-size:11px;border:1px solid #bfdbfe;font-family:monospace;';
+  const tdL='padding:5px 9px;text-align:left;font-size:11px;border:1px solid #bfdbfe;';
+  const doseNum=p=>parseFloat(String(p.dose).replace(',','.'))||0;
+  const areaTot=sets.reduce((x,s)=>x+areaDoSetor(s),0);
+  return `<div style="margin-top:9px;">
+    <div style="font-size:10px;font-weight:800;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;">💧 Fertirrigação — kg por setor</div>
+    <table style="width:100%;border-collapse:collapse;background:#f0f9ff;">
+      <thead><tr style="background:#dbeafe;color:#1e3a8a;">
+        <th style="${th}text-align:left;">Setor</th><th style="${th}text-align:center;">Área</th>
+        ${prods.map(p=>`<th style="${th}text-align:center;">${sanitizar(p.produto)}</th>`).join('')}
+      </tr></thead>
+      <tbody>
+        ${sets.map(s=>{const a=areaDoSetor(s);return `<tr>
+          <td style="${tdL}">${sanitizar(s.nome)}</td>
+          <td style="${td}">${fmtHa(a)}</td>
+          ${prods.map(p=>`<td style="${td}color:#1e40af;font-weight:700;">${fmtNum(doseNum(p)*a)} ${sanitizar(p.unidade||'kg')}</td>`).join('')}
+        </tr>`;}).join('')}
+        <tr style="background:#dbeafe;">
+          <td style="${tdL}font-weight:800;color:#1e3a8a;">Total</td>
+          <td style="${td}font-weight:800;color:#1e3a8a;">${fmtHa(areaTot)}</td>
+          ${prods.map(p=>`<td style="${td}font-weight:800;color:#1e3a8a;">${fmtNum(doseNum(p)*areaTot)} ${sanitizar(p.unidade||'kg')}</td>`).join('')}
+        </tr>
+      </tbody>
+    </table>
+  </div>`;
+}
+
 function renderCardAp(ap, planoDocId) {
   const adm=isAdmin(), podeMark=podeMarcar();
   const fmulti = ehFertinoxMulti(ap);
@@ -1106,6 +1140,7 @@ window.imprimirMes = function() {
               <span style="background:var(--v);color:white;border-radius:5px;padding:2px 7px;font-family:monospace;font-weight:700;font-size:11px;">${sanitizar(p.dose)} ${sanitizar(p.unidade)}/ha</span>
             </span>`).join('')}
           </div>
+          ${tabelaKgSetorImpressao(ap, talhaoSel.id)}
           ${ap.obs?`<div style="margin-top:7px;font-size:11px;color:var(--c);font-style:italic;">💬 ${sanitizar(ap.obs)}</div>`:''}
           ${ap.feito&&ap.feitoEm?`<div style="margin-top:7px;font-size:10px;color:#16a34a;">✔ Realizada em ${sanitizar(ap.feitoEm)}${ap.feitoPor?' por '+sanitizar(ap.feitoPor):''}</div>`:''}
           ${!ap.feito?`<div style="margin-top:9px;padding-top:7px;border-top:1px dashed var(--bd-l);font-size:10px;color:var(--t4);">Assinatura responsável: ____________________________  Data: _____/_____/______</div>`:''}
