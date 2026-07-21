@@ -501,10 +501,6 @@ function abrirModalSetor(coords, setorExistente){
   const fazSel = setorExistente?.fazenda || sug?.fazenda || '';
   document.getElementById('modalSetorTitle').textContent = setorExistente ? 'Editar Setor' : 'Novo Setor';
   document.getElementById('sNome').value = setorExistente?.nome || (sug? '' : '');
-  // Área: usa valor cadastrado ou calcula do desenho
-  const areaCalc = areaHectares(coords || setorExistente?.coordenadas || []);
-  const areaVal = (setorExistente && setorExistente.areaHa!=null && setorExistente.areaHa!=='') ? setorExistente.areaHa : (areaCalc? areaCalc.toFixed(2):'');
-  document.getElementById('sArea').value = areaVal;
   const selFaz=document.getElementById('sFazenda');
   selFaz.innerHTML = `<option value="">Todas as fazendas</option>` + fazendas.map(f=>`<option value="${sanitizar(f)}" ${f===fazSel?'selected':''}>${sanitizar(f)}</option>`).join('');
   atualizarTalhoesDoModal(setorExistente?.talhaoId || sug?.id || '');
@@ -519,11 +515,6 @@ function atualizarTalhoesDoModal(talhaoIdSel){
     lista.map(t=>`<option value="${sanitizar(t.id||'')}" ${t.id===talhaoIdSel?'selected':''}>${sanitizar((t.id||'')+' · '+(t.nome||''))}</option>`).join('');
 }
 window.checarFazendaModal=function(){ atualizarTalhoesDoModal(''); };
-window.recalcularAreaSetor=function(){
-  const a=areaHectares(setorEditandoCoords||[]);
-  document.getElementById('sArea').value = a? a.toFixed(2):'';
-  toast('📐 Área do desenho: '+fmtHa(a));
-};
 
 window.salvarSetor=async function(){
   const nome=(document.getElementById('sNome').value||'').trim();
@@ -532,19 +523,17 @@ window.salvarSetor=async function(){
   if(!nome){ toast('⚠️ Dê um nome ao setor.'); return; }
   if(!talhao){ toast('⚠️ Selecione o talhão do setor.'); return; }
   const fazenda=talhao.fazenda||''; // fazenda derivada do talhão (mantém a hierarquia consistente)
-  const areaRaw=document.getElementById('sArea').value;
-  const areaHa = (areaRaw!==''&&!isNaN(areaRaw)) ? Number(areaRaw) : (setorEditandoCoords?Number(areaHectares(setorEditandoCoords).toFixed(2)):null);
   try{
     if(_setorRedesenhoId){
       // Redesenho: mantém dados, troca coordenadas
       await updateDoc(doc(db,'irrigacaoSetores',_setorRedesenhoId),{
-        nome, fazenda, talhaoId, talhaoNome:talhao.nome||'', coordenadas:setorEditandoCoords||[], areaHa
+        nome, fazenda, talhaoId, talhaoNome:talhao.nome||'', coordenadas:setorEditandoCoords||[]
       });
       _setorRedesenhoId=null;
       toast('✅ Setor atualizado!');
     }else{
       const ref=await addDoc(collection(db,'irrigacaoSetores'),{
-        nome, fazenda, talhaoId, talhaoNome:talhao.nome||'', areaHa,
+        nome, fazenda, talhaoId, talhaoNome:talhao.nome||'',
         coordenadas:setorEditandoCoords||[], criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
       });
       talhoesExpandidos.add(talhaoId);
@@ -862,7 +851,6 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .msb-setor{padding:8px 11px 8px 24px;border-top:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;}
 .msb-setor:hover{background:var(--cl);}
 .msb-setor.active{background:var(--vb);border-left:3px solid var(--agua);padding-left:21px;}
-.btn-calc-area{background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:8px;padding:9px 11px;font-size:.74rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;}
 .btn-importar{width:100%;background:#eff6ff;border:1.5px dashed #93c5fd;color:var(--agua);border-radius:8px;padding:8px;font-size:.72rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
 .btn-importar:hover{background:#dbeafe;}
 /* MODAL IMPORTAR */
@@ -1059,14 +1047,6 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div><label>Talhão</label><select id="sTalhao"></select><div style="font-size:.62rem;color:var(--c);margin-top:3px;">O setor pertence a este talhão. A fazenda é definida automaticamente por ele.</div></div>
       <div><label>Fazenda (filtro)</label><select id="sFazenda" onchange="checarFazendaModal()"></select></div>
       <div><label>Nome do setor</label><input type="text" id="sNome" placeholder="Ex: Setor 3, Turno Norte..."></div>
-      <div>
-        <label>Área do setor (ha)</label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input type="number" id="sArea" step="0.01" min="0" placeholder="0,00" style="flex:1;">
-          <button type="button" class="btn-calc-area" onclick="recalcularAreaSetor()">📐 Do mapa</button>
-        </div>
-        <div style="font-size:.62rem;color:var(--c);margin-top:3px;">Calculada automaticamente pelo desenho — ajuste se precisar. Usada para converter kg/ha em kg por setor na fertirrigação.</div>
-      </div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharModalSetor()">Cancelar</button>

@@ -218,7 +218,10 @@ function renderizarLista() {
 
   let headerHtml = `<div class="lista-header">
     <div class="lista-title">Plano de Adubação</div>
-    ${adm?`<button onclick="irSafra()" class="btn-safra">⚙️ Safra</button>`:''}
+    <div style="display:flex;gap:7px;flex-wrap:wrap;">
+      ${adm?`<button onclick="abrirSetoresConfig()" class="btn-safra">📐 Setores</button>`:''}
+      ${adm?`<button onclick="irSafra()" class="btn-safra">⚙️ Safra</button>`:''}
+    </div>
   </div>`;
 
   if (!Object.keys(fazendas).length) {
@@ -413,6 +416,77 @@ function blocoKgPorSetor(dose, unidade, talhaoId){
     <div class="setor-kg-linha total"><span class="setor-kg-nome">Total · ${sets.length} setor${sets.length!==1?'es':''}</span><span class="setor-kg-area">${fmtHa(areaTot)}</span><span class="setor-kg-val">${fmtNum(d*areaTot)} ${un}</span></div>
   </div>`;
 }
+
+// ─── CONFIG: tamanho dos setores (por talhão) ───
+window.abrirSetoresConfig = function(){
+  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
+  const comSetores = talhoes.filter(t=>setoresIrrig.some(s=>s.talhaoId===t.id));
+  const ordenados = talhoes.slice().sort((a,b)=>String(a.id||'').localeCompare(String(b.id||''),'pt',{numeric:true}));
+  const sel=document.getElementById('setoresTalhaoSel');
+  sel.innerHTML = ordenados.map(t=>{
+    const n=setoresIrrig.filter(s=>s.talhaoId===t.id).length;
+    return `<option value="${sanitizar(t.id||'')}">${sanitizar((t.id||'')+' · '+(t.nome||''))}${n?` (${n})`:''}</option>`;
+  }).join('');
+  const inicial = (comSetores[0]||ordenados[0]);
+  if(inicial){ sel.value=inicial.id; setoresConfigTalhao(inicial.id); }
+  document.getElementById('ovSetores').classList.add('open');
+};
+window.fecharSetoresConfig = function(){ document.getElementById('ovSetores').classList.remove('open'); };
+window.ovSetoresClick = function(e){ if(e.target.id==='ovSetores') fecharSetoresConfig(); };
+window.setoresConfigTalhao = function(talhaoId){
+  const sets = setoresIrrig.filter(s=>s.talhaoId===talhaoId)
+    .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt',{numeric:true,sensitivity:'base'}));
+  const cont = document.getElementById('setoresConfigLista');
+  const linha = (id,nome,area)=>`<div class="scfg-row" data-id="${id||''}">
+      <input type="text" class="scfg-nome" value="${sanitizar(nome||'')}" placeholder="Nome do setor">
+      <input type="number" class="scfg-area" step="0.01" min="0" value="${area!=null&&area!==''?area:''}" placeholder="ha">
+      <span class="scfg-un">ha</span>
+    </div>`;
+  cont.innerHTML = sets.length
+    ? sets.map(s=>linha(s._docId, s.nome, (s.areaHa!=null&&s.areaHa!=='')?s.areaHa:(s.coordenadas&&s.coordenadas.length>=3?areaHectares(s.coordenadas).toFixed(2):''))).join('')
+    : `<div class="scfg-vazio">Nenhum setor neste talhão ainda. Use “+ Adicionar setor”.</div>`;
+};
+window.addSetorConfigLinha = function(){
+  const cont=document.getElementById('setoresConfigLista');
+  const vazio=cont.querySelector('.scfg-vazio'); if(vazio) vazio.remove();
+  const div=document.createElement('div');
+  div.className='scfg-row'; div.dataset.id='';
+  div.innerHTML=`<input type="text" class="scfg-nome" placeholder="Nome do setor">
+    <input type="number" class="scfg-area" step="0.01" min="0" placeholder="ha">
+    <span class="scfg-un">ha</span>
+    <button class="scfg-del" title="Remover" onclick="removerLinhaSetorConfig(this)">✕</button>`;
+  cont.appendChild(div);
+  div.querySelector('.scfg-nome').focus();
+};
+window.removerLinhaSetorConfig = function(btn){ btn.closest('.scfg-row')?.remove(); };
+window.salvarSetoresConfig = async function(){
+  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
+  const talhaoId=document.getElementById('setoresTalhaoSel').value;
+  const talhao=talhoes.find(t=>t.id===talhaoId);
+  if(!talhao){ toast('⚠️ Selecione o talhão.'); return; }
+  const linhas=[...document.querySelectorAll('#setoresConfigLista .scfg-row')];
+  let ok=0;
+  try{
+    for(const l of linhas){
+      const id=l.dataset.id;
+      const nome=(l.querySelector('.scfg-nome').value||'').trim();
+      const areaRaw=l.querySelector('.scfg-area').value;
+      const areaHa=(areaRaw!==''&&!isNaN(areaRaw))?Number(areaRaw):null;
+      if(id){
+        await updateDoc(doc(db,'irrigacaoSetores',id), { nome: nome||'Setor', areaHa });
+        ok++;
+      }else if(nome){
+        await addDoc(collection(db,'irrigacaoSetores'), {
+          nome, fazenda:talhao.fazenda||'', talhaoId, talhaoNome:talhao.nome||'', areaHa,
+          coordenadas:[], criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||'', origem:'adubacao'
+        });
+        ok++;
+      }
+    }
+    fecharSetoresConfig();
+    toast(`✅ ${ok} setor(es) salvo(s).`);
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
 
 function renderCardAp(ap, planoDocId) {
   const adm=isAdmin(), podeMark=podeMarcar();
@@ -1154,6 +1228,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prod-nome{font-weight:700;font-size:.95rem;color:var(--t);word-break:break-word;flex:1 1 auto;min-width:0;}
 .prod-dose{font-family:'DM Mono',monospace;font-size:.9rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.02em;}
 .aplic-obs{font-size:.72rem;color:var(--c);font-style:italic;margin-top:6px;}
+/* Config tamanho dos setores */
+.scfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.scfg-nome{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:8px;padding:9px 11px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;}
+.scfg-area{width:78px;flex-shrink:0;border:1.5px solid var(--cb);border-radius:8px;padding:9px 8px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;text-align:right;}
+.scfg-nome:focus,.scfg-area:focus{border-color:var(--v);}
+.scfg-un{font-size:.72rem;color:var(--c);flex-shrink:0;}
+.scfg-del{background:#fee2e2;color:var(--danger);border:none;border-radius:7px;width:30px;height:30px;font-size:.75rem;cursor:pointer;flex-shrink:0;}
+.scfg-vazio{font-size:.78rem;color:var(--c);text-align:center;padding:14px;background:var(--cl);border-radius:8px;margin-bottom:8px;}
 /* Fertirrigação: kg por setor */
 .setor-kg-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:9px 11px;margin:6px 0 2px;}
 .setor-kg-box.vazio{font-size:.72rem;color:#1e40af;line-height:1.45;}
@@ -1522,6 +1604,26 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharEdicao()">Cancelar</button>
       <button class="btn-save" onclick="salvarEdicao()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG TAMANHO DOS SETORES -->
+<div class="overlay" id="ovSetores" onclick="ovSetoresClick(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">📐 Tamanho dos setores</div>
+    <div class="modal-body">
+      <div style="font-size:.74rem;color:var(--c);line-height:1.5;margin-bottom:12px;">Informe a área (ha) de cada setor do talhão. Usada na <b>fertirrigação</b> para converter kg/ha em kg por setor. Setores com tamanhos diferentes são somados corretamente.</div>
+      <div class="campo" style="margin-bottom:12px;"><label>Talhão</label>
+        <select id="setoresTalhaoSel" onchange="setoresConfigTalhao(this.value)"></select>
+      </div>
+      <div id="setoresConfigLista"></div>
+      <button class="btn-add-sm" onclick="addSetorConfigLinha()">＋ Adicionar setor</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharSetoresConfig()">Cancelar</button>
+      <button class="btn-save" onclick="salvarSetoresConfig()">💾 Salvar</button>
     </div>
   </div>
 </div>
