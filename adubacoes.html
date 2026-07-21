@@ -369,6 +369,8 @@ function materializarProdutos(ap) {
 }
 
 // ─── FERTIRRIGAÇÃO: kg por setor (dose kg/ha × área de cada setor do talhão) ───
+// Escape HTML acessível no escopo do módulo (há uma cópia local homônima dentro do gerador de PDF)
+function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
 function normLatLngs(coords){
   return (coords||[]).map(c=>{
     if(Array.isArray(c)) return [c[0],c[1]];
