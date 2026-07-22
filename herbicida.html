@@ -30,7 +30,9 @@ let usuarioAtual=null, perfilAtual={};
 let talhoes=[], empregados=[], registros=[], conclusoes=[], configHerb={};
 let map, mapaIniciado=false, talhaoLayers={}, talhaoSel=null;
 let filtroFazenda='todas', sidebarAberta=true;
-let regMetodo='costal'; // método selecionado no modal de registro
+let regMetodo='costal'; // método selecionado no modal de lançamento manual
+// Painel do dia ao vivo (contadores)
+let diaCache=null, diaCacheTid=null, metodoDiaPref={}, _saveTimer=null, _saving=false, _dirty=false;
 
 const ST = {
   nao_iniciado:{fill:'rgba(148,163,184,.30)',border:'#94a3b8',dot:'#94a3b8',label:'Não iniciado'},
@@ -231,11 +233,9 @@ function abrirPainel(id){
   const badge=document.getElementById('pStatus');
   badge.textContent=stc.label; badge.style.background=stc.fill; badge.style.color=stc.border; badge.style.borderColor=stc.border;
 
-  let acoes='';
-  if(podeRegistrar()){
-    acoes+=`<button class="btn-princ" onclick="abrirRegistro('${id}')">➕ Registrar aplicação do dia</button>`;
-    if(st==='aplicando') acoes+=`<button class="btn-concluir" onclick="concluirTalhao('${id}')">✅ Concluir talhão (${fmtHa(areaTalhao(t))})</button>`;
-  }
+  // sincroniza o cache do dia ao vivo com este talhão
+  if(diaCacheTid!==id) carregarDiaCache(id);
+  else if(!diaCache._docId){ const s=sessaoHoje(id); if(s) diaCache._docId=s._docId; }
 
   const resumo = (st==='nao_iniciado')
     ? `<div class="resumo-vazio">Nenhuma aplicação registrada neste talhão.</div>`
@@ -249,7 +249,8 @@ function abrirPainel(id){
     ? `<div class="conc-box">✅ Concluído em <b>${formatarData(uc.dataConclusao)}</b> · ${fmtHa(uc.areaHa)} contabilizados. <br><span style="font-size:.7rem;color:var(--c);">Registrar uma nova aplicação reabre o talhão (novo ciclo).</span></div>`
     : '';
 
-  const histRows = regs.map(r=>{
+  const regsAnt = regs.filter(r=>r.data!==hojeISO());
+  const histRows = regsAnt.map(r=>{
     const un = r.metodo==='trator'?'tanque':'bomba';
     const totR = (r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0);
     const pess = (r.pessoas||[]).map(p=>`${sanitizar(p.apelido||p.nome||'—')}: <b>${fmtNum(p.qtd)}</b>`).join(' · ');
@@ -266,15 +267,101 @@ function abrirPainel(id){
   }).join('');
 
   document.getElementById('pBody').innerHTML=`
-    ${acoes?`<div class="acoes-princ">${acoes}</div>`:''}
     ${concTxt}
-    <div class="secao"><div class="secao-tit">Ciclo atual</div>${resumo}</div>
-    <div class="secao"><div class="secao-tit">Lançamentos${regs.length?` (${regs.length})`:''}</div>${regs.length?histRows:'<div class="hist-vazio">Sem lançamentos neste ciclo.</div>'}</div>`;
+    <div class="secao">
+      <div class="secao-tit">🎯 Turma de hoje · ${formatarData(hojeISO())}</div>
+      <div id="secaoHoje"></div>
+    </div>
+    ${podeRegistrar()&&(st==='aplicando'||(diaCache&&diaCache.pessoas.length))?`<button class="btn-concluir" onclick="concluirTalhao('${id}')">✅ Concluir talhão (${fmtHa(areaTalhao(t))})</button>`:''}
+    <div class="secao"><div class="secao-tit">Resumo do ciclo</div>${resumo}</div>
+    <div class="secao">
+      <div class="secao-tit">Dias anteriores${regsAnt.length?` (${regsAnt.length})`:''}</div>
+      ${regsAnt.length?histRows:'<div class="hist-vazio">Sem lançamentos anteriores.</div>'}
+      ${podeRegistrar()?`<button class="link-outra-data" onclick="abrirRegistro('${id}')">＋ lançar em outra data (manual)</button>`:''}
+    </div>`;
+  renderHojeSecao();
 
   document.getElementById('infoPanel').classList.add('visible');
   document.getElementById('hintBar').style.display='none';
 }
-window.fecharPainel=function(){ document.getElementById('infoPanel').classList.remove('visible'); talhaoSel=null; renderizarTalhoes(); renderizarSidebar(); document.getElementById('hintBar').style.display='block'; };
+window.fecharPainel=function(){ document.getElementById('infoPanel').classList.remove('visible'); talhaoSel=null; diaCacheTid=null; renderizarTalhoes(); renderizarSidebar(); document.getElementById('hintBar').style.display='block'; };
+
+// ─── PAINEL DO DIA AO VIVO (contadores) ───
+function sessaoHoje(tid){ return registros.find(r=>r.talhaoId===tid && r.data===hojeISO()) || null; }
+function carregarDiaCache(tid){
+  const s=sessaoHoje(tid);
+  diaCache = s ? {_docId:s._docId, metodo:s.metodo||'costal', pessoas:(s.pessoas||[]).map(p=>({...p}))}
+              : {_docId:null, metodo:(metodoDiaPref[tid]||'costal'), pessoas:[]};
+  diaCacheTid=tid;
+}
+function renderHojeSecao(){
+  const el=document.getElementById('secaoHoje'); if(!el||!diaCache)return;
+  const un = diaCache.metodo==='trator'?'tanques':'bombas';
+  const total = diaCache.pessoas.reduce((a,p)=>a+(Number(p.qtd)||0),0);
+  const jaAdd = new Set(diaCache.pessoas.map(p=>p.empregadoId));
+  const t=talhoes.find(x=>x.id===diaCacheTid);
+  const disp = empregados.filter(e=>!jaAdd.has(e._docId) && (!t?.fazenda||!e.fazenda||e.fazenda===t.fazenda))
+     .sort((a,b)=>String(a.apelido||a.nome||'').localeCompare(String(b.apelido||b.nome||''),'pt'));
+  const ed = podeRegistrar();
+  el.innerHTML=`
+    <div class="hoje-cab">
+      <div class="metodo-mini">
+        <button class="mm-btn ${diaCache.metodo==='costal'?'on':''}" ${ed?`onclick="setMetodoDia('costal')"`:'disabled'}>🎒 Costal</button>
+        <button class="mm-btn ${diaCache.metodo==='trator'?'on':''}" ${ed?`onclick="setMetodoDia('trator')"`:'disabled'}>🚜 Trator</button>
+      </div>
+      <div class="hoje-total" id="hojeTotal">${fmtNum(total)} <span>${un}</span></div>
+    </div>
+    ${diaCache.pessoas.length ? diaCache.pessoas.map(p=>`
+      <div class="cnt-row">
+        <div class="cnt-nome">${sanitizar(p.apelido||p.nome||'—')}</div>
+        <div class="contador">
+          ${ed?`<button class="cnt-btn menos" onclick="incHoje('${p.empregadoId}',-1)">−</button>`:''}
+          <span class="cnt-num" id="cnt-${p.empregadoId}">${fmtNum(p.qtd)}</span>
+          ${ed?`<button class="cnt-btn mais" onclick="incHoje('${p.empregadoId}',1)">+</button>`:''}
+          ${ed?`<button class="cnt-rm" onclick="removerHoje('${p.empregadoId}')" title="Tirar da turma">✕</button>`:''}
+        </div>
+      </div>`).join('') : '<div class="hoje-vazio">Ninguém na turma hoje ainda. Adicione abaixo e vá contando as bombas.</div>'}
+    ${ed&&disp.length?`<select class="add-pessoa-sel" onchange="addPessoaHoje(this.value); this.value='';">
+      <option value="">＋ Adicionar funcionário à turma…</option>
+      ${disp.map(e=>`<option value="${e._docId}">${sanitizar(e.apelido||e.nome)}</option>`).join('')}
+    </select>`:''}`;
+}
+window.incHoje=function(empId, delta){
+  if(!podeRegistrar()||!diaCache)return;
+  const p=diaCache.pessoas.find(x=>x.empregadoId===empId); if(!p)return;
+  p.qtd=Math.max(0,(Number(p.qtd)||0)+delta);
+  const span=document.getElementById('cnt-'+empId); if(span)span.textContent=fmtNum(p.qtd);
+  const tot=diaCache.pessoas.reduce((a,x)=>a+(Number(x.qtd)||0),0);
+  const te=document.getElementById('hojeTotal'); if(te)te.innerHTML=`${fmtNum(tot)} <span>${diaCache.metodo==='trator'?'tanques':'bombas'}</span>`;
+  agendarSaveDia();
+};
+window.addPessoaHoje=function(empId){
+  if(!empId||!diaCache)return;
+  if(diaCache.pessoas.some(p=>p.empregadoId===empId))return;
+  diaCache.pessoas.push({empregadoId:empId, apelido:empregadoApelido(empId), nome:empregadoNome(empId), qtd:0});
+  agendarSaveDia(); renderHojeSecao();
+};
+window.removerHoje=function(empId){
+  if(!diaCache)return;
+  diaCache.pessoas=diaCache.pessoas.filter(p=>p.empregadoId!==empId);
+  agendarSaveDia(); renderHojeSecao();
+};
+window.setMetodoDia=function(m){
+  if(!diaCache)return; diaCache.metodo=m; metodoDiaPref[diaCacheTid]=m; agendarSaveDia(); renderHojeSecao();
+};
+function agendarSaveDia(){ _dirty=true; clearTimeout(_saveTimer); _saveTimer=setTimeout(salvarDia,350); }
+async function salvarDia(){
+  if(!diaCache||!diaCacheTid)return;
+  if(_saving){ agendarSaveDia(); return; }
+  _saving=true; _dirty=false;
+  const tid=diaCacheTid, t=talhoes.find(x=>x.id===tid);
+  const payload={ talhaoId:tid, talhaoNome:t?.nome||'', fazenda:t?.fazenda||'', data:hojeISO(), metodo:diaCache.metodo, pessoas:diaCache.pessoas.map(p=>({...p, qtd:Number(p.qtd)||0})), atualizadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||'' };
+  try{
+    if(diaCache._docId){ await updateDoc(doc(db,'herbicidaRegistros',diaCache._docId), payload); }
+    else { const ref=await addDoc(collection(db,'herbicidaRegistros'), {...payload, criadoEm:new Date().toISOString()}); diaCache._docId=ref.id; }
+  }catch(e){ toast('❌ Erro ao salvar: '+e.message); }
+  finally{ _saving=false; if(_dirty) salvarDia(); }
+}
 
 // ─── REGISTRO DIÁRIO ───
 window.abrirRegistro=function(talhaoId){
@@ -531,6 +618,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .rg-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.4rem;color:var(--ve);line-height:1;}
 .rg-lab{font-size:.58rem;color:var(--c);margin-top:3px;text-transform:uppercase;letter-spacing:.03em;}
 .resumo-vazio,.hist-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:12px;background:var(--cl);border-radius:8px;}
+/* TURMA DE HOJE (contadores ao vivo) */
+.hoje-cab{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}
+.metodo-mini{display:flex;gap:5px;}
+.mm-btn{background:var(--cl);border:1.5px solid var(--cb);border-radius:8px;padding:6px 10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;color:var(--c);}
+.mm-btn.on{background:var(--vb);border-color:var(--herb);color:var(--v);}
+.hoje-total{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;color:var(--ve);white-space:nowrap;}
+.hoje-total span{font-size:.7rem;color:var(--c);font-weight:600;}
+.cnt-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--cl);}
+.cnt-nome{flex:1;min-width:0;font-size:.9rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;}
+.contador{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.cnt-btn{width:42px;height:42px;border-radius:50%;border:none;font-size:1.7rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;color:white;user-select:none;-webkit-user-select:none;touch-action:manipulation;}
+.cnt-btn.menos{background:#f97316;}
+.cnt-btn.mais{background:var(--herb);}
+.cnt-btn:active{transform:scale(.9);}
+.cnt-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.6rem;min-width:38px;text-align:center;color:var(--ve);}
+.cnt-rm{background:none;border:none;color:var(--cb);font-size:.85rem;cursor:pointer;padding:2px 4px;flex-shrink:0;}
+.hoje-vazio{font-size:.78rem;color:var(--c);text-align:center;padding:14px 10px;background:var(--cl);border-radius:8px;line-height:1.4;}
+.add-pessoa-sel{width:100%;margin-top:10px;border:1.5px dashed var(--herb);border-radius:9px;padding:11px;font-size:.86rem;font-family:'Barlow',sans-serif;color:var(--v);background:#f0fdf4;outline:none;cursor:pointer;font-weight:600;}
+.link-outra-data{background:none;border:none;color:var(--c);font-size:.72rem;cursor:pointer;text-decoration:underline;padding:6px 2px 0;}
 .hist-row{border:1px solid var(--cl);border-radius:9px;padding:9px 11px;margin-bottom:7px;}
 .hist-top{display:flex;align-items:center;gap:8px;}
 .hist-data{font-weight:700;font-family:'DM Mono',monospace;font-size:.78rem;}
