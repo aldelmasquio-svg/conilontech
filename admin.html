@@ -65,7 +65,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = {agenda:'admin',mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',irrigacao:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
+    perfilAtual.modulos = {agenda:'admin',mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',irrigacao:'admin',herbicida:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
   }
   const isAdmin = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil === 'admin';
   if (!isAdmin) { window.location.href = 'index.html'; return; }
@@ -100,6 +100,7 @@ function gerarMenu() {
       { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
       { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
       { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
       { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
       { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
       { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
@@ -146,6 +147,7 @@ function renderizarUsuarios() {
     {id:'pulverizacao',label:'Pulverização'},
     {id:'drench',label:'Drench Preventivo'},
     {id:'irrigacao',label:'Irrigação'},
+    {id:'herbicida',label:'Herbicida'},
     {id:'pedidos',label:'Pedidos'},
     {id:'cotacoes',label:'Cotações'},
     {id:'estoque',label:'Estoque'},
@@ -236,6 +238,7 @@ window.abrirFazendasUsuario = function(uid) {
     {id:'pulverizacao',label:'Pulverização',ico:'💧'},
     {id:'drench',label:'Drench Preventivo',ico:'🌱'},
     {id:'irrigacao',label:'Irrigação',ico:'💦'},
+    {id:'herbicida',label:'Herbicida',ico:'🌿'},
     {id:'pedidos',label:'Pedidos',ico:'📦'},
     {id:'cotacoes',label:'Cotações',ico:'💰'},
     {id:'estoque',label:'Estoque',ico:'🏬'},
