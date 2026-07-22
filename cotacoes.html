@@ -39,6 +39,7 @@ onAuthStateChanged(auth,async(user)=>{
   document.getElementById('appContent').style.display='flex';
   gerarMenu();
   if(!isAdmin())document.getElementById('fabNovoPedido').style.display='none';
+  checarRascunhoCot();
   onSnapshot(collection(db,'talhoes'),snap=>{talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(pedMapIniciado)renderizarPedPoligonos();});
   onSnapshot(collection(db,'cotacoes'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarCotacoes();if(tabAtual==='comparar')renderComparar();if(cotacaoAberta)sincronizarModal();});
   onSnapshot(collection(db,'garantiasProdutos'),snap=>{garantias=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(tabAtual==='comparar')renderComparar();});
@@ -205,6 +206,7 @@ function renderizarItensPedido(){
   const total=new Set(pedidoWIP.itens.flatMap(it=>[...it.talhoes])).size;
   const el2=document.getElementById('pedResumo');if(el2)el2.textContent=`${pedidoWIP.itens.length} insumo(s) · ${total} talhão(ões)`;
   renderizarPedPoligonos();
+  salvarRascunhoCot();
 }
 
 // Atualiza só a caixa do total daquele insumo (não re-renderiza tudo, preserva foco no input)
@@ -241,7 +243,36 @@ window.pedRepetirTalhoes=function(destino,origem){
   renderizarItensPedido();
   if(typeof toast==='function') toast(`🔁 Talhões do Insumo ${origem+1} aplicados (${dst.talhoes.size-antes} novo(s)).`);
 };
-window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar esta cotação?'))return;pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar esta cotação?'))return;pedidoWIP=null;pedItemAtivo=null;limparRascunhoCot();document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+
+// ─── RASCUNHO AUTOMÁTICO (evita perder edições se o salvamento falhar) ───
+const RASCUNHO_KEY='cotacaoRascunhoWIP';
+function salvarRascunhoCot(){
+  try{
+    if(pedidoWIP && pedidoWIP.itens && pedidoWIP.itens.some(it=>(it.produto&&it.produto.trim())||it.talhoes.size)){
+      localStorage.setItem(RASCUNHO_KEY, JSON.stringify({em:new Date().toISOString(), itens:pedidoWIP.itens.map(it=>({produto:it.produto||'',quantidade:it.quantidade||'',unidade:it.unidade||'kg',modo:it.modo||'terrestre',talhoes:[...it.talhoes]}))}));
+    }
+  }catch(e){}
+}
+function limparRascunhoCot(){ try{ localStorage.removeItem(RASCUNHO_KEY); }catch(e){} const b=document.getElementById('rascunhoBanner'); if(b)b.style.display='none'; }
+function temRascunhoCot(){ try{ const d=localStorage.getItem(RASCUNHO_KEY); if(!d)return null; const o=JSON.parse(d); return (o&&o.itens&&o.itens.length)?o:null; }catch(e){ return null; } }
+function checarRascunhoCot(){
+  const o=temRascunhoCot(); const b=document.getElementById('rascunhoBanner');
+  if(o&&b&&isAdmin()){ b.style.display='flex'; } else if(b){ b.style.display='none'; }
+}
+window.recuperarRascunhoCot=function(){
+  const o=temRascunhoCot(); if(!o||!isAdmin())return;
+  pedidoWIP={itens:o.itens.map(it=>({produto:it.produto||'',quantidade:it.quantidade||'',unidade:it.unidade||'kg',modo:it.modo||'terrestre',talhoes:new Set(it.talhoes||[])}))};
+  if(!pedidoWIP.itens.length)adicionarItemPedido();
+  pedItemAtivo=0;
+  document.getElementById('rascunhoBanner').style.display='none';
+  document.getElementById('painelPedido').style.display='flex';
+  document.getElementById('fabNovoPedido').style.display='none';
+  abrirTab('mapa',document.getElementById('ptab-mapa'));
+  renderizarItensPedido();
+  toast('🗒️ Rascunho recuperado! Confira e salve novamente.');
+};
+window.descartarRascunhoCot=function(){ if(confirm('Descartar a cotação não salva?')) limparRascunhoCot(); };
 window.salvarPedidoWIP=async function(){
   if(!pedidoWIP)return;
   const itensValidos=pedidoWIP.itens.filter(it=>it.produto.trim());
@@ -274,9 +305,16 @@ window.salvarPedidoWIP=async function(){
     });
     // Cotação nasce "aberta", sem fornecedores; as propostas entram na aba Cotação
     await addDoc(collection(db,'cotacoes'),{itens:itensFS,status:'aberta',fornecedores:[],criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
-    window.cancelarPedido();toast('✅ Cotação criada! Agora adicione os fornecedores na aba Cotação.');
+    limparRascunhoCot();
+    pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();
+    toast('✅ Cotação criada! Agora adicione os fornecedores na aba Cotação.');
     abrirTab('lista',document.getElementById('ptab-lista'));
-  }catch(e){toast('❌ Erro: '+e.message);}
+  }catch(e){
+    salvarRascunhoCot();
+    toast('❌ Não foi possível salvar agora. Seu trabalho foi guardado — feche as outras abas do app, recarregue a página e clique em "Recuperar cotação".',7000);
+  }finally{
+    const b2=document.getElementById('btnSalvarPed'); if(b2){b2.disabled=false;b2.textContent='💾 Salvar Cotação';}
+  }
   btn.disabled=false;btn.textContent='💾 Salvar Cotação';
 };
 // ══════════════════════════════════════════════════════════════
@@ -942,6 +980,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
   <div class="menu-topo"><div class="menu-app-nome">🌿 Conilon Tech</div><div class="menu-user-nome" id="menuUserNome"></div><div class="menu-user-email" id="menuUserEmail"></div></div>
   <div id="menuModulos"></div>
   <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+<div id="rascunhoBanner" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#92400e;padding:9px 14px;font-size:.82rem;font-weight:600;">
+  <span>🗒️ Você tem uma cotação não salva.</span>
+  <button onclick="recuperarRascunhoCot()" style="background:#16a34a;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:700;font-family:'Barlow Condensed',sans-serif;cursor:pointer;">Recuperar</button>
+  <button onclick="descartarRascunhoCot()" style="background:none;border:none;color:#92400e;text-decoration:underline;cursor:pointer;font-size:.76rem;">descartar</button>
 </div>
 <div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
   <div class="app-main">
