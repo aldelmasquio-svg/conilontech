@@ -157,6 +157,7 @@ function renderizarItensPedido(){
   const el=document.getElementById('itensPedido');if(!el)return;
   el.innerHTML=pedidoWIP.itens.map((item,i)=>{
     const ativo=i===pedItemAtivo,nTal=item.talhoes.size;
+    const outrosComTal = pedidoWIP.itens.map((it,idx)=>({idx,n:it.talhoes.size})).filter(o=>o.idx!==i && o.n>0);
     // Calcular área total dos talhões selecionados e dose total
     const areaTotal = [...item.talhoes].reduce((s,id)=>{
       const t=talhoes.find(x=>x.id===id);
@@ -207,6 +208,7 @@ function renderizarItensPedido(){
           }
         </div>
         ${nTal>0?`<div class="chips-talhoes">${chips}</div>`:''}
+        ${outrosComTal.length?`<div class="repetir-row" onclick="event.stopPropagation()"><span class="repetir-lab">🔁 Repetir talhões de:</span> ${outrosComTal.map(o=>`<button class="btn-repetir" onclick="pedRepetirTalhoes(${i},${o.idx})">Insumo ${o.idx+1} · ${o.n}</button>`).join('')}</div>`:''}
         <div class="dica-mapa">👆 Clique nos talhões do mapa</div>
       </div>`:''}
     </div>`;
@@ -241,6 +243,15 @@ window.remItemPed=function(i){pedidoWIP.itens.splice(i,1);if(!pedidoWIP.itens.le
 window.remTalhaoPed=function(i,id){pedidoWIP.itens[i].talhoes.delete(id);renderizarItensPedido();};
 window.pedSelTodos=function(){if(pedItemAtivo===null||!pedidoWIP)return;talhoes.forEach(t=>{if(t.coordenadas?.length>=3)pedidoWIP.itens[pedItemAtivo].talhoes.add(t.id);});renderizarItensPedido();};
 window.pedLimparSel=function(){if(pedItemAtivo===null||!pedidoWIP)return;pedidoWIP.itens[pedItemAtivo].talhoes.clear();renderizarItensPedido();};
+window.pedRepetirTalhoes=function(destino,origem){
+  if(!pedidoWIP)return;
+  const src=pedidoWIP.itens[origem], dst=pedidoWIP.itens[destino];
+  if(!src||!dst)return;
+  const antes=dst.talhoes.size;
+  src.talhoes.forEach(id=>dst.talhoes.add(id));
+  renderizarItensPedido();
+  if(typeof toast==='function') toast(`🔁 Talhões do Insumo ${origem+1} aplicados (${dst.talhoes.size-antes} novo(s)).`);
+};
 window.cancelarPedido=function(){if(pedidoWIP&&!confirm(pedidoEditandoId?'Descartar as alterações?':'Cancelar o pedido?'))return;pedidoWIP=null;pedItemAtivo=null;pedidoEditandoId=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
 window.salvarPedidoWIP=async function(){
   if(!pedidoWIP)return;
@@ -447,6 +458,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .chip-tal{display:inline-flex;align-items:center;gap:3px;background:var(--v);color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;}
 .chip-tal button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0;}
 .dica-mapa{font-size:.7rem;color:var(--v);font-style:italic;text-align:center;padding:4px;background:var(--vb);border-radius:5px;}
+.repetir-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:6px 0;}
+.repetir-lab{font-size:.7rem;color:var(--t4);font-weight:700;}
+.btn-repetir{background:#eff6ff;border:1.5px dashed #93c5fd;color:#1e40af;border-radius:20px;padding:4px 11px;font-size:.72rem;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;}
+.btn-repetir:active{transform:scale(.96);}
 .btn-add-item{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:9px;font-size:.82rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-top:4px;}
 #fabNovoPedido{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
 #btnExpandPedSb{display:none;position:absolute;top:10px;left:10px;z-index:1001;background:white;border:none;border-radius:10px;padding:9px 13px;cursor:pointer;box-shadow:var(--sf);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);}
