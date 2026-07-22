@@ -33,6 +33,7 @@ let filtroFazenda='todas', sidebarAberta=true;
 let regMetodo='costal'; // método selecionado no modal de lançamento manual
 // Painel do dia ao vivo (contadores)
 let diaCache=null, diaCacheTid=null, metodoDiaPref={}, _saveTimer=null, _saving=false, _dirty=false;
+let _relDados=null; // últimos dados do relatório (para exportação)
 
 const ST = {
   nao_iniciado:{fill:'rgba(148,163,184,.30)',border:'#94a3b8',dot:'#94a3b8',label:'Não iniciado'},
@@ -290,8 +291,15 @@ window.fecharPainel=function(){ document.getElementById('infoPanel').classList.r
 function sessaoHoje(tid){ return registros.find(r=>r.talhaoId===tid && r.data===hojeISO()) || null; }
 function carregarDiaCache(tid){
   const s=sessaoHoje(tid);
-  diaCache = s ? {_docId:s._docId, metodo:s.metodo||'costal', pessoas:(s.pessoas||[]).map(p=>({...p}))}
-              : {_docId:null, metodo:(metodoDiaPref[tid]||'costal'), pessoas:[]};
+  if(s){
+    diaCache = {_docId:s._docId, metodo:s.metodo||'costal', pessoas:(s.pessoas||[]).map(p=>({...p}))};
+  }else{
+    // Sem sessão hoje: herda a turma do último dia do ciclo atual (contadores zerados)
+    const anteriores = registrosCiclo(tid).filter(r=>r.data!==hojeISO()).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+    const ult = anteriores[0];
+    const pessoas = ult ? (ult.pessoas||[]).map(p=>({empregadoId:p.empregadoId, apelido:p.apelido, nome:p.nome, qtd:0})) : [];
+    diaCache = {_docId:null, metodo:(ult?.metodo)||metodoDiaPref[tid]||'costal', pessoas};
+  }
   diaCacheTid=tid;
 }
 function renderHojeSecao(){
@@ -507,14 +515,21 @@ window.gerarRelatorio=function(){
   const porTalhao={};
   regs.forEach(r=>{ const k=r.talhaoId; if(!porTalhao[k]) porTalhao[k]={id:r.talhaoId, nome:r.talhaoNome, fazenda:r.fazenda, dias:new Set(), bombas:0, tanques:0}; porTalhao[k].dias.add(r.data); const q=(r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0); if(r.metodo==='trator')porTalhao[k].tanques+=q; else porTalhao[k].bombas+=q; });
 
+  const porDia={};
+  regs.forEach(r=>{ (porDia[r.data]=porDia[r.data]||[]).push(r); });
+
   const vB=configHerb.valorPorBomba, vT=configHerb.valorPorTanque, vH=configHerb.valorPorHa;
   const temValor = (vB||vT||vH);
-
-  const el=document.getElementById('relBody');
-  el.innerHTML=`
+  _relDados = { ini, fim, faz, concOrd, haTot, porPessoa, porTalhao, porDia, temValor, vB, vT, vH };
+  document.getElementById('relBody').innerHTML = renderRelBody(_relDados);
+};
+function renderRelBody(d){
+  const {concOrd,haTot,porPessoa,porTalhao,porDia,temValor,vB,vT,vH}=d;
+  const diasOrd=Object.keys(porDia).sort((a,b)=>b.localeCompare(a));
+  return `
     <div class="rel-kpis">
       <div class="rel-kpi"><div class="rk-num">${fmtHa(haTot)}</div><div class="rk-lab">aplicados no período</div></div>
-      <div class="rel-kpi"><div class="rk-num">${concs.length}</div><div class="rk-lab">talhões concluídos</div></div>
+      <div class="rel-kpi"><div class="rk-num">${concOrd.length}</div><div class="rk-lab">talhões concluídos</div></div>
       <div class="rel-kpi"><div class="rk-num">${Object.keys(porPessoa).length}</div><div class="rk-lab">pessoas</div></div>
     </div>
 
@@ -538,11 +553,69 @@ window.gerarRelatorio=function(){
     </div>
 
     <div class="rel-sec">
-      <div class="rel-sec-tit">📍 Onde trabalharam</div>
-      ${Object.keys(porTalhao).length?`<table class="rel-tab"><thead><tr><th>Talhão</th><th>Fazenda</th><th style="text-align:right;">Dias</th><th style="text-align:right;">Bombas</th><th style="text-align:right;">Tanques</th></tr></thead><tbody>
-        ${Object.values(porTalhao).sort((a,b)=>String(a.id).localeCompare(String(b.id),'pt',{numeric:true})).map(t=>`<tr><td>${sanitizar(t.id||'')} · ${sanitizar(t.nome||'')}</td><td>${sanitizar(t.fazenda||'')}</td><td style="text-align:right;">${t.dias.size}</td><td style="text-align:right;">${fmtNum(t.bombas)}</td><td style="text-align:right;">${fmtNum(t.tanques)}</td></tr>`).join('')}
-      </tbody></table>`:'<div class="rel-vazio">Sem trabalho no período.</div>'}
+      <div class="rel-sec-tit">📆 Detalhamento por dia</div>
+      ${diasOrd.length ? diasOrd.map(dia=>`
+        <div class="rel-dia">
+          <div class="rel-dia-data">${formatarData(dia)}</div>
+          ${porDia[dia].map(r=>{
+            const un=r.metodo==='trator'?'tanque':'bomba';
+            const tot=(r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0);
+            const pess=(r.pessoas||[]).map(p=>`${sanitizar(p.nome||p.apelido||'—')}: <b>${fmtNum(p.qtd)}</b>`).join(' · ');
+            return `<div class="rel-dia-reg"><span class="rel-dia-tal">${r.metodo==='trator'?'🚜':'🎒'} ${sanitizar(r.talhaoId||'')} · ${sanitizar(r.talhaoNome||'')}</span> <span class="rel-dia-tot">${fmtNum(tot)} ${un}${tot!==1?'s':''}</span><div class="rel-dia-pess">${pess||'—'}</div></div>`;
+          }).join('')}
+        </div>`).join('') : '<div class="rel-vazio">Sem lançamentos no período.</div>'}
     </div>`;
+}
+window.exportarRelatorio=function(){
+  if(!_relDados){ toast('Gere o relatório primeiro.'); return; }
+  const d=_relDados;
+  const {concOrd,haTot,porPessoa,porTalhao,porDia,temValor,vB,vT,vH}=d;
+  const diasOrd=Object.keys(porDia).sort((a,b)=>b.localeCompare(a));
+  const fazTxt = d.faz==='todas'?'Todas as fazendas':d.faz;
+  const periodoTxt = `${d.ini?formatarData(d.ini):'—'} a ${d.fim?formatarData(d.fim):'—'}`;
+  const th='padding:6px 9px;text-align:left;font-size:11px;border-bottom:2px solid #166534;color:#166534;text-transform:uppercase;letter-spacing:.03em;';
+  const td='padding:6px 9px;border-bottom:1px solid #e5e7eb;font-size:12px;';
+  const tdR=td+'text-align:right;font-weight:700;';
+  const html=`<div style="font-family:Arial,sans-serif;max-width:760px;margin:0 auto;padding:26px;color:#111;">
+    <div style="border-bottom:3px solid #166534;padding-bottom:12px;margin-bottom:18px;">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:#6b7280;">Conilon Tech · Controle de Herbicida</div>
+      <div style="font-size:21px;font-weight:900;color:#0b1c0d;">RELATÓRIO DE HERBICIDA</div>
+      <div style="font-size:13px;color:#374151;margin-top:4px;">Período: <b>${periodoTxt}</b> · ${sanitizar(fazTxt)}</div>
+    </div>
+    <div style="display:flex;gap:20px;margin-bottom:18px;font-size:13px;">
+      <div><b style="font-size:18px;color:#166534;">${fmtHa(haTot)}</b><br>aplicados</div>
+      <div><b style="font-size:18px;color:#166534;">${concOrd.length}</b><br>talhões concluídos</div>
+      <div><b style="font-size:18px;color:#166534;">${Object.keys(porPessoa).length}</b><br>pessoas</div>
+    </div>
+
+    <div style="font-size:13px;font-weight:800;color:#166534;margin:16px 0 6px;">🌿 Hectares aplicados</div>
+    ${concOrd.length?`<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="${th}">Data</th><th style="${th}">Talhão</th><th style="${th}">Fazenda</th><th style="${th}text-align:right;">Área</th></tr></thead><tbody>
+      ${concOrd.map(c=>`<tr><td style="${td}">${formatarData(c.dataConclusao)}</td><td style="${td}">${sanitizar(c.talhaoId||'')} · ${sanitizar(c.talhaoNome||'')}</td><td style="${td}">${sanitizar(c.fazenda||'')}</td><td style="${tdR}">${fmtHa(c.areaHa)}</td></tr>`).join('')}
+      <tr><td colspan="3" style="${td}font-weight:800;">Total</td><td style="${tdR}">${fmtHa(haTot)}</td></tr></tbody></table>`:'<div style="font-size:12px;color:#6b7280;">Nenhum talhão concluído.</div>'}
+
+    <div style="font-size:13px;font-weight:800;color:#166534;margin:18px 0 6px;">🎒 Bombas e tanques por pessoa</div>
+    ${Object.keys(porPessoa).length?`<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="${th}">Funcionário</th><th style="${th}text-align:right;">Bombas</th><th style="${th}text-align:right;">Tanques</th>${temValor?`<th style="${th}text-align:right;">Agrado</th>`:''}</tr></thead><tbody>
+      ${Object.values(porPessoa).sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt')).map(p=>{const val=(vB?vB*p.bombas:0)+(vT?vT*p.tanques:0);return `<tr><td style="${td}">${sanitizar(p.nome)}</td><td style="${tdR}">${fmtNum(p.bombas)}</td><td style="${tdR}">${fmtNum(p.tanques)}</td>${temValor?`<td style="${tdR}color:#166534;">${fmtR$(val)}</td>`:''}</tr>`;}).join('')}
+      </tbody></table>${vH?`<div style="font-size:12px;color:#166534;margin-top:6px;">💰 Bônus por hectare da equipe: ${fmtHa(haTot)} × ${fmtR$(vH)} = <b>${fmtR$(vH*haTot)}</b></div>`:''}`:'<div style="font-size:12px;color:#6b7280;">Nenhum lançamento.</div>'}
+
+    <div style="font-size:13px;font-weight:800;color:#166534;margin:18px 0 6px;">📍 Onde trabalharam</div>
+    ${Object.keys(porTalhao).length?`<table style="width:100%;border-collapse:collapse;"><thead><tr><th style="${th}">Talhão</th><th style="${th}">Fazenda</th><th style="${th}text-align:right;">Dias</th><th style="${th}text-align:right;">Bombas</th><th style="${th}text-align:right;">Tanques</th></tr></thead><tbody>
+      ${Object.values(porTalhao).sort((a,b)=>String(a.id).localeCompare(String(b.id),'pt',{numeric:true})).map(t=>`<tr><td style="${td}">${sanitizar(t.id||'')} · ${sanitizar(t.nome||'')}</td><td style="${td}">${sanitizar(t.fazenda||'')}</td><td style="${tdR}">${t.dias.size}</td><td style="${tdR}">${fmtNum(t.bombas)}</td><td style="${tdR}">${fmtNum(t.tanques)}</td></tr>`).join('')}
+      </tbody></table>`:'<div style="font-size:12px;color:#6b7280;">Sem trabalho.</div>'}
+
+    <div style="font-size:13px;font-weight:800;color:#166534;margin:18px 0 6px;">📆 Detalhamento por dia</div>
+    ${diasOrd.length?diasOrd.map(dia=>`<div style="margin-bottom:10px;page-break-inside:avoid;">
+      <div style="font-weight:800;font-size:12px;background:#dcfce7;padding:4px 8px;border-radius:4px;">${formatarData(dia)}</div>
+      ${porDia[dia].map(r=>{const un=r.metodo==='trator'?'tanque':'bomba';const tot=(r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0);const pess=(r.pessoas||[]).map(p=>`${sanitizar(p.nome||p.apelido||'—')}: ${fmtNum(p.qtd)}`).join(' · ');return `<div style="font-size:12px;padding:4px 8px;border-bottom:1px solid #eee;"><b>${r.metodo==='trator'?'🚜':'🎒'} ${sanitizar(r.talhaoId||'')} · ${sanitizar(r.talhaoNome||'')}</b> — ${pess} <span style="color:#166534;">(${fmtNum(tot)} ${un}${tot!==1?'s':''})</span></div>`;}).join('')}
+    </div>`).join(''):'<div style="font-size:12px;color:#6b7280;">Sem lançamentos.</div>'}
+
+    <div style="margin-top:22px;font-size:10px;color:#9ca3af;text-align:right;border-top:1px solid #e5e7eb;padding-top:8px;">Gerado pelo Conilon Tech · ${sanitizar(fazTxt)}</div>
+  </div>`;
+  let area=document.getElementById('area-impressao-herb');
+  if(!area){ area=document.createElement('div'); area.id='area-impressao-herb'; document.body.appendChild(area); }
+  area.innerHTML=html;
+  document.body.classList.add('imprimindo');
+  setTimeout(()=>{ window.print(); document.body.classList.remove('imprimindo'); }, 150);
 };
 
 // ─── UI base ───
@@ -692,6 +765,19 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .rel-tab tr.rel-total td{font-weight:800;border-top:1.5px solid var(--cb);color:var(--ve);}
 .rel-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:12px;background:var(--cl);border-radius:8px;}
 .rel-nota{font-size:.74rem;color:var(--v);background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 11px;margin-top:9px;line-height:1.5;}
+.rel-dia{margin-bottom:10px;}
+.rel-dia-data{font-size:.74rem;font-weight:800;color:var(--ve);background:var(--vb);border-radius:6px;padding:4px 9px;display:inline-block;margin-bottom:5px;}
+.rel-dia-reg{padding:5px 8px;border-bottom:1px solid var(--cl);font-size:.76rem;}
+.rel-dia-tal{font-weight:700;}
+.rel-dia-tot{color:var(--herb);font-weight:700;float:right;font-size:.72rem;}
+.rel-dia-pess{color:var(--c);font-size:.72rem;margin-top:2px;clear:both;}
+/* Impressão do relatório */
+#area-impressao-herb{display:none;}
+@media print{
+  body.imprimindo *{visibility:hidden;}
+  body.imprimindo #area-impressao-herb, body.imprimindo #area-impressao-herb *{visibility:visible;}
+  body.imprimindo #area-impressao-herb{display:block;position:absolute;left:0;top:0;width:100%;}
+}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
@@ -821,7 +907,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       </div>
       <div id="relBody"></div>
     </div>
-    <div class="modal-footer"><button class="btn-cancel" onclick="fecharRelatorio()">Fechar</button></div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="fecharRelatorio()">Fechar</button><button class="btn-save" onclick="exportarRelatorio()">🖨️ Exportar PDF</button></div>
   </div>
 </div>
 
