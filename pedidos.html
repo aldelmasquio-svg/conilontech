@@ -30,6 +30,7 @@ onAuthStateChanged(auth,async(user)=>{
   document.getElementById('appContent').style.display='flex';
   gerarMenu();
   if(!isAdmin())document.getElementById('fabNovoPedido').style.display='none';
+  checarRascunhoPed();
   onSnapshot(collection(db,'talhoes'),snap=>{talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(pedMapIniciado)renderizarPedPoligonos();});
   onSnapshot(collection(db,'pedidos'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarListaPedidos();});
   setTimeout(iniciarMapaPedidos,200);
@@ -216,6 +217,7 @@ function renderizarItensPedido(){
   const total=new Set(pedidoWIP.itens.flatMap(it=>[...it.talhoes])).size;
   const el2=document.getElementById('pedResumo');if(el2)el2.textContent=`${pedidoWIP.itens.length} insumo(s) · ${total} talhão(ões)`;
   renderizarPedPoligonos();
+  salvarRascunhoPed();
 }
 
 // Atualiza só a caixa do total daquele insumo (não re-renderiza tudo, preserva foco no input)
@@ -252,7 +254,36 @@ window.pedRepetirTalhoes=function(destino,origem){
   renderizarItensPedido();
   if(typeof toast==='function') toast(`🔁 Talhões do Insumo ${origem+1} aplicados (${dst.talhoes.size-antes} novo(s)).`);
 };
-window.cancelarPedido=function(){if(pedidoWIP&&!confirm(pedidoEditandoId?'Descartar as alterações?':'Cancelar o pedido?'))return;pedidoWIP=null;pedItemAtivo=null;pedidoEditandoId=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+window.cancelarPedido=function(){if(pedidoWIP&&!confirm(pedidoEditandoId?'Descartar as alterações?':'Cancelar o pedido?'))return;pedidoWIP=null;pedItemAtivo=null;pedidoEditandoId=null;limparRascunhoPed();document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+
+// ─── RASCUNHO AUTOMÁTICO (evita perder edições se o salvamento falhar) ───
+const RASCUNHO_KEY_PED='pedidoRascunhoWIP';
+function salvarRascunhoPed(){
+  try{
+    if(pedidoWIP && pedidoWIP.itens && pedidoWIP.itens.some(it=>(it.produto&&it.produto.trim())||it.talhoes.size)){
+      localStorage.setItem(RASCUNHO_KEY_PED, JSON.stringify({em:new Date().toISOString(), editandoId:pedidoEditandoId||null, itens:pedidoWIP.itens.map(it=>({produto:it.produto||'',quantidade:it.quantidade||'',unidade:it.unidade||'kg',modo:it.modo||'terrestre',talhoes:[...it.talhoes]}))}));
+    }
+  }catch(e){}
+}
+function limparRascunhoPed(){ try{ localStorage.removeItem(RASCUNHO_KEY_PED); }catch(e){} const b=document.getElementById('rascunhoBanner'); if(b)b.style.display='none'; }
+function temRascunhoPed(){ try{ const d=localStorage.getItem(RASCUNHO_KEY_PED); if(!d)return null; const o=JSON.parse(d); return (o&&o.itens&&o.itens.length)?o:null; }catch(e){ return null; } }
+function checarRascunhoPed(){ const o=temRascunhoPed(); const b=document.getElementById('rascunhoBanner'); if(o&&b&&isAdmin()){ b.style.display='flex'; } else if(b){ b.style.display='none'; } }
+window.recuperarRascunhoPed=function(){
+  const o=temRascunhoPed(); if(!o||!isAdmin())return;
+  pedidoWIP={itens:o.itens.map(it=>({produto:it.produto||'',quantidade:it.quantidade||'',unidade:it.unidade||'kg',modo:it.modo||'terrestre',talhoes:new Set(it.talhoes||[])}))};
+  pedidoEditandoId=o.editandoId||null;
+  if(!pedidoWIP.itens.length)adicionarItemPedido();
+  pedItemAtivo=0;
+  document.getElementById('painelTit').textContent=pedidoEditandoId?'✏️ Editar Pedido':'📦 Novo Pedido';
+  document.getElementById('btnSalvarPed').textContent=pedidoEditandoId?'💾 Salvar Alterações':'💾 Salvar Pedido';
+  document.getElementById('rascunhoBanner').style.display='none';
+  document.getElementById('painelPedido').style.display='flex';
+  document.getElementById('fabNovoPedido').style.display='none';
+  abrirTab('mapa',document.getElementById('ptab-mapa'));
+  renderizarItensPedido();
+  toast('🗒️ Rascunho recuperado! Confira e salve novamente.');
+};
+window.descartarRascunhoPed=function(){ if(confirm('Descartar o pedido não salvo?')) limparRascunhoPed(); };
 window.salvarPedidoWIP=async function(){
   if(!pedidoWIP)return;
   const itensValidos=pedidoWIP.itens.filter(it=>it.produto.trim());
@@ -284,15 +315,20 @@ window.salvarPedidoWIP=async function(){
         talhoes: talhoesArr
       };
     });
+    const editando=!!pedidoEditandoId;
     if(pedidoEditandoId){
       await updateDoc(doc(db,'pedidos',pedidoEditandoId),{itens:itensFS,editadoEm:new Date().toISOString(),editadoPor:usuarioAtual.email});
-      window.cancelarPedido();toast('✅ Pedido atualizado!');
     }else{
       await addDoc(collection(db,'pedidos'),{itens:itensFS,status:'solicitado',criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
-      window.cancelarPedido();toast('✅ Pedido salvo!');
     }
+    limparRascunhoPed();
+    pedidoWIP=null;pedItemAtivo=null;pedidoEditandoId=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();
+    toast(editando?'✅ Pedido atualizado!':'✅ Pedido salvo!');
     abrirTab('lista',document.getElementById('ptab-lista'));
-  }catch(e){toast('❌ Erro: '+e.message);}
+  }catch(e){
+    salvarRascunhoPed();
+    toast('❌ Não foi possível salvar agora. Seu trabalho foi guardado — feche as outras abas do app, recarregue a página e clique em "Recuperar".',7000);
+  }
   btn.disabled=false;btn.textContent=pedidoEditandoId?'💾 Salvar Alterações':'💾 Salvar Pedido';
 };
 function renderizarListaPedidos(){
@@ -509,6 +545,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
   <div class="menu-topo"><div class="menu-app-nome">🌿 Conilon Tech</div><div class="menu-user-nome" id="menuUserNome"></div><div class="menu-user-email" id="menuUserEmail"></div></div>
   <div id="menuModulos"></div>
   <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+<div id="rascunhoBanner" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:#fef3c7;border-bottom:1px solid #fcd34d;color:#92400e;padding:9px 14px;font-size:.82rem;font-weight:600;">
+  <span>🗒️ Você tem um pedido não salvo.</span>
+  <button onclick="recuperarRascunhoPed()" style="background:#16a34a;color:#fff;border:none;border-radius:7px;padding:6px 13px;font-weight:700;font-family:'Barlow Condensed',sans-serif;cursor:pointer;">Recuperar</button>
+  <button onclick="descartarRascunhoPed()" style="background:none;border:none;color:#92400e;text-decoration:underline;cursor:pointer;font-size:.76rem;">descartar</button>
 </div>
 <div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
   <div class="app-main">
