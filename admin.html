@@ -157,12 +157,36 @@ function renderizarUsuarios() {
     {id:'planejamento',label:'Planejamento'},
   ];
   const NIVEIS = ['nenhum','encarregado','operador','gerente','admin'];
+  const modLabel = id => (MODS.find(m=>m.id===id)?.label||id);
+  const GRUPOS = [
+    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','herbicida','atividades','equipe']},
+    {titulo:'Compras e estoque', ids:['estoque','pedidos','cotacoes']},
+    {titulo:'Análise e gestão', ids:['gestao','analises','recomendacoes','planejamento']},
+  ];
+  const _cobertos = new Set(GRUPOS.flatMap(g=>g.ids));
+  const _outros = MODS.filter(m=>!_cobertos.has(m.id)).map(m=>m.id);
+  if (_outros.length) GRUPOS.push({titulo:'Outros', ids:_outros});
 
   lista.innerHTML = filtrados.map(u => {
     const fmod = u.fazendasModulo || {};
     const resumoFaz = MODS.filter(m => fmod[m.id]?.length).map(m =>
       `${m.label}: ${fmod[m.id].length} faz.`
     ).join(' · ') || 'Todas as fazendas';
+    const mods = u.modulos || {};
+    const liberados = MODS.filter(m => mods[m.id] && mods[m.id]!=='nenhum');
+    const resumoChips = liberados.length
+      ? liberados.map(m=>`<span class="acesso-chip niv-${mods[m.id]}">${modLabel(m.id)} · ${mods[m.id]}</span>`).join('')
+      : `<span class="acesso-vazio">Nenhum módulo liberado ainda</span>`;
+    const editorHtml = GRUPOS.map(g=>`
+      <div class="mod-grupo-tit">${g.titulo}</div>
+      <div class="mod-grid">
+        ${g.ids.map(id=>{ const nv=mods[id]||'nenhum'; return `<div class="mod-cell">
+          <span class="mod-label">${modLabel(id)}</span>
+          <select class="sel-nivel niv-${nv}" onchange="alterarAcesso('${u.uid}','${id}',this.value); this.className='sel-nivel niv-'+this.value">
+            ${NIVEIS.map(n=>`<option value="${n}" ${nv===n?'selected':''}>${n}</option>`).join('')}
+          </select>
+        </div>`; }).join('')}
+      </div>`).join('');
     return `
     <div class="usuario-card ${u.ativo===false?'inativo':''}">
       <div class="usuario-top">
@@ -180,15 +204,11 @@ function renderizarUsuarios() {
           ${u.uid!==usuarioAtual?.uid?`<button onclick="excluirUsuario('${u.uid}')" class="btn-sm-ico" title="Excluir usuário" style="color:var(--danger);">🗑️</button>`:''}
         </div>
       </div>
-      <div class="usuario-modulos">
-        ${MODS.map(m=>`
-          <div class="mod-row">
-            <span class="mod-label">${m.label}</span>
-            <select class="sel-nivel" onchange="alterarAcesso('${u.uid}','${m.id}',this.value)">
-              ${NIVEIS.map(n=>`<option value="${n}" ${(u.modulos||{})[m.id]===n?'selected':''}>${n}</option>`).join('')}
-            </select>
-          </div>`).join('')}
-      </div>
+      <div class="acesso-resumo">${resumoChips}</div>
+      <details class="mod-editor">
+        <summary>⚙️ Editar acessos · ${liberados.length}/${MODS.length} liberados</summary>
+        ${editorHtml}
+      </details>
       <div class="usuario-fazendas-bar">
         <span class="uf-resumo">🏡 ${resumoFaz}</span>
         <button onclick="abrirFazendasUsuario('${u.uid}')" class="btn-sm-ico" title="Definir fazendas">🏡</button>
@@ -695,9 +715,29 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .faz-chip:active{transform:scale(.97);}
 .faz-chip.ativo{background:var(--vb);border-color:var(--v);color:var(--v);font-weight:700;}
 .faz-chip input{display:none;}
-.mod-row{display:flex;align-items:center;justify-content:space-between;}
-.mod-label{font-size:.78rem;font-weight:600;color:var(--ts);}
-.sel-nivel{border:1.5px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:.78rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:var(--cl);}
+.mod-label{font-size:.82rem;font-weight:600;color:var(--ts);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Resumo de acessos (chips) */
+.acesso-resumo{display:flex;flex-wrap:wrap;gap:6px;border-top:1px solid var(--cl);padding-top:10px;margin-top:2px;}
+.acesso-chip{font-size:.68rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid;white-space:nowrap;}
+.acesso-vazio{font-size:.74rem;color:var(--c);font-style:italic;}
+/* Editor de acessos (expansível) */
+.mod-editor{margin-top:8px;}
+.mod-editor summary{cursor:pointer;font-size:.78rem;font-weight:700;color:var(--v);padding:9px 11px;list-style:none;background:var(--cl);border-radius:8px;display:flex;align-items:center;gap:6px;}
+.mod-editor summary::-webkit-details-marker{display:none;}
+.mod-editor summary::before{content:'▸';font-size:.7rem;}
+.mod-editor[open] summary::before{content:'▾';}
+.mod-editor[open] summary{margin-bottom:8px;}
+.mod-grupo-tit{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;margin:11px 0 6px;}
+.mod-grid{display:grid;grid-template-columns:1fr;gap:6px 14px;}
+.mod-cell{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--cl);padding:4px 0;}
+.sel-nivel{border:1.5px solid var(--cb);border-radius:7px;padding:5px 10px;font-size:.74rem;font-weight:700;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:var(--cl);cursor:pointer;text-align:center;flex-shrink:0;min-width:112px;text-transform:capitalize;}
+/* Cores por nível de acesso */
+.niv-nenhum{background:#f3f4f6;color:#9ca3af;border-color:#e5e7eb;}
+.niv-operador{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}
+.niv-encarregado{background:#fef3c7;color:#92400e;border-color:#fcd34d;}
+.niv-gerente{background:#ffedd5;color:#9a3412;border-color:#fdba74;}
+.niv-admin{background:#dcfce7;color:#166534;border-color:#86efac;}
+@media(min-width:560px){.mod-grid{grid-template-columns:1fr 1fr;}}
 /* LOGS */
 .filtro-log{border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;width:100%;margin-bottom:10px;}
 .log-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--cl);}
