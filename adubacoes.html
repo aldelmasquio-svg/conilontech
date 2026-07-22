@@ -61,8 +61,6 @@ const SEMANAS = ['1ª Semana','2ª Semana','3ª Semana','4ª Semana'];
 let usuarioAtual = null, perfilAtual = {};
 let talhoes = [], planosAdubacao = [], configAdubacao = {}, planejamentosSafra = [];
 let setoresIrrig = []; // setores de irrigação (para converter kg/ha em kg por setor na fertirrigação)
-let pluviometria = []; // registros de chuva por fazenda/pluviômetro
-let pluvFaz = '', pluvPluvi = '', pluvAno = null; // seleção atual do modal de pluviometria
 let telaAtual = 'lista', talhaoSel = null, mesSel = null;
 let planoWIP = null, etapa = 1, semanaAtiva = 0;
 
@@ -154,10 +152,6 @@ function iniciarListeners() {
     setoresIrrig = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     if (telaAtual==='talhao'||telaAtual==='mes') renderizarTela();
   });
-  onSnapshot(collection(db,'pluviometria'), snap => {
-    pluviometria = snap.docs.map(d => ({_docId:d.id,...d.data()}));
-    if (document.getElementById('ovPluv')?.classList.contains('open')) renderPluv();
-  });
   onSnapshot(doc(db,'configAdubacao','geral'), snap => {
     if (snap.exists()) configAdubacao = snap.data();
     if (telaAtual==='lista'||telaAtual==='talhao') renderizarTela();
@@ -226,7 +220,6 @@ function renderizarLista() {
   let headerHtml = `<div class="lista-header">
     <div class="lista-title">Plano de Adubação</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;">
-      <button onclick="abrirPluviometria()" class="btn-safra">🌧️ Chuva</button>
       ${adm?`<button onclick="abrirSetoresConfig()" class="btn-safra">📐 Setores</button>`:''}
       ${adm?`<button onclick="irSafra()" class="btn-safra">⚙️ Safra</button>`:''}
     </div>
@@ -530,102 +523,6 @@ function tabelaKgSetorImpressao(ap, talhaoId){
       </tbody>
     </table>
   </div>`;
-}
-
-// ─── PLUVIOMETRIA (por fazenda, múltiplos pluviômetros, histórico anual) ───
-const MESES_PLUV=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-let pluvExtras={}; // pluviômetros criados mas ainda sem registro
-const escJs=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-function _hojeISO(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
-function fazendasDisp(){ return [...new Set(talhoes.map(t=>t.fazenda).filter(Boolean))].filter(f=>fazendaPermitida(f)).sort(); }
-function pluviometrosDaFaz(faz){
-  const set=new Set(pluviometria.filter(p=>p.fazenda===faz).map(p=>p.pluviometro||'Principal'));
-  (pluvExtras[faz]||[]).forEach(n=>set.add(n));
-  if(!set.size) set.add('Principal');
-  return [...set].sort();
-}
-window.abrirPluviometria=function(){
-  const fs=fazendasDisp();
-  if(!fs.length){ toast('⚠️ Nenhuma fazenda disponível.'); return; }
-  pluvFaz = (pluvFaz && fs.includes(pluvFaz)) ? pluvFaz : fs[0];
-  pluvAno = pluvAno || new Date().getFullYear();
-  const pls=pluviometrosDaFaz(pluvFaz);
-  pluvPluvi = (pluvPluvi && pls.includes(pluvPluvi)) ? pluvPluvi : pls[0];
-  document.getElementById('ovPluv').classList.add('open');
-  renderPluv();
-};
-window.fecharPluv=function(){ document.getElementById('ovPluv').classList.remove('open'); };
-window.ovPluvClick=function(e){ if(e.target.id==='ovPluv') fecharPluv(); };
-window.pluvSetFaz=function(f){ pluvFaz=f; pluvPluvi=pluviometrosDaFaz(f)[0]; renderPluv(); };
-window.pluvSetPluvi=function(p){ pluvPluvi=p; renderPluv(); };
-window.pluvSetAno=function(a){ pluvAno=a; renderPluv(); };
-window.pluvAddPluvi=function(){
-  const nome=(prompt('Nome do novo pluviômetro (ex: Sede, Baixada):')||'').trim();
-  if(!nome)return;
-  (pluvExtras[pluvFaz]=pluvExtras[pluvFaz]||[]).push(nome);
-  pluvPluvi=nome; renderPluv();
-};
-window.salvarChuva=async function(){
-  if(!podeMarcar()){ toast('⛔ Sem permissão.'); return; }
-  if(!pluvFaz){ toast('⚠️ Selecione a fazenda.'); return; }
-  const data=document.getElementById('pluvData').value;
-  const mm=parseFloat(String(document.getElementById('pluvMm').value||'').replace(',','.'));
-  if(!data){ toast('⚠️ Informe a data.'); return; }
-  if(isNaN(mm)||mm<0){ toast('⚠️ Informe os mm de chuva.'); return; }
-  try{
-    await addDoc(collection(db,'pluviometria'),{ fazenda:pluvFaz, pluviometro:pluvPluvi||'Principal', data, mm, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||'' });
-    document.getElementById('pluvMm').value='';
-    toast('💧 Chuva registrada!');
-  }catch(e){ toast('❌ Erro: '+e.message); }
-};
-window.excluirChuva=async function(id){
-  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
-  if(!confirm('Excluir esta anotação de chuva?'))return;
-  try{ await deleteDoc(doc(db,'pluviometria',id)); toast('🗑️ Excluído.'); }catch(e){ toast('❌ Erro: '+e.message); }
-};
-function renderPluv(){
-  const body=document.getElementById('pluvBody'); if(!body)return;
-  const fs=fazendasDisp();
-  const pls=pluviometrosDaFaz(pluvFaz);
-  if(!pls.includes(pluvPluvi)) pluvPluvi=pls[0];
-  const anoStr=String(pluvAno);
-  const regs=pluviometria.filter(p=>p.fazenda===pluvFaz && (p.pluviometro||'Principal')===pluvPluvi && String(p.data||'').startsWith(anoStr))
-     .sort((a,b)=>(b.data||'').localeCompare(a.data||''));
-  const porMes=Array(12).fill(0);
-  regs.forEach(r=>{ const m=parseInt((r.data||'').slice(5,7))-1; if(m>=0&&m<12) porMes[m]+=Number(r.mm)||0; });
-  const totalAno=porMes.reduce((a,b)=>a+b,0);
-  const fmtmm=v=>(Math.round(v*10)/10).toLocaleString('pt-BR');
-  const maxMes=Math.max(1,...porMes);
-  body.innerHTML=`
-    <div class="campo" style="margin-bottom:10px;"><label>Fazenda</label>
-      <select onchange="pluvSetFaz(this.value)">${fs.map(f=>`<option ${f===pluvFaz?'selected':''}>${sanitizar(f)}</option>`).join('')}</select>
-    </div>
-    <div class="pluv-chips">
-      ${pls.map(p=>`<button class="pluv-chip ${p===pluvPluvi?'on':''}" onclick="pluvSetPluvi('${escJs(p)}')">📟 ${sanitizar(p)}</button>`).join('')}
-      <button class="pluv-chip novo" onclick="pluvAddPluvi()">＋ pluviômetro</button>
-    </div>
-    ${podeMarcar()?`<div class="pluv-reg">
-      <div class="campo"><label>Data</label><input type="date" id="pluvData" value="${_hojeISO()}"></div>
-      <div class="campo" style="width:96px;"><label>Chuva (mm)</label><input type="number" id="pluvMm" step="0.1" min="0" placeholder="0"></div>
-      <button class="pluv-save" onclick="salvarChuva()">💧 Registrar</button>
-    </div>`:''}
-    <div class="pluv-hist-cab">
-      <button class="pluv-ano-btn" onclick="pluvSetAno(${pluvAno-1})">◀</button>
-      <span class="pluv-ano">${anoStr}</span>
-      <button class="pluv-ano-btn" onclick="pluvSetAno(${pluvAno+1})">▶</button>
-      <span class="pluv-total">Total do ano: <b>${fmtmm(totalAno)} mm</b></span>
-    </div>
-    <div class="pluv-grade">
-      ${MESES_PLUV.map((m,i)=>`<div class="pluv-mes ${porMes[i]?'':'zero'}">
-        <div class="pm-nome">${m}</div>
-        <div class="pm-bar"><div class="pm-fill" style="height:${porMes[i]?Math.max(6,porMes[i]/maxMes*100):0}%"></div></div>
-        <div class="pm-val">${porMes[i]?fmtmm(porMes[i]):'–'}</div>
-      </div>`).join('')}
-    </div>
-    <div class="pluv-lista">
-      <div class="pluv-lista-tit">Anotações de ${anoStr}${regs.length?` · ${regs.length}`:''}</div>
-      ${regs.length?regs.map(r=>`<div class="pluv-row"><span class="pluv-row-data">${formatarData(r.data)}</span><span class="pluv-row-mm">${fmtmm(r.mm)} mm</span>${isAdmin()?`<button class="pluv-del" onclick="excluirChuva('${r._docId}')">✕</button>`:''}</div>`).join(''):'<div class="pluv-vazio">Nenhuma anotação neste ano. Registre a chuva acima.</div>'}
-    </div>`;
 }
 
 function renderCardAp(ap, planoDocId) {
@@ -1369,33 +1266,6 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prod-nome{font-weight:700;font-size:.95rem;color:var(--t);word-break:break-word;flex:1 1 auto;min-width:0;}
 .prod-dose{font-family:'DM Mono',monospace;font-size:.9rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 10px;white-space:nowrap;letter-spacing:.02em;}
 .aplic-obs{font-size:.72rem;color:var(--c);font-style:italic;margin-top:6px;}
-/* Pluviometria */
-.pluv-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;}
-.pluv-chip{background:var(--cl);border:1.5px solid var(--cb);border-radius:20px;padding:6px 12px;font-size:.78rem;font-weight:700;font-family:'Barlow',sans-serif;cursor:pointer;color:var(--c);}
-.pluv-chip.on{background:#dbeafe;border-color:#60a5fa;color:#1e40af;}
-.pluv-chip.novo{border-style:dashed;color:var(--v);}
-.pluv-reg{display:flex;align-items:flex-end;gap:9px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:11px;margin-bottom:12px;flex-wrap:wrap;}
-.pluv-reg .campo{display:flex;flex-direction:column;gap:3px;}
-.pluv-reg label{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
-.pluv-reg input{border:1.5px solid var(--cb);border-radius:8px;padding:8px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;}
-.pluv-save{background:#2563eb;border:none;color:white;border-radius:8px;padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
-.pluv-hist-cab{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
-.pluv-ano-btn{background:var(--cl);border:1px solid var(--cb);border-radius:7px;width:30px;height:30px;font-size:.85rem;cursor:pointer;color:var(--v);}
-.pluv-ano{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;color:var(--ve);}
-.pluv-total{margin-left:auto;font-size:.82rem;color:var(--t);}
-.pluv-grade{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:14px;}
-.pluv-mes{background:var(--cl);border-radius:8px;padding:6px 3px 5px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:3px;}
-.pluv-mes.zero{opacity:.5;}
-.pm-nome{font-size:.6rem;text-transform:uppercase;color:var(--c);font-weight:700;}
-.pm-bar{height:40px;width:14px;background:#e5e7eb;border-radius:3px;display:flex;align-items:flex-end;overflow:hidden;}
-.pm-fill{width:100%;background:#3b82f6;border-radius:3px;}
-.pm-val{font-size:.66rem;font-weight:700;color:#1e40af;font-family:'DM Mono',monospace;}
-.pluv-lista-tit{font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;margin-bottom:6px;}
-.pluv-row{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--cl);font-size:.82rem;}
-.pluv-row-data{font-family:'DM Mono',monospace;font-weight:700;}
-.pluv-row-mm{margin-left:auto;color:#1e40af;font-weight:700;}
-.pluv-del{background:#fee2e2;color:var(--danger);border:none;border-radius:6px;width:22px;height:22px;font-size:.62rem;cursor:pointer;}
-.pluv-vazio{font-size:.78rem;color:var(--c);text-align:center;padding:14px;background:var(--cl);border-radius:8px;}
 /* Config tamanho dos setores */
 .scfg-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
 .scfg-nome{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:8px;padding:9px 11px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;}
@@ -1793,16 +1663,6 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
       <button class="btn-cancel" onclick="fecharSetoresConfig()">Cancelar</button>
       <button class="btn-save" onclick="salvarSetoresConfig()">💾 Salvar</button>
     </div>
-  </div>
-</div>
-
-<!-- MODAL PLUVIOMETRIA -->
-<div class="overlay" id="ovPluv" onclick="ovPluvClick(event)">
-  <div class="modal-sheet">
-    <div class="modal-handle"></div>
-    <div class="modal-tit">🌧️ Pluviometria</div>
-    <div class="modal-body" id="pluvBody"></div>
-    <div class="modal-footer"><button class="btn-cancel" onclick="fecharPluv()">Fechar</button></div>
   </div>
 </div>
 
