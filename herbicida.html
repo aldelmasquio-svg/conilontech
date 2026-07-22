@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Herbicida</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableIndexedDbPersistence(db).catch(()=>{});
+
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], empregados=[], registros=[], conclusoes=[], configHerb={};
+let map, mapaIniciado=false, talhaoLayers={}, talhaoSel=null;
+let filtroFazenda='todas', sidebarAberta=true;
+let regMetodo='costal'; // método selecionado no modal de registro
+
+const ST = {
+  nao_iniciado:{fill:'rgba(148,163,184,.30)',border:'#94a3b8',dot:'#94a3b8',label:'Não iniciado'},
+  aplicando:   {fill:'rgba(249,115,22,.45)', border:'#f97316',dot:'#f97316',label:'Aplicando'},
+  concluido:   {fill:'rgba(34,197,94,.45)',  border:'#22c55e',dot:'#22c55e',label:'Concluído'},
+};
+
+// ─── AUTH ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual=user;
+  const snap=await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual=snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') perfilAtual.modulos={mapa:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  if (!ehAdminSistema() && nivelAcesso('herbicida')==='nenhum') { window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserEmail').textContent=user.email;
+  gerarMenu();
+  if (ehAdminSistema()) document.getElementById('btnConfigHerb').style.display='inline-flex';
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appContent').style.display='flex';
+  iniciarMapa();
+  iniciarListeners();
+});
+
+function nivelAcesso(mod){
+  const _mods = perfilAtual.modulos || {};
+  if (_mods[mod]) return _mods[mod];
+  const _heranca = { drench:'pulverizacao', cotacoes:'pedidos' };
+  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
+  if (perfilAtual.perfil==='admin') return 'admin';
+  return 'nenhum';
+}
+function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+function podeRegistrar(){ return ehAdminSistema() || ['admin','gerente','encarregado','operador'].includes(nivelAcesso('herbicida')); }
+function podeGerenciar(){ return ehAdminSistema() || nivelAcesso('herbicida')==='admin'; }
+function fazendaPermitida(fazenda){
+  if (ehAdminSistema()) return true;
+  const permitidas = perfilAtual.fazendasModulo?.herbicida;
+  if (!permitidas || !permitidas.length) return true;
+  return permitidas.includes(fazenda);
+}
+
+function gerarMenu() {
+  const isAdm = ehAdminSistema();
+  const pg = (window.location.pathname.split('/').pop() || 'index.html');
+  const secoes = [
+    { label: 'Principal', items: [
+      { href:'index.html',         ico:'📊', label:'Dashboard' },
+      { href:'agenda.html',        ico:'📅', label:'Agenda' },
+      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
+      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
+      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
+      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
+      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
+      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
+      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
+      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
+      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
+      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
+    ]},
+    { label: 'Análise', items: [
+      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
+      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
+      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
+      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
+      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
+    ]},
+  ];
+  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
+    const html = s.items.map(m => {
+      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
+      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
+    }).filter(Boolean).join('');
+    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
+  }).join('');
+}
+
+// ─── DADOS ───
+function iniciarListeners(){
+  onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(mapaIniciado){renderizarTalhoes(); renderizarSidebar(); preencherFazendas();} });
+  onSnapshot(collection(db,'equipeEmpregados'), snap => { empregados=snap.docs.map(d=>({_docId:d.id,...d.data()})).filter(e=>e.ativo!==false); });
+  onSnapshot(collection(db,'herbicidaRegistros'), snap => { registros=snap.docs.map(d=>({_docId:d.id,...d.data()})); atualizar(); });
+  onSnapshot(collection(db,'herbicidaConclusoes'), snap => { conclusoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); atualizar(); });
+  onSnapshot(doc(db,'configHerbicida','geral'), snap => { if(snap.exists()) configHerb=snap.data(); });
+}
+function atualizar(){ if(!mapaIniciado)return; renderizarTalhoes(); renderizarSidebar(); if(talhaoSel) abrirPainel(talhaoSel); }
+
+// ─── HELPERS ───
+function formatarData(d){ if(!d)return'—'; const[a,m,dd]=d.split('-'); return `${dd}/${m}/${a}`; }
+function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g,ch=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
+function hojeISO(){ const d=new Date(); const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+function fmtHa(ha){ if(ha==null||isNaN(ha))return'—'; return (Number(ha)>=10?Number(ha).toFixed(1):Number(ha).toFixed(2)).replace('.',',')+' ha'; }
+function fmtNum(n){ if(n==null||isNaN(n))return'0'; return (Math.round(n*100)/100).toLocaleString('pt-BR'); }
+function fmtR$(n){ return 'R$ '+(Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function toast(msg,dur=3000){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),dur); }
+function empregadoNome(id){ const e=empregados.find(x=>x._docId===id); return e?(e.nome||e.apelido||'—'):'—'; }
+function empregadoApelido(id){ const e=empregados.find(x=>x._docId===id); return e?(e.apelido||e.nome||'—'):'—'; }
+function areaTalhao(t){ return (t && t.area!=null && !isNaN(t.area)) ? Number(t.area) : 0; }
+function normLatLngs(coords){ return (coords||[]).map(c=>{ if(Array.isArray(c))return[c[0],c[1]]; if(c.lat!==undefined)return[c.lat,c.lng]; if(c.latitude!==undefined)return[c.latitude,c.longitude]; return c; }); }
+
+// ─── STATUS DO TALHÃO (derivado do histórico) ───
+function conclusoesDoTalhao(tid){ return conclusoes.filter(c=>c.talhaoId===tid).sort((a,b)=>(b.dataConclusao||'').localeCompare(a.dataConclusao||'')); }
+function registrosDoTalhao(tid){ return registros.filter(r=>r.talhaoId===tid).sort((a,b)=>(b.data||'').localeCompare(a.data||'')); }
+function ultimaConclusao(tid){ return conclusoesDoTalhao(tid)[0]||null; }
+// registros do ciclo atual = os que vieram depois da última conclusão (ou todos, se nunca concluído)
+function registrosCiclo(tid){
+  const uc=ultimaConclusao(tid);
+  const regs=registrosDoTalhao(tid);
+  return uc ? regs.filter(r=>(r.data||'')>uc.dataConclusao) : regs;
+}
+function statusTalhao(tid){
+  const regs=registrosDoTalhao(tid), uc=ultimaConclusao(tid);
+  if(!regs.length && !uc) return 'nao_iniciado';
+  const ultReg=regs[0];
+  if(ultReg && (!uc || ultReg.data>uc.dataConclusao)) return 'aplicando';
+  return 'concluido';
+}
+function totalQtdCiclo(tid, metodo){
+  return registrosCiclo(tid).filter(r=>!metodo||r.metodo===metodo)
+    .reduce((s,r)=>s+(r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0),0);
+}
+
+// ─── MAPA ───
+function iniciarMapa(){
+  if(mapaIniciado)return; mapaIniciado=true;
+  map=L.map('map',{center:[-18.7166,-40.4000],zoom:14});
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}).addTo(map);
+  map.on('click',()=>fecharPainel());
+  requestAnimationFrame(()=>map.invalidateSize());
+  setTimeout(()=>map.invalidateSize(),300);
+  setTimeout(()=>map.invalidateSize(),800);
+  renderizarTalhoes();
+}
+function talhoesVisiveis(){ return talhoes.filter(t=>fazendaPermitida(t.fazenda) && (filtroFazenda==='todas'||t.fazenda===filtroFazenda)); }
+function renderizarTalhoes(){
+  if(!map)return;
+  Object.values(talhaoLayers).forEach(l=>map.removeLayer(l)); talhaoLayers={};
+  talhoesVisiveis().forEach(t=>{
+    if(!t.coordenadas||t.coordenadas.length<3)return;
+    const st=ST[statusTalhao(t.id)];
+    const poly=L.polygon(normLatLngs(t.coordenadas),{color:talhaoSel===t.id?'#fff':st.border,weight:talhaoSel===t.id?4:2.5,fillColor:st.fill,fillOpacity:1}).addTo(map);
+    poly.bindTooltip(`<b>${sanitizar(t.id)} · ${sanitizar(t.nome||'')}</b><br>${st.label}`,{sticky:true,direction:'top'});
+    poly.on('click',ev=>{ L.DomEvent.stopPropagation(ev); selecionarTalhao(t.id); });
+    talhaoLayers[t.id]=poly;
+  });
+}
+window.selecionarTalhao=function(id){
+  talhaoSel=id; renderizarTalhoes(); renderizarSidebar(); abrirPainel(id);
+  const ly=talhaoLayers[id];
+  if(ly){ try{ map.fitBounds(ly.getBounds(),{maxZoom:17,padding:[60,60]}); }catch(e){} ly.bringToFront(); }
+};
+
+// ─── SIDEBAR ───
+function preencherFazendas(){
+  const fazendas=[...new Set(talhoesVisiveis().map(t=>t.fazenda).filter(Boolean))].sort();
+  const sel=document.getElementById('filtroFaz');
+  sel.innerHTML=`<option value="todas">Todas as fazendas</option>`+fazendas.map(f=>`<option value="${sanitizar(f)}" ${f===filtroFazenda?'selected':''}>${sanitizar(f)}</option>`).join('');
+}
+window.setFiltroFaz=function(v){ filtroFazenda=v; renderizarTalhoes(); renderizarSidebar(); };
+function renderizarSidebar(){
+  const lista=document.getElementById('sidebarList');
+  const vis=talhoesVisiveis();
+  document.getElementById('sidebarCount').textContent=vis.length+' talhã'+(vis.length!==1?'os':'o');
+  if(!vis.length){ lista.innerHTML=`<div style="padding:22px 14px;text-align:center;color:var(--c);font-size:.78rem;">Nenhum talhão cadastrado no mapa.</div>`; return; }
+  const grupos={};
+  vis.forEach(t=>{ const f=t.fazenda||'Sem fazenda'; (grupos[f]=grupos[f]||[]).push(t); });
+  const cmp=(a,b)=>String(a.id||'').localeCompare(String(b.id||''),'pt',{numeric:true});
+  lista.innerHTML=Object.keys(grupos).sort().map(f=>{
+    return `<div class="sb-fazenda">${sanitizar(f)}</div>`+grupos[f].sort(cmp).map(t=>{
+      const st=ST[statusTalhao(t.id)];
+      const tot=totalQtdCiclo(t.id);
+      return `<div class="msb-item ${talhaoSel===t.id?'active':''}" onclick="selecionarTalhao('${t.id}')">
+        <div class="msb-dot" style="background:${st.dot}"></div>
+        <div class="msb-info">
+          <div class="msb-nome"><b>${sanitizar(t.id)}</b> · ${sanitizar(t.nome||'')}</div>
+          <div class="msb-sub" style="color:${st.border};font-weight:600;">${st.label}${tot?` · ${fmtNum(tot)} apl.`:''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }).join('');
+}
+
+// ─── PAINEL DO TALHÃO ───
+function abrirPainel(id){
+  const t=talhoes.find(x=>x.id===id); if(!t){ fecharPainel(); return; }
+  const st=statusTalhao(id), stc=ST[st];
+  const regs=registrosCiclo(id);
+  const uc=ultimaConclusao(id);
+  const totBombas=totalQtdCiclo(id,'costal'), totTanques=totalQtdCiclo(id,'trator');
+  const dias=[...new Set(regs.map(r=>r.data))].length;
+
+  document.getElementById('pNome').textContent='🌿 '+(t.id||'')+' · '+(t.nome||'');
+  document.getElementById('pFaz').textContent=(t.fazenda||'—')+' · '+fmtHa(areaTalhao(t));
+  const badge=document.getElementById('pStatus');
+  badge.textContent=stc.label; badge.style.background=stc.fill; badge.style.color=stc.border; badge.style.borderColor=stc.border;
+
+  let acoes='';
+  if(podeRegistrar()){
+    acoes+=`<button class="btn-princ" onclick="abrirRegistro('${id}')">➕ Registrar aplicação do dia</button>`;
+    if(st==='aplicando') acoes+=`<button class="btn-concluir" onclick="concluirTalhao('${id}')">✅ Concluir talhão (${fmtHa(areaTalhao(t))})</button>`;
+  }
+
+  const resumo = (st==='nao_iniciado')
+    ? `<div class="resumo-vazio">Nenhuma aplicação registrada neste talhão.</div>`
+    : `<div class="resumo-grid">
+        <div class="rg-item"><div class="rg-num">${dias}</div><div class="rg-lab">dia${dias!==1?'s':''}</div></div>
+        <div class="rg-item"><div class="rg-num">${fmtNum(totBombas)}</div><div class="rg-lab">bombas (costal)</div></div>
+        <div class="rg-item"><div class="rg-num">${fmtNum(totTanques)}</div><div class="rg-lab">tanques (trator)</div></div>
+      </div>`;
+
+  const concTxt = (st==='concluido' && uc)
+    ? `<div class="conc-box">✅ Concluído em <b>${formatarData(uc.dataConclusao)}</b> · ${fmtHa(uc.areaHa)} contabilizados. <br><span style="font-size:.7rem;color:var(--c);">Registrar uma nova aplicação reabre o talhão (novo ciclo).</span></div>`
+    : '';
+
+  const histRows = regs.map(r=>{
+    const un = r.metodo==='trator'?'tanque':'bomba';
+    const totR = (r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0);
+    const pess = (r.pessoas||[]).map(p=>`${sanitizar(p.apelido||p.nome||'—')}: <b>${fmtNum(p.qtd)}</b>`).join(' · ');
+    return `<div class="hist-row">
+      <div class="hist-top">
+        <span class="hist-data">${formatarData(r.data)}</span>
+        <span class="hist-metodo ${r.metodo}">${r.metodo==='trator'?'🚜 Trator':'🎒 Costal'}</span>
+        <span class="hist-tot">${fmtNum(totR)} ${un}${totR!==1?'s':''}</span>
+        ${podeGerenciar()?`<button class="hist-del" onclick="excluirRegistro('${r._docId}')" title="Excluir">✕</button>`:''}
+      </div>
+      <div class="hist-pess">${pess||'—'}</div>
+      ${r.obs?`<div class="hist-obs">💬 ${sanitizar(r.obs)}</div>`:''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('pBody').innerHTML=`
+    ${acoes?`<div class="acoes-princ">${acoes}</div>`:''}
+    ${concTxt}
+    <div class="secao"><div class="secao-tit">Ciclo atual</div>${resumo}</div>
+    <div class="secao"><div class="secao-tit">Lançamentos${regs.length?` (${regs.length})`:''}</div>${regs.length?histRows:'<div class="hist-vazio">Sem lançamentos neste ciclo.</div>'}</div>`;
+
+  document.getElementById('infoPanel').classList.add('visible');
+  document.getElementById('hintBar').style.display='none';
+}
+window.fecharPainel=function(){ document.getElementById('infoPanel').classList.remove('visible'); talhaoSel=null; renderizarTalhoes(); renderizarSidebar(); document.getElementById('hintBar').style.display='block'; };
+
+// ─── REGISTRO DIÁRIO ───
+window.abrirRegistro=function(talhaoId){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const t=talhoes.find(x=>x.id===talhaoId); if(!t)return;
+  regMetodo='costal';
+  document.getElementById('regTalhaoTit').textContent=`${t.id} · ${t.nome||''}`;
+  document.getElementById('regTalhaoId').value=talhaoId;
+  document.getElementById('regData').value=hojeISO();
+  document.getElementById('regObs').value='';
+  atualizarMetodoUI();
+  document.getElementById('regPessoas').innerHTML='';
+  addPessoaLinha();
+  document.getElementById('ovRegistro').classList.add('open');
+};
+window.setMetodo=function(m){ regMetodo=m; atualizarMetodoUI(); };
+function atualizarMetodoUI(){
+  document.querySelectorAll('.metodo-btn').forEach(b=>b.classList.toggle('on', b.dataset.m===regMetodo));
+  document.getElementById('regUnLabel').textContent = regMetodo==='trator'?'Tanques':'Bombas';
+  document.querySelectorAll('#regPessoas .qtd-un').forEach(s=>s.textContent = regMetodo==='trator'?'tanques':'bombas');
+}
+function opcoesEmpregados(fazenda){
+  const lista=empregados.filter(e=>!fazenda||!e.fazenda||e.fazenda===fazenda)
+    .sort((a,b)=>String(a.apelido||a.nome||'').localeCompare(String(b.apelido||b.nome||''),'pt'));
+  return `<option value="">— funcionário —</option>`+lista.map(e=>`<option value="${e._docId}">${sanitizar(e.apelido||e.nome)}</option>`).join('');
+}
+window.addPessoaLinha=addPessoaLinha;
+function addPessoaLinha(){
+  const t=talhoes.find(x=>x.id===document.getElementById('regTalhaoId').value);
+  const cont=document.getElementById('regPessoas');
+  const div=document.createElement('div');
+  div.className='pessoa-row';
+  div.innerHTML=`<select class="pessoa-sel">${opcoesEmpregados(t?.fazenda)}</select>
+    <input type="number" class="pessoa-qtd" min="0" step="1" placeholder="0">
+    <span class="qtd-un">${regMetodo==='trator'?'tanques':'bombas'}</span>
+    <button class="pessoa-del" onclick="this.closest('.pessoa-row').remove()">✕</button>`;
+  cont.appendChild(div);
+}
+window.fecharRegistro=function(){ document.getElementById('ovRegistro').classList.remove('open'); };
+window.ovRegistroClick=function(e){ if(e.target.id==='ovRegistro') fecharRegistro(); };
+window.salvarRegistro=async function(){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const talhaoId=document.getElementById('regTalhaoId').value;
+  const t=talhoes.find(x=>x.id===talhaoId); if(!t)return;
+  const data=document.getElementById('regData').value||hojeISO();
+  const obs=(document.getElementById('regObs').value||'').trim();
+  const pessoas=[];
+  document.querySelectorAll('#regPessoas .pessoa-row').forEach(row=>{
+    const id=row.querySelector('.pessoa-sel').value;
+    const qtd=parseFloat(row.querySelector('.pessoa-qtd').value);
+    if(id && qtd>0) pessoas.push({empregadoId:id, apelido:empregadoApelido(id), nome:empregadoNome(id), qtd});
+  });
+  if(!pessoas.length){ toast('⚠️ Informe ao menos um funcionário e a quantidade.'); return; }
+  try{
+    await addDoc(collection(db,'herbicidaRegistros'),{
+      talhaoId, talhaoNome:t.nome||'', fazenda:t.fazenda||'', data, metodo:regMetodo, pessoas, obs,
+      criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
+    });
+    fecharRegistro();
+    toast('✅ Aplicação registrada!');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.excluirRegistro=async function(id){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  if(!confirm('Excluir este lançamento?'))return;
+  try{ await deleteDoc(doc(db,'herbicidaRegistros',id)); toast('🗑️ Excluído.'); }catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+// ─── CONCLUIR TALHÃO ───
+window.concluirTalhao=async function(talhaoId){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const t=talhoes.find(x=>x.id===talhaoId); if(!t)return;
+  const area=areaTalhao(t);
+  if(!confirm(`Concluir a aplicação no talhão ${t.id} · ${t.nome||''}?\n\nSerão contabilizados ${fmtHa(area)} na data de hoje. Isso fecha o ciclo atual.`))return;
+  try{
+    await addDoc(collection(db,'herbicidaConclusoes'),{
+      talhaoId, talhaoNome:t.nome||'', fazenda:t.fazenda||'', dataConclusao:hojeISO(), areaHa:area,
+      criadoEm:new Date().toISOString(), criadoPor:usuarioAtual?.email||''
+    });
+    toast('✅ Talhão concluído! '+fmtHa(area)+' contabilizados.');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+// ─── CONFIG (valores do agrado, opcional) ───
+window.abrirConfigHerb=function(){
+  if(!ehAdminSistema())return;
+  document.getElementById('cfgBomba').value=configHerb.valorPorBomba??'';
+  document.getElementById('cfgTanque').value=configHerb.valorPorTanque??'';
+  document.getElementById('cfgHa').value=configHerb.valorPorHa??'';
+  document.getElementById('ovConfig').classList.add('open');
+};
+window.fecharConfigHerb=function(){ document.getElementById('ovConfig').classList.remove('open'); };
+window.ovConfigClick=function(e){ if(e.target.id==='ovConfig') fecharConfigHerb(); };
+window.salvarConfigHerb=async function(){
+  const num=v=>{ v=String(v).replace(',','.'); return (v!==''&&!isNaN(v))?Number(v):null; };
+  try{
+    await setDoc(doc(db,'configHerbicida','geral'),{
+      valorPorBomba:num(document.getElementById('cfgBomba').value),
+      valorPorTanque:num(document.getElementById('cfgTanque').value),
+      valorPorHa:num(document.getElementById('cfgHa').value)
+    },{merge:true});
+    fecharConfigHerb();
+    toast('✅ Valores salvos.');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+// ─── RELATÓRIO ───
+window.abrirRelatorio=function(){
+  const hoje=hojeISO();
+  const d=new Date(); d.setDate(d.getDate()-30);
+  const p=n=>String(n).padStart(2,'0');
+  const ini=`${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+  document.getElementById('relIni').value=ini;
+  document.getElementById('relFim').value=hoje;
+  const fazendas=[...new Set(talhoes.filter(t=>fazendaPermitida(t.fazenda)).map(t=>t.fazenda).filter(Boolean))].sort();
+  document.getElementById('relFaz').innerHTML=`<option value="todas">Todas as fazendas</option>`+fazendas.map(f=>`<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
+  document.getElementById('ovRelatorio').classList.add('open');
+  gerarRelatorio();
+};
+window.fecharRelatorio=function(){ document.getElementById('ovRelatorio').classList.remove('open'); };
+window.ovRelatorioClick=function(e){ if(e.target.id==='ovRelatorio') fecharRelatorio(); };
+window.gerarRelatorio=function(){
+  const ini=document.getElementById('relIni').value, fim=document.getElementById('relFim').value;
+  const faz=document.getElementById('relFaz').value;
+  const noPeriodo=d=>(!ini||d>=ini)&&(!fim||d<=fim);
+  const okFaz=f=>(faz==='todas'||f===faz)&&fazendaPermitida(f);
+
+  // Hectares (conclusões no período)
+  const concs=conclusoes.filter(c=>noPeriodo(c.dataConclusao)&&okFaz(c.fazenda));
+  const haTot=concs.reduce((s,c)=>s+(Number(c.areaHa)||0),0);
+  const concOrd=concs.slice().sort((a,b)=>(a.dataConclusao||'').localeCompare(b.dataConclusao||''));
+
+  // Registros no período
+  const regs=registros.filter(r=>noPeriodo(r.data)&&okFaz(r.fazenda));
+  // Bombas/tanques por pessoa
+  const porPessoa={};
+  regs.forEach(r=>(r.pessoas||[]).forEach(p=>{
+    const k=p.empregadoId||p.nome||p.apelido;
+    if(!porPessoa[k]) porPessoa[k]={nome:p.nome||empregadoNome(p.empregadoId)||p.apelido, bombas:0, tanques:0};
+    if(r.metodo==='trator') porPessoa[k].tanques+=Number(p.qtd)||0; else porPessoa[k].bombas+=Number(p.qtd)||0;
+  }));
+  // Onde cada um trabalhou: talhão × dias
+  const porTalhao={};
+  regs.forEach(r=>{ const k=r.talhaoId; if(!porTalhao[k]) porTalhao[k]={id:r.talhaoId, nome:r.talhaoNome, fazenda:r.fazenda, dias:new Set(), bombas:0, tanques:0}; porTalhao[k].dias.add(r.data); const q=(r.pessoas||[]).reduce((a,p)=>a+(Number(p.qtd)||0),0); if(r.metodo==='trator')porTalhao[k].tanques+=q; else porTalhao[k].bombas+=q; });
+
+  const vB=configHerb.valorPorBomba, vT=configHerb.valorPorTanque, vH=configHerb.valorPorHa;
+  const temValor = (vB||vT||vH);
+
+  const el=document.getElementById('relBody');
+  el.innerHTML=`
+    <div class="rel-kpis">
+      <div class="rel-kpi"><div class="rk-num">${fmtHa(haTot)}</div><div class="rk-lab">aplicados no período</div></div>
+      <div class="rel-kpi"><div class="rk-num">${concs.length}</div><div class="rk-lab">talhões concluídos</div></div>
+      <div class="rel-kpi"><div class="rk-num">${Object.keys(porPessoa).length}</div><div class="rk-lab">pessoas</div></div>
+    </div>
+
+    <div class="rel-sec">
+      <div class="rel-sec-tit">🌿 Hectares aplicados (talhões concluídos)</div>
+      ${concOrd.length?`<table class="rel-tab"><thead><tr><th>Data</th><th>Talhão</th><th>Fazenda</th><th style="text-align:right;">Área</th></tr></thead><tbody>
+        ${concOrd.map(c=>`<tr><td>${formatarData(c.dataConclusao)}</td><td>${sanitizar(c.talhaoId||'')} · ${sanitizar(c.talhaoNome||'')}</td><td>${sanitizar(c.fazenda||'')}</td><td style="text-align:right;font-weight:700;">${fmtHa(c.areaHa)}</td></tr>`).join('')}
+        <tr class="rel-total"><td colspan="3">Total</td><td style="text-align:right;">${fmtHa(haTot)}</td></tr>
+      </tbody></table>`:'<div class="rel-vazio">Nenhum talhão concluído no período.</div>'}
+    </div>
+
+    <div class="rel-sec">
+      <div class="rel-sec-tit">🎒 Bombas e tanques por pessoa</div>
+      ${Object.keys(porPessoa).length?`<table class="rel-tab"><thead><tr><th>Funcionário</th><th style="text-align:right;">Bombas</th><th style="text-align:right;">Tanques</th>${temValor?`<th style="text-align:right;">Agrado</th>`:''}</tr></thead><tbody>
+        ${Object.values(porPessoa).sort((a,b)=>String(a.nome).localeCompare(String(b.nome),'pt')).map(p=>{
+          const val=(vB?vB*p.bombas:0)+(vT?vT*p.tanques:0);
+          return `<tr><td>${sanitizar(p.nome)}</td><td style="text-align:right;font-weight:700;">${fmtNum(p.bombas)}</td><td style="text-align:right;font-weight:700;">${fmtNum(p.tanques)}</td>${temValor?`<td style="text-align:right;color:var(--v);font-weight:700;">${fmtR$(val)}</td>`:''}</tr>`;
+        }).join('')}
+      </tbody></table>`:'<div class="rel-vazio">Nenhum lançamento no período.</div>'}
+      ${vH?`<div class="rel-nota">💰 Bônus por hectare da equipe: ${fmtHa(haTot)} × ${fmtR$(vH)} = <b>${fmtR$(vH*haTot)}</b> (a dividir conforme seu critério).</div>`:''}
+    </div>
+
+    <div class="rel-sec">
+      <div class="rel-sec-tit">📍 Onde trabalharam</div>
+      ${Object.keys(porTalhao).length?`<table class="rel-tab"><thead><tr><th>Talhão</th><th>Fazenda</th><th style="text-align:right;">Dias</th><th style="text-align:right;">Bombas</th><th style="text-align:right;">Tanques</th></tr></thead><tbody>
+        ${Object.values(porTalhao).sort((a,b)=>String(a.id).localeCompare(String(b.id),'pt',{numeric:true})).map(t=>`<tr><td>${sanitizar(t.id||'')} · ${sanitizar(t.nome||'')}</td><td>${sanitizar(t.fazenda||'')}</td><td style="text-align:right;">${t.dias.size}</td><td style="text-align:right;">${fmtNum(t.bombas)}</td><td style="text-align:right;">${fmtNum(t.tanques)}</td></tr>`).join('')}
+      </tbody></table>`:'<div class="rel-vazio">Sem trabalho no período.</div>'}
+    </div>`;
+};
+
+// ─── UI base ───
+window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
+window.fecharMenu=()=>{document.getElementById('menuLateral').classList.remove('aberto');document.getElementById('menuOverlay').classList.remove('aberto');};
+window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
+window.toggleSidebar=function(){ sidebarAberta=!sidebarAberta; document.getElementById('mapaSidebar').style.display=sidebarAberta?'flex':'none'; document.getElementById('btnExpandSb').style.display=sidebarAberta?'none':'block'; setTimeout(()=>map&&map.invalidateSize(),50); };
+</script>
+
+<style>
+:root{--v:#166534;--ve:#0b1c0d;--vb:#dcfce7;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;--bg:#f4f1ea;--herb:#16a34a;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--herb);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;}
+.hdr-right{display:flex;align-items:center;gap:10px;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+.menu-secao{font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.35);padding:12px 12px 4px;font-weight:700;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+#appContent{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.mapa-wrap{flex:1;position:relative;overflow:hidden;min-height:0;height:100%;}
+#map{width:100%;height:100%;}
+.mapa-sidebar{position:absolute;top:14px;left:14px;width:216px;height:calc(100% - 28px);background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);display:flex;flex-direction:column;overflow:hidden;}
+.msb-header{padding:9px 11px;border-bottom:1px solid var(--cl);display:flex;align-items:center;justify-content:space-between;}
+.msb-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--herb);font-weight:700;}
+.msb-filter{padding:6px 10px;border-bottom:1px solid var(--cl);}
+.msb-filter select{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:5px 8px;font-size:.72rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
+#sidebarList{overflow-y:auto;flex:1;min-height:0;}
+.sb-fazenda{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;padding:7px 11px 3px;background:var(--cl);}
+.msb-item{padding:8px 11px;border-bottom:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;}
+.msb-item:hover{background:var(--cl);}
+.msb-item.active{background:var(--vb);border-left:3px solid var(--herb);}
+.msb-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px rgba(0,0,0,.06);}
+.msb-info{flex:1;min-width:0;}
+.msb-nome{font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.msb-sub{font-size:.66rem;}
+.info-panel{position:absolute;top:14px;right:14px;width:308px;max-width:calc(100vw - 28px);max-height:calc(100% - 28px);overflow-y:auto;background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);transform:translateX(340px);opacity:0;transition:transform .35s cubic-bezier(.34,1.4,.64,1),opacity .3s;}
+.info-panel.visible{transform:translateX(0);opacity:1;}
+.panel-header{padding:14px 40px 10px 14px;border-bottom:1px solid var(--cl);position:relative;}
+.panel-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;line-height:1.1;}
+.panel-faz{font-size:.75rem;color:var(--c);margin-top:2px;}
+.panel-close{position:absolute;top:12px;right:12px;background:var(--cl);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;color:var(--c);}
+.status-bar{padding:9px 14px;border-bottom:1px solid var(--cl);}
+.status-tag{display:inline-flex;align-items:center;border:1.5px solid;border-radius:20px;padding:4px 13px;font-size:.74rem;font-weight:700;}
+.panel-body{padding:14px;display:flex;flex-direction:column;gap:16px;}
+.acoes-princ{display:flex;flex-direction:column;gap:8px;}
+.btn-princ{width:100%;background:var(--herb);border:none;color:white;border-radius:9px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
+.btn-princ:active{transform:scale(.98);}
+.btn-concluir{width:100%;background:var(--vb);border:1.5px solid #86efac;color:var(--v);border-radius:9px;padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;}
+.conc-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:9px;padding:10px 12px;font-size:.8rem;color:#166534;line-height:1.5;}
+.secao{display:flex;flex-direction:column;gap:8px;}
+.secao-tit{font-size:.6rem;text-transform:uppercase;letter-spacing:.11em;color:var(--c);font-weight:700;}
+.resumo-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.rg-item{background:var(--cl);border-radius:9px;padding:10px 6px;text-align:center;}
+.rg-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.4rem;color:var(--ve);line-height:1;}
+.rg-lab{font-size:.58rem;color:var(--c);margin-top:3px;text-transform:uppercase;letter-spacing:.03em;}
+.resumo-vazio,.hist-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:12px;background:var(--cl);border-radius:8px;}
+.hist-row{border:1px solid var(--cl);border-radius:9px;padding:9px 11px;margin-bottom:7px;}
+.hist-top{display:flex;align-items:center;gap:8px;}
+.hist-data{font-weight:700;font-family:'DM Mono',monospace;font-size:.78rem;}
+.hist-metodo{font-size:.62rem;font-weight:700;padding:2px 7px;border-radius:12px;}
+.hist-metodo.costal{background:#fef3c7;color:#92400e;}
+.hist-metodo.trator{background:#dbeafe;color:#1e40af;}
+.hist-tot{margin-left:auto;font-size:.72rem;color:var(--herb);font-weight:700;}
+.hist-del{background:#fee2e2;color:var(--danger);border:none;border-radius:5px;width:20px;height:20px;font-size:.6rem;cursor:pointer;}
+.hist-pess{font-size:.76rem;color:var(--t);margin-top:5px;line-height:1.5;}
+.hist-obs{font-size:.7rem;color:#6b7280;font-style:italic;margin-top:4px;}
+.hint{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.5);border-radius:20px;padding:6px 14px;font-size:.72rem;color:rgba(255,255,255,.9);z-index:999;pointer-events:none;white-space:nowrap;}
+.legenda{position:absolute;bottom:20px;left:14px;background:rgba(255,255,255,.95);border-radius:10px;padding:8px 11px;z-index:999;box-shadow:var(--sf);font-size:.62rem;}
+.leg-row{display:flex;align-items:center;gap:6px;margin-bottom:2px;}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.fab-rel{position:absolute;bottom:20px;right:16px;background:var(--herb);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;display:flex;align-items:center;gap:8px;}
+#btnExpandSb{display:none;position:absolute;top:14px;left:14px;z-index:1001;background:white;border:none;border-radius:10px;padding:9px 13px;cursor:pointer;box-shadow:var(--sf);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--herb);}
+.btn-hdr{background:rgba(255,255,255,.14);border:none;color:white;border-radius:8px;padding:7px 11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;cursor:pointer;display:none;align-items:center;gap:5px;}
+/* MODAIS */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2500;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.overlay.open{opacity:1;pointer-events:all;}
+.modal{background:white;border-radius:16px 16px 0 0;width:100%;max-width:560px;max-height:92vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,.3);}
+.modal-header{padding:15px 18px 12px;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:white;z-index:2;}
+.modal-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;}
+.modal-body{padding:15px 18px;display:flex;flex-direction:column;gap:12px;}
+.modal-footer{padding:11px 18px 16px;display:flex;gap:9px;justify-content:flex-end;border-top:1px solid var(--cb);position:sticky;bottom:0;background:white;}
+.mlabel{font-size:.6rem;text-transform:uppercase;letter-spacing:.09em;color:var(--v);font-weight:700;display:block;margin-bottom:5px;}
+.minput{width:100%;border:1.5px solid var(--cb);border-radius:8px;padding:10px 12px;font-size:.88rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
+.minput:focus{border-color:var(--herb);}
+.metodo-toggle{display:flex;gap:8px;}
+.metodo-btn{flex:1;background:var(--cl);border:1.5px solid var(--cb);border-radius:9px;padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;color:var(--c);}
+.metodo-btn.on{background:var(--vb);border-color:var(--herb);color:var(--v);}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.pessoa-row{display:flex;align-items:center;gap:7px;margin-bottom:8px;}
+.pessoa-sel{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:8px;padding:9px;font-size:.84rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
+.pessoa-qtd{width:64px;border:1.5px solid var(--cb);border-radius:8px;padding:9px 8px;font-size:.84rem;font-family:'Barlow',sans-serif;outline:none;text-align:right;}
+.qtd-un{font-size:.64rem;color:var(--c);width:44px;flex-shrink:0;}
+.pessoa-del{background:#fee2e2;color:var(--danger);border:none;border-radius:7px;width:30px;height:30px;font-size:.72rem;cursor:pointer;flex-shrink:0;}
+.btn-add-pessoa{background:var(--cl);border:1px dashed var(--cb);color:var(--c);border-radius:8px;padding:9px;font-size:.8rem;cursor:pointer;font-family:'Barlow',sans-serif;width:100%;}
+.btn-cancel{background:var(--cl);border:1px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:10px 18px;font-size:.82rem;cursor:pointer;font-family:'Barlow',sans-serif;}
+.btn-save{background:var(--herb);border:none;color:white;border-radius:var(--rs);padding:10px 22px;font-size:.82rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;}
+/* RELATÓRIO */
+.rel-filtros{display:flex;gap:9px;flex-wrap:wrap;align-items:flex-end;}
+.rel-filtros .campo{display:flex;flex-direction:column;gap:3px;}
+.rel-kpis{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin:4px 0 6px;}
+.rel-kpi{background:var(--vb);border-radius:10px;padding:12px 8px;text-align:center;}
+.rk-num{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--v);line-height:1;}
+.rk-lab{font-size:.6rem;color:var(--c);margin-top:4px;text-transform:uppercase;}
+.rel-sec{margin-top:14px;}
+.rel-sec-tit{font-size:.78rem;font-weight:800;color:var(--v);margin-bottom:7px;padding-bottom:4px;border-bottom:1px solid var(--cl);}
+.rel-tab{width:100%;border-collapse:collapse;font-size:.78rem;}
+.rel-tab th{text-align:left;padding:6px 8px;color:var(--c);font-size:.64rem;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--cb);}
+.rel-tab td{padding:6px 8px;border-bottom:1px solid var(--cl);}
+.rel-tab tr.rel-total td{font-weight:800;border-top:1.5px solid var(--cb);color:var(--ve);}
+.rel-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:12px;background:var(--cl);border-radius:8px;}
+.rel-nota{font-size:.74rem;color:var(--v);background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:9px 11px;margin-top:9px;line-height:1.5;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
+@media(min-width:600px){.overlay{align-items:center;}.modal{border-radius:16px;}}
+@media(max-width:520px){.info-panel{width:calc(100vw - 28px);}.mapa-sidebar{width:172px;}}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Herbicida · Daninhas</span></div>
+  </div>
+  <div class="hdr-right">
+    <button class="btn-hdr" id="btnConfigHerb" onclick="abrirConfigHerb()">⚙️ Valores</button>
+    <div class="hdr-user" id="userNome"></div>
+  </div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+  <div class="mapa-wrap">
+    <div id="map"></div>
+    <div class="mapa-sidebar" id="mapaSidebar">
+      <div class="msb-header">
+        <span class="msb-title">🌿 Talhões</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:.6rem;color:var(--c)" id="sidebarCount"></span>
+          <button onclick="toggleSidebar()" style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--c);">◀</button>
+        </div>
+      </div>
+      <div class="msb-filter"><select id="filtroFaz" onchange="setFiltroFaz(this.value)"><option value="todas">Todas as fazendas</option></select></div>
+      <div id="sidebarList"></div>
+    </div>
+    <button id="btnExpandSb" onclick="toggleSidebar()">▶ Talhões</button>
+
+    <div class="info-panel" id="infoPanel">
+      <div class="panel-header">
+        <div class="panel-nome" id="pNome"></div>
+        <div class="panel-faz" id="pFaz"></div>
+        <button class="panel-close" onclick="fecharPainel()">✕</button>
+      </div>
+      <div class="status-bar"><span class="status-tag" id="pStatus"></span></div>
+      <div class="panel-body" id="pBody"></div>
+    </div>
+
+    <div class="legenda">
+      <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;margin-bottom:5px;">Status</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#94a3b8"></span>Não iniciado</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#f97316"></span>Aplicando</div>
+      <div class="leg-row"><span class="leg-dot" style="background:#22c55e"></span>Concluído</div>
+    </div>
+    <div class="hint" id="hintBar">Toque em um talhão para registrar</div>
+    <button class="fab-rel" onclick="abrirRelatorio()">📊 Relatório</button>
+  </div>
+</div>
+
+<!-- MODAL REGISTRO DIÁRIO -->
+<div class="overlay" id="ovRegistro" onclick="ovRegistroClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">➕ Aplicação · <span id="regTalhaoTit"></span></div><button class="panel-close" onclick="fecharRegistro()">✕</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="regTalhaoId">
+      <div>
+        <span class="mlabel">Método</span>
+        <div class="metodo-toggle">
+          <button class="metodo-btn on" data-m="costal" onclick="setMetodo('costal')">🎒 Bomba costal</button>
+          <button class="metodo-btn" data-m="trator" onclick="setMetodo('trator')">🚜 Trator</button>
+        </div>
+      </div>
+      <div class="row2">
+        <div><span class="mlabel">Data</span><input type="date" id="regData" class="minput"></div>
+        <div><span class="mlabel" id="regUnLabel">Bombas</span><input type="text" class="minput" value="por funcionário abaixo" disabled style="color:var(--c);font-size:.78rem;"></div>
+      </div>
+      <div>
+        <span class="mlabel">Funcionários e quantidade</span>
+        <div id="regPessoas"></div>
+        <button class="btn-add-pessoa" onclick="addPessoaLinha()">＋ Adicionar funcionário</button>
+      </div>
+      <div><span class="mlabel">Observação (opcional)</span><input type="text" id="regObs" class="minput" placeholder="Ex: produto, dose, condições..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharRegistro()">Cancelar</button>
+      <button class="btn-save" onclick="salvarRegistro()">💾 Salvar aplicação</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIG VALORES -->
+<div class="overlay" id="ovConfig" onclick="ovConfigClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">⚙️ Valores do agrado</div><button class="panel-close" onclick="fecharConfigHerb()">✕</button></div>
+    <div class="modal-body">
+      <div style="font-size:.76rem;color:var(--c);line-height:1.5;">Opcional. Se preenchidos, o relatório calcula o agrado. Deixe em branco para só controlar bombas e hectares.</div>
+      <div><span class="mlabel">R$ por bomba (costal)</span><input type="number" id="cfgBomba" step="0.01" min="0" class="minput" placeholder="Ex: 2,50"></div>
+      <div><span class="mlabel">R$ por tanque (trator)</span><input type="number" id="cfgTanque" step="0.01" min="0" class="minput" placeholder="Ex: 8,00"></div>
+      <div><span class="mlabel">R$ por hectare (equipe)</span><input type="number" id="cfgHa" step="0.01" min="0" class="minput" placeholder="Ex: 30,00"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharConfigHerb()">Cancelar</button>
+      <button class="btn-save" onclick="salvarConfigHerb()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RELATÓRIO -->
+<div class="overlay" id="ovRelatorio" onclick="ovRelatorioClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">📊 Relatório de Herbicida</div><button class="panel-close" onclick="fecharRelatorio()">✕</button></div>
+    <div class="modal-body">
+      <div class="rel-filtros">
+        <div class="campo"><span class="mlabel">De</span><input type="date" id="relIni" class="minput" onchange="gerarRelatorio()"></div>
+        <div class="campo"><span class="mlabel">Até</span><input type="date" id="relFim" class="minput" onchange="gerarRelatorio()"></div>
+        <div class="campo" style="flex:1;min-width:130px;"><span class="mlabel">Fazenda</span><select id="relFaz" class="minput" onchange="gerarRelatorio()"></select></div>
+      </div>
+      <div id="relBody"></div>
+    </div>
+    <div class="modal-footer"><button class="btn-cancel" onclick="fecharRelatorio()">Fechar</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>

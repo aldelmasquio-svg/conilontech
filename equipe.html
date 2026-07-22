@@ -111,6 +111,7 @@ function gerarMenu() {
       { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
       { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
       { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
       { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
       { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
       { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
@@ -679,6 +680,7 @@ function renderCadEmpregados() {
     <div class="cad-form">
       <div class="cad-form-tit">➕ Novo Empregado</div>
       <div class="campo"><label>Nome completo</label><input type="text" id="cadEmpNome" placeholder="Ex: João Silva"></div>
+      <div class="campo"><label>Apelido (usado no campo)</label><input type="text" id="cadEmpApelido" placeholder="Ex: Cidi, Jal, Pirulito..."></div>
       <div class="campo"><label>Cargo / Função</label><input type="text" id="cadEmpCargo" placeholder="Ex: Operador de máquina"></div>
       <div class="campo"><label>Fazenda</label>${_fazSelectHtml('')}</div>
       <div class="campo"><label>Telefone (opcional)</label><input type="tel" id="cadEmpTelefone" placeholder="(99) 99999-9999"></div>
@@ -701,8 +703,9 @@ window.salvarEmpregado = async function() {
   if (!nome) { toast('⚠️ Nome obrigatório.'); return; }
   const fazenda = document.getElementById('cadEmpFazenda')?.value || '';
   if (!fazenda) { toast('⚠️ Selecione a fazenda.'); return; }
-  await addDoc(collection(db,'equipeEmpregados'), {nome, cargo:document.getElementById('cadEmpCargo').value.trim(), fazenda, telefone:document.getElementById('cadEmpTelefone').value.trim(), ativo:true, criadoEm:new Date().toISOString()});
+  await addDoc(collection(db,'equipeEmpregados'), {nome, apelido:document.getElementById('cadEmpApelido')?.value.trim()||'', cargo:document.getElementById('cadEmpCargo').value.trim(), fazenda, telefone:document.getElementById('cadEmpTelefone').value.trim(), ativo:true, criadoEm:new Date().toISOString()});
   document.getElementById('cadEmpNome').value = '';
+  if(document.getElementById('cadEmpApelido')) document.getElementById('cadEmpApelido').value = '';
   document.getElementById('cadEmpCargo').value = '';
   document.getElementById('cadEmpTelefone').value = '';
   toast('✅ '+nome+' cadastrado!');
