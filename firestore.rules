@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore — Conilon Tech
+// Objetivo desta 1ª versão: exigir login para tudo e impedir que um usuário
+// comum se auto-promova a admin (o furo mais grave hoje). O controle fino por
+// módulo/fazenda continua no app (client-side); dá para endurecê-lo aqui depois.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function meExists() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
+    }
+    function meData() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return meExists() && (
+        meData().perfil == 'admin'
+        || ('admin' in meData().modulos && meData().modulos.admin == 'admin')
+      );
+    }
+
+    // Perfis de usuário.
+    // - Qualquer logado lê perfis (o app lista usuários no Admin e lê o próprio).
+    // - Cada um só CRIA o seu próprio doc (auto-cadastro no login).
+    // - UPDATE/DELETE só admin  ← fecha a auto-promoção: um operador NÃO pode
+    //   editar o próprio `modulos`/`perfil`/`fazendasModulo`/`ativo`.
+    match /usuarios/{uid} {
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Configuração global (código de cadastro, atividades, fazendas).
+    // Leitura por qualquer logado; escrita só admin (o 1º cadastro já vira admin).
+    match /config/{doc} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Demais dados operacionais (talhões, planos, estoque, pedidos, etc.):
+    // exige apenas estar logado. A condição `col != ...` impede que esta regra
+    // genérica reabra `usuarios`/`config`, porque regras do Firestore são OR
+    // (se qualquer match permite, o acesso é concedido). Coleções novas ficam
+    // automaticamente cobertas por esta regra.
+    match /{col}/{doc=**} {
+      allow read, write: if signedIn() && col != 'usuarios' && col != 'config';
+    }
+  }
+}

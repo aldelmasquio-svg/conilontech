@@ -400,11 +400,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, setDoc, collection, onSnapshot, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-enableIndexedDbPersistence(db).catch(()=>{});
+enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Backspace') {

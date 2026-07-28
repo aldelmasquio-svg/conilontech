@@ -10,10 +10,10 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
-enableIndexedDbPersistence(db).catch(()=>{});
+enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 // NOTA: este módulo foi clonado de pedidos.html — a máquina de mapa/seleção de talhões é a mesma
 // (variáveis/funções mantêm o prefixo "ped" por reuso). A diferença é o resultado: em vez de um
 // pedido com workflow de status, gera uma COTAÇÃO que recebe propostas de fornecedores na aba Cotação.
