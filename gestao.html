@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 :root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--purple:#a855f7;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
@@ -199,6 +202,18 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prod-zerado-nome{font-weight:700;font-size:.88rem;color:var(--t);}
 .prod-zerado-meta{font-size:.7rem;color:var(--c);margin-top:1px;}
 .prod-zerado-und{font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);font-weight:700;flex-shrink:0;}
+/* Nutrientes: abas de visualização + gráficos + mapa */
+.nutri-views{display:flex;gap:6px;background:var(--cl);border-radius:10px;padding:4px;}
+.nutri-view-btn{background:transparent;border:none;border-radius:8px;padding:7px 13px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.86rem;cursor:pointer;color:var(--c);}
+.nutri-view-btn.on{background:white;color:var(--v);box-shadow:var(--s);}
+.chart-box{position:relative;height:230px;background:white;border:1px solid var(--cl);border-radius:12px;padding:12px;}
+.nutri-legenda{position:absolute;bottom:12px;left:12px;background:rgba(255,255,255,.95);border-radius:9px;padding:8px 11px;box-shadow:var(--sf);z-index:500;font-size:.66rem;pointer-events:none;}
+.nl-tit{font-size:.58rem;text-transform:uppercase;letter-spacing:.06em;color:var(--c);font-weight:700;margin-bottom:4px;}
+.nl-bar{width:120px;height:9px;border-radius:4px;background:linear-gradient(90deg,#fef08a,#166534);}
+.nl-esc{display:flex;justify-content:space-between;font-family:'DM Mono',monospace;color:var(--ts);margin-top:2px;}
+.nl-row{display:flex;align-items:center;gap:5px;margin-top:4px;color:var(--ts);}
+.nl-dot{width:10px;height:10px;border-radius:3px;display:inline-block;}
+.leaflet-container{font:inherit;}
 </style>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <link rel="stylesheet" href="style.css">
@@ -338,6 +353,9 @@ let compraSafra = '';
 // Filtro da aba "Nutrientes" (relatório de nutrientes já aplicados)
 let nutrTalhaoId = '';
 let nutrSafra = '';
+let nutrView = 'painel';        // 'painel' | 'mapa' | 'tabela'
+let nutrNutrienteSel = 'n';     // nutriente destacado no painel/mapa
+let _nutriMap = null, _nutriCharts = [];
 
 // Filtros da aba "Drench"
 let drenchFiltroFazenda = '';
@@ -1949,49 +1967,16 @@ function buscarComposicaoProduto(nomeProduto) {
 
 window.setNutrTalhao = function(v) { nutrTalhaoId = v; renderTab(); };
 window.setNutrSafra = function(v) { nutrSafra = v; renderTab(); };
+window.setNutrView = function(v) { nutrView = v; renderTab(); };
+window.setNutrNutriente = function(v) { nutrNutrienteSel = v; renderTab(); };
 
-function renderNutrientes() {
-  const cont = document.getElementById('tabContent');
-  const faz = fazendaFiltro();
-  let { inicio, fim, label: lblPeriodo } = periodoFiltro();
-  const safras = listaSafras();
-  if (nutrSafra) {
-    const safraSel = safras.find(s => String(s.anoIni) === nutrSafra);
-    if (safraSel) {
-      ({ inicio, fim } = safraRange(safraSel.anoIni));
-      lblPeriodo = `Safra ${safraSel.label}`;
-    }
-  }
-
-  const talhoesBase = (faz ? talhoes.filter(t => t.fazenda === faz) : talhoes)
-    .slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
-  if (nutrTalhaoId && !talhoesBase.some(t => t.id === nutrTalhaoId)) nutrTalhaoId = '';
-  const talhoesSel = nutrTalhaoId ? talhoesBase.filter(t => t.id === nutrTalhaoId) : talhoesBase;
-
-  // Barra de filtro do relatório (talhão + safra)
-  let html = `<div class="secao" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-    <div class="filtro-grupo">
-      <span class="filtro-label">🌱 Talhão</span>
-      <select class="filtro-sel" id="selNutrTalhao" onchange="window.setNutrTalhao(this.value)">
-        <option value="">Todos${faz ? '' : ' (todas fazendas)'}</option>
-        ${talhoesBase.map(t => `<option value="${escAttr(t.id)}"${t.id === nutrTalhaoId ? ' selected' : ''}>${escHtml(t.nome || t.id)}${!faz ? ' · ' + escHtml(t.fazenda || '') : ''}</option>`).join('')}
-      </select>
-    </div>
-    ${safras.length ? `<div class="filtro-grupo">
-      <span class="filtro-label">🗓️ Safra</span>
-      <select class="filtro-sel" id="selNutrSafra" onchange="window.setNutrSafra(this.value)">
-        <option value="">Usar filtro de período acima</option>
-        ${safras.map(s => `<option value="${s.anoIni}"${String(s.anoIni) === nutrSafra ? ' selected' : ''}>Safra ${s.label}</option>`).join('')}
-      </select>
-    </div>` : ''}
-  </div>`;
-
-  // Agrega aplicações já realizadas (feito=true) dentro do período selecionado
-  const nutrientes = {}; // chave (n,p2o5,...) -> kg total
-  const naoContabilizados = {}; // "produto|unidade" -> {produto,unidade,qtd}
+// Calcula nutrientes aplicados (confirmados) no período, com total e detalhado por talhão
+function _calcNutrientes(talhoesSel, inicio, fim) {
+  const total = {};                 // nk -> kg
+  const porTalhao = {};             // talhaoId -> {nk:kg, ...}
+  const naoContabilizados = {};     // "produto|unidade" -> {produto,unidade,qtd}
   let totalAplicacoes = 0;
   const talhoesAdubados = new Set();
-
   talhoesSel.forEach(t => {
     const area = parseDose(t.area);
     planosAdubacao.filter(p => p.talhaoId === t.id).forEach(plano => {
@@ -2003,7 +1988,7 @@ function renderNutrientes() {
         (ap.produtos || []).forEach(p => {
           const dose = parseDose(p.dose);
           if (!dose) return;
-          const qtdProduto = dose * area; // na unidade do produto
+          const qtdProduto = dose * area;
           const fator = FATOR_KG[p.unidade];
           const comp = buscarComposicaoProduto(p.produto);
           if (fator == null || !comp) {
@@ -2015,67 +2000,207 @@ function renderNutrientes() {
           const qtdKg = qtdProduto * fator;
           Object.keys(NUTRIENTE_LABELS).forEach(nk => {
             const pct = comp[nk];
-            if (pct) nutrientes[nk] = (nutrientes[nk] || 0) + qtdKg * pct / 100;
+            if (!pct) return;
+            const kg = qtdKg * pct / 100;
+            total[nk] = (total[nk] || 0) + kg;
+            (porTalhao[t.id] = porTalhao[t.id] || {})[nk] = (porTalhao[t.id][nk] || 0) + kg;
           });
         });
       });
     });
   });
-
   const areaAdubada = talhoes.filter(t => talhoesAdubados.has(t.id)).reduce((s, t) => s + parseDose(t.area), 0);
-  const nutrientesOrd = Object.keys(NUTRIENTE_LABELS).filter(k => nutrientes[k] > 0);
+  return { total, porTalhao, naoContabilizados, totalAplicacoes, talhoesAdubados, areaAdubada };
+}
+
+function renderNutrientes() {
+  const cont = document.getElementById('tabContent');
+  const faz = fazendaFiltro();
+  let { inicio, fim, label: lblPeriodo } = periodoFiltro();
+  const safras = listaSafras();
+  if (nutrSafra) {
+    const safraSel = safras.find(s => String(s.anoIni) === nutrSafra);
+    if (safraSel) { ({ inicio, fim } = safraRange(safraSel.anoIni)); lblPeriodo = `Safra ${safraSel.label}`; }
+  }
+  const talhoesBase = (faz ? talhoes.filter(t => t.fazenda === faz) : talhoes)
+    .slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+  if (nutrTalhaoId && !talhoesBase.some(t => t.id === nutrTalhaoId)) nutrTalhaoId = '';
+  // No mapa e no painel usamos TODOS os talhões da fazenda (a seleção é por clique no mapa); na tabela respeita o dropdown
+  const talhoesSel = (nutrView === 'tabela' && nutrTalhaoId) ? talhoesBase.filter(t => t.id === nutrTalhaoId) : talhoesBase;
+  const d = _calcNutrientes(talhoesSel, inicio, fim);
+
+  // Destrói mapa/charts anteriores (o tabContent vai ser reescrito)
+  if (_nutriMap) { try { _nutriMap.remove(); } catch(e){} _nutriMap = null; }
+  _nutriCharts.forEach(c => { try { c.destroy(); } catch(e){} }); _nutriCharts = [];
+
+  // Barra de filtro (safra) + abas de visualização
+  let html = `<div class="secao" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+    <div class="nutri-views">
+      <button class="nutri-view-btn ${nutrView==='painel'?'on':''}" onclick="window.setNutrView('painel')">📊 Painel</button>
+      <button class="nutri-view-btn ${nutrView==='mapa'?'on':''}" onclick="window.setNutrView('mapa')">🗺️ Mapa</button>
+      <button class="nutri-view-btn ${nutrView==='tabela'?'on':''}" onclick="window.setNutrView('tabela')">📋 Tabela</button>
+    </div>
+    ${safras.length ? `<div class="filtro-grupo">
+      <span class="filtro-label">🗓️ Safra</span>
+      <select class="filtro-sel" id="selNutrSafra" onchange="window.setNutrSafra(this.value)">
+        <option value="">Período do topo</option>
+        ${safras.map(s => `<option value="${s.anoIni}"${String(s.anoIni) === nutrSafra ? ' selected' : ''}>Safra ${s.label}</option>`).join('')}
+      </select>
+    </div>` : ''}
+  </div>`;
 
   html += `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Período</div><div class="kpi-value" style="font-size:1.05rem;">${escHtml(lblPeriodo)}</div><div class="kpi-aux">${faz ? escHtml(faz) : 'todas as fazendas'}</div></div>
-    <div class="kpi-card ok"><div class="kpi-label">Aplicações realizadas</div><div class="kpi-value">${totalAplicacoes}</div><div class="kpi-aux">no período</div></div>
-    <div class="kpi-card info"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(areaAdubada, 1)}</div><div class="kpi-aux">${talhoesAdubados.size} talhão(ões)</div></div>
+    <div class="kpi-card ok"><div class="kpi-label">Aplicações realizadas</div><div class="kpi-value">${d.totalAplicacoes}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card info"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(d.areaAdubada, 1)}</div><div class="kpi-aux">${d.talhoesAdubados.size} talhão(ões)</div></div>
   </div>`;
 
-  if (!totalAplicacoes) {
+  if (!d.totalAplicacoes) {
     html += `<div class="vazio"><div class="ico">🌿</div><p>Nenhuma aplicação de adubação confirmada no período/seleção escolhidos.<br><span style="font-size:.78rem;">Marque as aplicações como "feitas" no módulo de Adubações.</span></p></div>`;
-    cont.innerHTML = html;
-    return;
+    cont.innerHTML = html; return;
   }
 
+  if (nutrView === 'tabela')      html += _nutriTabelaHtml(d, talhoesBase, faz, lblPeriodo, talhoesSel);
+  else if (nutrView === 'painel') html += _nutriPainelHtml(d);
+  else                            html += _nutriMapaHtml(d, faz);
+
+  cont.innerHTML = html;
+  if (nutrView === 'painel') requestAnimationFrame(() => _nutriDesenharCharts(d));
+  if (nutrView === 'mapa')   requestAnimationFrame(() => _nutriDesenharMapa(d, talhoesSel));
+}
+
+const NUTRI_CORES = { n:'#22c55e', p2o5:'#f59e0b', k2o:'#a855f7', s:'#eab308', ca:'#3b82f6', mg:'#14b8a6', zn:'#ec4899', b:'#f97316', cu:'#8b5cf6', mn:'#06b6d4', fe:'#ef4444', mo:'#64748b' };
+function _nutrienteOpcoes(sel){ return Object.keys(NUTRIENTE_LABELS).map(k=>`<option value="${k}"${k===sel?' selected':''}>${escHtml(NUTRIENTE_LABELS[k])}</option>`).join(''); }
+
+// ── PAINEL (dashboard) ──
+function _nutriPainelHtml(d) {
+  const macros = ['n','p2o5','k2o','ca','mg','s'].filter(k => d.total[k] > 0);
+  const micros = ['zn','b','cu','mn','fe','mo'].filter(k => d.total[k] > 0);
+  const nsel = d.total[nutrNutrienteSel] > 0 ? nutrNutrienteSel : (macros[0] || Object.keys(d.total)[0] || 'n');
+  return `
+    <div class="secao"><div class="secao-tit">📊 Total aplicado por nutriente</div>
+      <div class="chart-box"><canvas id="chNutriMacro"></canvas></div>
+    </div>
+    ${micros.length ? `<div class="secao"><div class="secao-tit">Micronutrientes (kg)</div><div class="chart-box" style="height:150px;"><canvas id="chNutriMicro"></canvas></div></div>` : ''}
+    <div class="secao">
+      <div class="secao-tit" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span>🏅 Talhões que mais receberam</span>
+        <select class="filtro-sel" onchange="window.setNutrNutriente(this.value)">${_nutrienteOpcoes(nsel)}</select>
+      </div>
+      <div class="secao-sub">kg/ha de ${escHtml(NUTRIENTE_LABELS[nsel])} por talhão (na seleção atual).</div>
+      <div class="chart-box" id="boxRankTalhao"><canvas id="chNutriRank"></canvas></div>
+    </div>`;
+}
+function _nutriDesenharCharts(d) {
+  if (typeof Chart === 'undefined') return;
+  const macros = ['n','p2o5','k2o','ca','mg','s'].filter(k => d.total[k] > 0);
+  const c1 = document.getElementById('chNutriMacro');
+  if (c1 && macros.length) _nutriCharts.push(new Chart(c1, { type:'bar', data:{ labels:macros.map(k=>NUTRIENTE_LABELS[k]), datasets:[{ data:macros.map(k=>Math.round(d.total[k])), backgroundColor:macros.map(k=>NUTRI_CORES[k]||'#1a5c1a'), borderRadius:6 }] }, options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>fmt(c.parsed.y,1)+' kg'}}}, scales:{y:{ticks:{callback:v=>fmt(v,0)+' kg'}}} } }));
+  const micros = ['zn','b','cu','mn','fe','mo'].filter(k => d.total[k] > 0);
+  const c2 = document.getElementById('chNutriMicro');
+  if (c2 && micros.length) _nutriCharts.push(new Chart(c2, { type:'bar', data:{ labels:micros.map(k=>NUTRIENTE_LABELS[k]), datasets:[{ data:micros.map(k=>d.total[k]), backgroundColor:micros.map(k=>NUTRI_CORES[k]||'#a855f7'), borderRadius:6 }] }, options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>fmt(c.parsed.x,2)+' kg'}}} } }));
+  const nsel = d.total[nutrNutrienteSel] > 0 ? nutrNutrienteSel : (macros[0] || 'n');
+  const ranking = Object.entries(d.porTalhao).map(([tid, obj]) => {
+    const t = talhoes.find(x => x.id === tid); const area = t ? parseDose(t.area) : 0;
+    return { nome: (t && (t.nome || t.id)) || tid, kgha: area > 0 ? (obj[nsel] || 0) / area : 0 };
+  }).filter(r => r.kgha > 0).sort((a, b) => b.kgha - a.kgha).slice(0, 12);
+  const c3 = document.getElementById('chNutriRank');
+  if (c3 && ranking.length) _nutriCharts.push(new Chart(c3, { type:'bar', data:{ labels:ranking.map(r=>r.nome), datasets:[{ data:ranking.map(r=>Math.round(r.kgha*100)/100), backgroundColor:NUTRI_CORES[nsel]||'#1a5c1a', borderRadius:5 }] }, options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>fmt(c.parsed.x,2)+' kg/ha'}}}, scales:{x:{ticks:{callback:v=>fmt(v,0)}}} } }));
+}
+
+// ── MAPA (talhões clicáveis por nutriente) ──
+function _nutriMapaHtml(d, faz) {
+  const nsel = d.total[nutrNutrienteSel] > 0 ? nutrNutrienteSel : (Object.keys(d.total)[0] || 'n');
+  return `
+    <div class="secao" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span class="filtro-label">🌿 Nutriente no mapa</span>
+      <select class="filtro-sel" onchange="window.setNutrNutriente(this.value)">${_nutrienteOpcoes(nsel)}</select>
+      <span class="secao-sub" style="margin:0;">Cores por <b>kg/ha</b> de ${escHtml(NUTRIENTE_LABELS[nsel])} · toque num talhão para ver o detalhe.</span>
+    </div>
+    <div id="nutriMapWrap" style="position:relative;">
+      <div id="nutriMap" style="height:min(60vh,460px);border-radius:12px;overflow:hidden;"></div>
+      <div id="nutriMapLegenda" class="nutri-legenda"></div>
+    </div>
+    <div id="nutriTalhaoDetalhe" class="secao" style="display:none;"></div>`;
+}
+function _nutriDesenharMapa(d, talhoesSel) {
+  if (typeof L === 'undefined') return;
+  const nsel = d.total[nutrNutrienteSel] > 0 ? nutrNutrienteSel : (Object.keys(d.total)[0] || 'n');
+  const el = document.getElementById('nutriMap'); if (!el) return;
+  const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _nutriMap = map;
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
+  // kg/ha por talhão para o nutriente escolhido → escala de cor
+  const vals = {};
+  talhoesSel.forEach(t => { const a=parseDose(t.area); const kg=(d.porTalhao[t.id]||{})[nsel]||0; vals[t.id] = a>0?kg/a:0; });
+  const max = Math.max(0.0001, ...Object.values(vals));
+  const cor = v => { if (v<=0) return '#94a3b8'; const r=Math.min(1,v/max); // amarelo→verde escuro
+    const g1=[254,240,138], g2=[22,101,52]; const mix=g1.map((c,i)=>Math.round(c+(g2[i]-c)*r)); return `rgb(${mix[0]},${mix[1]},${mix[2]})`; };
+  const bounds = [];
+  talhoesSel.forEach(t => {
+    if (!t.coordenadas || t.coordenadas.length < 3) return;
+    const ll = norm(t.coordenadas); bounds.push(...ll);
+    const v = vals[t.id] || 0;
+    const poly = L.polygon(ll, { color:'#fff', weight:1.5, fillColor:cor(v), fillOpacity:v>0?.75:.35 }).addTo(map);
+    poly.bindTooltip(`<b>${escHtml(t.nome||t.id)}</b><br>${fmt(v,2)} kg/ha de ${escHtml(NUTRIENTE_LABELS[nsel])}`, { sticky:true });
+    poly.on('click', () => _nutriMostrarTalhao(t, d));
+  });
+  if (bounds.length) { try { map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); } catch(e){} }
+  setTimeout(() => map.invalidateSize(), 200);
+  // legenda
+  const leg = document.getElementById('nutriMapLegenda');
+  if (leg) leg.innerHTML = `<div class="nl-tit">${escHtml(NUTRIENTE_LABELS[nsel])} (kg/ha)</div>
+    <div class="nl-bar"></div><div class="nl-esc"><span>0</span><span>${fmt(max,1)}</span></div>
+    <div class="nl-row"><span class="nl-dot" style="background:#94a3b8;"></span>sem aplicação</div>`;
+}
+function _nutriMostrarTalhao(t, d) {
+  const box = document.getElementById('nutriTalhaoDetalhe'); if (!box) return;
+  const obj = d.porTalhao[t.id] || {};
+  const area = parseDose(t.area);
+  const linhas = Object.keys(NUTRIENTE_LABELS).filter(k => obj[k] > 0).map(k =>
+    `<tr><td><strong>${escHtml(NUTRIENTE_LABELS[k])}</strong></td><td class="num">${fmt(obj[k],1)} kg</td><td class="num">${area>0?fmt(obj[k]/area,2)+' kg/ha':'—'}</td></tr>`).join('');
+  box.style.display = '';
+  box.innerHTML = `<div class="secao-tit" style="display:flex;justify-content:space-between;align-items:center;">
+      <span>🌱 ${escHtml(t.nome||t.id)} <span style="font-weight:400;color:var(--c);font-size:.8rem;">· ${escHtml(t.fazenda||'')} · ${fmt(area,1)} ha</span></span>
+      <button class="nutri-view-btn" onclick="document.getElementById('nutriTalhaoDetalhe').style.display='none'">✕</button>
+    </div>
+    ${linhas ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nutriente</th><th class="num">Total</th><th class="num">kg/ha</th></tr></thead><tbody>${linhas}</tbody></table></div>`
+             : '<div class="secao-sub">Nenhum nutriente contabilizado neste talhão no período.</div>'}`;
+  box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// ── TABELA (visão original) ──
+function _nutriTabelaHtml(d, talhoesBase, faz, lblPeriodo, talhoesSel) {
+  const nutrientesOrd = Object.keys(NUTRIENTE_LABELS).filter(k => d.total[k] > 0);
+  let html = `<div class="secao" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+    <div class="filtro-grupo">
+      <span class="filtro-label">🌱 Talhão</span>
+      <select class="filtro-sel" id="selNutrTalhao" onchange="window.setNutrTalhao(this.value)">
+        <option value="">Todos${faz ? '' : ' (todas fazendas)'}</option>
+        ${talhoesBase.map(t => `<option value="${escAttr(t.id)}"${t.id === nutrTalhaoId ? ' selected' : ''}>${escHtml(t.nome || t.id)}${!faz ? ' · ' + escHtml(t.fazenda || '') : ''}</option>`).join('')}
+      </select>
+    </div>
+  </div>`;
   if (nutrientesOrd.length) {
     html += `<div class="secao">
       <div class="secao-tit">🌿 Nutrientes aplicados</div>
-      <div class="secao-sub">Calculado a partir das doses aplicadas (confirmadas) × área dos talhões × composição cadastrada no catálogo de adubos (Administração). Líquidos (L/mL) considerados com densidade ≈ 1 kg/L.</div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr>
-        <th>Nutriente</th><th class="num">Total aplicado</th><th class="num">kg/ha</th>
-      </tr></thead><tbody>
-      ${nutrientesOrd.map(k => `<tr>
-        <td><strong>${escHtml(NUTRIENTE_LABELS[k])}</strong></td>
-        <td class="num">${fmt(nutrientes[k], 1)} kg</td>
-        <td class="num">${areaAdubada > 0 ? fmt(nutrientes[k] / areaAdubada, 2) + ' kg/ha' : '—'}</td>
-      </tr>`).join('')}
-      </tbody></table></div>
-    </div>`;
+      <div class="secao-sub">Doses aplicadas (confirmadas) × área × composição do catálogo de adubos. Líquidos (L/mL) ≈ 1 kg/L.</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Nutriente</th><th class="num">Total aplicado</th><th class="num">kg/ha</th></tr></thead><tbody>
+      ${nutrientesOrd.map(k => `<tr><td><strong>${escHtml(NUTRIENTE_LABELS[k])}</strong></td><td class="num">${fmt(d.total[k], 1)} kg</td><td class="num">${d.areaAdubada > 0 ? fmt(d.total[k] / d.areaAdubada, 2) + ' kg/ha' : '—'}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
   } else {
-    html += `<div class="vazio"><div class="ico">🌿</div><p>Nenhum dos produtos aplicados tem composição cadastrada no catálogo de adubos.<br><span style="font-size:.78rem;">Cadastre a composição NPK em Administração → Catálogo de adubos.</span></p></div>`;
+    html += `<div class="vazio"><div class="ico">🌿</div><p>Nenhum produto aplicado tem composição no catálogo de adubos.<br><span style="font-size:.78rem;">Cadastre a composição NPK em Administração → Catálogo de adubos.</span></p></div>`;
   }
-
-  const naoContOrd = Object.values(naoContabilizados).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
+  const naoContOrd = Object.values(d.naoContabilizados).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
   if (naoContOrd.length) {
-    html += `<div class="secao">
-      <div class="secao-tit">⚠️ Produtos não contabilizados</div>
-      <div class="secao-sub">Sem composição cadastrada no catálogo de adubos — não entraram na soma de nutrientes acima.</div>
-      <div class="tbl-wrap"><table class="tbl"><thead><tr>
-        <th>Produto</th><th class="num">Quantidade aplicada</th>
-      </tr></thead><tbody>
-      ${naoContOrd.map(p => `<tr>
-        <td>${escHtml(p.produto)}</td>
-        <td class="num">${fmt(p.qtd, 2)} ${escHtml(p.unidade)}</td>
-      </tr>`).join('')}
-      </tbody></table></div>
-    </div>`;
+    html += `<div class="secao"><div class="secao-tit">⚠️ Produtos não contabilizados</div>
+      <div class="secao-sub">Sem composição no catálogo — fora da soma acima.</div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Produto</th><th class="num">Quantidade aplicada</th></tr></thead><tbody>
+      ${naoContOrd.map(p => `<tr><td>${escHtml(p.produto)}</td><td class="num">${fmt(p.qtd, 2)} ${escHtml(p.unidade)}</td></tr>`).join('')}
+      </tbody></table></div></div>`;
   }
-
-  html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
-    Relatório baseado nas aplicações confirmadas em "Adubações" · ${escHtml(lblPeriodo)}${faz ? ' · ' + escHtml(faz) : ''}${nutrTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}
-  </div>`;
-
-  cont.innerHTML = html;
+  html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">Baseado nas aplicações confirmadas em "Adubações" · ${escHtml(lblPeriodo)}${faz ? ' · ' + escHtml(faz) : ''}${nutrTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}</div>`;
+  return html;
 }
 
 // ════════════════════════════════════════════════════
