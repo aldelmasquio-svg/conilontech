@@ -235,16 +235,25 @@ function renderizarLista() {
       const total = planos.reduce((s,p)=>s+(p.aplicacoes||[]).length,0);
       const feitas = planos.reduce((s,p)=>s+(p.aplicacoes||[]).filter(a=>a.feito).length,0);
       const pct = total ? Math.round(feitas/total*100) : null;
+      // Progresso do mês vigente (planos cujo mesAno é o mês atual)
+      const _hj = new Date();
+      const mesNomeAtual = MESES[_hj.getMonth()];
+      const mesVigente = `${mesNomeAtual}/${_hj.getFullYear()}`;
+      const planosMes = planos.filter(p=>p.mesAno===mesVigente);
+      const totalMes = planosMes.reduce((s,p)=>s+(p.aplicacoes||[]).length,0);
+      const feitasMes = planosMes.reduce((s,p)=>s+(p.aplicacoes||[]).filter(a=>a.feito).length,0);
+      const mesCls = !totalMes ? 'sem' : (feitasMes>=totalMes ? 'ok' : (feitasMes>0 ? 'and' : 'zero'));
       return `<div class="talhao-card" onclick="irTalhao('${t.id}')">
         <div class="tc-left">
           <div class="tc-id">${t.id}</div>
           <div class="tc-nome">${t.nome}</div>
           <div class="tc-meta">${t.fazenda||''} · ${t.area||'—'} ha</div>
+          <div class="prog-mes ${mesCls}">📅 ${mesNomeAtual}: ${totalMes?`<b>${feitasMes}/${totalMes}</b>${totalMes?` · ${Math.round(feitasMes/totalMes*100)}%`:''}`:'sem adubação'}</div>
         </div>
         <div class="tc-right">
           ${pct!==null?`
             <div class="prog-ring" style="--p:${pct}"><span class="prog-val">${pct}%</span></div>
-            <div class="prog-lbl">${feitas}/${total}</div>
+            <div class="prog-lbl">${feitas}/${total} · safra</div>
           `:`<div class="sem-plano">Sem<br>plano</div>`}
           <span class="seta">›</span>
         </div>
@@ -1227,6 +1236,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prog-ring::before{content:'';position:absolute;width:36px;height:36px;border-radius:50%;background:white;}
 .prog-val{position:relative;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;}
 .prog-lbl{font-size:.65rem;color:var(--c);font-weight:700;}
+.prog-mes{display:inline-block;font-size:.66rem;font-weight:700;margin-top:6px;padding:2px 8px;border-radius:20px;line-height:1.5;}
+.prog-mes.ok{background:var(--vb);color:var(--ve);border:1px solid #a7d7a7;}
+.prog-mes.and{background:#fef3c7;color:#92400e;border:1px solid #fcd34d;}
+.prog-mes.zero{background:#fee2e2;color:#b91c1c;border:1px solid #fca5a5;}
+.prog-mes.sem{background:#f1f5f9;color:var(--t4);border:1px solid var(--cb);}
 .sem-plano{font-size:.68rem;color:var(--t4);text-align:center;line-height:1.4;}
 .seta{font-size:1.4rem;color:var(--cb);margin-left:4px;}
 /* TALHÃO */
