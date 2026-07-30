@@ -429,6 +429,39 @@ function blocoKgPorSetor(dose, unidade, talhaoId){
     <div class="setor-kg-linha total"><span class="setor-kg-nome">Total · ${sets.length} setor${sets.length!==1?'es':''}</span><span class="setor-kg-area">${fmtHa(areaTot)}</span><span class="setor-kg-val">${fmtNum(d*areaTot)} ${un}</span></div>
   </div>`;
 }
+// Quebra consolidada: uma tabela só, setores nas linhas × adubos nas colunas.
+// Evita repetir a lista de setores (e a área) para cada adubo da fertirrigação.
+function blocoKgPorSetorConsolidado(pm, talhaoId){
+  if(!talhaoId) return '';
+  const prods=(pm||[]).filter(p=>p&&p.produto);
+  if(!prods.length) return '';
+  const sets=setoresDoTalhao(talhaoId);
+  if(!sets.length){
+    return `<div class="setor-kg-box vazio">💧 <b>kg por setor:</b> nenhum setor de irrigação cadastrado neste talhão. Cadastre os setores em <b>Irrigação</b> (ou no botão 📐 Setores) para ver a dose por setor.</div>`;
+  }
+  const doseNum=p=>parseFloat(String(p.dose).replace(',','.'))||0;
+  const areaTot=sets.reduce((x,s)=>x+areaDoSetor(s),0);
+  const ths=prods.map(p=>`<th class="skm-prod"><span class="skm-prod-nome">${sanitizar(p.produto)}</span><span class="skm-prod-dose">${fmtNum(doseNum(p))} ${sanitizar(p.unidade||'kg')}/ha</span></th>`).join('');
+  const cel=(v,un)=>`<td class="skm-val">${fmtNum(v)}<span class="skm-un"> ${sanitizar(un||'kg')}</span></td>`;
+  const rows=sets.map(s=>{const a=areaDoSetor(s);
+    return `<tr>
+      <td class="skm-setor">${sanitizar(s.nome)}</td>
+      <td class="skm-area">${fmtHa(a)}</td>
+      ${prods.map(p=>cel(doseNum(p)*a,p.unidade)).join('')}
+    </tr>`;}).join('');
+  const totRow=`<tr class="skm-tot">
+    <td class="skm-setor">Total · ${sets.length} setor${sets.length!==1?'es':''}</td>
+    <td class="skm-area">${fmtHa(areaTot)}</td>
+    ${prods.map(p=>cel(doseNum(p)*areaTot,p.unidade)).join('')}
+  </tr>`;
+  return `<div class="setor-kg-matriz">
+    <div class="skm-tit">💧 kg por setor <span class="skm-hint">dose/ha × área de cada setor</span></div>
+    <div class="skm-scroll"><table class="skm-table">
+      <thead><tr><th class="skm-setor">Setor</th><th class="skm-area">Área</th>${ths}</tr></thead>
+      <tbody>${rows}${totRow}</tbody>
+    </table></div>
+  </div>`;
+}
 
 // ─── CONFIG: tamanho dos setores (por talhão) ───
 window.abrirSetoresConfig = function(){
@@ -565,7 +598,7 @@ function renderCardAp(ap, planoDocId) {
       <span class="prod-nome">${p.produto}</span>
       <span class="prod-dose">${p.dose} ${p.unidade}/ha</span>
       ${p.doseFertinox?`<span class="prod-dose" style="background:#2d6a4f;">📍 ${p.doseFertinox} g/m</span>`:''}`;
-    if (!fmulti) return `<div class="prod-linha">${base}</div>${ap.modo==='Fertirrigação'?blocoKgPorSetor(p.dose,p.unidade,talhaoSel?.id):''}`;
+    if (!fmulti) return `<div class="prod-linha">${base}</div>`;
     // Fertinox com múltiplos adubos: cada um é uma operação separada
     const pf = p.feito;
     return `<div class="prod-op ${pf?'feita':''}">
@@ -591,6 +624,7 @@ function renderCardAp(ap, planoDocId) {
       <div class="aplic-top-main">
         ${ap.modo?`<div class="aplic-modo">⚙️ ${ap.modo}${ap.fase?' · '+ap.fase:''}${ap.doseFertinox?' · <strong>'+ap.doseFertinox+' g/m</strong>':''}${fmulti?' · <span style="color:#2d6a4f;">confirmação por adubo</span>':''}</div>`:''}
         <div class="prods-lista">${prods}</div>
+        ${(ap.modo==='Fertirrigação' && !fmulti)?blocoKgPorSetorConsolidado(pm, talhaoSel?.id):''}
         ${ap.obs?`<div class="aplic-obs">💬 ${ap.obs}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
@@ -1320,6 +1354,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .setor-kg-val{font-weight:700;color:#1e40af;font-family:'DM Mono',monospace;flex-shrink:0;min-width:64px;text-align:right;}
 .setor-kg-linha.total{border-top:1.5px solid #93c5fd;font-weight:700;margin-top:2px;}
 .setor-kg-linha.total .setor-kg-nome{font-weight:700;}
+/* Fertirrigação: matriz consolidada (setores × adubos) */
+.setor-kg-matriz{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:9px 10px;margin:8px 0 2px;}
+.skm-tit{font-size:.68rem;font-weight:700;color:#2563eb;text-transform:uppercase;letter-spacing:.04em;margin-bottom:7px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.skm-hint{font-weight:600;text-transform:none;letter-spacing:0;color:#60a5fa;font-size:.66rem;font-family:'DM Mono',monospace;}
+.skm-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;}
+.skm-table{border-collapse:collapse;width:100%;font-size:.76rem;}
+.skm-table th,.skm-table td{padding:5px 8px;white-space:nowrap;text-align:right;}
+.skm-table thead th{color:#1e3a8a;border-bottom:1.5px solid #93c5fd;vertical-align:bottom;}
+.skm-table th.skm-setor,.skm-table td.skm-setor{text-align:left;position:sticky;left:0;background:#f0f9ff;z-index:1;}
+.skm-table td.skm-setor{font-weight:600;}
+.skm-area{color:var(--c);font-size:.7rem;font-family:'DM Mono',monospace;}
+.skm-prod-nome{display:block;font-weight:700;}
+.skm-prod-dose{display:block;font-weight:600;text-transform:none;letter-spacing:0;color:#60a5fa;font-size:.62rem;font-family:'DM Mono',monospace;margin-top:1px;}
+.skm-val{font-weight:700;color:#1e40af;font-family:'DM Mono',monospace;}
+.skm-un{color:#60a5fa;font-weight:600;font-size:.66rem;}
+.skm-table tbody td{border-top:1px solid #dbeafe;}
+.skm-tot td{border-top:1.5px solid #93c5fd;font-weight:800;color:#1e3a8a;}
+.skm-tot td.skm-setor,.skm-tot td.skm-val,.skm-tot td.skm-area{color:#1e3a8a;}
+.skm-tot td.skm-setor{background:#e0f2fe;}
 .badge{font-size:.68rem;font-weight:700;border-radius:20px;padding:3px 10px;white-space:nowrap;}
 .badge-ok{background:#dcfce7;color:#16a34a;}
 .badge-pend{background:var(--cl);color:var(--c);}
