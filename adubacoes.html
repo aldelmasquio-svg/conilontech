@@ -454,6 +454,7 @@ window.setoresConfigTalhao = function(talhaoId){
       <input type="text" class="scfg-nome" value="${sanitizar(nome||'')}" placeholder="Nome do setor">
       <input type="number" class="scfg-area" step="0.01" min="0" value="${area!=null&&area!==''?area:''}" placeholder="ha">
       <span class="scfg-un">ha</span>
+      ${id?`<button class="scfg-del" title="Excluir setor" onclick="excluirSetorConfig(this,'${id}')">🗑️</button>`:''}
     </div>`;
   cont.innerHTML = sets.length
     ? sets.map(s=>linha(s._docId, s.nome, (s.areaHa!=null&&s.areaHa!=='')?s.areaHa:(s.coordenadas&&s.coordenadas.length>=3?areaHectares(s.coordenadas).toFixed(2):''))).join('')
@@ -472,6 +473,25 @@ window.addSetorConfigLinha = function(){
   div.querySelector('.scfg-nome').focus();
 };
 window.removerLinhaSetorConfig = function(btn){ btn.closest('.scfg-row')?.remove(); };
+window.excluirSetorConfig = async function(btn, docId){
+  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
+  const s = setoresIrrig.find(x=>x._docId===docId);
+  const nome = s?.nome || 'setor';
+  const temPoligono = s && Array.isArray(s.coordenadas) && s.coordenadas.length>=3;
+  const aviso = temPoligono
+    ? `⚠️ "${nome}" tem um polígono desenhado na Irrigação. Excluir aqui remove o setor também do mapa de irrigação.\n\nExcluir mesmo assim?`
+    : `Excluir o setor "${nome}"? Esta ação não pode ser desfeita.`;
+  if(!confirm(aviso)) return;
+  try{
+    await deleteDoc(doc(db,'irrigacaoSetores',docId));
+    btn.closest('.scfg-row')?.remove();
+    const cont=document.getElementById('setoresConfigLista');
+    if(cont && !cont.querySelector('.scfg-row')){
+      cont.innerHTML=`<div class="scfg-vazio">Nenhum setor neste talhão ainda. Use “+ Adicionar setor”.</div>`;
+    }
+    toast(`🗑️ Setor "${nome}" excluído.`);
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
 window.salvarSetoresConfig = async function(){
   if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
   const talhaoId=document.getElementById('setoresTalhaoSel').value;
@@ -1667,7 +1687,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
     <div class="modal-handle"></div>
     <div class="modal-tit">📐 Tamanho dos setores</div>
     <div class="modal-body">
-      <div style="font-size:.74rem;color:var(--c);line-height:1.5;margin-bottom:12px;">Informe a área (ha) de cada setor do talhão. Usada na <b>fertirrigação</b> para converter kg/ha em kg por setor. Setores com tamanhos diferentes são somados corretamente.</div>
+      <div style="font-size:.74rem;color:var(--c);line-height:1.5;margin-bottom:12px;">Informe a área (ha) de cada setor do talhão. Usada na <b>fertirrigação</b> para converter kg/ha em kg por setor. Setores com tamanhos diferentes são somados corretamente. Use o 🗑️ para <b>excluir setores duplicados ou errados</b>.</div>
       <div class="campo" style="margin-bottom:12px;"><label>Talhão</label>
         <select id="setoresTalhaoSel" onchange="setoresConfigTalhao(this.value)"></select>
       </div>
