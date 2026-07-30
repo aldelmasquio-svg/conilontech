@@ -62,6 +62,8 @@ let usuarioAtual = null, perfilAtual = {};
 let talhoes = [], planosAdubacao = [], configAdubacao = {}, planejamentosSafra = [];
 let setoresIrrig = []; // setores de irrigação (para converter kg/ha em kg por setor na fertirrigação)
 let telaAtual = 'lista', talhaoSel = null, mesSel = null;
+let fazendasAbertas = new Set(); // (admin) fazendas expandidas na lista de talhões
+let fazendasListaAtual = [];      // ordem atual das fazendas renderizadas (índice → nome)
 let planoWIP = null, etapa = 1, semanaAtiva = 0;
 
 onAuthStateChanged(auth, async (user) => {
@@ -229,7 +231,13 @@ function renderizarLista() {
     lista.innerHTML = headerHtml + `<div class="vazio"><div class="ico">🌿</div><p>Nenhum talhão cadastrado.</p></div>`;
     return;
   }
-  lista.innerHTML = headerHtml + Object.entries(fazendas).sort().map(([faz, ts]) => {
+  // Fazendas em ordem alfabética; talhões dentro de cada uma também (por nome, depois id).
+  const entradas = Object.entries(fazendas)
+    .sort((a,b)=>String(a[0]).localeCompare(String(b[0]),'pt',{numeric:true,sensitivity:'base'}));
+  fazendasListaAtual = entradas.map(e=>e[0]);
+  lista.innerHTML = headerHtml + entradas.map(([faz, tsRaw], fi) => {
+    const ts = tsRaw.slice().sort((a,b)=>
+      String(a.nome||a.id||'').localeCompare(String(b.nome||b.id||''),'pt',{numeric:true,sensitivity:'base'}));
     const cards = ts.map(t => {
       const planos = planosAdubacao.filter(p=>p.talhaoId===t.id);
       const total = planos.reduce((s,p)=>s+(p.aplicacoes||[]).length,0);
@@ -260,12 +268,33 @@ function renderizarLista() {
         <span class="seta">›</span>
       </div>`;
     }).join('');
+    if (adm) {
+      // Admin: fazenda vira botão principal; talhões só aparecem ao clicar (accordion).
+      const aberta = fazendasAbertas.has(faz);
+      const n = ts.length;
+      return `<div class="fazenda-grupo adm ${aberta?'aberta':''}" data-faz-idx="${fi}">
+        <button class="fazenda-btn" onclick="toggleFazendaLista(${fi})">
+          <span class="fazenda-btn-ico">🏡</span>
+          <span class="fazenda-btn-nome">${sanitizar(faz)}</span>
+          <span class="fazenda-btn-cont">${n} talh${n!==1?'ões':'ão'}</span>
+          <span class="fazenda-btn-seta">▾</span>
+        </button>
+        <div class="fazenda-cards">${cards}</div>
+      </div>`;
+    }
     return `<div class="fazenda-grupo">
-      <div class="fazenda-tit">🏡 ${faz}</div>
+      <div class="fazenda-tit">🏡 ${sanitizar(faz)}</div>
       ${cards}
     </div>`;
   }).join('');
 }
+window.toggleFazendaLista = function(fi){
+  const faz = fazendasListaAtual[fi];
+  if(faz==null) return;
+  if(fazendasAbertas.has(faz)) fazendasAbertas.delete(faz); else fazendasAbertas.add(faz);
+  const grp=document.querySelector(`.fazenda-grupo[data-faz-idx="${fi}"]`);
+  if(grp) grp.classList.toggle('aberta', fazendasAbertas.has(faz));
+};
 
 // ─── TALHÃO ───
 function gerarMesesSafra() {
@@ -1280,6 +1309,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .btn-safra{background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:7px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;}
 .fazenda-grupo{margin-bottom:18px;}
 .fazenda-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;color:var(--c);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;padding-left:4px;}
+/* Admin: fazenda como botão principal (accordion) */
+.fazenda-grupo.adm{margin-bottom:10px;}
+.fazenda-btn{width:100%;display:flex;align-items:center;gap:10px;background:white;border:1px solid var(--cb);border-left:5px solid var(--v);border-radius:var(--rad);box-shadow:var(--s);padding:15px 14px;cursor:pointer;font-family:inherit;text-align:left;transition:.12s;}
+.fazenda-btn:active{transform:scale(.99);}
+.fazenda-btn-ico{font-size:1.15rem;flex-shrink:0;}
+.fazenda-btn-nome{flex:1;min-width:0;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.fazenda-btn-cont{flex-shrink:0;font-size:.7rem;color:var(--v);font-weight:700;background:var(--vb);border:1px solid #a7d7a7;border-radius:20px;padding:3px 10px;}
+.fazenda-btn-seta{flex-shrink:0;font-size:1.05rem;color:var(--v);transition:transform .2s;}
+.fazenda-grupo.adm.aberta .fazenda-btn-seta{transform:rotate(180deg);}
+.fazenda-grupo.adm .fazenda-cards{display:none;padding-top:9px;}
+.fazenda-grupo.adm.aberta .fazenda-cards{display:block;}
 .talhao-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px 12px 14px 16px;display:flex;align-items:center;margin-bottom:8px;cursor:pointer;transition:.15s;border-left:4px solid var(--v);}
 .talhao-card:active{transform:scale(.98);}
 .tc-left{flex:1;}
