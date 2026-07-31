@@ -1015,9 +1015,9 @@ function _statusTalhoes() {
 }
 function _statusCor(info) {
   if (!info) return '#94a3b8';
-  if (info.overdue.length) return '#dc2626';
-  if (info.pend.length) return '#f59e0b';
-  if (info.atividade > 0) return '#16a34a';
+  if (info.overdue.length) return '#dc2626';        // atrasado = pendência
+  if (info.atividade > 0) return '#16a34a';         // em dia (tem atividade feita, nada atrasado)
+  if (info.pend.length) return '#2563eb';           // programado (futuro, ainda no prazo) — não é pendência
   return '#94a3b8';
 }
 function _desenharGeralMapa(statusMap) {
@@ -1034,7 +1034,7 @@ function _desenharGeralMapa(statusMap) {
     const c = _statusCor(info);
     const nO = info ? info.overdue.length : 0, nP = info ? info.pend.length : 0;
     const poly = L.polygon(ll, { color:'#fff', weight:1.5, fillColor:c, fillOpacity:.72 }).addTo(map);
-    const resumo = nO ? `${nO} atrasada(s)` : nP ? `${nP} pendente(s)` : (info && info.atividade>0 ? 'em dia' : 'sem dados');
+    const resumo = nO ? `⚠️ ${nO} atrasada(s)` : (info && info.atividade>0 ? '✅ em dia' : nP ? `📅 ${nP} programada(s)` : 'sem dados');
     poly.bindTooltip(`<b>${escHtml(t.nome||t.id)}</b><br>${resumo}`, { sticky:true });
     poly.on('click', () => _geralMostrarTalhao(t, info));
   });
@@ -1051,11 +1051,11 @@ function _geralMostrarTalhao(t, info) {
       <span>📍 ${escHtml(t.nome||t.id)} <span style="font-weight:400;color:var(--c);font-size:.8rem;">· ${escHtml(t.fazenda||'')}</span></span>
       <button class="nutri-view-btn" onclick="document.getElementById('geralStatusDetalhe').style.display='none'">✕</button>
     </div>
-    ${itens.length ? `<div class="secao-sub">Pendências neste talhão (atrasadas primeiro):</div>
-      <div class="pulv-hist">${itens.map(x => `<div class="pulv-hist-item" style="border-left-color:${x.atr?'#dc2626':'#f59e0b'};">
-        <div class="phi-data" style="color:${x.atr?'#dc2626':'#d97706'};">${x.atr?'⚠️':'📅'} ${x.data?formatarData(x.data):'—'}</div>
+    ${itens.length ? `<div class="secao-sub">⚠️ atrasadas (pendências) primeiro · 📅 programadas são futuras (ainda no prazo):</div>
+      <div class="pulv-hist">${itens.map(x => `<div class="pulv-hist-item" style="border-left-color:${x.atr?'#dc2626':'#2563eb'};">
+        <div class="phi-data" style="color:${x.atr?'#dc2626':'#1d4ed8'};">${x.atr?'⚠️':'📅'} ${x.data?formatarData(x.data):'—'}</div>
         <div class="phi-corpo">
-          <div class="phi-linha"><span class="praga-prod-chip">${icoTipo[x.tipo]||'•'} ${escHtml(x.tipo)}${x.atr?' · atrasada':''}</span>${x.det?`<span style="font-size:.75rem;color:var(--c);">${escHtml(x.det)}</span>`:''}</div>
+          <div class="phi-linha"><span class="praga-prod-chip">${icoTipo[x.tipo]||'•'} ${escHtml(x.tipo)} · ${x.atr?'atrasada':'programada'}</span>${x.det?`<span style="font-size:.75rem;color:var(--c);">${escHtml(x.det)}</span>`:''}</div>
         </div>
       </div>`).join('')}</div>`
     : `<div class="secao-sub">✅ Sem pendências — talhão em dia${info&&info.atividade>0?'':' (ou sem registros no período)'}.</div>`}`;
@@ -1078,9 +1078,10 @@ function renderGeral() {
   // Adubações realizadas no período (de planosAdubacao)
   const planosFil = filtrarPlanos();
   const haAdubado = calcHaAdubado(planosFil);
-  // Pulverizações pendentes
-  const pulvPend = pulverizacoes.filter(p => !p.realizada && (!faz || p.fazenda === faz)).length;
-  // Adubações atrasadas
+  // Pendência = programada para data já passada e não realizada (data < hoje). Futuro = programado, não conta.
+  const _hjP = hoje();
+  const pulvPend = pulverizacoes.filter(p => !p.realizada && (!faz || p.fazenda === faz) && p.data && p.data < _hjP).length;
+  // Adubações atrasadas (aplicações não confirmadas com data planejada já vencida)
   const adubAtrasadas = calcAdubacoesAtrasadas();
   // Produção total da safra atual (soma de sc/ha × área de cada talhão)
   const prodSafraAtual = calcProducaoTotalSafraAtual(talhFil);
@@ -1091,7 +1092,7 @@ function renderGeral() {
   // Avisos / pendências
   const semClassif = produtosEstoque.filter(p => !p.categoria && (!faz || p.fazenda === faz)).length;
   const movSemPreco = movimentacoes.filter(m => m.tipo === 'entrada' && !m.precoUnitario && (!faz || m.fazenda === faz)).length;
-  const drenchPend = drenchPrevencao.filter(d => (d.status||'pendente') === 'pendente' && (!faz || d.fazenda === faz)).length;
+  const drenchPend = drenchPrevencao.filter(d => (d.status||'pendente') !== 'realizado' && (!faz || d.fazenda === faz) && d.data && d.data < _hjP).length;
   const talhoesSemArea = talhFil.filter(t => !parseDose(t.area)).length;
   // Estoque em alerta (acabando / negativo)
   const estCrit = _estoqueCritico();
@@ -1106,11 +1107,11 @@ function renderGeral() {
   let html = '';
   // ── Painel de Ações Pendentes (consolidado, clicável) ──
   const acoes = [
-    {n: pulvPend,             ico:'💧', txt:'pulverização(ões) pendente(s)',        tab:'pulverizacoes', danger:false},
+    {n: pulvPend,             ico:'💧', txt:'pulverização(ões) atrasada(s)',         tab:'pulverizacoes', danger:true},
     {n: adubAtrasadas,        ico:'🧪', txt:'adubação(ões) atrasada(s)',            tab:'adubacao',      danger:true},
+    {n: drenchPend,           ico:'🌱', txt:'drench atrasado(s)',                   tab:'drench',        danger:true},
     {n: estCrit.acabando.length, ico:'📦', txt:'produto(s) do estoque acabando (< 30 dias)', tab:'estoque', danger:false},
     {n: estCrit.negativos.length, ico:'🚫', txt:'produto(s) com saldo negativo',    tab:'estoque',       danger:true},
-    {n: drenchPend,           ico:'🌱', txt:'agendamento(s) de drench pendente(s)', tab:'drench',        danger:false},
     {n: semClassif,           ico:'🏬', txt:'produto(s) do estoque sem categoria',  tab:'estoque',       danger:false},
     {n: movSemPreco,          ico:'💰', txt:'entrada(s) de estoque sem preço',      tab:'estoque',       danger:false},
     {n: talhoesSemArea,       ico:'📐', txt:'talhão(ões) sem área cadastrada',      href:'mapa.html',    danger:false},
@@ -1149,7 +1150,7 @@ function renderGeral() {
     <div class="kpi-card ok clk" onclick="abrirTab('adubacao')"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">no período</div></div>
     <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}${gastoDefensivos>0?delta(metAtual.gastoDef,'menosMelhor','gastoDef'):''}</div></div>
     <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ adubos</div><div class="kpi-value">${gastoAdubos>0?fmtRS(gastoAdubos):'—'}</div><div class="kpi-aux">${gastoAdubos>0?'no período':'sem preços cadastrados'}${gastoAdubos>0?delta(metAtual.gastoAdu,'menosMelhor','gastoAdu'):''}</div></div>
-    <div class="kpi-card clk ${pulvPend>0?'alerta':''}" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Pulverizações pendentes</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">aguardando aplicação</div></div>
+    <div class="kpi-card clk ${pulvPend>0?'danger':''}" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Pulverizações atrasadas</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">passou da data prevista</div></div>
     <div class="kpi-card clk ${adubAtrasadas>0?'danger':''}" onclick="abrirTab('adubacao')"><div class="kpi-label">Adubações atrasadas</div><div class="kpi-value">${adubAtrasadas}</div><div class="kpi-aux">passou da data prevista</div></div>
   </div>`;
   // ── Chuva recente (pluviometria) ──
@@ -1195,7 +1196,7 @@ function renderGeral() {
   if (temMapa) {
     html += `<div class="secao" style="margin-top:12px;">
       <div class="secao-tit">🗺️ Mapa de atenção</div>
-      <div class="secao-sub">Talhões por situação · toque para ver as pendências. <span class="map-leg"><span class="ml-dot" style="background:#dc2626;"></span>atrasado <span class="ml-dot" style="background:#f59e0b;"></span>pendente <span class="ml-dot" style="background:#16a34a;"></span>em dia <span class="ml-dot" style="background:#94a3b8;"></span>sem dados</span></div>
+      <div class="secao-sub">Talhões por situação · toque para ver os detalhes. <span class="map-leg"><span class="ml-dot" style="background:#dc2626;"></span>atrasado (pendência) <span class="ml-dot" style="background:#16a34a;"></span>em dia <span class="ml-dot" style="background:#2563eb;"></span>programado <span class="ml-dot" style="background:#94a3b8;"></span>sem dados</span></div>
       <div id="geralMap" style="height:min(56vh,420px);border-radius:12px;overflow:hidden;"></div>
       <div id="geralStatusDetalhe" class="secao" style="display:none;margin-top:10px;box-shadow:none;padding:12px 0 0;"></div>
     </div>`;
@@ -1321,18 +1322,22 @@ function calcHaAdubado(planos) {
 }
 
 function calcAdubacoesAtrasadas() {
+  // Atrasada = aplicação planejada para uma data JÁ VENCIDA (data planejada < hoje) e não confirmada.
+  // Usa a data real derivada de mesAno+semana (_dataPlanejadaAp), não a comparação de texto antiga (bug).
   const faz = fazendaFiltro();
-  const hojeStr = hoje().slice(0,7); // YYYY-MM
+  const hj = hoje();
   let count = 0;
   planosAdubacao.forEach(plano => {
-    if (!plano.mesAno || plano.mesAno >= hojeStr) return; // não atrasado
+    if (!Array.isArray(plano.aplicacoes) || !plano.aplicacoes.length) return;
     if (faz) {
       const t = talhoes.find(x => x.id === plano.talhaoId);
       if (!t || t.fazenda !== faz) return;
     }
-    // Sem aplicação confirmada = atrasado
-    const temAplic = plano.aplicacoes && Object.values(plano.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
-    if (!temAplic) count++;
+    plano.aplicacoes.forEach(ap => {
+      if (ap.feito) return;
+      const dp = _dataPlanejadaAp(plano, ap);
+      if (dp && dp < hj) count++;
+    });
   });
   return count;
 }
@@ -2231,36 +2236,39 @@ function renderAdubacao() {
       </tbody></table>
     </div>`;
   }
-  // Atrasados (lista detalhada)
+  // Atrasados (lista detalhada) — aplicações com data planejada já vencida e não confirmadas
   if (atrasados > 0) {
-    const hojeStr = hoje().slice(0,7);
-    const listaAtras = planosAdubacao.filter(plano => {
-      if (!plano.mesAno || plano.mesAno >= hojeStr) return false;
+    const hj = hoje();
+    const listaAtras = [];
+    planosAdubacao.forEach(plano => {
+      if (!Array.isArray(plano.aplicacoes)) return;
       if (faz) {
         const t = talhoes.find(x => x.id === plano.talhaoId);
-        if (!t || t.fazenda !== faz) return false;
+        if (!t || t.fazenda !== faz) return;
       }
-      const tem = plano.aplicacoes && Object.values(plano.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
-      return !tem;
-    }).sort((a,b)=>(a.mesAno||'').localeCompare(b.mesAno||''));
+      plano.aplicacoes.forEach(ap => {
+        if (ap.feito) return;
+        const dp = _dataPlanejadaAp(plano, ap);
+        if (dp && dp < hj) listaAtras.push({ talhaoId: plano.talhaoId, mesAno: plano.mesAno, semana: ap.semana, data: dp });
+      });
+    });
+    listaAtras.sort((a,b) => String(a.data||'').localeCompare(String(b.data||'')));
     if (listaAtras.length) {
       html += `<div class="secao">
-        <div class="secao-tit">⚠️ Adubações atrasadas (sem aplicação)</div>
-        <div class="secao-sub">Planos com data já passada e sem aplicação confirmada</div>
+        <div class="secao-tit">⚠️ Adubações atrasadas</div>
+        <div class="secao-sub">Aplicações com data já vencida e sem confirmação (data planejada &lt; hoje)</div>
         <table class="tbl"><thead><tr>
-          <th>Mês previsto</th><th>Talhão</th><th>Fazenda</th>
+          <th>Data prevista</th><th>Talhão</th><th>Fazenda</th>
         </tr></thead><tbody>
         ${listaAtras.slice(0,20).map(p => {
           const t = talhoes.find(x => x.id === p.talhaoId);
-          const [a,mm] = (p.mesAno||'').split('-');
-          const lab = ['','jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][parseInt(mm)] + '/' + a;
           return `<tr>
-            <td><strong>${lab}</strong></td>
+            <td><strong>${formatarData(p.data)}</strong>${p.semana?` <span style="color:var(--c);font-size:.72rem;">· ${escHtml(String(p.semana))}</span>`:''}</td>
             <td>${escHtml(p.talhaoId||'')}${t?.nome?' · '+escHtml(t.nome):''}</td>
             <td>${escHtml(t?.fazenda||'—')}</td>
           </tr>`;
         }).join('')}
-        ${listaAtras.length > 20 ? `<tr><td colspan="3" style="text-align:center;color:var(--c);font-style:italic;">+ ${listaAtras.length-20} outros não listados</td></tr>` : ''}
+        ${listaAtras.length > 20 ? `<tr><td colspan="3" style="text-align:center;color:var(--c);font-style:italic;">+ ${listaAtras.length-20} outras não listadas</td></tr>` : ''}
         </tbody></table>
       </div>`;
     }

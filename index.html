@@ -454,33 +454,35 @@ function atualizarHeatmapAdub() {
 }
 
 // ── PENDÊNCIAS POR FAZENDA (heatmap compacto) ──
-// Drench é contado só do MÊS ATUAL — fora da janela de aplicação (2-3x/safra) não é "pendência real".
+// Pendência = algo programado para data JÁ VENCIDA e não realizado (atrasado). O que está
+// programado para o futuro não conta como pendência (não vira alerta vermelho).
 function calcFazendaStatus() {
   const hoje = new Date();
   const mesIdx = hoje.getMonth(), ano = hoje.getFullYear();
-  const hojeYM = hoje.toISOString().slice(0,7);
+  const hojeISO = hoje.toISOString().slice(0,10);
   const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
 
   return fazendas.map(faz => {
-    let adubAtrasada = 0, adubPendenteMes = 0;
+    // Pendência = programada para data já vencida e não feita. Futuro = programado, não conta.
+    let adubAtrasada = 0, adubProgramada = 0;
     planosAdubacao.filter(p => p.fazenda === faz).forEach(p => {
       const pend = (p.aplicacoes||[]).filter(a => !a.feito).length;
       if (!pend) return;
       const passado = (p.ano < ano) || (p.ano === ano && p.mesIdx < mesIdx);
-      if (passado) adubAtrasada += pend; else if (p.ano === ano && p.mesIdx === mesIdx) adubPendenteMes += pend;
+      if (passado) adubAtrasada += pend; else adubProgramada += pend;
     });
-    const adubStatus = adubAtrasada > 0 ? 'red' : (adubPendenteMes > 0 ? 'yellow' : 'green');
+    const adubStatus = adubAtrasada > 0 ? 'red' : 'green';
 
-    const pulvPend = pulverizacoes.filter(p => p.fazenda === faz && !p.realizada).length;
-    const pulvStatus = pulvPend > 0 ? 'yellow' : 'green';
+    const pulvAtras = pulverizacoes.filter(p => p.fazenda === faz && !p.realizada && p.data && p.data < hojeISO).length;
+    const pulvStatus = pulvAtras > 0 ? 'red' : 'green';
 
-    const drenchPendMes = drenchPrevencao.filter(d => d.fazenda === faz && (d.status||'pendente') === 'pendente' && (d.data||'').slice(0,7) === hojeYM).length;
-    const drenchStatus = drenchPendMes > 0 ? 'yellow' : 'green';
+    const drenchAtras = drenchPrevencao.filter(d => d.fazenda === faz && (d.status||'pendente') !== 'realizado' && d.data && d.data < hojeISO).length;
+    const drenchStatus = drenchAtras > 0 ? 'red' : 'green';
 
     const estBaixo = estoqueProdutos.filter(p => p.fazenda === faz && (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).length;
     const estStatus = estBaixo > 0 ? 'red' : 'green';
 
-    return { faz, adubStatus, adubAtrasada, adubPendenteMes, pulvStatus, pulvPend, drenchStatus, drenchPendMes, estStatus, estBaixo };
+    return { faz, adubStatus, adubAtrasada, adubProgramada, pulvStatus, pulvAtras, drenchStatus, drenchAtras, estStatus, estBaixo };
   });
 }
 
@@ -495,9 +497,9 @@ function atualizarFazendaStatus() {
     <div class="faz-status-row">
       <div class="faz-status-nome">🏡 ${d.faz}</div>
       <div class="faz-status-chips">
-        ${chip(d.adubStatus, 'adubacoes.html', '🧪', 'Adubação', d.adubAtrasada?`${d.adubAtrasada} atrasada(s)`:(d.adubPendenteMes?`${d.adubPendenteMes} pendente(s) no mês`:'em dia'))}
-        ${chip(d.pulvStatus, 'pulverizacoes.html', '💧', 'Pulverização', d.pulvPend?`${d.pulvPend} pendente(s)`:'em dia')}
-        ${chip(d.drenchStatus, 'drench.html', '🌱', 'Drench (mês)', d.drenchPendMes?`${d.drenchPendMes} pendente(s) este mês`:'em dia')}
+        ${chip(d.adubStatus, 'adubacoes.html', '🧪', 'Adubação', d.adubAtrasada?`${d.adubAtrasada} atrasada(s)`:(d.adubProgramada?`${d.adubProgramada} programada(s)`:'em dia'))}
+        ${chip(d.pulvStatus, 'pulverizacoes.html', '💧', 'Pulverização', d.pulvAtras?`${d.pulvAtras} atrasada(s)`:'em dia')}
+        ${chip(d.drenchStatus, 'drench.html', '🌱', 'Drench', d.drenchAtras?`${d.drenchAtras} atrasado(s)`:'em dia')}
         ${chip(d.estStatus, 'estoque.html', '🏬', 'Estoque', d.estBaixo?`${d.estBaixo} abaixo do mínimo`:'em dia')}
       </div>
     </div>`).join('');
