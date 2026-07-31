@@ -125,6 +125,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .chuva-n{font-family:'DM Mono',monospace;font-weight:800;font-size:1.15rem;color:#0369a1;line-height:1;}
 .chuva-u{font-size:.62rem;color:#0284c7;margin-top:2px;}
 .chuva-ult{font-size:.66rem;color:var(--c);margin-top:7px;}
+/* Legenda do mini-mapa de atenção */
+.map-leg{display:inline-flex;flex-wrap:wrap;align-items:center;gap:9px;margin-left:4px;font-size:.7rem;color:var(--c);}
+.ml-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:2px;vertical-align:middle;}
 
 /* SEÇÃO */
 .secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
@@ -406,6 +409,7 @@ let pulvView = 'resumo';        // 'resumo' | 'mapa'
 let _pulvMap = null;            // instância Leaflet do mapa de pulverizações
 let adubView = 'resumo';        // 'resumo' | 'mapa' (aba Adubação)
 let _adubMap = null;            // instância Leaflet do mapa de adubações
+let _geralMap = null;           // instância Leaflet do mini-mapa de status (aba Geral)
 
 // Filtros da aba "Compras" (relatório de compras planejadas)
 let compraTalhaoId = '';
@@ -965,8 +969,97 @@ function _chuvaResumo() {
     };
   }).sort((a,b) => String(a.fazenda).localeCompare(String(b.fazenda),'pt'));
 }
+// Status de atenção por talhão: pendências atrasadas × pendentes × em dia.
+function _statusTalhoes() {
+  const hj = hoje();
+  const faz = fazendaFiltro();
+  const map = {};
+  const ensure = id => (map[id] = map[id] || { overdue:[], pend:[], atividade:0 });
+  planosAdubacao.forEach(plano => {
+    if (!Array.isArray(plano.aplicacoes) || !plano.talhaoId) return;
+    const t = talhoes.find(x => x.id === plano.talhaoId);
+    if (faz && (!t || t.fazenda !== faz)) return;
+    plano.aplicacoes.forEach(ap => {
+      const o = ensure(plano.talhaoId);
+      if (ap.feito) { o.atividade++; return; }
+      const dp = _dataPlanejadaAp(plano, ap);
+      if (dp && dp < hj) o.overdue.push({ tipo:'Adubação', data:dp, det: ap.modo||'' });
+      else if (dp) o.pend.push({ tipo:'Adubação', data:dp, det: ap.modo||'' });
+    });
+  });
+  pulverizacoes.forEach(p => {
+    if (!p.talhaoId) return;
+    if (faz && p.fazenda !== faz) return;
+    const o = ensure(p.talhaoId);
+    if (p.realizada) { o.atividade++; return; }
+    const d = p.data;
+    const pragas = getPragasPulv(p).join(', ');
+    if (d && d < hj) o.overdue.push({ tipo:'Pulverização', data:d, det:pragas });
+    else o.pend.push({ tipo:'Pulverização', data:d||'', det:pragas });
+  });
+  drenchPrevencao.forEach(dr => {
+    if (!dr.talhaoId) return;
+    if (faz && dr.fazenda !== faz) return;
+    const o = ensure(dr.talhaoId);
+    if ((dr.status||'pendente') === 'realizado') { o.atividade++; return; }
+    const d = dr.data;
+    const alvos = (Array.isArray(dr.alvoPrevencao) ? dr.alvoPrevencao : (dr.alvoPrevencao ? [dr.alvoPrevencao] : [])).filter(Boolean).join(', ');
+    if (d && d < hj) o.overdue.push({ tipo:'Drench', data:d, det:alvos });
+    else o.pend.push({ tipo:'Drench', data:d||'', det:alvos });
+  });
+  return map;
+}
+function _statusCor(info) {
+  if (!info) return '#94a3b8';
+  if (info.overdue.length) return '#dc2626';
+  if (info.pend.length) return '#f59e0b';
+  if (info.atividade > 0) return '#16a34a';
+  return '#94a3b8';
+}
+function _desenharGeralMapa(statusMap) {
+  if (typeof L === 'undefined') return;
+  const el = document.getElementById('geralMap'); if (!el) return;
+  const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _geralMap = map;
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
+  const bounds = [];
+  talhoesFiltrados().forEach(t => {
+    if (!t.coordenadas || t.coordenadas.length < 3) return;
+    const ll = norm(t.coordenadas); bounds.push(...ll);
+    const info = statusMap[t.id];
+    const c = _statusCor(info);
+    const nO = info ? info.overdue.length : 0, nP = info ? info.pend.length : 0;
+    const poly = L.polygon(ll, { color:'#fff', weight:1.5, fillColor:c, fillOpacity:.72 }).addTo(map);
+    const resumo = nO ? `${nO} atrasada(s)` : nP ? `${nP} pendente(s)` : (info && info.atividade>0 ? 'em dia' : 'sem dados');
+    poly.bindTooltip(`<b>${escHtml(t.nome||t.id)}</b><br>${resumo}`, { sticky:true });
+    poly.on('click', () => _geralMostrarTalhao(t, info));
+  });
+  if (bounds.length) { try { map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); } catch(e){} }
+  setTimeout(() => map.invalidateSize(), 200);
+}
+function _geralMostrarTalhao(t, info) {
+  const box = document.getElementById('geralStatusDetalhe'); if (!box) return;
+  const itens = [...(info?.overdue||[]).map(x=>({...x, atr:true})), ...(info?.pend||[]).map(x=>({...x, atr:false}))]
+    .sort((a,b) => String(a.data||'').localeCompare(String(b.data||'')));
+  const icoTipo = { 'Adubação':'🧪', 'Pulverização':'💧', 'Drench':'🌱' };
+  box.style.display = '';
+  box.innerHTML = `<div class="secao-tit" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span>📍 ${escHtml(t.nome||t.id)} <span style="font-weight:400;color:var(--c);font-size:.8rem;">· ${escHtml(t.fazenda||'')}</span></span>
+      <button class="nutri-view-btn" onclick="document.getElementById('geralStatusDetalhe').style.display='none'">✕</button>
+    </div>
+    ${itens.length ? `<div class="secao-sub">Pendências neste talhão (atrasadas primeiro):</div>
+      <div class="pulv-hist">${itens.map(x => `<div class="pulv-hist-item" style="border-left-color:${x.atr?'#dc2626':'#f59e0b'};">
+        <div class="phi-data" style="color:${x.atr?'#dc2626':'#d97706'};">${x.atr?'⚠️':'📅'} ${x.data?formatarData(x.data):'—'}</div>
+        <div class="phi-corpo">
+          <div class="phi-linha"><span class="praga-prod-chip">${icoTipo[x.tipo]||'•'} ${escHtml(x.tipo)}${x.atr?' · atrasada':''}</span>${x.det?`<span style="font-size:.75rem;color:var(--c);">${escHtml(x.det)}</span>`:''}</div>
+        </div>
+      </div>`).join('')}</div>`
+    : `<div class="secao-sub">✅ Sem pendências — talhão em dia${info&&info.atividade>0?'':' (ou sem registros no período)'}.</div>`}`;
+  box.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
 function renderGeral() {
   const cont = document.getElementById('tabContent');
+  if (_geralMap) { try { _geralMap.remove(); } catch(e){} _geralMap = null; }
   const {inicio, fim, label: lblPeriodo} = periodoFiltro();
   const faz = fazendaFiltro();
   const talhFil = talhoesFiltrados();
@@ -998,6 +1091,9 @@ function renderGeral() {
   const talhoesSemArea = talhFil.filter(t => !parseDose(t.area)).length;
   // Estoque em alerta (acabando / negativo)
   const estCrit = _estoqueCritico();
+  // Status por talhão (para o mini-mapa de atenção)
+  const statusMap = _statusTalhoes();
+  const temMapa = talhFil.some(t => t.coordenadas && t.coordenadas.length >= 3);
   // Tendência vs período anterior
   const metAtual = _metricasJanela(inicio, fim, faz);
   const janAnt = (inicio > '2000-01-01') ? _janelaAnterior(inicio, fim) : null;
@@ -1087,6 +1183,15 @@ function renderGeral() {
       </div>
     </div>`;
   }
+  // ── Mini-mapa de atenção (talhões coloridos por pendência) ──
+  if (temMapa) {
+    html += `<div class="secao" style="margin-top:12px;">
+      <div class="secao-tit">🗺️ Mapa de atenção</div>
+      <div class="secao-sub">Talhões por situação · toque para ver as pendências. <span class="map-leg"><span class="ml-dot" style="background:#dc2626;"></span>atrasado <span class="ml-dot" style="background:#f59e0b;"></span>pendente <span class="ml-dot" style="background:#16a34a;"></span>em dia <span class="ml-dot" style="background:#94a3b8;"></span>sem dados</span></div>
+      <div id="geralMap" style="height:min(56vh,420px);border-radius:12px;overflow:hidden;"></div>
+      <div id="geralStatusDetalhe" class="secao" style="display:none;margin-top:10px;box-shadow:none;padding:12px 0 0;"></div>
+    </div>`;
+  }
   // Gráfico de barras por fazenda (só se filtro = todas)
   if (!faz && fazendas.length > 1) {
     const dadosGraf = fazendas.map(f => {
@@ -1174,6 +1279,7 @@ function renderGeral() {
     Filtros: ${escHtml(lblPeriodo)}${faz?' · '+escHtml(faz):' · todas as fazendas'}
   </div>`;
   cont.innerHTML = html;
+  if (temMapa) requestAnimationFrame(() => _desenharGeralMapa(statusMap));
 }
 
 // Helpers do Geral
