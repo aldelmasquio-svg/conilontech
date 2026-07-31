@@ -370,6 +370,8 @@ let pulvFiltroTalhao = '';
 let pulvFiltroPraga = '';
 let pulvView = 'resumo';        // 'resumo' | 'mapa'
 let _pulvMap = null;            // instância Leaflet do mapa de pulverizações
+let adubView = 'resumo';        // 'resumo' | 'mapa' (aba Adubação)
+let _adubMap = null;            // instância Leaflet do mapa de adubações
 
 // Filtros da aba "Compras" (relatório de compras planejadas)
 let compraTalhaoId = '';
@@ -1104,6 +1106,7 @@ function getPragasPulv(p) {
 window.setPulvFiltroTalhao = function(v) { pulvFiltroTalhao = v; renderTab(); };
 window.setPulvFiltroPraga  = function(v) { pulvFiltroPraga  = v; renderTab(); };
 window.setPulvView         = function(v) { pulvView = v; renderTab(); };
+window.setAdubView         = function(v) { adubView = v; renderTab(); };
 
 function renderPulverizacoes() {
   const cont = document.getElementById('tabContent');
@@ -1733,11 +1736,20 @@ function renderEstoque() {
 // ════════════════════════════════════════════════════
 function renderAdubacao() {
   const cont = document.getElementById('tabContent');
+  if (_adubMap) { try { _adubMap.remove(); } catch(e){} _adubMap = null; }
   const faz = fazendaFiltro();
+  // Seletor de visualização: Resumo (dashboard) × Mapa (talhões clicáveis → histórico)
+  const viewToggle = `<div class="secao" style="padding:10px 14px;">
+    <div class="nutri-views">
+      <button class="nutri-view-btn ${adubView==='resumo'?'on':''}" onclick="window.setAdubView('resumo')">📋 Resumo</button>
+      <button class="nutri-view-btn ${adubView==='mapa'?'on':''}" onclick="window.setAdubView('mapa')">🗺️ Mapa</button>
+    </div>
+  </div>`;
+  if (adubView === 'mapa') { renderAdubMapa(viewToggle); return; }
   const planosFil = filtrarPlanos();
   // Verifica se há planos
   if (!planosFil.length) {
-    cont.innerHTML = `<div class="vazio"><div class="ico">🧪</div><p>Nenhum plano de adubação no período selecionado.<br><span style="font-size:.78rem;">Verifique o filtro ou cadastre planos no módulo de Adubações.</span></p></div>`;
+    cont.innerHTML = viewToggle + `<div class="vazio"><div class="ico">🧪</div><p>Nenhum plano de adubação no período selecionado.<br><span style="font-size:.78rem;">Verifique o filtro ou cadastre planos no módulo de Adubações.</span></p></div>`;
     return;
   }
   // KPIs
@@ -1748,7 +1760,7 @@ function renderAdubacao() {
   const pctExec = totalPlanos > 0 ? (totalExecutados / totalPlanos * 100) : 0;
   const atrasados = calcAdubacoesAtrasadas();
   const haAdubado = calcHaAdubado(planosFil);
-  let html = `<div class="kpi-grid">
+  let html = viewToggle + `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Planos no período</div><div class="kpi-value">${totalPlanos}</div><div class="kpi-aux">planos cadastrados</div></div>
     <div class="kpi-card ok"><div class="kpi-label">Executados</div><div class="kpi-value">${totalExecutados}</div><div class="kpi-aux">${fmt(pctExec,0)}% do previsto</div></div>
     <div class="kpi-card ${atrasados>0?'danger':''}"><div class="kpi-label">Atrasados</div><div class="kpi-value">${atrasados}</div><div class="kpi-aux">passou data prevista</div></div>
@@ -1821,6 +1833,95 @@ function renderAdubacao() {
     }
   }
   cont.innerHTML = html;
+}
+
+// ── MAPA de adubações (talhões clicáveis → histórico "quais e quando") ──
+// Usa aplicações CONFIRMADAS (ap.feito), data = ap.dataFeito (fallback data planejada),
+// dentro do período do filtro. Mesmo método confiável usado na aba Nutrientes.
+function _adubAgrupaPorTalhao() {
+  const { inicio, fim } = periodoFiltro();
+  const faz = fazendaFiltro();
+  const porTal = {};
+  planosAdubacao.forEach(plano => {
+    if (!Array.isArray(plano.aplicacoes) || !plano.aplicacoes.length) return;
+    const t = talhoes.find(x => x.id === plano.talhaoId);
+    if (faz && (!t || t.fazenda !== faz)) return;
+    plano.aplicacoes.forEach(ap => {
+      if (!ap.feito) return;
+      const data = ap.dataFeito || _dataPlanejadaAp(plano, ap) || '';
+      if (data && (data < inicio || data > fim)) return; // fora do período selecionado
+      const produtos = (ap.produtos||[]).map(x=>({nome:x.produto, dose:x.dose, un:x.unidade})).filter(x=>x.nome);
+      const ev = { data, modo: ap.modo||'', fase: ap.fase||'', mesAno: plano.mesAno||'', semana: ap.semana||'', produtos };
+      const tid = plano.talhaoId;
+      if (!porTal[tid]) porTal[tid] = { qtd:0, ultima:'', eventos:[] };
+      porTal[tid].eventos.push(ev);
+      porTal[tid].qtd++;
+      if (data > porTal[tid].ultima) porTal[tid].ultima = data;
+    });
+  });
+  return porTal;
+}
+function renderAdubMapa(topo) {
+  const cont = document.getElementById('tabContent');
+  const porTal = _adubAgrupaPorTalhao();
+  const semGeo = Object.keys(porTal).filter(id => { const t = talhoes.find(x=>x.id===id); return !t || !t.coordenadas || t.coordenadas.length < 3; }).length;
+  cont.innerHTML = topo + `
+    <div class="secao" style="padding-bottom:6px;">
+      <div class="secao-tit">🗺️ Mapa de adubações</div>
+      <div class="secao-sub">Cor por <b>nº de adubações confirmadas</b> no período · toque num talhão para ver <b>quais</b> adubações e <b>quando</b> foram feitas.${semGeo?` <span style="color:#d97706;">⚠️ ${semGeo} talhão(ões) adubado(s) sem polígono cadastrado no mapa.</span>`:''}</div>
+    </div>
+    <div id="adubMapWrap" style="position:relative;">
+      <div id="adubMap" style="height:min(60vh,460px);border-radius:12px;overflow:hidden;"></div>
+      <div id="adubMapLegenda" class="nutri-legenda"></div>
+    </div>
+    <div id="adubTalhaoDetalhe" class="secao" style="display:none;"></div>`;
+  requestAnimationFrame(() => _desenharAdubMapa(porTal));
+}
+function _desenharAdubMapa(porTal) {
+  if (typeof L === 'undefined') return;
+  const el = document.getElementById('adubMap'); if (!el) return;
+  const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _adubMap = map;
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
+  const max = Math.max(1, ...Object.values(porTal).map(v=>v.qtd));
+  const cor = q => { if (q<=0) return '#94a3b8'; const r=Math.min(1,q/max); const c1=[187,247,208], c2=[21,101,52]; const mix=c1.map((c,i)=>Math.round(c+(c2[i]-c)*r)); return `rgb(${mix[0]},${mix[1]},${mix[2]})`; };
+  const bounds = [];
+  talhoesFiltrados().forEach(t => {
+    if (!t.coordenadas || t.coordenadas.length < 3) return;
+    const ll = norm(t.coordenadas); bounds.push(...ll);
+    const info = porTal[t.id] || { qtd:0, ultima:'', eventos:[] };
+    const q = info.qtd;
+    const poly = L.polygon(ll, { color:'#fff', weight:1.5, fillColor:cor(q), fillOpacity:q>0?.8:.3 }).addTo(map);
+    const ultimaTxt = info.ultima ? formatarData(info.ultima) : '—';
+    poly.bindTooltip(`<b>${escHtml(t.nome||t.id)}</b><br>${q>0?`${q} adubaç${q>1?'ões':'ão'} · última ${ultimaTxt}`:'sem adubação no período'}`, { sticky:true });
+    poly.on('click', () => _adubMostrarTalhao(t, info));
+  });
+  if (bounds.length) { try { map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); } catch(e){} }
+  setTimeout(() => map.invalidateSize(), 200);
+  const leg = document.getElementById('adubMapLegenda');
+  if (leg) leg.innerHTML = `<div class="nl-tit">Nº de adubações</div>
+    <div style="width:120px;height:9px;border-radius:4px;background:linear-gradient(90deg,#bbf7d0,#15803d);"></div>
+    <div class="nl-esc"><span>1</span><span>${max}</span></div>
+    <div class="nl-row"><span class="nl-dot" style="background:#94a3b8;"></span>sem adubação</div>`;
+}
+function _adubMostrarTalhao(t, info) {
+  const box = document.getElementById('adubTalhaoDetalhe'); if (!box) return;
+  const area = parseDose(t.area);
+  const evs = (info.eventos||[]).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  box.style.display = '';
+  box.innerHTML = `<div class="secao-tit" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span>🧪 ${escHtml(t.nome||t.id)} <span style="font-weight:400;color:var(--c);font-size:.8rem;">· ${escHtml(t.fazenda||'')}${area>0?' · '+fmt(area,1)+' ha':''}</span></span>
+      <button class="nutri-view-btn" onclick="document.getElementById('adubTalhaoDetalhe').style.display='none'">✕</button>
+    </div>
+    <div class="secao-sub">${info.qtd>0?`${info.qtd} adubaç${info.qtd>1?'ões':'ão'} confirmada${info.qtd>1?'s':''} no período — mais recente primeiro`:'Nenhuma adubação confirmada neste talhão no período selecionado.'}</div>
+    ${evs.length ? `<div class="pulv-hist">${evs.map(e => `<div class="pulv-hist-item" style="border-left-color:#16a34a;">
+        <div class="phi-data" style="color:#15803d;">📅 ${e.data?formatarData(e.data):'—'}</div>
+        <div class="phi-corpo">
+          ${(e.modo||e.mesAno)?`<div class="phi-modo">${e.modo?`⚙️ ${escHtml(e.modo)}`:''}${e.modo&&e.fase?' · ':''}${e.fase?escHtml(e.fase):''}${(e.modo||e.fase)&&e.mesAno?' · ':''}${e.mesAno?`🗓️ ${escHtml(e.mesAno)}${e.semana?' · '+escHtml(String(e.semana)):''}`:''}</div>`:''}
+          ${e.produtos&&e.produtos.length?`<div class="phi-linha">${e.produtos.map(pr=>`<span class="praga-prod-chip" style="color:#166534;">🧪 ${escHtml(pr.nome)}${pr.dose?` · ${escHtml(String(pr.dose))} ${escHtml(pr.un||'')}/ha`:''}</span>`).join('')}</div>`:'<div class="phi-modo" style="color:var(--c);">sem produtos detalhados</div>'}
+        </div>
+      </div>`).join('')}</div>` : ''}`;
+  box.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
 // ════════════════════════════════════════════════════
