@@ -68,12 +68,12 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .banner-aviso strong{display:block;margin-bottom:3px;font-family:'Barlow Condensed',sans-serif;font-size:.88rem;letter-spacing:.02em;}
 
 /* KPI CARDS */
-.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
-@media(min-width:700px){.kpi-grid{grid-template-columns:repeat(4,1fr);}}
-.kpi-card{background:white;border-radius:var(--rad);padding:12px 14px;box-shadow:var(--s);display:flex;flex-direction:column;gap:3px;}
-.kpi-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);}
-.kpi-value{font-family:'DM Mono',monospace;font-weight:700;font-size:1.45rem;color:var(--ve);line-height:1.1;}
-.kpi-aux{font-size:.7rem;color:var(--c);margin-top:2px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;}
+@media(min-width:640px){.kpi-grid{grid-template-columns:repeat(4,1fr);}}
+.kpi-card{background:white;border-radius:var(--rad);padding:9px 11px;box-shadow:var(--s);display:flex;flex-direction:column;gap:1px;}
+.kpi-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.63rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);}
+.kpi-value{font-family:'DM Mono',monospace;font-weight:700;font-size:1.22rem;color:var(--ve);line-height:1.15;}
+.kpi-aux{font-size:.66rem;color:var(--c);margin-top:1px;}
 .kpi-card.alerta .kpi-value{color:var(--warn);}
 .kpi-card.danger .kpi-value{color:var(--danger);}
 .kpi-card.ok .kpi-value{color:var(--ok);}
@@ -84,13 +84,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .kpi-card.clk::after{content:'›';position:absolute;top:9px;right:12px;color:#cbd5e1;font-size:1.1rem;font-weight:700;line-height:1;}
 
 /* AÇÕES PENDENTES */
-.acao-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fffdf5;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;cursor:pointer;font-family:'Barlow',sans-serif;transition:background .12s;}
+.acoes-grid{display:grid;grid-template-columns:1fr;gap:6px;}
+@media(min-width:560px){.acoes-grid{grid-template-columns:1fr 1fr;}}
+.acao-row{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:#fffdf5;border:1px solid #fde68a;border-radius:9px;padding:8px 11px;cursor:pointer;font-family:'Barlow',sans-serif;transition:background .12s;}
 .acao-row:hover{background:#fef9e7;}
 .acao-row.danger{background:#fef2f2;border-color:#fecaca;}
-.acao-ico{font-size:1.1rem;flex-shrink:0;}
-.acao-txt{flex:1;font-size:.82rem;color:#374151;}
+.acao-ico{font-size:1.05rem;flex-shrink:0;}
+.acao-txt{flex:1;font-size:.79rem;color:#374151;line-height:1.25;}
 .acao-txt strong{color:var(--ve);font-family:'DM Mono',monospace;}
-.acao-chev{color:var(--c);font-size:1.25rem;font-weight:700;line-height:1;}
+.acao-chev{color:var(--c);font-size:1.2rem;font-weight:700;line-height:1;}
+/* Progresso: 2 colunas em telas largas */
+@media(min-width:560px){.prog-safra-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;}.prog-safra-row{margin-top:4px;}}
 /* Progresso da safra */
 .prog-safra-row{margin-top:11px;}
 .prog-safra-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
@@ -1114,7 +1118,7 @@ function renderGeral() {
   if (acoes.length) {
     html += `<div class="secao" style="margin-bottom:12px;">
       <div class="secao-tit">⚡ Ações pendentes</div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
+      <div class="acoes-grid">
         ${acoes.map(a => {
           const nav = a.href ? `location.href='${a.href}'` : `abrirTab('${a.tab}')`;
           return `<button onclick="${nav}" class="acao-row${a.danger?' danger':''}">
@@ -1131,9 +1135,11 @@ function renderGeral() {
   if (prog.ad.total || prog.pv.total) {
     html += `<div class="secao" style="margin-bottom:12px;">
       <div class="secao-tit">🎯 Progresso da safra</div>
-      <div class="secao-sub">Aplicações confirmadas · barra verde/laranja = feito · marca ▲ = previsto até hoje.</div>
-      ${_barraProgresso('🧪','Adubação', prog.ad.feito, prog.ad.total, prog.ad.prevHoje)}
-      ${_barraProgresso('💧','Pulverização', prog.pv.feito, prog.pv.total, prog.pv.prevHoje)}
+      <div class="secao-sub">Aplicações confirmadas · barra = feito · marca ▲ = previsto até hoje.</div>
+      <div class="prog-safra-grid">
+        ${_barraProgresso('🧪','Adubação', prog.ad.feito, prog.ad.total, prog.ad.prevHoje)}
+        ${_barraProgresso('💧','Pulverização', prog.pv.feito, prog.pv.total, prog.pv.prevHoje)}
+      </div>
     </div>`;
   }
   html += `<div class="kpi-grid">
@@ -1164,22 +1170,24 @@ function renderGeral() {
       </div>
     </div>`;
   }
-  // ── Estoque em alerta (acabando / negativo) ──
-  if (estCrit.acabando.length || estCrit.negativos.length) {
-    const linha = (p, tipo) => `<button class="feed-item" onclick="abrirTab('estoque')">
-      <span class="feed-ico" style="background:${tipo==='neg'?'#fee2e2':'#fef3c7'};color:${tipo==='neg'?'#dc2626':'#d97706'};">${tipo==='neg'?'🚫':'📦'}</span>
-      <span class="feed-corpo">
-        <span class="feed-tit">${escHtml(p.nome||'—')}</span>
-        <span class="feed-sub">${tipo==='neg'?'saldo negativo — revisar movimentações':`acaba em ~${p.dias} dia${p.dias!==1?'s':''} no ritmo atual`}</span>
-      </span>
-      <span class="feed-data" style="color:${tipo==='neg'?'#dc2626':'#d97706'};font-weight:700;">${fmt(p.saldo,2)} ${escHtml(p.unidade||'')}</span>
-    </button>`;
+  // ── Estoque acabando (só os acionáveis; negativos ficam no contador das Ações) ──
+  if (estCrit.acabando.length) {
+    const CAP = 6;
+    const mostrar = estCrit.acabando.slice(0, CAP);
+    const resto = estCrit.acabando.length - mostrar.length;
     html += `<div class="secao" style="margin-top:12px;">
-      <div class="secao-tit">📦 Estoque em alerta</div>
-      <div class="secao-sub">Saldo negativo (revisar) ou acabando em menos de 30 dias, com base no consumo do período.</div>
+      <div class="secao-tit">📦 Estoque acabando</div>
+      <div class="secao-sub">Deve acabar em menos de 30 dias, no ritmo de consumo do período.${estCrit.negativos.length?` Saldos negativos (${estCrit.negativos.length}) ficam nas Ações pendentes acima.`:''}</div>
       <div class="feed-lista">
-        ${estCrit.negativos.map(p => linha(p,'neg')).join('')}
-        ${estCrit.acabando.slice(0,8).map(p => linha(p,'aca')).join('')}
+        ${mostrar.map(p => `<button class="feed-item" onclick="abrirTab('estoque')">
+          <span class="feed-ico" style="background:#fef3c7;color:#d97706;">📦</span>
+          <span class="feed-corpo">
+            <span class="feed-tit">${escHtml(p.nome||'—')}</span>
+            <span class="feed-sub">acaba em ~${p.dias} dia${p.dias!==1?'s':''} no ritmo atual</span>
+          </span>
+          <span class="feed-data" style="color:#d97706;font-weight:700;">${fmt(p.saldo,2)} ${escHtml(p.unidade||'')}</span>
+        </button>`).join('')}
+        ${resto>0?`<button class="feed-item" onclick="abrirTab('estoque')" style="justify-content:center;color:var(--c);font-weight:700;font-size:.8rem;">+ ${resto} outro(s) acabando — ver no Estoque ›</button>`:''}
       </div>
     </div>`;
   }
