@@ -106,6 +106,14 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .praga-n{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.25rem;color:var(--ve);line-height:1;}
 .praga-prods{display:flex;flex-wrap:wrap;gap:5px;}
 .praga-prod-chip{background:white;border:1px solid var(--cb);border-radius:20px;padding:3px 9px;font-size:.7rem;font-weight:600;color:#6b21a8;}
+/* Detalhe do mapa de pulverizações: histórico por talhão */
+.pulv-hist{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
+.pulv-hist-item{display:flex;gap:11px;background:#f8fafc;border:1px solid var(--cb);border-left:3px solid #2563eb;border-radius:9px;padding:9px 11px;}
+.phi-data{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:700;color:#1e40af;white-space:nowrap;flex-shrink:0;padding-top:1px;}
+.phi-corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;}
+.phi-linha{display:flex;flex-wrap:wrap;gap:5px;}
+.phi-modo{font-size:.72rem;color:var(--c);}
+.phi-obs{font-size:.74rem;color:var(--ts);font-style:italic;}
 
 /* LISTAS RANKING */
 .rank-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--cl);}
@@ -360,6 +368,8 @@ let configAdubacao = {}; // período da safra (mesInicio/anoInicio/mesFim/anoFim
 // Filtros da aba "Pulverizações" (detalhe interno)
 let pulvFiltroTalhao = '';
 let pulvFiltroPraga = '';
+let pulvView = 'resumo';        // 'resumo' | 'mapa'
+let _pulvMap = null;            // instância Leaflet do mapa de pulverizações
 
 // Filtros da aba "Compras" (relatório de compras planejadas)
 let compraTalhaoId = '';
@@ -1093,9 +1103,11 @@ function getPragasPulv(p) {
 
 window.setPulvFiltroTalhao = function(v) { pulvFiltroTalhao = v; renderTab(); };
 window.setPulvFiltroPraga  = function(v) { pulvFiltroPraga  = v; renderTab(); };
+window.setPulvView         = function(v) { pulvView = v; renderTab(); };
 
 function renderPulverizacoes() {
   const cont = document.getElementById('tabContent');
+  if (_pulvMap) { try { _pulvMap.remove(); } catch(e){} _pulvMap = null; }
   const faz = fazendaFiltro();
   const pulvTodas = pulverizacoesFiltradas().filter(p => p.realizada);
 
@@ -1131,14 +1143,25 @@ function renderPulverizacoes() {
     </div>` : ''}
   </div>` : '';
 
+  // Seletor de visualização: Resumo (dashboard) × Mapa (talhões clicáveis)
+  const viewToggle = `<div class="secao" style="padding:10px 14px;">
+    <div class="nutri-views">
+      <button class="nutri-view-btn ${pulvView==='resumo'?'on':''}" onclick="window.setPulvView('resumo')">📋 Resumo</button>
+      <button class="nutri-view-btn ${pulvView==='mapa'?'on':''}" onclick="window.setPulvView('mapa')">🗺️ Mapa</button>
+    </div>
+  </div>`;
+  const topo = viewToggle + barraFiltros;
+
   if (!pulvTodas.length) {
-    cont.innerHTML = barraFiltros + `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização realizada no período selecionado.<br><span style="font-size:.78rem;">Ajuste o filtro de período ou aguarde aplicações serem confirmadas.</span></p></div>`;
+    cont.innerHTML = topo + `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização realizada no período selecionado.<br><span style="font-size:.78rem;">Ajuste o filtro de período ou aguarde aplicações serem confirmadas.</span></p></div>`;
     return;
   }
   if (!pulvFil.length) {
-    cont.innerHTML = barraFiltros + `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização encontrada com os filtros selecionados.</p></div>`;
+    cont.innerHTML = topo + `<div class="vazio"><div class="ico">💧</div><p>Nenhuma pulverização encontrada com os filtros selecionados.</p></div>`;
     return;
   }
+  // Visão MAPA: talhões coloridos por nº de pulverizações, clicáveis → histórico
+  if (pulvView === 'mapa') { renderPulvMapa(pulvFil, topo); return; }
   // KPIs
   const totalPulv = pulvFil.length;
   const haPulv = pulvFil.reduce((s,p)=>{
@@ -1162,7 +1185,7 @@ function renderPulverizacoes() {
       }
     });
   });
-  let html = barraFiltros + `<div class="kpi-grid">
+  let html = topo + `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Pulverizações</div><div class="kpi-value">${totalPulv}</div><div class="kpi-aux">realizadas no período</div></div>
     <div class="kpi-card ok"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">soma das áreas</div></div>
     <div class="kpi-card info"><div class="kpi-label">Cobertura</div><div class="kpi-value">${fmt(cobertura,0)}%</div><div class="kpi-aux">${talhComPulv.size} de ${talhFil.length} talhões</div></div>
@@ -1429,6 +1452,105 @@ function renderPulverizacoes() {
   }
 
   cont.innerHTML = html;
+}
+
+// ── MAPA de pulverizações (talhões clicáveis → histórico "quais e quando") ──
+// Agrupa por talhão, expandindo cada aplicação (parcial) num evento datado.
+function _pulvAgrupaPorTalhao(pulvFil) {
+  const porTal = {};
+  pulvFil.forEach(p => {
+    if (!p.talhaoId) return;
+    const pragas = getPragasPulv(p);
+    const eventos = [];
+    if (Array.isArray(p.aplicacoes) && p.aplicacoes.length) {
+      p.aplicacoes.forEach(a => eventos.push({
+        data: a.data || p.dataRealizada || p.data || '',
+        modo: p.modoAplicacao || '',
+        pragas,
+        produtos: (a.produtos||[]).map(x=>({nome:x.produto, dose:x.dose, un:x.unidade})).filter(x=>x.nome),
+        obs: a.observacao || ''
+      }));
+    } else {
+      eventos.push({
+        data: p.dataRealizada || p.data || '',
+        modo: p.modoAplicacao || '',
+        pragas,
+        produtos: (p.produtosUsados||[]).map(x=>({nome:x.produto, dose:x.dose, un:x.unidade})).filter(x=>x.nome),
+        obs: p.obsRealizacao || p.observacoes || ''
+      });
+    }
+    if (!porTal[p.talhaoId]) porTal[p.talhaoId] = { qtd:0, ultima:'', eventos:[] };
+    eventos.forEach(e => {
+      porTal[p.talhaoId].eventos.push(e);
+      porTal[p.talhaoId].qtd++;
+      if (e.data > porTal[p.talhaoId].ultima) porTal[p.talhaoId].ultima = e.data;
+    });
+  });
+  return porTal;
+}
+function renderPulvMapa(pulvFil, topo) {
+  const cont = document.getElementById('tabContent');
+  const porTal = _pulvAgrupaPorTalhao(pulvFil);
+  const semGeo = Object.keys(porTal).filter(id => { const t = talhoes.find(x=>x.id===id); return !t || !t.coordenadas || t.coordenadas.length < 3; }).length;
+  cont.innerHTML = topo + `
+    <div class="secao" style="padding-bottom:6px;">
+      <div class="secao-tit">🗺️ Mapa de pulverizações</div>
+      <div class="secao-sub">Cor por <b>nº de aplicações</b> no período · toque num talhão para ver <b>quais</b> pulverizações e <b>quando</b> foram feitas.${semGeo?` <span style="color:#d97706;">⚠️ ${semGeo} talhão(ões) pulverizado(s) sem polígono cadastrado no mapa.</span>`:''}</div>
+    </div>
+    <div id="pulvMapWrap" style="position:relative;">
+      <div id="pulvMap" style="height:min(60vh,460px);border-radius:12px;overflow:hidden;"></div>
+      <div id="pulvMapLegenda" class="nutri-legenda"></div>
+    </div>
+    <div id="pulvTalhaoDetalhe" class="secao" style="display:none;"></div>`;
+  requestAnimationFrame(() => _desenharPulvMapa(porTal));
+}
+function _desenharPulvMapa(porTal) {
+  if (typeof L === 'undefined') return;
+  const el = document.getElementById('pulvMap'); if (!el) return;
+  const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _pulvMap = map;
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
+  const max = Math.max(1, ...Object.values(porTal).map(v=>v.qtd));
+  const cor = q => { if (q<=0) return '#94a3b8'; const r=Math.min(1,q/max); const c1=[191,219,254], c2=[30,64,175]; const mix=c1.map((c,i)=>Math.round(c+(c2[i]-c)*r)); return `rgb(${mix[0]},${mix[1]},${mix[2]})`; };
+  const bounds = [];
+  talhoesFiltrados().forEach(t => {
+    if (!t.coordenadas || t.coordenadas.length < 3) return;
+    const ll = norm(t.coordenadas); bounds.push(...ll);
+    const info = porTal[t.id] || { qtd:0, ultima:'', eventos:[] };
+    const q = info.qtd;
+    const poly = L.polygon(ll, { color:'#fff', weight:1.5, fillColor:cor(q), fillOpacity:q>0?.8:.3 }).addTo(map);
+    const ultimaTxt = info.ultima ? formatarData(info.ultima) : '—';
+    poly.bindTooltip(`<b>${escHtml(t.nome||t.id)}</b><br>${q>0?`${q} aplicaç${q>1?'ões':'ão'} · última ${ultimaTxt}`:'sem pulverização no período'}`, { sticky:true });
+    poly.on('click', () => _pulvMostrarTalhao(t, info));
+  });
+  if (bounds.length) { try { map.fitBounds(bounds, { padding:[30,30], maxZoom:15 }); } catch(e){} }
+  setTimeout(() => map.invalidateSize(), 200);
+  const leg = document.getElementById('pulvMapLegenda');
+  if (leg) leg.innerHTML = `<div class="nl-tit">Nº de aplicações</div>
+    <div style="width:120px;height:9px;border-radius:4px;background:linear-gradient(90deg,#bfdbfe,#1e40af);"></div>
+    <div class="nl-esc"><span>1</span><span>${max}</span></div>
+    <div class="nl-row"><span class="nl-dot" style="background:#94a3b8;"></span>sem pulverização</div>`;
+}
+function _pulvMostrarTalhao(t, info) {
+  const box = document.getElementById('pulvTalhaoDetalhe'); if (!box) return;
+  const area = parseDose(t.area);
+  const evs = (info.eventos||[]).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  box.style.display = '';
+  box.innerHTML = `<div class="secao-tit" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+      <span>💧 ${escHtml(t.nome||t.id)} <span style="font-weight:400;color:var(--c);font-size:.8rem;">· ${escHtml(t.fazenda||'')}${area>0?' · '+fmt(area,1)+' ha':''}</span></span>
+      <button class="nutri-view-btn" onclick="document.getElementById('pulvTalhaoDetalhe').style.display='none'">✕</button>
+    </div>
+    <div class="secao-sub">${info.qtd>0?`${info.qtd} aplicaç${info.qtd>1?'ões':'ão'} no período — mais recente primeiro`:'Nenhuma pulverização neste talhão no período selecionado.'}</div>
+    ${evs.length ? `<div class="pulv-hist">${evs.map(e => `<div class="pulv-hist-item">
+        <div class="phi-data">📅 ${e.data?formatarData(e.data):'—'}</div>
+        <div class="phi-corpo">
+          ${e.pragas&&e.pragas.length?`<div class="phi-linha">${e.pragas.map(pr=>`<span class="praga-prod-chip" style="background:#ede9fe;color:#6d28d9;border:none;">🐛 ${escHtml(pr)}</span>`).join(' ')}</div>`:''}
+          ${e.produtos&&e.produtos.length?`<div class="phi-linha">${e.produtos.map(pr=>`<span class="praga-prod-chip">🧪 ${escHtml(pr.nome)}${pr.dose?` · ${escHtml(String(pr.dose))} ${escHtml(pr.un||'')}/ha`:''}</span>`).join('')}</div>`:''}
+          ${e.modo?`<div class="phi-modo">⚙️ ${escHtml(e.modo)}</div>`:''}
+          ${e.obs?`<div class="phi-obs">💬 ${escHtml(e.obs)}</div>`:''}
+        </div>
+      </div>`).join('')}</div>` : ''}`;
+  box.scrollIntoView({ behavior:'smooth', block:'nearest' });
 }
 
 // ════════════════════════════════════════════════════
