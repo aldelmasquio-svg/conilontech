@@ -112,6 +112,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .feed-tit{font-size:.82rem;font-weight:700;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .feed-sub{font-size:.72rem;color:var(--c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .feed-data{flex-shrink:0;font-size:.7rem;color:var(--c);font-family:'DM Mono',monospace;white-space:nowrap;}
+.kpi-delta{font-family:'DM Mono',monospace;font-weight:700;font-size:.66rem;padding:1px 5px;border-radius:20px;white-space:nowrap;}
+.kpi-delta.up{background:#dcfce7;color:#16a34a;}
+.kpi-delta.down{background:#fee2e2;color:#dc2626;}
+.kpi-delta.neu{background:var(--cl);color:var(--c);}
 
 /* SEÇÃO */
 .secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
@@ -850,9 +854,78 @@ function _feedAtividades(limite) {
   ev.sort((a,b) => String(b.data).localeCompare(String(a.data)));
   return ev.slice(0, limite||10);
 }
+// Janela imediatamente anterior, com a mesma duração (para comparação de tendência).
+function _janelaAnterior(inicio, fim) {
+  const dIni = new Date(inicio), dFim = new Date(fim);
+  if (isNaN(dIni) || isNaN(dFim)) return null;
+  const durMs = dFim - dIni;
+  const prevFim = new Date(dIni.getTime() - 86400000);
+  const prevIni = new Date(prevFim.getTime() - durMs);
+  return { ini: prevIni.toISOString().slice(0,10), fim: prevFim.toISOString().slice(0,10) };
+}
+// Métricas comparáveis (ha pulverizado, gasto defensivos, gasto adubos) numa janela de datas.
+function _metricasJanela(ini, fim, faz) {
+  const emJan = d => d && d >= ini && d <= fim;
+  let haPulv = 0, gastoDef = 0, gastoAdu = 0;
+  pulverizacoes.forEach(p => {
+    if (!p.realizada) return;
+    if (faz && p.fazenda !== faz) return;
+    if (!emJan(p.dataRealizada || p.data)) return;
+    const t = talhoes.find(x => x.id === p.talhaoId);
+    haPulv += parseDose(t?.area);
+  });
+  movimentacoes.forEach(m => {
+    if (m.tipo !== 'entrada' || !m.precoTotal) return;
+    if (faz && m.fazenda !== faz) return;
+    if (!emJan(m.data || (m.criadoEm||'').slice(0,10))) return;
+    const cat = getCategoriaProduto(m.produtoId).categoria;
+    if (cat === 'defensivo') gastoDef += Number(m.precoTotal)||0;
+    else if (cat === 'adubo_mineral' || cat === 'fertilizante_foliar') gastoAdu += Number(m.precoTotal)||0;
+  });
+  return { haPulv, gastoDef, gastoAdu };
+}
+// Selo de variação vs período anterior. tipo: 'neutro' | 'maisMelhor' | 'menosMelhor'.
+function _deltaBadge(atual, anterior, tipo) {
+  if (anterior <= 0) return '';
+  const pct = Math.round((atual - anterior) / anterior * 100);
+  if (pct === 0) return ` <span class="kpi-delta neu">→ 0%</span>`;
+  const subiu = pct > 0;
+  let cls = 'neu';
+  if (tipo === 'maisMelhor') cls = subiu ? 'up' : 'down';
+  else if (tipo === 'menosMelhor') cls = subiu ? 'down' : 'up';
+  return ` <span class="kpi-delta ${cls}">${subiu?'▲':'▼'} ${Math.abs(pct)}%</span>`;
+}
+// Produtos do estoque em alerta: saldo negativo (erro) ou acabando (<30 dias no ritmo atual).
+function _estoqueCritico() {
+  const faz = fazendaFiltro();
+  const { inicio, fim } = periodoFiltro();
+  const meses = Math.max(1, (new Date(fim) - new Date(inicio)) / (30*86400000));
+  const prods = faz ? produtosEstoque.filter(p => p.fazenda === faz) : produtosEstoque;
+  const consumo = {};
+  movimentacoes.forEach(m => {
+    if (!['saida','aplicacao'].includes(m.tipo)) return;
+    if (faz && m.fazenda !== faz) return;
+    const d = m.data || (m.criadoEm||'').slice(0,10);
+    if (!d || d < inicio || d > fim) return;
+    consumo[m.produtoId] = (consumo[m.produtoId]||0) + (Number(m.quantidade)||0);
+  });
+  const negativos = [], acabando = [];
+  prods.forEach(p => {
+    const saldo = Number(p.saldo)||0;
+    if (saldo < 0) { negativos.push({ nome:p.nome, saldo, unidade:p.unidade }); return; }
+    const cons = consumo[p._docId] || 0;
+    if (saldo > 0 && cons > 0) {
+      const consMes = cons / meses;
+      const dias = Math.round(saldo / consMes * 30);
+      if (dias < 30) acabando.push({ nome:p.nome, saldo, unidade:p.unidade, dias });
+    }
+  });
+  acabando.sort((a,b) => a.dias - b.dias);
+  return { negativos, acabando };
+}
 function renderGeral() {
   const cont = document.getElementById('tabContent');
-  const {label: lblPeriodo} = periodoFiltro();
+  const {inicio, fim, label: lblPeriodo} = periodoFiltro();
   const faz = fazendaFiltro();
   const talhFil = talhoesFiltrados();
   const pulvFil = pulverizacoesFiltradas();
@@ -881,15 +954,24 @@ function renderGeral() {
   const movSemPreco = movimentacoes.filter(m => m.tipo === 'entrada' && !m.precoUnitario && (!faz || m.fazenda === faz)).length;
   const drenchPend = drenchPrevencao.filter(d => (d.status||'pendente') === 'pendente' && (!faz || d.fazenda === faz)).length;
   const talhoesSemArea = talhFil.filter(t => !parseDose(t.area)).length;
+  // Estoque em alerta (acabando / negativo)
+  const estCrit = _estoqueCritico();
+  // Tendência vs período anterior
+  const metAtual = _metricasJanela(inicio, fim, faz);
+  const janAnt = (inicio > '2000-01-01') ? _janelaAnterior(inicio, fim) : null;
+  const metAnt = janAnt ? _metricasJanela(janAnt.ini, janAnt.fim, faz) : null;
+  const delta = (atual, tipo, campo) => metAnt ? _deltaBadge(atual, metAnt[campo], tipo) : '';
   let html = '';
   // ── Painel de Ações Pendentes (consolidado, clicável) ──
   const acoes = [
-    {n: pulvPend,       ico:'💧', txt:'pulverização(ões) pendente(s)',        tab:'pulverizacoes', danger:false},
-    {n: adubAtrasadas,  ico:'🧪', txt:'adubação(ões) atrasada(s)',            tab:'adubacao',      danger:true},
-    {n: drenchPend,     ico:'🌱', txt:'agendamento(s) de drench pendente(s)', tab:'drench',        danger:false},
-    {n: semClassif,     ico:'🏬', txt:'produto(s) do estoque sem categoria',  tab:'estoque',       danger:false},
-    {n: movSemPreco,    ico:'💰', txt:'entrada(s) de estoque sem preço',      tab:'estoque',       danger:false},
-    {n: talhoesSemArea, ico:'📐', txt:'talhão(ões) sem área cadastrada',      href:'mapa.html',    danger:false},
+    {n: pulvPend,             ico:'💧', txt:'pulverização(ões) pendente(s)',        tab:'pulverizacoes', danger:false},
+    {n: adubAtrasadas,        ico:'🧪', txt:'adubação(ões) atrasada(s)',            tab:'adubacao',      danger:true},
+    {n: estCrit.acabando.length, ico:'📦', txt:'produto(s) do estoque acabando (< 30 dias)', tab:'estoque', danger:false},
+    {n: estCrit.negativos.length, ico:'🚫', txt:'produto(s) com saldo negativo',    tab:'estoque',       danger:true},
+    {n: drenchPend,           ico:'🌱', txt:'agendamento(s) de drench pendente(s)', tab:'drench',        danger:false},
+    {n: semClassif,           ico:'🏬', txt:'produto(s) do estoque sem categoria',  tab:'estoque',       danger:false},
+    {n: movSemPreco,          ico:'💰', txt:'entrada(s) de estoque sem preço',      tab:'estoque',       danger:false},
+    {n: talhoesSemArea,       ico:'📐', txt:'talhão(ões) sem área cadastrada',      href:'mapa.html',    danger:false},
   ].filter(a => a.n > 0);
   if (acoes.length) {
     html += `<div class="secao" style="margin-bottom:12px;">
@@ -919,13 +1001,32 @@ function renderGeral() {
   html += `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Área gerenciada</div><div class="kpi-value">${fmt(areaTotal,1)}</div><div class="kpi-aux">hectares ${faz?'· '+escHtml(faz):'· '+talhFil.length+' talhões'}</div></div>
     <div class="kpi-card info clk" onclick="abrirTab('produtividade')"><div class="kpi-label">Produção safra atual</div><div class="kpi-value">${fmt(prodSafraAtual,0)}</div><div class="kpi-aux">sacas${mediaScHaFilial>0?' · média '+fmt(mediaScHaFilial,1)+' sc/ha':''}</div></div>
-    <div class="kpi-card ok clk" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">no período</div></div>
+    <div class="kpi-card ok clk" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Hectares pulverizados</div><div class="kpi-value">${fmt(haPulv,1)}</div><div class="kpi-aux">no período${delta(metAtual.haPulv,'neutro','haPulv')}</div></div>
     <div class="kpi-card ok clk" onclick="abrirTab('adubacao')"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">no período</div></div>
-    <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}</div></div>
-    <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ adubos</div><div class="kpi-value">${gastoAdubos>0?fmtRS(gastoAdubos):'—'}</div><div class="kpi-aux">${gastoAdubos>0?'no período':'sem preços cadastrados'}</div></div>
+    <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ defensivos</div><div class="kpi-value">${gastoDefensivos>0?fmtRS(gastoDefensivos):'—'}</div><div class="kpi-aux">${gastoDefensivos>0?'no período (compras)':'sem preços cadastrados'}${gastoDefensivos>0?delta(metAtual.gastoDef,'menosMelhor','gastoDef'):''}</div></div>
+    <div class="kpi-card clk" onclick="abrirTab('estoque')"><div class="kpi-label">Gasto c/ adubos</div><div class="kpi-value">${gastoAdubos>0?fmtRS(gastoAdubos):'—'}</div><div class="kpi-aux">${gastoAdubos>0?'no período':'sem preços cadastrados'}${gastoAdubos>0?delta(metAtual.gastoAdu,'menosMelhor','gastoAdu'):''}</div></div>
     <div class="kpi-card clk ${pulvPend>0?'alerta':''}" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Pulverizações pendentes</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">aguardando aplicação</div></div>
     <div class="kpi-card clk ${adubAtrasadas>0?'danger':''}" onclick="abrirTab('adubacao')"><div class="kpi-label">Adubações atrasadas</div><div class="kpi-value">${adubAtrasadas}</div><div class="kpi-aux">passou da data prevista</div></div>
   </div>`;
+  // ── Estoque em alerta (acabando / negativo) ──
+  if (estCrit.acabando.length || estCrit.negativos.length) {
+    const linha = (p, tipo) => `<button class="feed-item" onclick="abrirTab('estoque')">
+      <span class="feed-ico" style="background:${tipo==='neg'?'#fee2e2':'#fef3c7'};color:${tipo==='neg'?'#dc2626':'#d97706'};">${tipo==='neg'?'🚫':'📦'}</span>
+      <span class="feed-corpo">
+        <span class="feed-tit">${escHtml(p.nome||'—')}</span>
+        <span class="feed-sub">${tipo==='neg'?'saldo negativo — revisar movimentações':`acaba em ~${p.dias} dia${p.dias!==1?'s':''} no ritmo atual`}</span>
+      </span>
+      <span class="feed-data" style="color:${tipo==='neg'?'#dc2626':'#d97706'};font-weight:700;">${fmt(p.saldo,2)} ${escHtml(p.unidade||'')}</span>
+    </button>`;
+    html += `<div class="secao" style="margin-top:12px;">
+      <div class="secao-tit">📦 Estoque em alerta</div>
+      <div class="secao-sub">Saldo negativo (revisar) ou acabando em menos de 30 dias, com base no consumo do período.</div>
+      <div class="feed-lista">
+        ${estCrit.negativos.map(p => linha(p,'neg')).join('')}
+        ${estCrit.acabando.slice(0,8).map(p => linha(p,'aca')).join('')}
+      </div>
+    </div>`;
+  }
   // Gráfico de barras por fazenda (só se filtro = todas)
   if (!faz && fazendas.length > 1) {
     const dadosGraf = fazendas.map(f => {
