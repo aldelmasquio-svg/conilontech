@@ -91,6 +91,27 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .acao-txt{flex:1;font-size:.82rem;color:#374151;}
 .acao-txt strong{color:var(--ve);font-family:'DM Mono',monospace;}
 .acao-chev{color:var(--c);font-size:1.25rem;font-weight:700;line-height:1;}
+/* Progresso da safra */
+.prog-safra-row{margin-top:11px;}
+.prog-safra-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;}
+.prog-safra-nome{font-weight:700;font-size:.86rem;color:#374151;}
+.prog-safra-pct{font-family:'DM Mono',monospace;font-weight:800;font-size:.9rem;color:var(--ve);}
+.prog-safra-track{position:relative;height:14px;background:var(--cl);border-radius:8px;overflow:hidden;}
+.prog-safra-fill{height:100%;border-radius:8px;min-width:2px;transition:width .4s;}
+.prog-safra-marca{position:absolute;top:-2px;bottom:-2px;width:3px;background:#1e3a8a;border-radius:2px;transform:translateX(-1px);box-shadow:0 0 0 1px rgba(255,255,255,.7);}
+.prog-safra-labels{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:.73rem;color:var(--c);}
+.prog-safra-labels b{color:var(--ve);font-family:'DM Mono',monospace;}
+.ps-ok{color:#16a34a;font-weight:700;}
+.ps-atr{color:#d97706;font-weight:700;}
+/* Feed de últimas atividades */
+.feed-lista{display:flex;flex-direction:column;gap:6px;}
+.feed-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#fafafa;border:1px solid var(--cb);border-radius:9px;padding:9px 11px;cursor:pointer;font-family:'Barlow',sans-serif;transition:background .12s;}
+.feed-item:hover{background:#f1f5f9;}
+.feed-ico{flex-shrink:0;width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1rem;}
+.feed-corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.feed-tit{font-size:.82rem;font-weight:700;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.feed-sub{font-size:.72rem;color:var(--c);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.feed-data{flex-shrink:0;font-size:.7rem;color:var(--c);font-family:'DM Mono',monospace;white-space:nowrap;}
 
 /* SEÇÃO */
 .secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
@@ -720,6 +741,115 @@ function renderTab() {
 // ════════════════════════════════════════════════════
 // ABA 1 — GERAL (visão executiva)
 // ════════════════════════════════════════════════════
+// Janela da safra atual (de configAdubacao) em datas ISO; null se não configurada.
+function _safraJanela() {
+  const c = configAdubacao;
+  if (c.anoInicio == null || c.mesInicio == null) return null;
+  const ini = `${c.anoInicio}-${String((c.mesInicio|0)+1).padStart(2,'0')}-01`;
+  const anoF = c.anoFim ?? c.anoInicio, mesF = c.mesFim ?? 11;
+  const ultimoDia = new Date(anoF, (mesF|0)+1, 0).getDate();
+  const fim = `${anoF}-${String((mesF|0)+1).padStart(2,'0')}-${String(ultimoDia).padStart(2,'0')}`;
+  return { ini, fim };
+}
+// Progresso da safra: aplicações confirmadas × previsto até hoje, para adubação e pulverização.
+function _progressoSafra() {
+  const faz = fazendaFiltro();
+  const hj = hoje();
+  const jan = _safraJanela();
+  const dentro = d => !jan || (d && d >= jan.ini && d <= jan.fim);
+  let ad = { total:0, feito:0, prevHoje:0 };
+  planosAdubacao.forEach(plano => {
+    if (!Array.isArray(plano.aplicacoes)) return;
+    const t = talhoes.find(x => x.id === plano.talhaoId);
+    if (faz && (!t || t.fazenda !== faz)) return;
+    plano.aplicacoes.forEach(ap => {
+      const dp = _dataPlanejadaAp(plano, ap);
+      if (!dentro(dp)) return;
+      ad.total++;
+      if (ap.feito) ad.feito++;
+      if (dp && dp <= hj) ad.prevHoje++;
+    });
+  });
+  let pv = { total:0, feito:0, prevHoje:0 };
+  pulverizacoes.forEach(p => {
+    if (faz && p.fazenda !== faz) return;
+    const dp = p.data || p.dataRealizada;
+    if (!dentro(dp)) return;
+    pv.total++;
+    if (p.realizada) pv.feito++;
+    if (dp && dp <= hj) pv.prevHoje++;
+  });
+  return { ad, pv };
+}
+function _barraProgresso(ico, label, feito, total, prevHoje) {
+  if (!total) return '';
+  const pct = Math.round(feito/total*100);
+  const pctPrev = Math.min(100, Math.round((prevHoje/total)*100));
+  const atrasado = feito < prevHoje;
+  const falta = Math.max(0, prevHoje - feito);
+  const cor = atrasado ? '#f59e0b' : '#16a34a';
+  return `<div class="prog-safra-row">
+    <div class="prog-safra-top">
+      <span class="prog-safra-nome">${ico} ${label}</span>
+      <span class="prog-safra-pct">${pct}%</span>
+    </div>
+    <div class="prog-safra-track">
+      <div class="prog-safra-fill" style="width:${pct}%;background:${cor};"></div>
+      ${prevHoje>0?`<div class="prog-safra-marca" style="left:${pctPrev}%;" title="previsto até hoje"></div>`:''}
+    </div>
+    <div class="prog-safra-labels">
+      <span><b>${feito}</b>/${total} feitas</span>
+      ${prevHoje>0?`<span class="${atrasado?'ps-atr':'ps-ok'}">${atrasado?`⚠ faltam ${falta} p/ ficar em dia`:'✓ em dia'}</span>`:''}
+    </div>
+  </div>`;
+}
+function _tempoRelativo(d) {
+  if (!d) return '';
+  const dias = Math.floor((new Date(hoje()) - new Date(d)) / 86400000);
+  if (dias <= 0) return 'hoje';
+  if (dias === 1) return 'ontem';
+  if (dias < 7) return `há ${dias} dias`;
+  if (dias < 30) return `há ${Math.floor(dias/7)} sem`;
+  return formatarData(d).slice(0,5); // DD/MM
+}
+// Feed cronológico de atividades recentes de todos os módulos.
+function _feedAtividades(limite) {
+  const faz = fazendaFiltro();
+  const ev = [];
+  pulverizacoes.forEach(p => {
+    if (!p.realizada) return;
+    if (faz && p.fazenda !== faz) return;
+    const d = p.dataRealizada || p.data; if (!d) return;
+    const pragas = getPragasPulv(p);
+    ev.push({ data:d, ico:'💧', cor:'#2563eb', tab:'pulverizacoes', titulo:`Pulverização · ${p.talhaoNome||p.talhaoId||''}`, sub: pragas.join(', ') });
+  });
+  planosAdubacao.forEach(plano => {
+    if (!Array.isArray(plano.aplicacoes)) return;
+    const t = talhoes.find(x => x.id === plano.talhaoId);
+    if (faz && (!t || t.fazenda !== faz)) return;
+    plano.aplicacoes.forEach(ap => {
+      if (!ap.feito) return;
+      const d = ap.dataFeito || _dataPlanejadaAp(plano, ap); if (!d) return;
+      const prods = (ap.produtos||[]).map(x => x.produto).filter(Boolean);
+      ev.push({ data:d, ico:'🧪', cor:'#16a34a', tab:'adubacao', titulo:`Adubação · ${t?.nome||plano.talhaoId||''}`, sub:(ap.modo?ap.modo+(prods.length?' · ':''):'')+prods.slice(0,3).join(', ') });
+    });
+  });
+  drenchPrevencao.forEach(d0 => {
+    if ((d0.status||'') !== 'realizado') return;
+    if (faz && d0.fazenda !== faz) return;
+    const d = d0.data; if (!d) return;
+    const alvos = (Array.isArray(d0.alvoPrevencao) ? d0.alvoPrevencao : (d0.alvoPrevencao ? [d0.alvoPrevencao] : [])).filter(Boolean);
+    ev.push({ data:d, ico:'🌱', cor:'#7c3aed', tab:'drench', titulo:`Drench · ${d0.talhaoNome||d0.talhaoId||''}`, sub:alvos.join(', ') });
+  });
+  movimentacoes.forEach(m => {
+    if (faz && m.fazenda !== faz) return;
+    const d = m.data || (m.criadoEm||'').slice(0,10); if (!d) return;
+    const ent = m.tipo === 'entrada';
+    ev.push({ data:d, ico: ent?'📥':'📤', cor: ent?'#0891b2':'#d97706', tab:'estoque', titulo:`${ent?'Entrada':'Saída'} · ${m.produtoNome||''}`, sub:`${fmt(Number(m.quantidade)||0,2)} ${m.unidade||''}` });
+  });
+  ev.sort((a,b) => String(b.data).localeCompare(String(a.data)));
+  return ev.slice(0, limite||10);
+}
 function renderGeral() {
   const cont = document.getElementById('tabContent');
   const {label: lblPeriodo} = periodoFiltro();
@@ -774,6 +904,16 @@ function renderGeral() {
           </button>`;
         }).join('')}
       </div>
+    </div>`;
+  }
+  // ── Progresso da safra (adubação + pulverização) ──
+  const prog = _progressoSafra();
+  if (prog.ad.total || prog.pv.total) {
+    html += `<div class="secao" style="margin-bottom:12px;">
+      <div class="secao-tit">🎯 Progresso da safra</div>
+      <div class="secao-sub">Aplicações confirmadas · barra verde/laranja = feito · marca ▲ = previsto até hoje.</div>
+      ${_barraProgresso('🧪','Adubação', prog.ad.feito, prog.ad.total, prog.ad.prevHoje)}
+      ${_barraProgresso('💧','Pulverização', prog.pv.feito, prog.pv.total, prog.pv.prevHoje)}
     </div>`;
   }
   html += `<div class="kpi-grid">
@@ -849,6 +989,24 @@ function renderGeral() {
         </tr>`;
       }).join('')}
       </tbody></table></div>
+    </div>`;
+  }
+  // ── Últimas atividades (feed cronológico de todos os módulos) ──
+  const feed = _feedAtividades(10);
+  if (feed.length) {
+    html += `<div class="secao" style="margin-top:12px;">
+      <div class="secao-tit">🕒 Últimas atividades</div>
+      <div class="secao-sub">O que aconteceu mais recentemente${faz?' em '+escHtml(faz):' nas fazendas'} · toque para abrir o módulo.</div>
+      <div class="feed-lista">
+        ${feed.map(e => `<button class="feed-item" onclick="abrirTab('${e.tab}')">
+          <span class="feed-ico" style="background:${e.cor}1f;color:${e.cor};">${e.ico}</span>
+          <span class="feed-corpo">
+            <span class="feed-tit">${escHtml(e.titulo)}</span>
+            ${e.sub?`<span class="feed-sub">${escHtml(e.sub)}</span>`:''}
+          </span>
+          <span class="feed-data">${_tempoRelativo(e.data)}</span>
+        </button>`).join('')}
+      </div>
     </div>`;
   }
   html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">
