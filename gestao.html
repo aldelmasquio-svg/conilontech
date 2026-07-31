@@ -116,6 +116,15 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .kpi-delta.up{background:#dcfce7;color:#16a34a;}
 .kpi-delta.down{background:#fee2e2;color:#dc2626;}
 .kpi-delta.neu{background:var(--cl);color:var(--c);}
+/* Chuva recente */
+.chuva-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;}
+.chuva-card{background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;}
+.chuva-faz{font-weight:700;font-size:.84rem;color:#0c4a6e;margin-bottom:7px;}
+.chuva-vals{display:flex;gap:14px;}
+.chuva-v{display:flex;flex-direction:column;}
+.chuva-n{font-family:'DM Mono',monospace;font-weight:800;font-size:1.15rem;color:#0369a1;line-height:1;}
+.chuva-u{font-size:.62rem;color:#0284c7;margin-top:2px;}
+.chuva-ult{font-size:.66rem;color:var(--c);margin-top:7px;}
 
 /* SEÇÃO */
 .secao{background:white;border-radius:var(--rad);padding:14px;box-shadow:var(--s);}
@@ -384,7 +393,7 @@ window._confirmarSaida = function() { history.go(-2); }
 
 // ─── ESTADO ───
 let usuarioAtual=null, perfilAtual={};
-let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[], catalogoAdubos=[], drenchPrevencao=[];
+let talhoes=[], pulverizacoes=[], movimentacoes=[], produtosEstoque=[], pedidos=[], planosAdubacao=[], catalogoAdubos=[], drenchPrevencao=[], pluviometria=[];
 let fazendas=[]; // derivado dos talhões
 let tabAtual='geral';
 let _carregados = {talhoes:false, pulverizacoes:false, movimentacoes:false, produtosEstoque:false, pedidos:false, planosAdubacao:false, catalogoAdubos:false, drenchPrevencao:false};
@@ -508,6 +517,10 @@ onAuthStateChanged(auth, async (user) => {
   onSnapshot(collection(db,'drenchPrevencao'), snap => {
     drenchPrevencao = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
     _carregados.drenchPrevencao = true;
+    renderTab();
+  });
+  onSnapshot(collection(db,'pluviometria'), snap => {
+    pluviometria = snap.docs.map(d => ({_docId:d.id, ...d.data()}));
     renderTab();
   });
   onSnapshot(doc(db,'configAdubacao','geral'), snap => {
@@ -923,6 +936,35 @@ function _estoqueCritico() {
   acabando.sort((a,b) => a.dias - b.dias);
   return { negativos, acabando };
 }
+// Resumo de chuva por fazenda (mm nos últimos 7 e 30 dias). Média entre pluviômetros da fazenda.
+function _chuvaResumo() {
+  const faz = fazendaFiltro();
+  const hj = hoje();
+  const d7  = new Date(new Date(hj).getTime() - 7*86400000).toISOString().slice(0,10);
+  const d30 = new Date(new Date(hj).getTime() - 30*86400000).toISOString().slice(0,10);
+  const porFaz = {};
+  pluviometria.forEach(r => {
+    if (faz && r.fazenda !== faz) return;
+    const d = r.data; if (!d) return;
+    const mm = Number(r.mm)||0;
+    const f = r.fazenda || '—', pl = r.pluviometro || '—';
+    (porFaz[f] = porFaz[f] || {});
+    (porFaz[f][pl] = porFaz[f][pl] || { mm7:0, mm30:0, ultima:'' });
+    if (d >= d30 && d <= hj) porFaz[f][pl].mm30 += mm;
+    if (d >= d7  && d <= hj) porFaz[f][pl].mm7  += mm;
+    if (d > porFaz[f][pl].ultima) porFaz[f][pl].ultima = d;
+  });
+  return Object.entries(porFaz).map(([f, pls]) => {
+    const arr = Object.values(pls);
+    return {
+      fazenda: f,
+      mm7:  arr.reduce((s,x)=>s+x.mm7,0)/arr.length,
+      mm30: arr.reduce((s,x)=>s+x.mm30,0)/arr.length,
+      nPluv: arr.length,
+      ultima: arr.reduce((u,x)=>x.ultima>u?x.ultima:u,'')
+    };
+  }).sort((a,b) => String(a.fazenda).localeCompare(String(b.fazenda),'pt'));
+}
 function renderGeral() {
   const cont = document.getElementById('tabContent');
   const {inicio, fim, label: lblPeriodo} = periodoFiltro();
@@ -1008,6 +1050,24 @@ function renderGeral() {
     <div class="kpi-card clk ${pulvPend>0?'alerta':''}" onclick="abrirTab('pulverizacoes')"><div class="kpi-label">Pulverizações pendentes</div><div class="kpi-value">${pulvPend}</div><div class="kpi-aux">aguardando aplicação</div></div>
     <div class="kpi-card clk ${adubAtrasadas>0?'danger':''}" onclick="abrirTab('adubacao')"><div class="kpi-label">Adubações atrasadas</div><div class="kpi-value">${adubAtrasadas}</div><div class="kpi-aux">passou da data prevista</div></div>
   </div>`;
+  // ── Chuva recente (pluviometria) ──
+  const chuva = _chuvaResumo();
+  if (chuva.length) {
+    html += `<div class="secao" style="margin-top:12px;">
+      <div class="secao-tit">🌧️ Chuva recente</div>
+      <div class="secao-sub">Acumulado por fazenda${chuva.some(c=>c.nPluv>1)?' (média entre pluviômetros)':''} · registrado em Irrigação → Pluviometria.</div>
+      <div class="chuva-grid">
+        ${chuva.map(c => `<div class="chuva-card">
+          <div class="chuva-faz"><span class="faz-bullet" style="background:${corFazenda(c.fazenda)};"></span>${escHtml(c.fazenda)}${c.nPluv>1?` <span style="font-weight:400;color:var(--c);font-size:.68rem;">· ${c.nPluv} pluv.</span>`:''}</div>
+          <div class="chuva-vals">
+            <div class="chuva-v"><span class="chuva-n">${fmt(c.mm7,0)}</span><span class="chuva-u">mm · 7 dias</span></div>
+            <div class="chuva-v"><span class="chuva-n">${fmt(c.mm30,0)}</span><span class="chuva-u">mm · 30 dias</span></div>
+          </div>
+          ${c.ultima?`<div class="chuva-ult">última leitura ${_tempoRelativo(c.ultima)}</div>`:''}
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
   // ── Estoque em alerta (acabando / negativo) ──
   if (estCrit.acabando.length || estCrit.negativos.length) {
     const linha = (p, tipo) => `<button class="feed-item" onclick="abrirTab('estoque')">
