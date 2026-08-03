@@ -294,26 +294,36 @@ function renderAvaliacoesList(id){
     </div>`;
   }).join('');
 }
-// Comparador antes/depois — usa as fotos do ponto ao longo do tempo (mesmo local travado)
+// Comparador antes/depois — sempre pareia fotos de DATAS DIFERENTES (mesmo local travado ao longo do tempo)
+const _dataFoto=f=>String(f?.data||'').slice(0,10);
 function renderComparador(id){
   const box=document.getElementById('cmpBox'); if(!box) return;
-  const fs=fotosDaPlanta(id);
-  if(fs.length<2){ box.innerHTML=''; return; }
-  if(!compA) compA=fs[0]._docId;
-  if(!compB) compB=fs[fs.length-1]._docId;
-  const fa=fs.find(f=>f._docId===compA)||fs[0];
-  const fb=fs.find(f=>f._docId===compB)||fs[fs.length-1];
+  const fs=fotosDaPlanta(id); // ordenadas por data (asc)
+  const datas=[...new Set(fs.map(_dataFoto).filter(Boolean))];
+  if(datas.length<2){ box.innerHTML=''; return; } // precisa de pelo menos 2 datas para "antes × depois"
+  // foto de referência escolhida (padrão: a mais recente)
+  if(!compB || !fs.some(f=>f._docId===compB)) compB=fs[fs.length-1]._docId;
+  const fb=fs.find(f=>f._docId===compB);
+  const dB=_dataFoto(fb);
+  // par de comparação sempre de DATA DIFERENTE: pega a data anterior mais próxima; se não houver, a posterior mais próxima
+  const anteriores=fs.filter(f=>_dataFoto(f)<dB);
+  const posteriores=fs.filter(f=>_dataFoto(f)>dB);
+  const outra = anteriores.length ? anteriores[anteriores.length-1] : posteriores[posteriores.length-1];
+  compA=outra._docId;
+  // exibe sempre na ordem cronológica (antes = data menor, depois = data maior)
+  const cronoA = _dataFoto(fb) <= _dataFoto(outra) ? fb : outra;
+  const cronoB = _dataFoto(fb) <= _dataFoto(outra) ? outra : fb;
   box.innerHTML=`<div class="secao">
     <div class="secao-tit">📸 Comparar antes / depois</div>
     <div class="cmp-pair">
-      <div class="cmp-side"><div class="cmp-lbl antes">ANTES · ${formatarData(fa.data)}</div><img src="${fa.dataURI}" onclick="abrirLightbox('${fa._docId}')"></div>
-      <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS · ${formatarData(fb.data)}</div><img src="${fb.dataURI}" onclick="abrirLightbox('${fb._docId}')"></div>
+      <div class="cmp-side"><div class="cmp-lbl antes">ANTES · ${formatarData(cronoA.data)}</div><img src="${cronoA.dataURI}" onclick="abrirLightbox('${cronoA._docId}')"></div>
+      <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS · ${formatarData(cronoB.data)}</div><img src="${cronoB.dataURI}" onclick="abrirLightbox('${cronoB._docId}')"></div>
     </div>
-    <div class="cmp-hint">Toque numa miniatura para trocar o "depois" (a anterior vira "antes").</div>
-    <div class="cmp-strip">${fs.map(f=>`<img class="cmp-mini ${f._docId===compB?'on':''}" src="${f.dataURI}" title="${formatarData(f.data)}" onclick="setComp('${f._docId}')">`).join('')}</div>
+    <div class="cmp-hint">Toque numa foto abaixo: ela vira a referência e o par é montado com a data diferente mais próxima.</div>
+    <div class="cmp-strip">${fs.map(f=>`<img class="cmp-mini ${f._docId===cronoB._docId?'on':(f._docId===cronoA._docId?'antes':'')}" src="${f.dataURI}" title="${formatarData(f.data)}" onclick="setComp('${f._docId}')">`).join('')}</div>
   </div>`;
 }
-window.setComp=function(fid){ if(fid===compB) return; compA=compB; compB=fid; renderComparador(plantaSel); };
+window.setComp=function(fid){ compB=fid; renderComparador(plantaSel); };
 
 // ─── AÇÕES (window bridges) ───
 window.selPlanta=function(id){ selecionarPlanta(id); };
@@ -537,7 +547,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .cmp-hint{font-size:.66rem;color:var(--c);margin-top:6px;text-align:center;}
 .cmp-strip{display:flex;gap:5px;overflow-x:auto;margin-top:6px;padding-bottom:2px;}
 .cmp-mini{width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid transparent;cursor:pointer;flex-shrink:0;opacity:.65;}
-.cmp-mini.on{border-color:var(--acc);opacity:1;}
+.cmp-mini.on{border-color:#16a34a;opacity:1;}
+.cmp-mini.antes{border-color:#f59e0b;opacity:1;}
 .panel-actions{padding:4px 14px 16px;}
 .btn-del-panel{width:100%;background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:8px;padding:9px;font-size:.78rem;cursor:pointer;font-weight:700;}
 /* BOTÃO FLUTUANTE */
