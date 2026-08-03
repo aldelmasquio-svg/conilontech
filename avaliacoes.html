@@ -210,7 +210,7 @@ function renderPlantas(){
     if(p.lat==null||p.lng==null) return;
     const n=registrosDaPlanta(p._docId).length;
     const mk=L.marker([p.lat,p.lng],{icon:iconePin(plantaSel===p._docId?'sel':(n>0?'ok':'novo'), n||'')}).addTo(map);
-    mk.bindTooltip(`🏷️ ${sanitizar(p.codigoPlaqueta||'sem código')}`,{direction:'top'});
+    mk.bindTooltip(sanitizar((p.descricao||'').trim()||(p.codigoPlaqueta||'').trim()||'ponto'),{direction:'top'});
     mk.on('click',()=>selecionarPlanta(p._docId));
     plantaMarkers[p._docId]=mk;
     bounds.push([p.lat,p.lng]);
@@ -233,14 +233,16 @@ function renderSidebar(){
   const porFaz={};
   vis.forEach(p=>{ const f=p.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(p); });
   cont.innerHTML=Object.keys(porFaz).sort().map(f=>{
-    const itens=porFaz[f].sort((a,b)=>String(a.codigoPlaqueta||'').localeCompare(String(b.codigoPlaqueta||''),'pt',{numeric:true})).map(p=>{
+    const tituloDe=p=>((p.descricao||'').trim()||(p.codigoPlaqueta||'').trim()||'Ponto sem descrição');
+    const itens=porFaz[f].sort((a,b)=>String(tituloDe(a)).localeCompare(String(tituloDe(b)),'pt',{numeric:true,sensitivity:'base'})).map(p=>{
       const n=registrosDaPlanta(p._docId).length;
       const nf=fotosDaPlanta(p._docId).length;
+      const desc=(p.descricao||'').trim(), cod=(p.codigoPlaqueta||'').trim();
       return `<div class="msb-item ${plantaSel===p._docId?'active':''}" onclick="selPlanta('${p._docId}')">
         <span class="msb-dot" style="background:${n>0?'#16a34a':'#94a3b8'}"></span>
         <div class="msb-info">
-          <div class="msb-nome">🏷️ ${sanitizar(p.codigoPlaqueta||'sem código')}</div>
-          <div class="msb-sub" style="color:var(--c)">${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${n} aval.${nf?` · ${nf}📷`:''}</div>
+          <div class="msb-nome">${sanitizar(tituloDe(p))}</div>
+          <div class="msb-sub" style="color:var(--c)">${desc&&cod?`🏷️ ${sanitizar(cod)} · `:''}${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${n} aval.${nf?` · ${nf}📷`:''}</div>
         </div>
       </div>`;
     }).join('');
@@ -255,8 +257,9 @@ function selecionarPlanta(id){
   if(p.lat!=null&&p.lng!=null) map.setView([p.lat,p.lng], Math.max(map.getZoom(),17), {animate:true});
   renderPlantas();
   const gm=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
-  document.getElementById('pNome').innerHTML=`🏷️ ${sanitizar(p.codigoPlaqueta||'sem código')}`;
-  document.getElementById('pFaz').textContent=`${p.talhaoNome||p.talhaoId||'—'} · ${p.fazenda||''}`;
+  const _desc=(p.descricao||'').trim(), _cod=(p.codigoPlaqueta||'').trim();
+  document.getElementById('pNome').textContent=_desc||_cod||'Ponto sem descrição';
+  document.getElementById('pFaz').innerHTML=`${_cod?`🏷️ ${sanitizar(_cod)} · `:''}${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${sanitizar(p.fazenda||'')}`;
   document.getElementById('pBody').innerHTML=`
     ${p.descricao?`<div class="secao"><div class="secao-tit">Descrição</div><div class="ult-val">${sanitizar(p.descricao)}</div></div>`:''}
     <div class="secao">
@@ -345,7 +348,7 @@ function abrirModalPlanta(){
   document.getElementById('mpCoord').innerHTML=`📍 ${tempLatLng.lat.toFixed(6)}, ${tempLatLng.lng.toFixed(6)}`
     + (tempAccuracy!=null ? ` <span style="color:${tempAccuracy<=15?'#16a34a':(tempAccuracy<=40?'#d97706':'#dc2626')};font-weight:700;">· 🎯 GPS ±${Math.round(tempAccuracy)} m</span>` : ` <span style="color:var(--c);">· ponto do mapa</span>`);
   document.getElementById('overlayPlanta').classList.add('open');
-  setTimeout(()=>document.getElementById('mpCodigo').focus(),100);
+  setTimeout(()=>document.getElementById('mpDesc').focus(),100);
 }
 window.fecharModalPlanta=function(){
   document.getElementById('overlayPlanta').classList.remove('open');
@@ -654,9 +657,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="modal-header"><div class="modal-title">📍 Marcar planta</div><button class="panel-close" onclick="fecharModalPlanta()">✕</button></div>
     <div class="modal-body">
       <div class="modal-coord" id="mpCoord"></div>
-      <div class="fg"><label>🏷️ Código da plaqueta</label><input type="text" id="mpCodigo" placeholder="Ex: E-01, P-127..."></div>
+      <div class="fg"><label>Nome / descrição do ponto</label><input type="text" id="mpDesc" placeholder="Ex: Bloco A · bioestimulante, Testemunha..."></div>
+      <div class="fg"><label>🏷️ Código da etiqueta</label><input type="text" id="mpCodigo" placeholder="Ex: E-01, P-127..."></div>
       <div class="fg"><label>Talhão</label><select id="mpTalhao"></select><span style="font-size:.62rem;color:var(--c);">Sugerido pelo ponto do mapa. A fazenda vem do talhão.</span></div>
-      <div class="fg"><label>Descrição / experimento (opcional)</label><textarea id="mpDesc" rows="2" placeholder="Ex: bloco A, tratamento com bioestimulante..."></textarea></div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharModalPlanta()">Cancelar</button>
