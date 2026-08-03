@@ -405,7 +405,13 @@ function renderCardPulv(p) {
       ${(p.produtos||[]).map(pr=>{
         const doseN=parseDose(pr.dose), un=pr.unidade||'';
         const totTalhao=(doseN>0 && sit.haTotal>0) ? doseN*sit.haTotal : null;
-        return `<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${un}/ha</span>`:''}${totTalhao!=null?`<span class="prod-total">= ${fmt(totTalhao,2)} ${un} no talhão</span>`:''}</div>`;
+        return `<div class="prod-linha">
+          <span class="prod-nome">🧪 ${pr.produto}</span>
+          <div class="prod-pills">
+            ${pr.dose?`<span class="prod-dose">${pr.dose} ${un}/ha</span>`:''}
+            ${totTalhao!=null?`<span class="prod-total">${fmt(totTalhao, totTalhao%1===0?0:1)} ${un} total</span>`:''}
+          </div>
+        </div>`;
       }).join('')}
     </div>
     ${p.observacoes?`<div class="pulv-obs">💬 ${sanitizar(p.observacoes)}</div>`:''}
@@ -1552,11 +1558,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .btn-encerrar{background:none;border:1.5px solid #fb923c;color:#9a3412;border-radius:6px;padding:7px 12px;font-size:.78rem;cursor:pointer;margin-top:6px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
 .btn-encerrar:active{transform:scale(.97);background:#fff7ed;}
 .btn-rm-pulv{background:none;border:none;cursor:pointer;font-size:1rem;color:var(--danger);}
-.pulv-produtos{padding:0 14px 10px;display:flex;flex-direction:column;gap:5px;align-items:flex-start;}
-.prod-linha{display:inline-flex;align-items:center;gap:9px;background:var(--vb);border:1px solid #c8e0c8;border-radius:9px;padding:6px 10px;max-width:100%;}
-.prod-nome{font-size:.88rem;font-weight:700;color:var(--t);}
-.prod-dose{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:700;color:white;background:var(--v);border-radius:5px;padding:2px 8px;white-space:nowrap;}
-.prod-total{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:800;color:#1e40af;background:#dbeafe;border:1px solid #93c5fd;border-radius:5px;padding:2px 8px;white-space:nowrap;}
+.pulv-produtos{padding:0 14px 10px;display:flex;flex-direction:column;gap:6px;align-items:stretch;}
+.prod-linha{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;width:100%;background:var(--vb);border:1px solid #c8e0c8;border-radius:9px;padding:8px 11px;}
+.prod-nome{flex:1 1 100%;font-size:.9rem;font-weight:700;color:var(--t);line-height:1.25;}
+.prod-pills{display:flex;flex-wrap:wrap;gap:7px;width:100%;}
+.prod-dose{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:700;color:white;background:var(--v);border-radius:6px;padding:3px 9px;white-space:nowrap;}
+.prod-total{display:inline-flex;align-items:center;gap:4px;font-family:'DM Mono',monospace;font-size:.82rem;font-weight:800;color:#1e40af;background:#dbeafe;border:1px solid #93c5fd;border-radius:6px;padding:3px 9px;white-space:nowrap;}
+.prod-total::before{content:'📦';font-size:.8rem;}
 .pulv-obs{padding:0 14px 10px;font-size:.75rem;color:var(--c);font-style:italic;}
 .pulv-acoes{padding:10px 14px;border-top:1px solid var(--cl);}
 .obs-conf{width:100%;border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;resize:none;min-height:56px;outline:none;margin-bottom:8px;}
