@@ -80,7 +80,7 @@ function nivelAcesso(mod) {
   return 'nenhum';
 }
 function isAdmin() { return nivelAcesso('drench') === 'admin'; }
-function podeConfirmar() { return ['admin','encarregado','operador'].includes(nivelAcesso('drench')); }
+function podeConfirmar() { return ['admin','gerente','encarregado','operador'].includes(nivelAcesso('drench')); }
 
 // Restringe a visualização de agendamentos às fazendas liberadas para o usuário.
 // Módulo próprio 'drench', com herança das fazendas de pulverização (retrocompat).
