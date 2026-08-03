@@ -29,7 +29,7 @@ enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 let usuarioAtual=null, perfilAtual={};
 let talhoes=[], plantas=[], registros=[], fotos=[];
 let map, mapaIniciado=false, talhaoLayers=[], plantaMarkers={}, plantaSel=null;
-let modoMarcar=false, tempMarker=null, tempLatLng=null, tempTalhao=null;
+let modoMarcar=false, tempMarker=null, tempLatLng=null, tempTalhao=null, tempAccuracy=null;
 let filtroFazenda='todas', sidebarAberta=true;
 let fotosNovas=[];               // dataURIs pendentes na avaliação sendo criada
 let compA=null, compB=null;      // fotos selecionadas para comparação antes/depois
@@ -47,7 +47,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserEmail').textContent=user.email;
   gerarMenu();
-  if (podeRegistrar()) document.getElementById('btnMarcar').style.display='flex';
+  if (podeRegistrar()) document.getElementById('marcarBar').style.display='flex';
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('appContent').style.display='flex';
   iniciarMapa();
@@ -159,12 +159,34 @@ function iniciarMapa(){
 }
 function onMapClick(e){
   if(!modoMarcar) return;
-  tempLatLng=e.latlng;
+  tempLatLng=e.latlng; tempAccuracy=null;
   tempTalhao=talhaoDoPonto(e.latlng.lat, e.latlng.lng);
   if(tempMarker) map.removeLayer(tempMarker);
   tempMarker=L.marker(e.latlng,{icon:iconePin('novo','')}).addTo(map);
   abrirModalPlanta();
 }
+// Marca o ponto usando o GPS do celular (o avaliador já está no local)
+window.marcarPorGps=function(){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  if(!navigator.geolocation){ toast('❌ GPS não disponível neste aparelho.'); return; }
+  const b=document.getElementById('btnGps'); const txt=b.innerHTML; b.innerHTML='🎯 Localizando...'; b.disabled=true;
+  navigator.geolocation.getCurrentPosition(pos=>{
+    b.innerHTML=txt; b.disabled=false;
+    const {latitude,longitude,accuracy}=pos.coords;
+    tempLatLng={lat:latitude,lng:longitude};
+    tempAccuracy=accuracy;
+    tempTalhao=talhaoDoPonto(latitude,longitude);
+    if(modoMarcar) window.toggleMarcar();
+    if(map) map.setView([latitude,longitude], 18, {animate:true});
+    if(tempMarker) map.removeLayer(tempMarker);
+    tempMarker=L.marker([latitude,longitude],{icon:iconePin('novo','')}).addTo(map);
+    abrirModalPlanta();
+  }, err=>{
+    b.innerHTML=txt; b.disabled=false;
+    const msg = err.code===1 ? 'permissão de localização negada' : (err.code===3 ? 'tempo esgotado, tente de novo' : 'sem sinal de GPS');
+    toast('❌ '+msg);
+  }, {enableHighAccuracy:true, timeout:15000, maximumAge:0});
+};
 function iconePin(tipo, badge){
   return L.divIcon({ className:'', html:`<div class="pin ${tipo}">📍${badge?`<span class="pin-badge">${badge}</span>`:''}</div>`, iconSize:[30,38], iconAnchor:[15,34], popupAnchor:[0,-30] });
 }
@@ -207,7 +229,7 @@ function renderSidebar(){
   const cont=document.getElementById('sidebarList');
   const vis=plantasVisiveis();
   document.getElementById('sidebarCount').textContent=vis.length?`${vis.length} ponto${vis.length!==1?'s':''}`:'';
-  if(!vis.length){ cont.innerHTML=`<div class="sb-vazio">Nenhum ponto marcado ainda.${podeRegistrar()?'<br>Use <b>📍 Marcar planta</b> e toque no mapa.':''}</div>`; return; }
+  if(!vis.length){ cont.innerHTML=`<div class="sb-vazio">Nenhum ponto marcado ainda.${podeRegistrar()?'<br>Use <b>🎯 Marcar aqui (GPS)</b> no local, ou toque no mapa.':''}</div>`; return; }
   const porFaz={};
   vis.forEach(p=>{ const f=p.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(p); });
   cont.innerHTML=Object.keys(porFaz).sort().map(f=>{
@@ -240,7 +262,7 @@ function selecionarPlanta(id){
     <div class="secao">
       <div class="secao-tit">Localização travada</div>
       <div class="loc-row">
-        <span class="loc-coord">📍 ${Number(p.lat).toFixed(6)}, ${Number(p.lng).toFixed(6)}</span>
+        <span class="loc-coord">📍 ${Number(p.lat).toFixed(6)}, ${Number(p.lng).toFixed(6)}${p.precisaoGps!=null?` · 🎯 GPS ±${p.precisaoGps} m`:(p.origem==='mapa'?' · ponto do mapa':'')}</span>
         <a class="btn-maps" href="${gm}" target="_blank" rel="noopener">🧭 Abrir no Google Maps</a>
       </div>
     </div>
@@ -307,7 +329,7 @@ window.toggleMarcar=function(){
   modoMarcar=!modoMarcar;
   const b=document.getElementById('btnMarcar');
   b.classList.toggle('on',modoMarcar);
-  b.innerHTML=modoMarcar?'✕ Cancelar marcação':'📍 Marcar planta';
+  b.innerHTML=modoMarcar?'✕ Cancelar':'📍 Tocar no mapa';
   document.getElementById('map').style.cursor=modoMarcar?'crosshair':'';
   document.getElementById('hintBar').style.display=modoMarcar?'block':'none';
   if(!modoMarcar && tempMarker){ map.removeLayer(tempMarker); tempMarker=null; }
@@ -320,7 +342,8 @@ function abrirModalPlanta(){
   document.getElementById('mpTalhao').innerHTML=`<option value="">— sem talhão —</option>`+talOpts;
   document.getElementById('mpCodigo').value='';
   document.getElementById('mpDesc').value='';
-  document.getElementById('mpCoord').textContent=`📍 ${tempLatLng.lat.toFixed(6)}, ${tempLatLng.lng.toFixed(6)}`;
+  document.getElementById('mpCoord').innerHTML=`📍 ${tempLatLng.lat.toFixed(6)}, ${tempLatLng.lng.toFixed(6)}`
+    + (tempAccuracy!=null ? ` <span style="color:${tempAccuracy<=15?'#16a34a':(tempAccuracy<=40?'#d97706':'#dc2626')};font-weight:700;">· 🎯 GPS ±${Math.round(tempAccuracy)} m</span>` : ` <span style="color:var(--c);">· ponto do mapa</span>`);
   document.getElementById('overlayPlanta').classList.add('open');
   setTimeout(()=>document.getElementById('mpCodigo').focus(),100);
 }
@@ -341,6 +364,8 @@ window.salvarPlanta=async function(){
       codigoPlaqueta:codigo, descricao:desc,
       talhaoId:talId||'', talhaoNome:tal?.nome||'', fazenda:tal?.fazenda||'',
       lat:tempLatLng.lat, lng:tempLatLng.lng,
+      precisaoGps: tempAccuracy!=null ? Math.round(tempAccuracy) : null,
+      origem: tempAccuracy!=null ? 'gps' : 'mapa',
       criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email
     });
     if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; }
@@ -535,7 +560,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .btn-del-panel{width:100%;background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:8px;padding:9px;font-size:.78rem;cursor:pointer;font-weight:700;}
 /* HINT / BOTÕES FLUTUANTES */
 .hint{position:absolute;bottom:78px;left:50%;transform:translateX(-50%);background:var(--acc);color:#fff;padding:9px 16px;border-radius:20px;font-size:.78rem;font-weight:700;z-index:999;box-shadow:var(--sf);display:none;white-space:nowrap;}
-#btnMarcar{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--acc);color:#fff;border:none;border-radius:24px;padding:13px 22px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);display:none;align-items:center;gap:6px;}
+.marcar-bar{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;display:none;gap:9px;max-width:calc(100vw - 28px);}
+.marcar-bar button{border:none;border-radius:24px;padding:13px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.98rem;cursor:pointer;box-shadow:var(--sf);white-space:nowrap;}
+#btnGps{background:#16a34a;color:#fff;}
+#btnGps:disabled{opacity:.7;}
+#btnMarcar{background:var(--acc);color:#fff;}
 #btnMarcar.on{background:var(--danger);}
 /* MODAL */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:4000;display:none;align-items:flex-end;justify-content:center;}
@@ -612,7 +641,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     </div>
 
     <div class="hint" id="hintBar">Toque no mapa para marcar a planta</div>
-    <button id="btnMarcar" onclick="toggleMarcar()">📍 Marcar planta</button>
+    <div class="marcar-bar" id="marcarBar" style="display:none;">
+      <button id="btnGps" onclick="marcarPorGps()">🎯 Marcar aqui (GPS)</button>
+      <button id="btnMarcar" onclick="toggleMarcar()">📍 Tocar no mapa</button>
+    </div>
   </div>
 </div>
 
