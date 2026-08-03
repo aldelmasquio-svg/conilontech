@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Avaliações</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableMultiTabIndexedDbPersistence(db).catch(()=>{});
+
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], plantas=[], registros=[], fotos=[];
+let map, mapaIniciado=false, talhaoLayers=[], plantaMarkers={}, plantaSel=null;
+let modoMarcar=false, tempMarker=null, tempLatLng=null, tempTalhao=null;
+let filtroFazenda='todas', sidebarAberta=true;
+let fotosNovas=[];               // dataURIs pendentes na avaliação sendo criada
+let compA=null, compB=null;      // fotos selecionadas para comparação antes/depois
+
+// ─── AUTH ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual=user;
+  const snap=await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual=snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') perfilAtual.modulos={mapa:'admin',adubacao:'admin',avaliacoes:'admin',admin:'admin'};
+  if (!ehAdminSistema() && nivelAcesso('avaliacoes')==='nenhum') { window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserEmail').textContent=user.email;
+  gerarMenu();
+  if (podeRegistrar()) document.getElementById('btnMarcar').style.display='flex';
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appContent').style.display='flex';
+  iniciarMapa();
+  iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  const _mods = perfilAtual.modulos || {};
+  if (_mods[mod]) return _mods[mod];
+  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
+  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
+  if (perfilAtual.perfil === 'admin') return 'admin';
+  return 'nenhum';
+}
+function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+function podeGerenciar(){ return ehAdminSistema() || nivelAcesso('avaliacoes')==='admin'; }
+function podeRegistrar(){ return podeGerenciar() || ['gerente','encarregado','operador'].includes(nivelAcesso('avaliacoes')); }
+function fazendaPermitida(fazenda){
+  if (ehAdminSistema()) return true;
+  const permitidas = perfilAtual.fazendasModulo?.avaliacoes;
+  if (!permitidas || !permitidas.length) return true;
+  return permitidas.includes(fazenda);
+}
+
+function gerarMenu() {
+  const isAdm = ehAdminSistema();
+  const pg = (window.location.pathname.split('/').pop() || 'index.html');
+  const secoes = [
+    { label: 'Principal', items: [
+      { href:'index.html',         ico:'📊', label:'Dashboard' },
+      { href:'agenda.html',        ico:'📅', label:'Agenda' },
+      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
+      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
+      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
+      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
+      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
+      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
+      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
+      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
+      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
+      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
+      { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
+    ]},
+    { label: 'Análise', items: [
+      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
+      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
+      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
+      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
+      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
+    ]},
+  ];
+  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
+    const html = s.items.map(m => {
+      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
+      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
+    }).filter(Boolean).join('');
+    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
+  }).join('');
+}
+
+// ─── HELPERS ───
+function hoje(){ return new Date().toISOString().slice(0,10); }
+function formatarData(d){ if(!d) return '—'; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
+function corFazenda(nome){ const cores=['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#db2777','#65a30d']; let h=0; for(const c of String(nome||'')) h=(h*31+c.charCodeAt(0))%cores.length; return cores[h]; }
+function normLatLngs(coords){ return (coords||[]).map(c=>{ if(Array.isArray(c)) return [c[0],c[1]]; if(c.lat!==undefined) return [c.lat,c.lng]; if(c.latitude!==undefined) return [c.latitude,c.longitude]; return c; }); }
+function pontoNoPoligono(lat,lng,coords){
+  const pts=normLatLngs(coords); let dentro=false;
+  for(let i=0,j=pts.length-1;i<pts.length;j=i++){
+    const yi=pts[i][0],xi=pts[i][1],yj=pts[j][0],xj=pts[j][1];
+    const inter=((yi>lat)!==(yj>lat)) && (lng < (xj-xi)*(lat-yi)/((yj-yi)||1e-12)+xi);
+    if(inter)dentro=!dentro;
+  }
+  return dentro;
+}
+function talhaoDoPonto(lat,lng){ return talhoes.find(t=>t.coordenadas&&t.coordenadas.length>=3&&pontoNoPoligono(lat,lng,t.coordenadas)); }
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+// Comprime a imagem no próprio dispositivo (redimensiona + JPEG) → dataURI leve p/ salvar no Firestore
+function comprimirImagem(file, maxDim=1024, quality=0.6){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width, h=img.height;
+        if(w>=h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
+        else if(h>w && h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
+        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        try{ resolve(canvas.toDataURL('image/jpeg',quality)); }catch(err){ reject(err); }
+      };
+      img.onerror=reject; img.src=e.target.result;
+    };
+    reader.onerror=reject; reader.readAsDataURL(file);
+  });
+}
+function plantasVisiveis(){ return plantas.filter(p=>fazendaPermitida(p.fazenda) && (filtroFazenda==='todas'||p.fazenda===filtroFazenda)); }
+function registrosDaPlanta(id){ return registros.filter(r=>r.plantaId===id).sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))); }
+function fotosDaPlanta(id){ return fotos.filter(f=>f.plantaId===id).slice().sort((a,b)=>String(a.data||a.criadoEm||'').localeCompare(String(b.data||b.criadoEm||''))); }
+function fotosDoRegistro(id){ return fotos.filter(f=>f.registroId===id).sort((a,b)=>String(a.criadoEm||'').localeCompare(String(b.criadoEm||''))); }
+
+// ─── MAPA ───
+function iniciarMapa(){
+  if(mapaIniciado) return; mapaIniciado=true;
+  map=L.map('map',{center:[-18.7166,-40.4000],zoom:13,zoomControl:true,scrollWheelZoom:true});
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}).addTo(map);
+  map.on('click', onMapClick);
+}
+function onMapClick(e){
+  if(!modoMarcar) return;
+  tempLatLng=e.latlng;
+  tempTalhao=talhaoDoPonto(e.latlng.lat, e.latlng.lng);
+  if(tempMarker) map.removeLayer(tempMarker);
+  tempMarker=L.marker(e.latlng,{icon:iconePin('novo','')}).addTo(map);
+  abrirModalPlanta();
+}
+function iconePin(tipo, badge){
+  return L.divIcon({ className:'', html:`<div class="pin ${tipo}">📍${badge?`<span class="pin-badge">${badge}</span>`:''}</div>`, iconSize:[30,38], iconAnchor:[15,34], popupAnchor:[0,-30] });
+}
+function desenharTalhoes(){
+  talhaoLayers.forEach(l=>map.removeLayer(l)); talhaoLayers=[];
+  const bounds=[];
+  talhoes.forEach(t=>{
+    if(!t.coordenadas||t.coordenadas.length<3) return;
+    if(!fazendaPermitida(t.fazenda)) return;
+    const ll=normLatLngs(t.coordenadas); bounds.push(...ll);
+    const poly=L.polygon(ll,{color:'#ffffff',weight:1.2,opacity:.6,fillColor:'#ffffff',fillOpacity:.05,interactive:false,dashArray:'4,4'}).addTo(map);
+    poly.bindTooltip(sanitizar(t.nome||t.id),{permanent:false,direction:'center',className:'tal-tip'});
+    talhaoLayers.push(poly);
+  });
+  if(bounds.length && !plantasVisiveis().length){ try{ map.fitBounds(bounds,{padding:[40,40],maxZoom:15}); }catch(e){} }
+}
+function renderPlantas(){
+  Object.values(plantaMarkers).forEach(m=>map.removeLayer(m)); plantaMarkers={};
+  const vis=plantasVisiveis(); const bounds=[];
+  vis.forEach(p=>{
+    if(p.lat==null||p.lng==null) return;
+    const n=registrosDaPlanta(p._docId).length;
+    const mk=L.marker([p.lat,p.lng],{icon:iconePin(plantaSel===p._docId?'sel':(n>0?'ok':'novo'), n||'')}).addTo(map);
+    mk.bindTooltip(`🏷️ ${sanitizar(p.codigoPlaqueta||'sem código')}`,{direction:'top'});
+    mk.on('click',()=>selecionarPlanta(p._docId));
+    plantaMarkers[p._docId]=mk;
+    bounds.push([p.lat,p.lng]);
+  });
+  renderSidebar();
+  if(bounds.length && !plantaSel){ try{ map.fitBounds(bounds,{padding:[60,60],maxZoom:17}); }catch(e){} }
+}
+
+// ─── SIDEBAR ───
+function renderSidebar(){
+  const fazSel=document.getElementById('filtroFaz');
+  const fzs=[...new Set(plantas.filter(p=>fazendaPermitida(p.fazenda)).map(p=>p.fazenda).filter(Boolean))].sort();
+  const atual=fazSel.value;
+  fazSel.innerHTML=`<option value="todas">Todas as fazendas</option>`+fzs.map(f=>`<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
+  if(fzs.includes(atual)||atual==='todas') fazSel.value=atual;
+  const cont=document.getElementById('sidebarList');
+  const vis=plantasVisiveis();
+  document.getElementById('sidebarCount').textContent=vis.length?`${vis.length} ponto${vis.length!==1?'s':''}`:'';
+  if(!vis.length){ cont.innerHTML=`<div class="sb-vazio">Nenhum ponto marcado ainda.${podeRegistrar()?'<br>Use <b>📍 Marcar planta</b> e toque no mapa.':''}</div>`; return; }
+  const porFaz={};
+  vis.forEach(p=>{ const f=p.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(p); });
+  cont.innerHTML=Object.keys(porFaz).sort().map(f=>{
+    const itens=porFaz[f].sort((a,b)=>String(a.codigoPlaqueta||'').localeCompare(String(b.codigoPlaqueta||''),'pt',{numeric:true})).map(p=>{
+      const n=registrosDaPlanta(p._docId).length;
+      const nf=fotosDaPlanta(p._docId).length;
+      return `<div class="msb-item ${plantaSel===p._docId?'active':''}" onclick="selPlanta('${p._docId}')">
+        <span class="msb-dot" style="background:${n>0?'#16a34a':'#94a3b8'}"></span>
+        <div class="msb-info">
+          <div class="msb-nome">🏷️ ${sanitizar(p.codigoPlaqueta||'sem código')}</div>
+          <div class="msb-sub" style="color:var(--c)">${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${n} aval.${nf?` · ${nf}📷`:''}</div>
+        </div>
+      </div>`;
+    }).join('');
+    return `<div class="sb-fazenda">🏡 ${sanitizar(f)}</div>${itens}`;
+  }).join('');
+}
+
+// ─── PAINEL DA PLANTA ───
+function selecionarPlanta(id){
+  plantaSel=id; compA=null; compB=null; fotosNovas=[];
+  const p=plantas.find(x=>x._docId===id); if(!p) return;
+  if(p.lat!=null&&p.lng!=null) map.setView([p.lat,p.lng], Math.max(map.getZoom(),17), {animate:true});
+  renderPlantas();
+  const gm=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
+  document.getElementById('pNome').innerHTML=`🏷️ ${sanitizar(p.codigoPlaqueta||'sem código')}`;
+  document.getElementById('pFaz').textContent=`${p.talhaoNome||p.talhaoId||'—'} · ${p.fazenda||''}`;
+  document.getElementById('pBody').innerHTML=`
+    ${p.descricao?`<div class="secao"><div class="secao-tit">Descrição</div><div class="ult-val">${sanitizar(p.descricao)}</div></div>`:''}
+    <div class="secao">
+      <div class="secao-tit">Localização travada</div>
+      <div class="loc-row">
+        <span class="loc-coord">📍 ${Number(p.lat).toFixed(6)}, ${Number(p.lng).toFixed(6)}</span>
+        <a class="btn-maps" href="${gm}" target="_blank" rel="noopener">🧭 Abrir no Google Maps</a>
+      </div>
+    </div>
+    <div id="cmpBox"></div>
+    ${podeRegistrar()?`<div class="secao nova-aval">
+      <div class="secao-tit">＋ Nova avaliação</div>
+      <div class="fg"><label>Data</label><input type="date" id="avData" value="${hoje()}"></div>
+      <div class="fg"><label>Observação</label><textarea id="avObs" rows="2" placeholder="O que observou neste ponto? (tratamento, sintoma, comparação...)"></textarea></div>
+      <div class="foto-add">
+        <label class="btn-foto">📷 Adicionar fotos<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="onFotoInput(this)"></label>
+        <div id="avFotosPreview" class="foto-preview"></div>
+      </div>
+      <button class="btn-salvar-aval" onclick="salvarAvaliacao('${id}')">💾 Salvar avaliação</button>
+    </div>`:''}
+    <div class="secao"><div class="secao-tit">Histórico de avaliações</div><div id="avList"></div></div>`;
+  renderAvaliacoesList(id);
+  renderComparador(id);
+  document.getElementById('panelActions').innerHTML = podeGerenciar()
+    ? `<button class="btn-del-panel" onclick="excluirPlanta('${id}')">🗑 Excluir ponto</button>` : '';
+  document.getElementById('infoPanel').classList.add('visible');
+}
+function renderAvaliacoesList(id){
+  const box=document.getElementById('avList'); if(!box) return;
+  const regs=registrosDaPlanta(id);
+  if(!regs.length){ box.innerHTML=`<div class="hist-vazio">Nenhuma avaliação ainda.</div>`; return; }
+  box.innerHTML=regs.map(r=>{
+    const fs=fotosDoRegistro(r._docId);
+    return `<div class="aval-row">
+      <div class="aval-top">
+        <span class="aval-data">📅 ${formatarData(r.data)}</span>
+        ${podeGerenciar()?`<button class="hist-del" title="Excluir avaliação" onclick="excluirAvaliacao('${r._docId}')">✕</button>`:''}
+      </div>
+      ${r.observacao?`<div class="aval-obs">${sanitizar(r.observacao)}</div>`:''}
+      ${fs.length?`<div class="aval-fotos">${fs.map(f=>`<img class="foto-thumb" src="${f.dataURI}" onclick="abrirLightbox('${f._docId}')">`).join('')}</div>`:''}
+      <div class="aval-por">${sanitizar(r.criadoPor||'')}</div>
+    </div>`;
+  }).join('');
+}
+// Comparador antes/depois — usa as fotos do ponto ao longo do tempo (mesmo local travado)
+function renderComparador(id){
+  const box=document.getElementById('cmpBox'); if(!box) return;
+  const fs=fotosDaPlanta(id);
+  if(fs.length<2){ box.innerHTML=''; return; }
+  if(!compA) compA=fs[0]._docId;
+  if(!compB) compB=fs[fs.length-1]._docId;
+  const fa=fs.find(f=>f._docId===compA)||fs[0];
+  const fb=fs.find(f=>f._docId===compB)||fs[fs.length-1];
+  box.innerHTML=`<div class="secao">
+    <div class="secao-tit">📸 Comparar antes / depois</div>
+    <div class="cmp-pair">
+      <div class="cmp-side"><div class="cmp-lbl antes">ANTES · ${formatarData(fa.data)}</div><img src="${fa.dataURI}" onclick="abrirLightbox('${fa._docId}')"></div>
+      <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS · ${formatarData(fb.data)}</div><img src="${fb.dataURI}" onclick="abrirLightbox('${fb._docId}')"></div>
+    </div>
+    <div class="cmp-hint">Toque numa miniatura para trocar o "depois" (a anterior vira "antes").</div>
+    <div class="cmp-strip">${fs.map(f=>`<img class="cmp-mini ${f._docId===compB?'on':''}" src="${f.dataURI}" title="${formatarData(f.data)}" onclick="setComp('${f._docId}')">`).join('')}</div>
+  </div>`;
+}
+window.setComp=function(fid){ if(fid===compB) return; compA=compB; compB=fid; renderComparador(plantaSel); };
+
+// ─── AÇÕES (window bridges) ───
+window.selPlanta=function(id){ selecionarPlanta(id); };
+window.toggleMarcar=function(){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  modoMarcar=!modoMarcar;
+  const b=document.getElementById('btnMarcar');
+  b.classList.toggle('on',modoMarcar);
+  b.innerHTML=modoMarcar?'✕ Cancelar marcação':'📍 Marcar planta';
+  document.getElementById('map').style.cursor=modoMarcar?'crosshair':'';
+  document.getElementById('hintBar').style.display=modoMarcar?'block':'none';
+  if(!modoMarcar && tempMarker){ map.removeLayer(tempMarker); tempMarker=null; }
+};
+function abrirModalPlanta(){
+  const sug=tempTalhao;
+  const fzs=[...new Set(talhoes.map(t=>t.fazenda).filter(Boolean))].sort();
+  const talOpts=talhoes.slice().sort((a,b)=>String(a.id||'').localeCompare(String(b.id||''),'pt',{numeric:true}))
+    .map(t=>`<option value="${sanitizar(t.id||'')}" ${sug&&sug.id===t.id?'selected':''}>${sanitizar((t.id||'')+' · '+(t.nome||''))}</option>`).join('');
+  document.getElementById('mpTalhao').innerHTML=`<option value="">— sem talhão —</option>`+talOpts;
+  document.getElementById('mpCodigo').value='';
+  document.getElementById('mpDesc').value='';
+  document.getElementById('mpCoord').textContent=`📍 ${tempLatLng.lat.toFixed(6)}, ${tempLatLng.lng.toFixed(6)}`;
+  document.getElementById('overlayPlanta').classList.add('open');
+  setTimeout(()=>document.getElementById('mpCodigo').focus(),100);
+}
+window.fecharModalPlanta=function(){
+  document.getElementById('overlayPlanta').classList.remove('open');
+  if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; }
+};
+window.overlayPlantaClick=function(e){ if(e.target.id==='overlayPlanta') fecharModalPlanta(); };
+window.salvarPlanta=async function(){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  if(!tempLatLng){ toast('⚠️ Toque no mapa para marcar o ponto.'); return; }
+  const codigo=document.getElementById('mpCodigo').value.trim();
+  const desc=document.getElementById('mpDesc').value.trim();
+  const talId=document.getElementById('mpTalhao').value;
+  const tal=talhoes.find(t=>t.id===talId);
+  try{
+    const ref=await addDoc(collection(db,'avaliacaoPlantas'),{
+      codigoPlaqueta:codigo, descricao:desc,
+      talhaoId:talId||'', talhaoNome:tal?.nome||'', fazenda:tal?.fazenda||'',
+      lat:tempLatLng.lat, lng:tempLatLng.lng,
+      criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email
+    });
+    if(tempMarker){ map.removeLayer(tempMarker); tempMarker=null; }
+    document.getElementById('overlayPlanta').classList.remove('open');
+    window.toggleMarcar(); // sai do modo marcar
+    toast('✅ Ponto marcado!');
+    setTimeout(()=>selecionarPlanta(ref.id),300);
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.onFotoInput=async function(input){
+  const files=[...input.files]; input.value='';
+  if(!files.length) return;
+  toast('🖼️ Processando foto(s)...');
+  for(const f of files){
+    if(!f.type.startsWith('image/')) continue;
+    try{ fotosNovas.push(await comprimirImagem(f)); }catch(e){}
+  }
+  renderPreviewFotos();
+};
+function renderPreviewFotos(){
+  const box=document.getElementById('avFotosPreview'); if(!box) return;
+  box.innerHTML=fotosNovas.map((uri,i)=>`<div class="foto-prev-item"><img src="${uri}"><button onclick="removerFotoNova(${i})">✕</button></div>`).join('');
+}
+window.removerFotoNova=function(i){ fotosNovas.splice(i,1); renderPreviewFotos(); };
+window.salvarAvaliacao=async function(plantaId){
+  if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
+  const obs=(document.getElementById('avObs')?.value||'').trim();
+  const data=document.getElementById('avData')?.value||hoje();
+  if(!obs && !fotosNovas.length){ toast('⚠️ Escreva uma observação ou adicione uma foto.'); return; }
+  try{
+    const ref=await addDoc(collection(db,'avaliacaoRegistros'),{ plantaId, data, observacao:obs, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
+    for(const uri of fotosNovas){
+      await addDoc(collection(db,'avaliacaoFotos'),{ plantaId, registroId:ref.id, data, dataURI:uri, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
+    }
+    fotosNovas=[]; renderPreviewFotos();
+    if(document.getElementById('avObs')) document.getElementById('avObs').value='';
+    toast('✅ Avaliação salva!');
+  }catch(e){ toast('❌ Erro ao salvar: '+e.message+' (foto muito grande?)'); }
+};
+window.excluirAvaliacao=async function(regId){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  if(!confirm('Excluir esta avaliação e suas fotos?')) return;
+  try{
+    for(const f of fotos.filter(x=>x.registroId===regId)) await deleteDoc(doc(db,'avaliacaoFotos',f._docId));
+    await deleteDoc(doc(db,'avaliacaoRegistros',regId));
+    toast('🗑️ Avaliação excluída.');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.excluirPlanta=async function(id){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  const p=plantas.find(x=>x._docId===id);
+  if(!confirm(`Excluir o ponto "${p?.codigoPlaqueta||''}" com TODAS as suas avaliações e fotos? Não dá pra desfazer.`)) return;
+  try{
+    for(const f of fotos.filter(x=>x.plantaId===id)) await deleteDoc(doc(db,'avaliacaoFotos',f._docId));
+    for(const r of registros.filter(x=>x.plantaId===id)) await deleteDoc(doc(db,'avaliacaoRegistros',r._docId));
+    await deleteDoc(doc(db,'avaliacaoPlantas',id));
+    fecharPainel();
+    toast('🗑️ Ponto excluído.');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
+window.abrirLightbox=function(fid){
+  const f=fotos.find(x=>x._docId===fid); if(!f) return;
+  document.getElementById('lightboxImg').src=f.dataURI;
+  document.getElementById('lightboxCap').textContent=formatarData(f.data);
+  document.getElementById('lightbox').classList.add('open');
+};
+window.fecharLightbox=function(){ document.getElementById('lightbox').classList.remove('open'); };
+window.fecharPainel=function(){ plantaSel=null; document.getElementById('infoPanel').classList.remove('visible'); renderPlantas(); };
+function fecharPainel(){ window.fecharPainel(); }
+window.setFiltroFaz=function(sel){ filtroFazenda=sel.value; renderPlantas(); };
+window.toggleSidebar=function(){
+  sidebarAberta=!sidebarAberta;
+  document.getElementById('mapaSidebar').style.display=sidebarAberta?'flex':'none';
+  document.getElementById('btnExpandSb').style.display=sidebarAberta?'none':'block';
+};
+window.toggleMenu=function(){ document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu=function(){ document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout=async function(){ await signOut(auth); window.location.href='login.html'; };
+
+// ─── LISTENERS ───
+function iniciarListeners(){
+  onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); desenharTalhoes(); renderPlantas(); });
+  onSnapshot(collection(db,'avaliacaoPlantas'), snap => { plantas=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderPlantas(); if(plantaSel && !plantas.some(p=>p._docId===plantaSel)) fecharPainel(); });
+  onSnapshot(collection(db,'avaliacaoRegistros'), snap => { registros=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); } renderPlantas(); });
+  onSnapshot(collection(db,'avaliacaoFotos'), snap => { fotos=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); renderComparador(plantaSel); } });
+}
+</script>
+
+<style>
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;--bg:#f4f1ea;--acc:#7c3aed;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+.menu-secao{font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.35);padding:12px 12px 4px;font-weight:700;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+#appContent{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.mapa-wrap{flex:1;position:relative;overflow:hidden;min-height:0;height:100%;}
+#map{width:100%;height:100%;background:#333;}
+.tal-tip{background:rgba(0,0,0,.6);border:none;color:#fff;font-size:.66rem;box-shadow:none;}
+/* PINS */
+.pin{font-size:26px;line-height:1;position:relative;filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));}
+.pin.novo{filter:drop-shadow(0 2px 2px rgba(0,0,0,.5)) grayscale(.4);}
+.pin.ok{color:#16a34a;}
+.pin.sel{transform:scale(1.25);}
+.pin-badge{position:absolute;top:-4px;right:-6px;background:#16a34a;color:#fff;font-family:'DM Mono',monospace;font-size:.6rem;font-weight:700;min-width:16px;height:16px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 3px;border:1.5px solid #fff;}
+/* SIDEBAR */
+.mapa-sidebar{position:absolute;top:14px;left:14px;width:216px;height:calc(100% - 28px);background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);display:flex;flex-direction:column;overflow:hidden;}
+.msb-header{padding:9px 11px;border-bottom:1px solid var(--cl);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+.msb-title{font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--acc);font-weight:700;}
+.msb-filter{padding:6px 10px;border-bottom:1px solid var(--cl);flex-shrink:0;}
+.msb-filter select{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:5px 8px;font-size:.72rem;font-family:'Barlow',sans-serif;color:var(--t);outline:none;background:white;}
+#sidebarList{overflow-y:auto;flex:1;min-height:0;}
+.sb-fazenda{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;padding:7px 11px 3px;background:var(--cl);}
+.msb-item{padding:8px 11px;border-bottom:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;}
+.msb-item:hover{background:var(--cl);}
+.msb-item.active{background:#f3e8ff;border-left:3px solid var(--acc);}
+.msb-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0;box-shadow:0 0 0 2px rgba(0,0,0,.06);}
+.msb-info{flex:1;min-width:0;}
+.msb-nome{font-size:.8rem;overflow:hidden;text-overflow:ellipsis;line-height:1.3;font-weight:600;white-space:nowrap;}
+.msb-sub{font-size:.66rem;}
+.sb-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:18px 12px;line-height:1.6;}
+#btnExpandSb{display:none;position:absolute;top:14px;left:14px;z-index:1000;background:white;border:none;border-radius:9px;padding:9px 12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;color:var(--acc);box-shadow:var(--sf);cursor:pointer;}
+/* PAINEL */
+.info-panel{position:absolute;top:14px;right:14px;width:320px;max-width:calc(100vw - 28px);max-height:calc(100% - 28px);overflow-y:auto;background:white;border-radius:var(--rad);z-index:1000;box-shadow:var(--sf);transform:translateX(360px);opacity:0;transition:transform .35s cubic-bezier(.34,1.4,.64,1),opacity .3s;}
+.info-panel.visible{transform:translateX(0);opacity:1;}
+.panel-header{padding:14px 40px 10px 14px;border-bottom:1px solid var(--cl);position:relative;}
+.panel-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;line-height:1.1;}
+.panel-faz{font-size:.75rem;color:var(--c);margin-top:2px;}
+.panel-close{position:absolute;top:12px;right:12px;background:var(--cl);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;color:var(--c);}
+.panel-body{padding:14px;display:flex;flex-direction:column;gap:16px;}
+.secao{display:flex;flex-direction:column;gap:7px;}
+.secao-tit{font-size:.6rem;text-transform:uppercase;letter-spacing:.11em;color:var(--c);font-weight:700;}
+.ult-val{font-size:.84rem;color:var(--t);background:var(--cl);border-radius:9px;padding:10px 12px;line-height:1.5;}
+.loc-row{display:flex;flex-direction:column;gap:7px;}
+.loc-coord{font-family:'DM Mono',monospace;font-size:.74rem;color:var(--c);}
+.btn-maps{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#eef2ff;border:1.5px solid #c7d2fe;color:#4338ca;border-radius:9px;padding:9px;font-size:.8rem;font-weight:700;text-decoration:none;font-family:'Barlow Condensed',sans-serif;}
+.btn-maps:active{background:#e0e7ff;}
+.nova-aval{background:#faf5ff;border:1px solid #e9d5ff;border-radius:11px;padding:11px;}
+.fg{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.fg label{font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
+.fg input,.fg textarea,.fg select{border:1.5px solid var(--cb);border-radius:8px;padding:9px 10px;font-size:.84rem;font-family:'Barlow',sans-serif;outline:none;background:white;resize:vertical;}
+.fg input:focus,.fg textarea:focus,.fg select:focus{border-color:var(--acc);}
+.foto-add{display:flex;flex-direction:column;gap:8px;}
+.btn-foto{display:inline-flex;align-items:center;gap:7px;background:white;border:1.5px dashed #c084fc;color:var(--acc);border-radius:9px;padding:10px;font-size:.82rem;font-weight:700;cursor:pointer;justify-content:center;}
+.foto-preview{display:flex;flex-wrap:wrap;gap:6px;}
+.foto-prev-item{position:relative;width:60px;height:60px;}
+.foto-prev-item img{width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid var(--cb);}
+.foto-prev-item button{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;}
+.btn-salvar-aval{width:100%;background:var(--acc);border:none;color:#fff;border-radius:9px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;margin-top:9px;}
+.btn-salvar-aval:active{transform:scale(.98);}
+.aval-row{border-bottom:1px solid var(--cl);padding:9px 0;}
+.aval-top{display:flex;justify-content:space-between;align-items:center;}
+.aval-data{font-weight:700;font-family:'DM Mono',monospace;font-size:.78rem;color:var(--acc);}
+.hist-del{background:#fee2e2;color:var(--danger);border:none;border-radius:6px;width:22px;height:22px;font-size:.62rem;cursor:pointer;flex-shrink:0;}
+.aval-obs{font-size:.8rem;color:var(--t);margin-top:4px;line-height:1.45;}
+.aval-fotos{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+.foto-thumb{width:66px;height:66px;object-fit:cover;border-radius:8px;border:1px solid var(--cb);cursor:pointer;}
+.aval-por{font-size:.64rem;color:var(--c);margin-top:5px;}
+.hist-vazio{font-size:.76rem;color:var(--c);text-align:center;padding:12px;}
+/* Comparador */
+.cmp-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.cmp-side{display:flex;flex-direction:column;gap:4px;}
+.cmp-side img{width:100%;height:120px;object-fit:cover;border-radius:9px;border:1px solid var(--cb);cursor:pointer;}
+.cmp-lbl{font-size:.58rem;font-weight:800;letter-spacing:.06em;text-align:center;border-radius:20px;padding:2px 0;}
+.cmp-lbl.antes{background:#fef3c7;color:#92400e;}
+.cmp-lbl.depois{background:#dcfce7;color:#166534;}
+.cmp-hint{font-size:.66rem;color:var(--c);margin-top:6px;text-align:center;}
+.cmp-strip{display:flex;gap:5px;overflow-x:auto;margin-top:6px;padding-bottom:2px;}
+.cmp-mini{width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid transparent;cursor:pointer;flex-shrink:0;opacity:.65;}
+.cmp-mini.on{border-color:var(--acc);opacity:1;}
+.panel-actions{padding:4px 14px 16px;}
+.btn-del-panel{width:100%;background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:8px;padding:9px;font-size:.78rem;cursor:pointer;font-weight:700;}
+/* HINT / BOTÕES FLUTUANTES */
+.hint{position:absolute;bottom:78px;left:50%;transform:translateX(-50%);background:var(--acc);color:#fff;padding:9px 16px;border-radius:20px;font-size:.78rem;font-weight:700;z-index:999;box-shadow:var(--sf);display:none;white-space:nowrap;}
+#btnMarcar{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;background:var(--acc);color:#fff;border:none;border-radius:24px;padding:13px 22px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);display:none;align-items:center;gap:6px;}
+#btnMarcar.on{background:var(--danger);}
+/* MODAL */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:4000;display:none;align-items:flex-end;justify-content:center;}
+.overlay.open{display:flex;}
+@media(min-width:600px){.overlay.open{align-items:center;}}
+.modal{background:white;border-radius:16px 16px 0 0;width:100%;max-width:460px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;}
+@media(min-width:600px){.modal{border-radius:16px;}}
+.modal-header{padding:15px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--cl);}
+.modal-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;}
+.modal-body{padding:16px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;}
+.modal-coord{font-family:'DM Mono',monospace;font-size:.72rem;color:var(--acc);background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:8px 10px;}
+.modal-footer{padding:12px 16px;display:flex;gap:9px;border-top:1px solid var(--cl);}
+.btn-cancel{flex:1;background:var(--cl);border:none;color:var(--c);border-radius:9px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+.btn-save{flex:2;background:var(--acc);border:none;color:#fff;border-radius:9px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;}
+/* LIGHTBOX */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:5000;display:none;flex-direction:column;align-items:center;justify-content:center;padding:20px;}
+.lightbox.open{display:flex;}
+.lightbox img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:8px;}
+.lightbox-cap{color:#fff;font-family:'DM Mono',monospace;margin-top:12px;font-size:.86rem;}
+.lightbox-close{position:absolute;top:16px;right:18px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.2rem;cursor:pointer;}
+/* TOAST */
+.toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--ve);color:#fff;padding:12px 20px;border-radius:24px;font-size:.85rem;font-weight:600;z-index:6000;opacity:0;transition:.3s;box-shadow:var(--sf);max-width:88vw;text-align:center;}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Avaliação de Lavoura</span></div>
+  </div>
+  <div class="hdr-user" id="userNome"></div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+  <div class="mapa-wrap">
+    <div id="map"></div>
+    <div class="mapa-sidebar" id="mapaSidebar">
+      <div class="msb-header">
+        <span class="msb-title">📍 Pontos avaliados</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:.6rem;color:var(--c)" id="sidebarCount"></span>
+          <button onclick="toggleSidebar()" style="background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--c);padding:2px 4px;">◀</button>
+        </div>
+      </div>
+      <div class="msb-filter">
+        <select id="filtroFaz" onchange="setFiltroFaz(this)"><option value="todas">Todas as fazendas</option></select>
+      </div>
+      <div id="sidebarList"></div>
+    </div>
+    <button id="btnExpandSb" onclick="toggleSidebar()">▶ Pontos</button>
+
+    <div class="info-panel" id="infoPanel">
+      <div class="panel-header">
+        <div class="panel-nome" id="pNome"></div>
+        <div class="panel-faz" id="pFaz"></div>
+        <button class="panel-close" onclick="fecharPainel()">✕</button>
+      </div>
+      <div class="panel-body" id="pBody"></div>
+      <div class="panel-actions" id="panelActions"></div>
+    </div>
+
+    <div class="hint" id="hintBar">Toque no mapa para marcar a planta</div>
+    <button id="btnMarcar" onclick="toggleMarcar()">📍 Marcar planta</button>
+  </div>
+</div>
+
+<!-- MODAL NOVA PLANTA -->
+<div class="overlay" id="overlayPlanta" onclick="overlayPlantaClick(event)">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">📍 Marcar planta</div><button class="panel-close" onclick="fecharModalPlanta()">✕</button></div>
+    <div class="modal-body">
+      <div class="modal-coord" id="mpCoord"></div>
+      <div class="fg"><label>🏷️ Código da plaqueta</label><input type="text" id="mpCodigo" placeholder="Ex: E-01, P-127..."></div>
+      <div class="fg"><label>Talhão</label><select id="mpTalhao"></select><span style="font-size:.62rem;color:var(--c);">Sugerido pelo ponto do mapa. A fazenda vem do talhão.</span></div>
+      <div class="fg"><label>Descrição / experimento (opcional)</label><textarea id="mpDesc" rows="2" placeholder="Ex: bloco A, tratamento com bioestimulante..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharModalPlanta()">Cancelar</button>
+      <button class="btn-save" onclick="salvarPlanta()">Salvar ponto</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="fecharLightbox()">
+  <button class="lightbox-close" onclick="fecharLightbox()">✕</button>
+  <img id="lightboxImg" src="" alt="">
+  <div class="lightbox-cap" id="lightboxCap"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+</body>
+</html>
