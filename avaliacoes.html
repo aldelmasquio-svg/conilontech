@@ -31,6 +31,8 @@ let talhoes=[], plantas=[], registros=[], fotos=[];
 let map, mapaIniciado=false, talhaoLayers=[], plantaMarkers={}, plantaSel=null;
 let tempMarker=null, tempLatLng=null, tempTalhao=null, tempAccuracy=null;
 let filtroFazenda='todas', sidebarAberta=true;
+let fazFechadas=new Set(), talFechados=new Set(); // accordion: fazendas/talhões recolhidos
+let _sbFazKeys=[], _sbTalKeys=[];                 // chaves por índice p/ os toggles inline
 let fotosNovas=[];               // dataURIs pendentes na avaliação sendo criada
 let compA=null, compB=null;      // fotos selecionadas para comparação antes/depois
 
@@ -220,25 +222,50 @@ function renderSidebar(){
   const vis=plantasVisiveis();
   document.getElementById('sidebarCount').textContent=vis.length?`${vis.length} ponto${vis.length!==1?'s':''}`:'';
   if(!vis.length){ cont.innerHTML=`<div class="sb-vazio">Nenhum ponto marcado ainda.${podeRegistrar()?'<br>No pé da planta, toque em <b>🎯 Marcar aqui (GPS)</b>.':''}</div>`; return; }
+  const tituloDe=p=>((p.descricao||'').trim()||(p.codigoPlaqueta||'').trim()||'Ponto sem descrição');
   const porFaz={};
   vis.forEach(p=>{ const f=p.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(p); });
-  cont.innerHTML=Object.keys(porFaz).sort().map(f=>{
-    const tituloDe=p=>((p.descricao||'').trim()||(p.codigoPlaqueta||'').trim()||'Ponto sem descrição');
-    const itens=porFaz[f].sort((a,b)=>String(tituloDe(a)).localeCompare(String(tituloDe(b)),'pt',{numeric:true,sensitivity:'base'})).map(p=>{
-      const n=registrosDaPlanta(p._docId).length;
-      const nf=fotosDaPlanta(p._docId).length;
-      const desc=(p.descricao||'').trim(), cod=(p.codigoPlaqueta||'').trim();
-      return `<div class="msb-item ${plantaSel===p._docId?'active':''}" onclick="selPlanta('${p._docId}')">
-        <span class="msb-dot" style="background:${n>0?'#16a34a':'#94a3b8'}"></span>
-        <div class="msb-info">
-          <div class="msb-nome">${sanitizar(tituloDe(p))}</div>
-          <div class="msb-sub" style="color:var(--c)">${desc&&cod?`🏷️ ${sanitizar(cod)} · `:''}${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${n} aval.${nf?` · ${nf}📷`:''}</div>
+  _sbFazKeys=[]; _sbTalKeys=[];
+  cont.innerHTML=Object.keys(porFaz).sort((a,b)=>a.localeCompare(b,'pt')).map(f=>{
+    const fi=_sbFazKeys.push(f)-1;
+    const fFechada=fazFechadas.has(f);
+    const porTal={};
+    porFaz[f].forEach(p=>{ const tk=(p.talhaoNome||p.talhaoId||'Sem talhão'); (porTal[tk]=porTal[tk]||[]).push(p); });
+    const talBlocks=Object.keys(porTal).sort((a,b)=>a.localeCompare(b,'pt',{numeric:true})).map(tk=>{
+      const talKey=f+'||'+tk;
+      const ti=_sbTalKeys.push(talKey)-1;
+      const tFechado=talFechados.has(talKey);
+      const pts=porTal[tk].sort((a,b)=>String(tituloDe(a)).localeCompare(String(tituloDe(b)),'pt',{numeric:true,sensitivity:'base'})).map(p=>{
+        const n=registrosDaPlanta(p._docId).length, nf=fotosDaPlanta(p._docId).length, cod=(p.codigoPlaqueta||'').trim();
+        return `<div class="msb-item ${plantaSel===p._docId?'active':''}" onclick="selPlanta('${p._docId}')">
+          <span class="msb-dot" style="background:${n>0?'#16a34a':'#94a3b8'}"></span>
+          <div class="msb-info">
+            <div class="msb-nome">${sanitizar(tituloDe(p))}</div>
+            <div class="msb-sub" style="color:var(--c)">${cod?`🏷️ ${sanitizar(cod)} · `:''}${n} aval.${nf?` · ${nf}📷`:''}</div>
+          </div>
+        </div>`;
+      }).join('');
+      return `<div class="sb-tal-bloco">
+        <div class="sb-tal ${tFechado?'':'aberto'}" onclick="toggleTalAval(${ti})">
+          <span class="sb-caret">${tFechado?'▸':'▾'}</span>
+          <span class="sb-tal-nome">🌿 ${sanitizar(tk)}</span>
+          <span class="sb-cont">${porTal[tk].length}</span>
         </div>
+        <div class="sb-pontos"${tFechado?' style="display:none"':''}>${pts}</div>
       </div>`;
     }).join('');
-    return `<div class="sb-fazenda">🏡 ${sanitizar(f)}</div>${itens}`;
+    return `<div class="sb-faz-bloco">
+      <div class="sb-fazenda ${fFechada?'':'aberto'}" onclick="toggleFazAval(${fi})">
+        <span class="sb-caret">${fFechada?'▸':'▾'}</span>
+        <span class="sb-faz-nome">🏡 ${sanitizar(f)}</span>
+        <span class="sb-cont">${porFaz[f].length}</span>
+      </div>
+      <div class="sb-tals"${fFechada?' style="display:none"':''}>${talBlocks}</div>
+    </div>`;
   }).join('');
 }
+window.toggleFazAval=function(i){ const f=_sbFazKeys[i]; if(f==null)return; if(fazFechadas.has(f))fazFechadas.delete(f); else fazFechadas.add(f); renderSidebar(); };
+window.toggleTalAval=function(i){ const k=_sbTalKeys[i]; if(k==null)return; if(talFechados.has(k))talFechados.delete(k); else talFechados.add(k); renderSidebar(); };
 
 // ─── PAINEL DA PLANTA ───
 function selecionarPlanta(id){
@@ -500,7 +527,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .msb-filter{padding:6px 10px;border-bottom:1px solid var(--cl);flex-shrink:0;}
 .msb-filter select{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:5px 8px;font-size:.72rem;font-family:'Barlow',sans-serif;color:var(--t);outline:none;background:white;}
 #sidebarList{overflow-y:auto;flex:1;min-height:0;}
-.sb-fazenda{font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;color:var(--c);font-weight:700;padding:7px 11px 3px;background:var(--cl);}
+.sb-fazenda{display:flex;align-items:center;gap:7px;font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;padding:9px 11px;background:var(--cl);cursor:pointer;border-top:1px solid #e6e0d4;}
+.sb-faz-nome{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sb-tal-bloco{border-bottom:1px solid var(--cl);}
+.sb-tal{display:flex;align-items:center;gap:7px;padding:8px 11px 8px 14px;cursor:pointer;background:#fafcff;}
+.sb-tal:hover,.sb-fazenda:hover{background:#f1ede3;}
+.sb-tal.aberto{background:#f3e8ff;}
+.sb-tal-nome{flex:1;min-width:0;font-size:.76rem;font-weight:700;color:var(--t);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;letter-spacing:0;}
+.sb-caret{font-size:.66rem;color:var(--acc);width:11px;flex-shrink:0;}
+.sb-cont{flex-shrink:0;font-size:.62rem;font-weight:700;color:var(--c);background:white;border:1px solid var(--cb);border-radius:20px;padding:1px 7px;}
+.sb-pontos .msb-item{padding-left:26px;}
+.sb-pontos:empty{display:none;}
 .msb-item{padding:8px 11px;border-bottom:1px solid var(--cl);cursor:pointer;display:flex;align-items:center;gap:8px;transition:.15s;}
 .msb-item:hover{background:var(--cl);}
 .msb-item.active{background:#f3e8ff;border-left:3px solid var(--acc);}
