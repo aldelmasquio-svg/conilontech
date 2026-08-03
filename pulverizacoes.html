@@ -402,7 +402,11 @@ function renderCardPulv(p) {
     </div>`:''}
     ${getPragas(p).length?`<div class="pulv-praga">🐛 Alvo: <strong>${getPragas(p).map(a=>sanitizar(a)).join(' · ')}</strong></div>`:''}
     <div class="pulv-produtos">
-      ${(p.produtos||[]).map(pr=>`<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${pr.unidade||''}/ha</span>`:''}</div>`).join('')}
+      ${(p.produtos||[]).map(pr=>{
+        const doseN=parseDose(pr.dose), un=pr.unidade||'';
+        const totTalhao=(doseN>0 && sit.haTotal>0) ? doseN*sit.haTotal : null;
+        return `<div class="prod-linha"><span class="prod-nome">🧪 ${pr.produto}</span>${pr.dose?`<span class="prod-dose">${pr.dose} ${un}/ha</span>`:''}${totTalhao!=null?`<span class="prod-total">= ${fmt(totTalhao,2)} ${un} no talhão</span>`:''}</div>`;
+      }).join('')}
     </div>
     ${p.observacoes?`<div class="pulv-obs">💬 ${sanitizar(p.observacoes)}</div>`:''}
     ${(isParcial || isRealizada) && sit.haTotal>0 ? `<div class="prog-area">
@@ -1552,6 +1556,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .prod-linha{display:inline-flex;align-items:center;gap:9px;background:var(--vb);border:1px solid #c8e0c8;border-radius:9px;padding:6px 10px;max-width:100%;}
 .prod-nome{font-size:.88rem;font-weight:700;color:var(--t);}
 .prod-dose{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:700;color:white;background:var(--v);border-radius:5px;padding:2px 8px;white-space:nowrap;}
+.prod-total{font-family:'DM Mono',monospace;font-size:.82rem;font-weight:800;color:#1e40af;background:#dbeafe;border:1px solid #93c5fd;border-radius:5px;padding:2px 8px;white-space:nowrap;}
 .pulv-obs{padding:0 14px 10px;font-size:.75rem;color:var(--c);font-style:italic;}
 .pulv-acoes{padding:10px 14px;border-top:1px solid var(--cl);}
 .obs-conf{width:100%;border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;resize:none;min-height:56px;outline:none;margin-bottom:8px;}
