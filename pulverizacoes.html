@@ -95,7 +95,7 @@ function nivelAcesso(mod) {
   return 'nenhum';
 }
 function isAdmin() { return nivelAcesso('pulverizacao') === 'admin'; }
-function podeConfirmar() { return ['admin','encarregado','operador'].includes(nivelAcesso('pulverizacao')); }
+function podeConfirmar() { return ['admin','gerente','encarregado','operador'].includes(nivelAcesso('pulverizacao')); }
 
 function gerarMenu() {
   const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
