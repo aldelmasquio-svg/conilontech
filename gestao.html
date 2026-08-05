@@ -1297,14 +1297,14 @@ function filtrarPlanos() {
   const faz = fazendaFiltro();
   const {inicio, fim} = periodoFiltro();
   return planosAdubacao.filter(plano => {
-    // plano tem talhaoId e mesAno (YYYY-MM)
     if (faz) {
       const t = talhoes.find(x => x.id === plano.talhaoId);
       if (!t || t.fazenda !== faz) return false;
     }
-    if (!plano.mesAno) return false;
-    const mesAno = plano.mesAno + '-15'; // meio do mês pra comparar
-    return mesAno >= inicio && mesAno <= fim;
+    // Data do meio do mês do plano — tolera mesAno "Julho/2026" e "2026-07" (via _planoMesAno)
+    const ma = _planoMesAno(plano); if (!ma) return false;
+    const meio = `${ma.ano}-${String(ma.mesIdx + 1).padStart(2, '0')}-15`;
+    return meio >= inicio && meio <= fim;
   });
 }
 
@@ -2205,14 +2205,15 @@ function renderAdubacao() {
     <div class="kpi-card ${atrasados>0?'danger':''}"><div class="kpi-label">Atrasados</div><div class="kpi-value">${atrasados}</div><div class="kpi-aux">passou data prevista</div></div>
     <div class="kpi-card info"><div class="kpi-label">Hectares adubados</div><div class="kpi-value">${fmt(haAdubado,1)}</div><div class="kpi-aux">com alguma aplicação</div></div>
   </div>`;
-  // Previsto vs Realizado por mês
+  // Previsto vs Realizado por mês (chave normalizada YYYY-MM, tolerando os dois formatos)
   const porMes = {};
   planosFil.forEach(p => {
-    if (!p.mesAno) return;
-    if (!porMes[p.mesAno]) porMes[p.mesAno] = {previsto:0, realizado:0};
-    porMes[p.mesAno].previsto++;
+    const ma = _planoMesAno(p); if (!ma) return;
+    const key = `${ma.ano}-${String(ma.mesIdx + 1).padStart(2, '0')}`;
+    if (!porMes[key]) porMes[key] = {previsto:0, realizado:0};
+    porMes[key].previsto++;
     const tem = p.aplicacoes && Object.values(p.aplicacoes).some(v => v === true || (typeof v === 'object' && v?.feito));
-    if (tem) porMes[p.mesAno].realizado++;
+    if (tem) porMes[key].realizado++;
   });
   const mesesOrd = Object.keys(porMes).sort();
   if (mesesOrd.length > 0) {
@@ -2654,13 +2655,24 @@ window.setNutrView = function(v) { nutrView = v; renderTab(); };
 window.setNutrNutriente = function(v) { nutrNutrienteSel = v; renderTab(); };
 
 // Calcula nutrientes aplicados (confirmados) no período, com total e detalhado por talhão
+// Lê mês/ano de um plano tolerando os dois formatos de mesAno que convivem no banco:
+// "Julho/2026" (nome/ano) e "2026-07" (ISO). Usa os campos mesIdx/ano quando presentes.
+function _planoMesAno(plano) {
+  if (!plano) return null;
+  if (plano.mesIdx != null && plano.mesIdx !== '' && plano.ano) {
+    const mi = Number(plano.mesIdx), a = Number(plano.ano);
+    if (mi >= 0 && mi <= 11 && a) return { mesIdx: mi, ano: a };
+  }
+  const s = String(plano.mesAno || '').trim();
+  if (s.includes('/')) { const [mn, as] = s.split('/'); const mi = MESES.indexOf(mn.trim()); const a = parseInt(as); if (mi >= 0 && a) return { mesIdx: mi, ano: a }; }
+  const m = s.match(/^(\d{4})-(\d{2})/); if (m) return { mesIdx: parseInt(m[2]) - 1, ano: parseInt(m[1]) };
+  return null;
+}
 function _dataPlanejadaAp(plano, ap) {
-  const [mesNome, anoStr] = String(plano.mesAno || '').split('/');
-  const mesIdx = MESES.indexOf(mesNome); const ano = parseInt(anoStr);
-  if (mesIdx < 0 || !ano) return null;
+  const ma = _planoMesAno(plano); if (!ma) return null;
   const semIdx = ordemSem(ap.semana);
   const dia = DIAS_SEMANA_ADUBACAO[semIdx >= 0 ? semIdx : 0];
-  return `${ano}-${String(mesIdx + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+  return `${ma.ano}-${String(ma.mesIdx + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
 }
 function _calcNutrientes(talhoesSel, inicio, fim) {
   const total = {};                 // nk -> kg (APLICADO/feito)
