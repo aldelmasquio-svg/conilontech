@@ -207,7 +207,19 @@ function renderTipo(){
         </div>
       </div>
       ${form}
-      <div class="cg"><label>Observação</label><div class="cg-inp"><input type="text" id="calObs" placeholder="Ex: marcha 2, rotação 540..."></div></div>
+      <div class="cal-secao">
+        <div class="cal-secao-tit">⚙️ Ajustes (trator / bomba)</div>
+        <div class="secao-sub">Registre os ajustes usados nesta calibração — aparecem depois na lista de calibrações salvas.</div>
+        <div class="cg2">
+          <div class="cg"><label>Marcha</label><div class="cg-inp"><select id="calMarcha"><option value="">—</option><option>1ª</option><option>2ª</option><option>3ª</option><option>4ª</option><option>5ª</option><option>Reduzida</option></select></div></div>
+          <div class="cg"><label>Caixa</label><div class="cg-inp"><select id="calCaixa"><option value="">—</option><option>A</option><option>B</option><option>C</option></select></div></div>
+        </div>
+        <div class="cg2">
+          <div class="cg"><label>Rotação do motor</label><div class="cg-inp"><input type="text" inputmode="decimal" id="calRotacao" placeholder="Ex: 540"><span class="cg-un">rpm</span></div></div>
+          <div class="cg"><label>Pressão da bomba</label><div class="cg-inp"><input type="text" inputmode="decimal" id="calPressao" placeholder="Ex: 40"><span class="cg-un">kgf/cm²</span></div></div>
+        </div>
+      </div>
+      <div class="cg"><label>Observação</label><div class="cg-inp"><input type="text" id="calObs" placeholder="Outras observações (opcional)"></div></div>
     </div>
     <div class="cal-resultado" id="calResultado"></div>
     ${podeRegistrar()?`<button class="btn-salvar-cal" onclick="salvarCalibracao()">💾 Salvar calibração</button>`:''}
@@ -298,6 +310,12 @@ window.salvarCalibracao=async function(){
   const fazenda=document.getElementById('calFazenda')?.value||'';
   const data=document.getElementById('calData')?.value||hoje();
   const obs=(document.getElementById('calObs')?.value||'').trim();
+  const ajustes={
+    marcha:document.getElementById('calMarcha')?.value||'',
+    caixa:document.getElementById('calCaixa')?.value||'',
+    rotacao:(document.getElementById('calRotacao')?.value||'').trim(),
+    pressao:(document.getElementById('calPressao')?.value||'').trim()
+  };
   let dados={}, resultado={};
   if(tipoAtual==='barra'||tipoAtual==='turbina'){
     const c=calcAspersao();
@@ -311,9 +329,10 @@ window.salvarCalibracao=async function(){
     resultado={ velocidade:c.v, lMetro:c.lMetro, lPlanta:c.lPlanta, metrosTanque:c.metrosTanque, autonomiaMin:c.autonomiaMin };
   }
   try{
-    await addDoc(collection(db,'calibracoes'),{ tipo:tipoAtual, nome, fazenda, data, dados, resultado, obs, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
+    await addDoc(collection(db,'calibracoes'),{ tipo:tipoAtual, nome, fazenda, data, dados, resultado, ajustes, obs, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
     toast('✅ Calibração salva!');
-    ['calNome','calObs','distancia','t1','t2','t3','largura','tanque','vazaoDrench','espPlantas'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+    ['calNome','calObs','distancia','t1','t2','t3','largura','tanque','vazaoDrench','espPlantas','calRotacao','calPressao'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+    ['calMarcha','calCaixa'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
     if(tipoAtual!=='drench') renderBicos();
     calcular();
   }catch(e){ toast('❌ Erro ao salvar: '+e.message); }
@@ -329,12 +348,20 @@ function renderHist(){
     const destaque = c.tipo==='drench'
       ? `${fmt(r.lMetro,3)} L/m${r.lPlanta?` · ${fmt(r.lPlanta,3)} L/planta`:''}`
       : `${fmt(r.lha,0)} L/ha · ${fmt(r.haTanque,1)} ha/tanque`;
+    const aj=c.ajustes||{};
+    const ajChips=[
+      aj.marcha?`🕹️ Marcha ${sanitizar(aj.marcha)}`:'',
+      aj.caixa?`🔀 Caixa ${sanitizar(aj.caixa)}`:'',
+      aj.rotacao?`⚙️ ${sanitizar(aj.rotacao)} rpm`:'',
+      aj.pressao?`💨 ${sanitizar(aj.pressao)} kgf/cm²`:''
+    ].filter(Boolean);
     return `<div class="hist-cal">
       <div class="hist-cal-top">
         <div><b>${sanitizar(c.nome||'Sem nome')}</b> <span class="hist-cal-meta">· ${formatarData(c.data)}${c.fazenda?' · '+sanitizar(c.fazenda):''}</span></div>
         ${podeGerenciar()?`<button class="hist-del" onclick="excluirCalibracao('${c._docId}')">✕</button>`:''}
       </div>
       <div class="hist-cal-res">${destaque}${r.velocidade?` · ${fmt(r.velocidade,1)} km/h`:''}</div>
+      ${ajChips.length?`<div class="hist-cal-ajustes">${ajChips.map(x=>`<span class="aj-chip">${x}</span>`).join('')}</div>`:''}
       ${c.obs?`<div class="hist-cal-obs">💬 ${sanitizar(c.obs)}</div>`:''}
       <div class="hist-cal-por">${sanitizar(c.criadoPor||'')}</div>
     </div>`;
@@ -437,7 +464,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .hist-cal-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
 .hist-cal-meta{font-weight:400;color:var(--c);font-size:.76rem;}
 .hist-cal-res{font-family:'DM Mono',monospace;font-weight:700;color:var(--acc);font-size:.86rem;margin-top:3px;}
-.hist-cal-obs{font-size:.74rem;color:var(--c);font-style:italic;margin-top:3px;}
+.hist-cal-ajustes{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
+.aj-chip{font-size:.68rem;font-weight:600;color:#334155;background:var(--cl);border:1px solid var(--cb);border-radius:20px;padding:2px 8px;}
+.hist-cal-obs{font-size:.74rem;color:var(--c);font-style:italic;margin-top:5px;}
 .hist-cal-por{font-size:.64rem;color:var(--c);margin-top:4px;}
 .hist-del{background:#fee2e2;color:var(--danger);border:none;border-radius:6px;width:24px;height:24px;font-size:.7rem;cursor:pointer;flex-shrink:0;}
 /* MODAL CONFIRM */
