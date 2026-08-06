@@ -295,6 +295,7 @@ function selecionarPlanta(id){
       <div class="foto-add">
         <label class="btn-foto">📷 Adicionar fotos<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="onFotoInput(this)"></label>
         <div id="avFotosPreview" class="foto-preview"></div>
+        <div id="avCompPreview"></div>
       </div>
       <button class="btn-salvar-aval" onclick="salvarAvaliacao('${id}')">💾 Salvar avaliação</button>
     </div>`:''}
@@ -311,13 +312,20 @@ function renderAvaliacoesList(id){
   if(!regs.length){ box.innerHTML=`<div class="hist-vazio">Nenhuma avaliação ainda.</div>`; return; }
   box.innerHTML=regs.map(r=>{
     const fs=fotosDoRegistro(r._docId);
+    const fa=fs.find(f=>f.papel==='antes'), fd=fs.find(f=>f.papel==='depois');
+    const temPar = fa && fd;
+    const outras = temPar ? fs.filter(f=>f!==fa && f!==fd) : fs;
     return `<div class="aval-row">
       <div class="aval-top">
         <span class="aval-data">📅 ${formatarData(r.data)}</span>
         ${podeGerenciar()?`<button class="hist-del" title="Excluir avaliação" onclick="excluirAvaliacao('${r._docId}')">✕</button>`:''}
       </div>
       ${r.observacao?`<div class="aval-obs">${sanitizar(r.observacao)}</div>`:''}
-      ${fs.length?`<div class="aval-fotos">${fs.map(f=>`<img class="foto-thumb" src="${f.dataURI}" onclick="abrirLightbox('${f._docId}')">`).join('')}</div>`:''}
+      ${temPar?`<div class="aval-cmp"><div class="cmp-pair">
+        <div class="cmp-side"><div class="cmp-lbl antes">ANTES</div><img src="${fa.dataURI}" onclick="abrirLightbox('${fa._docId}')"></div>
+        <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS</div><img src="${fd.dataURI}" onclick="abrirLightbox('${fd._docId}')"></div>
+      </div></div>`:''}
+      ${outras.length?`<div class="aval-fotos">${outras.map(f=>`<img class="foto-thumb" src="${f.dataURI}" onclick="abrirLightbox('${f._docId}')">`).join('')}</div>`:''}
       <div class="aval-por">${sanitizar(r.criadoPor||'')}</div>
     </div>`;
   }).join('');
@@ -435,14 +443,36 @@ window.onFotoInput=async function(input){
   toast('🖼️ Processando foto(s)...');
   for(const f of files){
     if(!f.type.startsWith('image/')) continue;
-    try{ fotosNovas.push(await comprimirImagem(f)); }catch(e){}
+    try{ fotosNovas.push({uri:await comprimirImagem(f), papel:null}); }catch(e){}
   }
   renderPreviewFotos();
 };
 function renderPreviewFotos(){
-  const box=document.getElementById('avFotosPreview'); if(!box) return;
-  box.innerHTML=fotosNovas.map((uri,i)=>`<div class="foto-prev-item"><img src="${uri}"><button onclick="removerFotoNova(${i})">✕</button></div>`).join('');
+  const box=document.getElementById('avFotosPreview');
+  if(box){
+    box.innerHTML=fotosNovas.map((ft,i)=>`<div class="foto-prev-item ${ft.papel||''}">
+      <img src="${ft.uri}">
+      <button class="fp-rm" onclick="removerFotoNova(${i})">✕</button>
+      <div class="fp-roles">
+        <button class="fp-role ${ft.papel==='antes'?'on-a':''}" onclick="setPapelFoto(${i},'antes')">Antes</button>
+        <button class="fp-role ${ft.papel==='depois'?'on-d':''}" onclick="setPapelFoto(${i},'depois')">Depois</button>
+      </div>
+    </div>`).join('');
+  }
+  const cbox=document.getElementById('avCompPreview');
+  if(cbox){
+    const a=fotosNovas.find(f=>f.papel==='antes'), d=fotosNovas.find(f=>f.papel==='depois');
+    cbox.innerHTML = (a&&d)
+      ? `<div class="secao-tit" style="margin-bottom:5px;">📸 Comparação desta atualização</div><div class="cmp-pair"><div class="cmp-side"><div class="cmp-lbl antes">ANTES</div><img src="${a.uri}"></div><div class="cmp-side"><div class="cmp-lbl depois">DEPOIS</div><img src="${d.uri}"></div></div>`
+      : (fotosNovas.length>=2 ? `<div class="fp-dica">💡 Marque uma foto como <b>Antes</b> e outra como <b>Depois</b> para salvar uma comparação lado a lado.</div>` : '');
+  }
 }
+window.setPapelFoto=function(i,papel){
+  const ft=fotosNovas[i]; if(!ft) return;
+  if(ft.papel===papel){ ft.papel=null; }
+  else { fotosNovas.forEach(x=>{ if(x.papel===papel) x.papel=null; }); ft.papel=papel; }
+  renderPreviewFotos();
+};
 window.removerFotoNova=function(i){ fotosNovas.splice(i,1); renderPreviewFotos(); };
 window.salvarAvaliacao=async function(plantaId){
   if(!podeRegistrar()){ toast('⛔ Sem permissão.'); return; }
@@ -451,8 +481,8 @@ window.salvarAvaliacao=async function(plantaId){
   if(!obs && !fotosNovas.length){ toast('⚠️ Escreva uma observação ou adicione uma foto.'); return; }
   try{
     const ref=await addDoc(collection(db,'avaliacaoRegistros'),{ plantaId, data, observacao:obs, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
-    for(const uri of fotosNovas){
-      await addDoc(collection(db,'avaliacaoFotos'),{ plantaId, registroId:ref.id, data, dataURI:uri, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
+    for(const ft of fotosNovas){
+      await addDoc(collection(db,'avaliacaoFotos'),{ plantaId, registroId:ref.id, data, dataURI:ft.uri, papel:ft.papel||null, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
     }
     fotosNovas=[]; renderPreviewFotos();
     if(document.getElementById('avObs')) document.getElementById('avObs').value='';
@@ -480,13 +510,35 @@ window.excluirPlanta=async function(id){
     toast('🗑️ Ponto excluído.');
   }catch(e){ toast('❌ Erro: '+e.message); }
 };
+let _lbFotos=[], _lbIdx=0;
 window.abrirLightbox=function(fid){
-  const f=fotos.find(x=>x._docId===fid); if(!f) return;
-  document.getElementById('lightboxImg').src=f.dataURI;
-  document.getElementById('lightboxCap').textContent=formatarData(f.data);
+  // navega por todas as fotos do ponto (ordem cronológica)
+  _lbFotos = plantaSel ? fotosDaPlanta(plantaSel) : fotos.filter(f=>f._docId===fid);
+  if(!_lbFotos.length){ const f=fotos.find(x=>x._docId===fid); if(f) _lbFotos=[f]; }
+  _lbIdx = Math.max(0, _lbFotos.findIndex(f=>f._docId===fid));
+  _lbRender();
   document.getElementById('lightbox').classList.add('open');
 };
+function _lbRender(){
+  const f=_lbFotos[_lbIdx]; if(!f) return;
+  document.getElementById('lightboxImg').src=f.dataURI;
+  document.getElementById('lightboxCap').textContent=`${formatarData(f.data)} · ${_lbIdx+1}/${_lbFotos.length}`;
+  const uni=_lbFotos.length<=1;
+  document.getElementById('lbPrev').style.visibility=(uni||_lbIdx<=0)?'hidden':'visible';
+  document.getElementById('lbNext').style.visibility=(uni||_lbIdx>=_lbFotos.length-1)?'hidden':'visible';
+}
+window.lbNav=function(d,ev){ if(ev)ev.stopPropagation(); const n=_lbIdx+d; if(n<0||n>=_lbFotos.length)return; _lbIdx=n; _lbRender(); };
 window.fecharLightbox=function(){ document.getElementById('lightbox').classList.remove('open'); };
+// teclado (setas / esc) e swipe no lightbox
+document.addEventListener('keydown', e=>{
+  if(!document.getElementById('lightbox')?.classList.contains('open')) return;
+  if(e.key==='ArrowLeft') window.lbNav(-1);
+  else if(e.key==='ArrowRight') window.lbNav(1);
+  else if(e.key==='Escape') window.fecharLightbox();
+});
+let _lbTouchX=null;
+window.lbTouchStart=function(e){ _lbTouchX=e.changedTouches[0].clientX; };
+window.lbTouchEnd=function(e){ if(_lbTouchX==null)return; const dx=e.changedTouches[0].clientX-_lbTouchX; if(Math.abs(dx)>40) window.lbNav(dx>0?-1:1); _lbTouchX=null; };
 window.fecharPainel=function(){ plantaSel=null; document.getElementById('infoPanel').classList.remove('visible'); renderPlantas(); };
 function fecharPainel(){ window.fecharPainel(); }
 window.setFiltroFaz=function(sel){ filtroFazenda=sel.value; renderPlantas(); };
@@ -594,10 +646,19 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .fg input:focus,.fg textarea:focus,.fg select:focus{border-color:var(--acc);}
 .foto-add{display:flex;flex-direction:column;gap:8px;}
 .btn-foto{display:inline-flex;align-items:center;gap:7px;background:white;border:1.5px dashed #c084fc;color:var(--acc);border-radius:9px;padding:10px;font-size:.82rem;font-weight:700;cursor:pointer;justify-content:center;}
-.foto-preview{display:flex;flex-wrap:wrap;gap:6px;}
-.foto-prev-item{position:relative;width:60px;height:60px;}
-.foto-prev-item img{width:60px;height:60px;object-fit:cover;border-radius:8px;border:1px solid var(--cb);}
-.foto-prev-item button{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;}
+.foto-preview{display:flex;flex-wrap:wrap;gap:10px;}
+.foto-prev-item{position:relative;width:76px;}
+.foto-prev-item img{width:76px;height:76px;object-fit:cover;border-radius:8px;border:2px solid var(--cb);display:block;}
+.foto-prev-item.antes img{border-color:#f59e0b;}
+.foto-prev-item.depois img{border-color:#16a34a;}
+.fp-rm{position:absolute;top:-6px;right:-6px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:.65rem;cursor:pointer;z-index:1;}
+.fp-roles{display:flex;gap:3px;margin-top:3px;}
+.fp-role{flex:1;font-size:.6rem;font-weight:700;border:1px solid var(--cb);background:white;color:var(--c);border-radius:5px;padding:3px 0;cursor:pointer;}
+.fp-role.on-a{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
+.fp-role.on-d{background:#dcfce7;border-color:#16a34a;color:#166534;}
+.fp-dica{font-size:.68rem;color:var(--c);margin-top:8px;line-height:1.4;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;padding:7px 9px;}
+#avCompPreview{margin-top:10px;}
+.aval-cmp{margin-top:8px;}
 .btn-salvar-aval{width:100%;background:var(--acc);border:none;color:#fff;border-radius:9px;padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;margin-top:9px;}
 .btn-salvar-aval:active{transform:scale(.98);}
 .aval-row{border-bottom:1px solid var(--cl);padding:9px 0;}
@@ -653,7 +714,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .lightbox.open{display:flex;}
 .lightbox img{max-width:100%;max-height:82vh;object-fit:contain;border-radius:8px;}
 .lightbox-cap{color:#fff;font-family:'DM Mono',monospace;margin-top:12px;font-size:.86rem;}
-.lightbox-close{position:absolute;top:16px;right:18px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.2rem;cursor:pointer;}
+.lightbox-close{position:absolute;top:16px;right:18px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:1.2rem;cursor:pointer;z-index:2;}
+.lb-nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:50px;height:50px;font-size:2rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;}
+.lb-nav:active{background:rgba(255,255,255,.3);}
+.lb-prev{left:12px;}
+.lb-next{right:12px;}
 /* TOAST */
 .toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--ve);color:#fff;padding:12px 20px;border-radius:24px;font-size:.85rem;font-weight:600;z-index:6000;opacity:0;transition:.3s;box-shadow:var(--sf);max-width:88vw;text-align:center;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
@@ -736,7 +801,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 <!-- LIGHTBOX -->
 <div class="lightbox" id="lightbox" onclick="fecharLightbox()">
   <button class="lightbox-close" onclick="fecharLightbox()">✕</button>
-  <img id="lightboxImg" src="" alt="">
+  <button class="lb-nav lb-prev" id="lbPrev" onclick="lbNav(-1,event)">‹</button>
+  <img id="lightboxImg" src="" alt="" ontouchstart="lbTouchStart(event)" ontouchend="lbTouchEnd(event)" onclick="event.stopPropagation()">
+  <button class="lb-nav lb-next" id="lbNext" onclick="lbNav(1,event)">›</button>
   <div class="lightbox-cap" id="lightboxCap"></div>
 </div>
 
