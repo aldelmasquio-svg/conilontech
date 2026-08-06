@@ -489,9 +489,23 @@ window.salvarAvaliacao=async function(plantaId){
     toast('✅ Avaliação salva!');
   }catch(e){ toast('❌ Erro ao salvar: '+e.message+' (foto muito grande?)'); }
 };
+// Diálogo de confirmação próprio (o confirm() nativo não aparece em vários navegadores de celular)
+let _confirmResolver=null;
+function confirmar(msg, okLabel){
+  return new Promise(res=>{
+    _confirmResolver=res;
+    document.getElementById('confirmMsg').textContent=msg;
+    document.getElementById('confirmOk').textContent=okLabel||'Excluir';
+    document.getElementById('ovConfirm').classList.add('open');
+  });
+}
+window._confirmResolve=function(v){
+  document.getElementById('ovConfirm').classList.remove('open');
+  const r=_confirmResolver; _confirmResolver=null; if(r) r(v);
+};
 window.excluirAvaliacao=async function(regId){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
-  if(!confirm('Excluir esta avaliação e suas fotos?')) return;
+  if(!(await confirmar('Excluir esta avaliação e suas fotos? Não dá pra desfazer.'))) return;
   try{
     for(const f of fotos.filter(x=>x.registroId===regId)) await deleteDoc(doc(db,'avaliacaoFotos',f._docId));
     await deleteDoc(doc(db,'avaliacaoRegistros',regId));
@@ -501,7 +515,8 @@ window.excluirAvaliacao=async function(regId){
 window.excluirPlanta=async function(id){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
   const p=plantas.find(x=>x._docId===id);
-  if(!confirm(`Excluir o ponto "${p?.codigoPlaqueta||''}" com TODAS as suas avaliações e fotos? Não dá pra desfazer.`)) return;
+  const nome=(p?.descricao||'').trim()||(p?.codigoPlaqueta||'').trim()||'este ponto';
+  if(!(await confirmar(`Excluir "${nome}" com TODAS as suas avaliações e fotos? Não dá pra desfazer.`, 'Excluir ponto'))) return;
   try{
     for(const f of fotos.filter(x=>x.plantaId===id)) await deleteDoc(doc(db,'avaliacaoFotos',f._docId));
     for(const r of registros.filter(x=>x.plantaId===id)) await deleteDoc(doc(db,'avaliacaoRegistros',r._docId));
@@ -805,6 +820,18 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
   <img id="lightboxImg" src="" alt="" ontouchstart="lbTouchStart(event)" ontouchend="lbTouchEnd(event)" onclick="event.stopPropagation()">
   <button class="lb-nav lb-next" id="lbNext" onclick="lbNav(1,event)">›</button>
   <div class="lightbox-cap" id="lightboxCap"></div>
+</div>
+
+<!-- CONFIRMAÇÃO DE EXCLUSÃO -->
+<div class="overlay" id="ovConfirm" onclick="if(event.target.id==='ovConfirm')_confirmResolve(false)">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header"><div class="modal-title">⚠️ Confirmar exclusão</div></div>
+    <div class="modal-body"><div id="confirmMsg" style="font-size:.9rem;color:var(--t);line-height:1.55;"></div></div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="_confirmResolve(false)">Cancelar</button>
+      <button class="btn-save" id="confirmOk" style="background:var(--danger);" onclick="_confirmResolve(true)">Excluir</button>
+    </div>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
