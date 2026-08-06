@@ -146,22 +146,22 @@ function renderTipo(){
     form=`
       <div class="cal-secao">
         <div class="cal-secao-tit">⏱️ Velocidade</div>
-        <div class="secao-sub">Percorra uma distância conhecida e cronometre (pode repetir até 3×). Tempo em <b>mm:ss</b> ou segundos.</div>
+        <div class="secao-sub">Percorra uma distância conhecida e cronometre (pode repetir até 3×). Tempo em <b>segundos</b>.</div>
         ${campo('distancia','Distância percorrida','Ex: 113','m')}
         <div class="cg3">
-          ${campo('t1','Tempo 1','1:30','')}
-          ${campo('t2','Tempo 2','1:32','')}
-          ${campo('t3','Tempo 3','1:31','')}
+          ${campo('t1','Tempo 1','Ex: 90','s')}
+          ${campo('t2','Tempo 2','Ex: 91','s')}
+          ${campo('t3','Tempo 3','Ex: 91','s')}
         </div>
       </div>
       <div class="cal-secao">
         <div class="cal-secao-tit">💦 Vazão dos bicos</div>
-        <div class="secao-sub">Meça a vazão de cada bico em <b>1 minuto</b> (L/min).</div>
+        <div class="secao-sub">Colete a água de cada bico por um tempo e informe os <b>litros</b> e o <b>tempo (s)</b> — o app converte em L/min.</div>
         <div id="bicosLista"></div>
         <div class="bicos-ctrl">
-          <button class="btn-mini" onclick="setBicos(nBicos-1)">− bico</button>
+          <button class="btn-mini" onclick="menosBico()">− bico</button>
           <span id="bicosCount"></span>
-          <button class="btn-mini" onclick="setBicos(nBicos+1)">+ bico</button>
+          <button class="btn-mini" onclick="maisBico()">+ bico</button>
         </div>
       </div>
       <div class="cal-secao">
@@ -178,12 +178,12 @@ function renderTipo(){
       </div>
       <div class="cal-secao">
         <div class="cal-secao-tit">⏱️ Velocidade</div>
-        <div class="secao-sub">Distância percorrida e tempo (mm:ss ou segundos).</div>
+        <div class="secao-sub">Distância percorrida e tempo em <b>segundos</b>.</div>
         ${campo('distancia','Distância percorrida','Ex: 100','m')}
         <div class="cg3">
-          ${campo('t1','Tempo 1','1:30','')}
-          ${campo('t2','Tempo 2','','')}
-          ${campo('t3','Tempo 3','','')}
+          ${campo('t1','Tempo 1','Ex: 60','s')}
+          ${campo('t2','Tempo 2','','s')}
+          ${campo('t3','Tempo 3','','s')}
         </div>
       </div>
       <div class="cal-secao">
@@ -217,15 +217,23 @@ function renderTipo(){
   renderHist();
 }
 
-// Bicos (barra/turbina)
+// Bicos (barra/turbina) — cada bico: litros coletados + tempo (s) → L/min
 window.setBicos=function(n){ nBicos=Math.max(1,Math.min(24,n)); renderBicos(); calcular(); };
+window.maisBico=function(){ setBicos(nBicos+1); };
+window.menosBico=function(){ setBicos(nBicos-1); };
 function renderBicos(){
   const box=document.getElementById('bicosLista'); if(!box) return;
   box.innerHTML=Array.from({length:nBicos},(_,i)=>
-    `<div class="cg-inp bico-row"><span class="bico-lbl">Bico ${i+1}</span><input type="text" inputmode="decimal" id="bico${i}" placeholder="L/min" oninput="calcular()"><span class="cg-un">L/min</span></div>`
+    `<div class="bico-row2">
+      <span class="bico-lbl">Bico ${i+1}</span>
+      <div class="cg-inp"><input type="text" inputmode="decimal" id="bicoL${i}" placeholder="litros" oninput="calcular()"><span class="cg-un">L</span></div>
+      <div class="cg-inp"><input type="text" inputmode="decimal" id="bicoT${i}" placeholder="tempo" oninput="calcular()"><span class="cg-un">s</span></div>
+    </div>`
   ).join('');
   const c=document.getElementById('bicosCount'); if(c) c.textContent=`${nBicos} bico${nBicos!==1?'s':''}`;
 }
+// vazão (L/min) de um bico a partir de litros + tempo(s)
+function vazaoBico(i){ const L=num('bicoL'+i), T=num('bicoT'+i); return T>0 ? L*60/T : 0; }
 
 // ─── CÁLCULO ───
 function velocidadeKmh(){
@@ -237,7 +245,7 @@ function velocidadeKmh(){
 }
 function calcAspersao(){
   const {v,tMed}=velocidadeKmh();
-  const bicos=Array.from({length:nBicos},(_,i)=>num('bico'+i)).filter(x=>x>0);
+  const bicos=Array.from({length:nBicos},(_,i)=>vazaoBico(i)).filter(x=>x>0);
   const vazaoTotal=bicos.reduce((a,b)=>a+b,0);
   const vazaoMedia=bicos.length?vazaoTotal/bicos.length:0;
   const largura=num('largura'), tanque=num('tanque');
@@ -294,7 +302,7 @@ window.salvarCalibracao=async function(){
   if(tipoAtual==='barra'||tipoAtual==='turbina'){
     const c=calcAspersao();
     if(!c.lha){ toast('⚠️ Preencha distância/tempo, bicos e largura para calcular.'); return; }
-    dados={ distancia:num('distancia'), tempos:[document.getElementById('t1').value,document.getElementById('t2').value,document.getElementById('t3').value], bicos:Array.from({length:nBicos},(_,i)=>num('bico'+i)), largura:c.largura, tanque:c.tanque };
+    dados={ distancia:num('distancia'), tempos:[document.getElementById('t1').value,document.getElementById('t2').value,document.getElementById('t3').value], bicos:Array.from({length:nBicos},(_,i)=>({litros:num('bicoL'+i),tempo:num('bicoT'+i),vazao:vazaoBico(i)})), largura:c.largura, tanque:c.tanque };
     resultado={ velocidade:c.v, vazaoTotal:c.vazaoTotal, vazaoMedia:c.vazaoMedia, lha:c.lha, haTanque:c.haTanque, autonomiaMin:c.autonomiaMin };
   } else if(tipoAtual==='drench'){
     const c=calcDrench();
@@ -408,6 +416,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .cg2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
 .cg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
 .bico-row{margin-bottom:6px;}
+.bico-row2{display:grid;grid-template-columns:auto 1fr 1fr;align-items:center;gap:8px;margin-bottom:7px;}
 .bico-lbl{font-size:.72rem;color:var(--c);font-weight:700;flex-shrink:0;min-width:44px;}
 .bicos-ctrl{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:4px;}
 .bicos-ctrl span{font-size:.78rem;color:var(--c);font-weight:700;min-width:64px;text-align:center;}
