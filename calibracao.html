@@ -344,8 +344,16 @@ window.toggleMenu=function(){ document.getElementById('menuLateral').classList.t
 window.fecharMenu=function(){ document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
 window.fazerLogout=async function(){ await signOut(auth); window.location.href='login.html'; };
 
+// Repopula o seletor de fazenda quando os talhões carregam (preserva a seleção atual)
+function atualizarFazendasSelect(){
+  const sel=document.getElementById('calFazenda'); if(!sel) return;
+  const atual=sel.value;
+  const fazendas=[...new Set(talhoes.map(x=>x.fazenda).filter(Boolean))].filter(fazendaPermitida).sort();
+  sel.innerHTML=`<option value="">—</option>`+fazendas.map(f=>`<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
+  if(atual && fazendas.includes(atual)) sel.value=atual;
+}
 function iniciarListeners(){
-  onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); });
+  onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); atualizarFazendasSelect(); });
   onSnapshot(collection(db,'calibracoes'), snap => { calibracoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderHist(); });
 }
 </script>
