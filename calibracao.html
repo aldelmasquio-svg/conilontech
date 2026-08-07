@@ -26,7 +26,7 @@ enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 
 let usuarioAtual=null, perfilAtual={};
 let talhoes=[], calibracoes=[];
-let tipoAtual='barra', nBicos=3;
+let tipoAtual='barra';
 
 // Tipos de calibração — para adicionar um novo tipo no futuro, inclua aqui e crie a função de formulário/cálculo.
 const TIPOS=[
@@ -168,13 +168,9 @@ function renderTipo(){
       </div>
       <div class="cal-secao">
         <div class="cal-secao-tit">💦 Vazão dos bicos</div>
-        <div class="secao-sub">Colete a água de cada bico por um tempo e informe os <b>litros</b> e o <b>tempo (s)</b> — o app converte em L/min.</div>
-        <div id="bicosLista"></div>
-        <div class="bicos-ctrl">
-          <button class="btn-mini" onclick="menosBico()">− bico</button>
-          <span id="bicosCount"></span>
-          <button class="btn-mini" onclick="maisBico()">+ bico</button>
-        </div>
+        <div class="secao-sub">Faça <b>3 medidas</b> de vazão (colete os litros e cronometre em segundos) — o app tira a <b>média por bico</b>. Depois informe quantos bicos o equipamento tem.</div>
+        <div id="medidasLista"></div>
+        <div class="cg" style="margin-top:9px;"><label>Número de bicos do equipamento</label><div class="cg-inp"><input type="text" inputmode="decimal" id="numBicos" placeholder="Ex: 12" oninput="calcular()"><span class="cg-un">bicos</span></div></div>
       </div>
       <div class="cal-secao">
         <div class="cal-secao-tit">📐 Equipamento & Ajustes</div>
@@ -237,28 +233,24 @@ function renderTipo(){
     <div class="cal-resultado" id="calResultado"></div>
     ${podeRegistrar()?`<button class="btn-salvar-cal" onclick="salvarCalibracao()">💾 Salvar calibração</button>`:''}
     <div class="cal-hist" id="calHist"></div>`;
-  if(tipoAtual==='barra'||tipoAtual==='turbina') renderBicos();
+  if(tipoAtual==='barra'||tipoAtual==='turbina') renderMedidas();
   calcular();
   renderHist();
 }
 
-// Bicos (barra/turbina) — cada bico: litros coletados + tempo (s) → L/min
-window.setBicos=function(n){ nBicos=Math.max(1,Math.min(24,n)); renderBicos(); calcular(); };
-window.maisBico=function(){ setBicos(nBicos+1); };
-window.menosBico=function(){ setBicos(nBicos-1); };
-function renderBicos(){
-  const box=document.getElementById('bicosLista'); if(!box) return;
-  box.innerHTML=Array.from({length:nBicos},(_,i)=>
+// Vazão: 3 medidas (litros + tempo em s) → média por bico; nº de bicos é informado à parte
+function renderMedidas(){
+  const box=document.getElementById('medidasLista'); if(!box) return;
+  box.innerHTML=[0,1,2].map(i=>
     `<div class="bico-row2">
-      <span class="bico-lbl">Bico ${i+1}</span>
-      <div class="cg-inp"><input type="text" inputmode="decimal" id="bicoL${i}" placeholder="litros" oninput="calcular()"><span class="cg-un">L</span></div>
-      <div class="cg-inp"><input type="text" inputmode="decimal" id="bicoT${i}" placeholder="tempo" oninput="calcular()"><span class="cg-un">s</span></div>
+      <span class="bico-lbl">Medida ${i+1}</span>
+      <div class="cg-inp"><input type="text" inputmode="decimal" id="medL${i}" placeholder="litros" oninput="calcular()"><span class="cg-un">L</span></div>
+      <div class="cg-inp"><input type="text" inputmode="decimal" id="medT${i}" placeholder="tempo" oninput="calcular()"><span class="cg-un">s</span></div>
     </div>`
   ).join('');
-  const c=document.getElementById('bicosCount'); if(c) c.textContent=`${nBicos} bico${nBicos!==1?'s':''}`;
 }
-// vazão (L/min) de um bico a partir de litros + tempo(s)
-function vazaoBico(i){ const L=num('bicoL'+i), T=num('bicoT'+i); return T>0 ? L*60/T : 0; }
+// vazão (L/min) de uma medida a partir de litros + tempo(s)
+function vazaoMedida(i){ const L=num('medL'+i), T=num('medT'+i); return T>0 ? L*60/T : 0; }
 
 // ─── CÁLCULO ───
 function velocidadeKmh(){
@@ -270,14 +262,15 @@ function velocidadeKmh(){
 }
 function calcAspersao(){
   const {v,tMed}=velocidadeKmh();
-  const bicos=Array.from({length:nBicos},(_,i)=>vazaoBico(i)).filter(x=>x>0);
-  const vazaoTotal=bicos.reduce((a,b)=>a+b,0);
-  const vazaoMedia=bicos.length?vazaoTotal/bicos.length:0;
+  const medidas=[0,1,2].map(i=>vazaoMedida(i)).filter(x=>x>0);
+  const vazaoMedia=medidas.length ? medidas.reduce((a,b)=>a+b,0)/medidas.length : 0;
+  const numBicos=num('numBicos');
+  const vazaoTotal=vazaoMedia*numBicos;
   const largura=num('largura'), tanque=num('tanque');
   const lha=(v>0 && largura>0)? vazaoTotal*600/(v*largura) : 0;
   const haTanque=(lha>0 && tanque>0)? tanque/lha : 0;
   const autonomiaMin=(vazaoTotal>0 && tanque>0)? tanque/vazaoTotal : 0;
-  return {v,tMed,nBicos:bicos.length,vazaoTotal,vazaoMedia,largura,tanque,lha,haTanque,autonomiaMin};
+  return {v,tMed,nMedidas:medidas.length,numBicos,vazaoMedia,vazaoTotal,largura,tanque,lha,haTanque,autonomiaMin};
 }
 function calcDrench(){
   const {v,tMed}=velocidadeKmh();
@@ -298,8 +291,8 @@ window.calcular=function(){
     if(!c.v && !c.vazaoTotal){ box.innerHTML=`<div class="res-vazio">Preencha os campos para calcular o resultado.</div>`; return; }
     box.innerHTML=`<div class="res-tit">📊 Resultado</div>
       ${R('Velocidade', c.v?fmt(c.v,2)+' km/h':'—')}
-      ${R('Vazão total dos bicos', c.vazaoTotal?fmt(c.vazaoTotal,2)+' L/min':'—')}
-      ${R('Vazão média por bico', c.vazaoMedia?fmt(c.vazaoMedia,2)+' L/min':'—')}
+      ${R('Vazão média por bico', c.vazaoMedia ? (fmt(c.vazaoMedia,2)+' L/min'+(c.nMedidas?' ('+c.nMedidas+' medida'+(c.nMedidas!==1?'s':'')+')':'')) : '—')}
+      ${R('Vazão total', c.vazaoTotal ? (fmt(c.vazaoTotal,2)+' L/min'+(c.numBicos?' · '+fmt(c.numBicos,0)+' bicos':'')) : '—')}
       ${R('Volume de calda', c.lha?fmt(c.lha,0)+' L/ha':'—', true)}
       ${R('Área por tanque', c.haTanque?fmt(c.haTanque,1)+' ha/tanque':'—', true)}
       ${R('Autonomia do tanque', c.autonomiaMin?fmt(c.autonomiaMin,0)+' min · '+fmt(c.autonomiaMin/60,1)+' h':'—')}`;
@@ -332,9 +325,9 @@ window.salvarCalibracao=async function(){
   let dados={}, resultado={};
   if(tipoAtual==='barra'||tipoAtual==='turbina'){
     const c=calcAspersao();
-    if(!c.lha){ toast('⚠️ Preencha distância/tempo, bicos e largura para calcular.'); return; }
-    dados={ distancia:num('distancia'), tempos:[document.getElementById('t1').value,document.getElementById('t2').value,document.getElementById('t3').value], bicos:Array.from({length:nBicos},(_,i)=>({litros:num('bicoL'+i),tempo:num('bicoT'+i),vazao:vazaoBico(i)})), largura:c.largura, tanque:c.tanque };
-    resultado={ velocidade:c.v, vazaoTotal:c.vazaoTotal, vazaoMedia:c.vazaoMedia, lha:c.lha, haTanque:c.haTanque, autonomiaMin:c.autonomiaMin };
+    if(!c.lha){ toast('⚠️ Preencha distância/tempo, as 3 medidas, nº de bicos e largura.'); return; }
+    dados={ distancia:num('distancia'), tempos:[document.getElementById('t1').value,document.getElementById('t2').value,document.getElementById('t3').value], medidas:[0,1,2].map(i=>({litros:num('medL'+i),tempo:num('medT'+i),vazao:vazaoMedida(i)})), numBicos:c.numBicos, largura:c.largura, tanque:c.tanque };
+    resultado={ velocidade:c.v, vazaoMedia:c.vazaoMedia, numBicos:c.numBicos, vazaoTotal:c.vazaoTotal, lha:c.lha, haTanque:c.haTanque, autonomiaMin:c.autonomiaMin };
   } else if(tipoAtual==='drench'){
     const c=calcDrench();
     if(!c.lMetro){ toast('⚠️ Preencha vazão, distância e tempo para calcular.'); return; }
@@ -344,9 +337,9 @@ window.salvarCalibracao=async function(){
   try{
     await addDoc(collection(db,'calibracoes'),{ tipo:tipoAtual, nome, fazenda, data, dados, resultado, ajustes, obs, criadoEm:new Date().toISOString(), criadoPor:usuarioAtual.email });
     toast('✅ Calibração salva!');
-    ['calNome','calObs','distancia','t1','t2','t3','largura','tanque','vazaoDrench','espPlantas','calRotacao','calPressao'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
+    ['calNome','calObs','distancia','t1','t2','t3','largura','tanque','vazaoDrench','espPlantas','calRotacao','calPressao','numBicos','medL0','medL1','medL2','medT0','medT1','medT2'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
     ['calMarcha','calCaixa'].forEach(id=>{const e=document.getElementById(id); if(e)e.value='';});
-    if(tipoAtual!=='drench') renderBicos();
+    if(tipoAtual!=='drench') renderMedidas();
     calcular();
   }catch(e){ toast('❌ Erro ao salvar: '+e.message); }
 };
