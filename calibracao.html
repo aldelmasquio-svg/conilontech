@@ -135,6 +135,18 @@ window.setTipo=function(id){ tipoAtual=id; renderTabs(); renderTipo(); };
 
 // Campo genérico
 function campo(id,label,ph,unidade,val){ return `<div class="cg"><label>${label}</label><div class="cg-inp"><input type="text" inputmode="decimal" id="${id}" placeholder="${ph||''}" value="${val!=null?val:''}" oninput="calcular()">${unidade?`<span class="cg-un">${unidade}</span>`:''}</div></div>`; }
+// Box "Parâmetros do trator / bomba" (marcha, caixa, rotação, pressão) — só registro, não entra no cálculo
+function paramsTratorBox(){
+  return `<div class="params-trator">
+    <div class="params-tit">⚙️ Parâmetros do trator / bomba</div>
+    <div class="pt-grid">
+      <div class="cg"><label>Marcha</label><div class="cg-inp"><select id="calMarcha"><option value="">Selecione...</option><option>1ª</option><option>2ª</option><option>3ª</option><option>4ª</option><option>5ª</option><option>Reduzida</option></select></div></div>
+      <div class="cg"><label>Caixa</label><div class="cg-inp"><select id="calCaixa"><option value="">Selecione...</option><option>A</option><option>B</option><option>C</option></select></div></div>
+      <div class="cg"><label>Rotação (rpm)</label><div class="cg-inp"><input type="text" inputmode="decimal" id="calRotacao" placeholder="Ex: 540"></div></div>
+      <div class="cg"><label>Pressão</label><div class="cg-inp"><input type="text" inputmode="decimal" id="calPressao" placeholder="Ex: 40"><span class="cg-un">kgf</span></div></div>
+    </div>
+  </div>`;
+}
 
 function renderTipo(){
   const t=TIPOS.find(x=>x.id===tipoAtual);
@@ -146,12 +158,12 @@ function renderTipo(){
     form=`
       <div class="cal-secao">
         <div class="cal-secao-tit">⏱️ Velocidade</div>
-        <div class="secao-sub">Percorra uma distância conhecida e cronometre (pode repetir até 3×). Tempo em <b>segundos</b>.</div>
+        <div class="secao-sub">Percorra uma distância conhecida e cronometre (pode repetir até 3×). <b class="realce">Tempo apenas em segundos.</b></div>
         ${campo('distancia','Distância percorrida','Ex: 113','m')}
         <div class="cg3">
-          ${campo('t1','Tempo 1','Ex: 90','s')}
-          ${campo('t2','Tempo 2','Ex: 91','s')}
-          ${campo('t3','Tempo 3','Ex: 91','s')}
+          ${campo('t1','Tempo 1 (segundos)','Ex: 90','')}
+          ${campo('t2','Tempo 2 (segundos)','Ex: 91','')}
+          ${campo('t3','Tempo 3 (segundos)','Ex: 91','')}
         </div>
       </div>
       <div class="cal-secao">
@@ -165,9 +177,14 @@ function renderTipo(){
         </div>
       </div>
       <div class="cal-secao">
-        <div class="cal-secao-tit">📐 Equipamento</div>
-        ${campo('largura',lblLargura,'Ex: 1,9','m')}
-        ${campo('tanque','Capacidade do tanque','Ex: 2000','L')}
+        <div class="cal-secao-tit">📐 Equipamento & Ajustes</div>
+        <div class="equip-grid">
+          <div class="equip-col">
+            ${campo('largura',lblLargura,'Ex: 1,9','m')}
+            ${campo('tanque','Capacidade do tanque','Ex: 2000','L')}
+          </div>
+          ${paramsTratorBox()}
+        </div>
       </div>`;
   } else if(tipoAtual==='drench'){
     form=`
@@ -178,18 +195,23 @@ function renderTipo(){
       </div>
       <div class="cal-secao">
         <div class="cal-secao-tit">⏱️ Velocidade</div>
-        <div class="secao-sub">Distância percorrida e tempo em <b>segundos</b>.</div>
+        <div class="secao-sub">Distância percorrida e tempo — <b class="realce">apenas em segundos</b>.</div>
         ${campo('distancia','Distância percorrida','Ex: 100','m')}
         <div class="cg3">
-          ${campo('t1','Tempo 1','Ex: 60','s')}
-          ${campo('t2','Tempo 2','','s')}
-          ${campo('t3','Tempo 3','','s')}
+          ${campo('t1','Tempo 1 (segundos)','Ex: 60','')}
+          ${campo('t2','Tempo 2 (segundos)','','')}
+          ${campo('t3','Tempo 3 (segundos)','','')}
         </div>
       </div>
       <div class="cal-secao">
-        <div class="cal-secao-tit">📐 Lavoura</div>
-        ${campo('espPlantas','Espaçamento entre plantas (opcional)','Ex: 0,5','m')}
-        ${campo('tanque','Capacidade do tanque','Ex: 2000','L')}
+        <div class="cal-secao-tit">📐 Lavoura & Ajustes</div>
+        <div class="equip-grid">
+          <div class="equip-col">
+            ${campo('espPlantas','Espaçamento entre plantas (opcional)','Ex: 0,5','m')}
+            ${campo('tanque','Capacidade do tanque','Ex: 2000','L')}
+          </div>
+          ${paramsTratorBox()}
+        </div>
       </div>`;
   }
   cont.innerHTML=`
@@ -208,18 +230,9 @@ function renderTipo(){
       </div>
       ${form}
       <div class="cal-secao">
-        <div class="cal-secao-tit">⚙️ Ajustes (trator / bomba)</div>
-        <div class="secao-sub">Registre os ajustes usados nesta calibração — aparecem depois na lista de calibrações salvas.</div>
-        <div class="cg2">
-          <div class="cg"><label>Marcha</label><div class="cg-inp"><select id="calMarcha"><option value="">—</option><option>1ª</option><option>2ª</option><option>3ª</option><option>4ª</option><option>5ª</option><option>Reduzida</option></select></div></div>
-          <div class="cg"><label>Caixa</label><div class="cg-inp"><select id="calCaixa"><option value="">—</option><option>A</option><option>B</option><option>C</option></select></div></div>
-        </div>
-        <div class="cg2">
-          <div class="cg"><label>Rotação do motor</label><div class="cg-inp"><input type="text" inputmode="decimal" id="calRotacao" placeholder="Ex: 540"><span class="cg-un">rpm</span></div></div>
-          <div class="cg"><label>Pressão da bomba</label><div class="cg-inp"><input type="text" inputmode="decimal" id="calPressao" placeholder="Ex: 40"><span class="cg-un">kgf/cm²</span></div></div>
-        </div>
+        <div class="cal-secao-tit">📝 Observação</div>
+        <div class="cg"><div class="cg-inp"><input type="text" id="calObs" placeholder="Ex: vento moderado, bicos novos..."></div></div>
       </div>
-      <div class="cg"><label>Observação</label><div class="cg-inp"><input type="text" id="calObs" placeholder="Outras observações (opcional)"></div></div>
     </div>
     <div class="cal-resultado" id="calResultado"></div>
     ${podeRegistrar()?`<button class="btn-salvar-cal" onclick="salvarCalibracao()">💾 Salvar calibração</button>`:''}
@@ -425,7 +438,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .cal-tab{white-space:nowrap;border:1.5px solid var(--cb);background:white;color:var(--c);border-radius:20px;padding:8px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.86rem;cursor:pointer;flex-shrink:0;}
 .cal-tab.on{background:var(--acc);border-color:var(--acc);color:white;}
 .cal-scroll{flex:1;overflow-y:auto;min-height:0;}
-.cal-wrap{max-width:600px;margin:0 auto;padding:14px 14px 40px;}
+.cal-wrap{max-width:760px;margin:0 auto;padding:14px 14px 40px;}
 .cal-topo{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
 .cal-topo-ico{font-size:2rem;}
 .cal-topo-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.3rem;}
@@ -441,6 +454,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .cg-inp input,.cg-inp select{flex:1;border:none;outline:none;padding:10px 0;font-size:.9rem;font-family:'Barlow',sans-serif;background:transparent;min-width:0;}
 .cg-un{font-size:.72rem;color:var(--c);font-weight:700;flex-shrink:0;}
 .cg2{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.realce{color:var(--acc);}
+.equip-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+@media(min-width:560px){.equip-grid{grid-template-columns:1fr 1fr;align-items:start;}}
+.equip-col{display:flex;flex-direction:column;gap:9px;}
+.params-trator{border:1.5px solid var(--cb);border-radius:10px;padding:11px 12px;background:#fafbfc;}
+.params-tit{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);font-weight:700;margin-bottom:9px;}
+.pt-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
 .bico-row{margin-bottom:6px;}
 .bico-row2{display:grid;grid-template-columns:auto 1fr 1fr;align-items:center;gap:8px;margin-bottom:7px;}
