@@ -1324,10 +1324,11 @@ function calcHaAdubado(planos) {
 }
 
 function calcAdubacoesAtrasadas() {
-  // Atrasada = aplicação planejada para uma data JÁ VENCIDA (data planejada < hoje) e não confirmada.
-  // Usa a data real derivada de mesAno+semana (_dataPlanejadaAp), não a comparação de texto antiga (bug).
+  // Atrasada = aplicação planejada para uma data JÁ VENCIDA (data planejada < hoje) e não confirmada,
+  // DENTRO da safra atual (janela de configAdubacao) — planos de safras passadas não poluem o alerta.
   const faz = fazendaFiltro();
   const hj = hoje();
+  const jan = _safraJanela();
   let count = 0;
   planosAdubacao.forEach(plano => {
     if (!Array.isArray(plano.aplicacoes) || !plano.aplicacoes.length) return;
@@ -1338,7 +1339,7 @@ function calcAdubacoesAtrasadas() {
     plano.aplicacoes.forEach(ap => {
       if (ap.feito) return;
       const dp = _dataPlanejadaAp(plano, ap);
-      if (dp && dp < hj) count++;
+      if (dp && dp < hj && (!jan || (dp >= jan.ini && dp <= jan.fim))) count++;
     });
   });
   return count;
@@ -2239,9 +2240,10 @@ function renderAdubacao() {
       </tbody></table>
     </div>`;
   }
-  // Atrasados (lista detalhada) — aplicações com data planejada já vencida e não confirmadas
+  // Atrasados (lista detalhada) — aplicações vencidas e não confirmadas DENTRO da safra atual
   if (atrasados > 0) {
     const hj = hoje();
+    const jan = _safraJanela();
     const listaAtras = [];
     planosAdubacao.forEach(plano => {
       if (!Array.isArray(plano.aplicacoes)) return;
@@ -2252,7 +2254,7 @@ function renderAdubacao() {
       plano.aplicacoes.forEach(ap => {
         if (ap.feito) return;
         const dp = _dataPlanejadaAp(plano, ap);
-        if (dp && dp < hj) listaAtras.push({ talhaoId: plano.talhaoId, mesAno: plano.mesAno, semana: ap.semana, data: dp });
+        if (dp && dp < hj && (!jan || (dp >= jan.ini && dp <= jan.fim))) listaAtras.push({ talhaoId: plano.talhaoId, mesAno: plano.mesAno, semana: ap.semana, data: dp });
       });
     });
     listaAtras.sort((a,b) => String(a.data||'').localeCompare(String(b.data||'')));
