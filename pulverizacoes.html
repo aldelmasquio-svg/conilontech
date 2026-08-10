@@ -167,6 +167,7 @@ function renderizar() {
 // ══════════════════════════════
 function renderizarCalendario() {
   document.getElementById('vizLabel').textContent = `${MESES[mesAtual]} ${anoAtual}`;
+  if (isAdmin()) setupTouchDrag();
   const primeiroDia = new Date(anoAtual, mesAtual, 1).getDay();
   const diasNoMes = new Date(anoAtual, mesAtual + 1, 0).getDate();
   const hoje = new Date();
@@ -185,6 +186,7 @@ function renderizarCalendario() {
   });
 
   const cal = document.getElementById('calendario');
+  const adm = isAdmin(); // admin pode arrastar pulverizações planejadas para reagendar
   // Cabeçalho dias da semana
   let html = DIAS_SEMANA.map(d => `<div class="cal-dia-hdr">${d}</div>`).join('');
   // Dias vazios antes do primeiro
@@ -195,12 +197,16 @@ function renderizarCalendario() {
     const eventos = porDia[d] || [];
     const temNaoRealizado = eventos.some(e => !e.realizada);
     const todosFeitos = eventos.length > 0 && eventos.every(e => e.realizada);
-    html += `<div class="cal-dia ${isHoje?'hoje':''} ${todosFeitos?'feito':temNaoRealizado?'pendente':''}" onclick="verDia(${d})">
+    const dropAttrs = adm ? ` ondragover="pulvDragOver(event)" ondragleave="pulvDragLeave(event)" ondrop="pulvDrop(event,${d})"` : '';
+    html += `<div class="cal-dia ${isHoje?'hoje':''} ${todosFeitos?'feito':temNaoRealizado?'pendente':''}" onclick="verDia(${d})"${dropAttrs}>
       <span class="cal-num">${d}</span>
       ${eventos.map(e=>{
         const cor = corFazenda(e.fazenda);
         const modoIco = {Drone:'🚁',Tratorizado:'🚜',Terrestre:'🚶',Costal:'🎒'}[e.modoAplicacao] || '';
-        return `<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}" style="background:${cor};border-color:${cor};" title="${escAttrCal(e.fazenda||'')}: ${escAttrCal(e.talhaoNome||e.talhaoId||'')}${e.modoAplicacao?' ('+e.modoAplicacao+')':''}">${modoIco?modoIco+' ':''}${escAttrCal(e.talhaoNome||e.talhaoId||'—')}</div>`;
+        // Só pulverizações ainda não realizadas podem ser arrastadas (só admin)
+        const arrastavel = adm && !e.realizada;
+        const dragAttrs = arrastavel ? ` draggable="true" data-doc="${e._docId}" ondragstart="pulvDragStart(event,'${e._docId}')" ondragend="pulvDragEnd(event)"` : '';
+        return `<div class="cal-evento ${e.realizada?'ev-feito':'ev-pend'}${arrastavel?' arrastavel':''}"${dragAttrs} style="background:${cor};border-color:${cor};" title="${escAttrCal(e.fazenda||'')}: ${escAttrCal(e.talhaoNome||e.talhaoId||'')}${e.modoAplicacao?' ('+e.modoAplicacao+')':''}${arrastavel?' — arraste para reagendar':''}">${modoIco?modoIco+' ':''}${escAttrCal(e.talhaoNome||e.talhaoId||'—')}</div>`;
       }).join('')}
     </div>`;
   }
@@ -243,6 +249,156 @@ window.verDia = function(dia) {
 };
 
 window.fecharDia = function() { document.getElementById('overlayDia').classList.remove('open'); };
+
+// ══════════════════════════════
+// ARRASTAR-E-SOLTAR: reagendar pulverização (SÓ ADMIN)
+// Preserva a data planejada original (dataOriginal) para o histórico
+// planejada · alterada · executada.
+// ══════════════════════════════
+let _pulvArrastandoId = null;
+let _reagPend = null; // { docId, novoData }
+
+window.pulvDragStart = function(ev, docId) {
+  if (!isAdmin()) return;
+  _pulvArrastandoId = docId;
+  try { ev.dataTransfer.setData('text/plain', docId); ev.dataTransfer.effectAllowed = 'move'; } catch(e) {}
+  if (ev.currentTarget) ev.currentTarget.classList.add('arrastando');
+};
+window.pulvDragEnd = function(ev) {
+  _pulvArrastandoId = null;
+  if (ev.currentTarget) ev.currentTarget.classList.remove('arrastando');
+  document.querySelectorAll('.cal-dia.dragover').forEach(el => el.classList.remove('dragover'));
+};
+window.pulvDragOver = function(ev) {
+  if (!_pulvArrastandoId) return;
+  ev.preventDefault();
+  try { ev.dataTransfer.dropEffect = 'move'; } catch(e) {}
+  if (ev.currentTarget) ev.currentTarget.classList.add('dragover');
+};
+window.pulvDragLeave = function(ev) {
+  if (ev.currentTarget) ev.currentTarget.classList.remove('dragover');
+};
+window.pulvDrop = function(ev, dia) {
+  ev.preventDefault();
+  if (ev.currentTarget) ev.currentTarget.classList.remove('dragover');
+  const docId = _pulvArrastandoId || (ev.dataTransfer && ev.dataTransfer.getData('text/plain'));
+  _pulvArrastandoId = null;
+  if (!docId || !isAdmin()) return;
+  const novoData = `${anoAtual}-${String(mesAtual+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  pedirConfirmacaoReagendar(docId, novoData);
+};
+
+// Suporte a toque (celular): o drag-and-drop HTML5 não funciona em telas de toque,
+// então reproduzimos o arraste com touchstart/move/end + elementFromPoint.
+let _touchDragSetup = false;
+function setupTouchDrag() {
+  if (_touchDragSetup) return;
+  const cal = document.getElementById('calendario');
+  if (!cal) return;
+  _touchDragSetup = true;
+  let clone = null, docId = null, ultimoDia = null, origem = null, x0 = 0, y0 = 0, arrastando = false;
+
+  function limpar() {
+    if (clone) { clone.remove(); clone = null; }
+    docId = null; ultimoDia = null; origem = null; arrastando = false;
+    cal.querySelectorAll('.cal-dia.dragover').forEach(el => el.classList.remove('dragover'));
+    cal.querySelectorAll('.cal-evento.arrastando').forEach(el => el.classList.remove('arrastando'));
+  }
+
+  cal.addEventListener('touchstart', (ev) => {
+    if (!isAdmin()) return;
+    const ev0 = ev.target.closest('.cal-evento.arrastavel');
+    if (!ev0) return;
+    docId = ev0.getAttribute('data-doc');
+    origem = ev0;
+    const t = ev.touches[0];
+    x0 = t.clientX; y0 = t.clientY; arrastando = false;
+  }, { passive: true });
+
+  cal.addEventListener('touchmove', (ev) => {
+    if (!docId) return;
+    const t = ev.touches[0];
+    // Só vira "arraste" depois de mover além do limiar — assim um toque simples abre o dia normalmente
+    if (!arrastando) {
+      if (Math.abs(t.clientX - x0) < 8 && Math.abs(t.clientY - y0) < 8) return;
+      arrastando = true;
+      origem.classList.add('arrastando');
+      const r = origem.getBoundingClientRect();
+      clone = origem.cloneNode(true);
+      clone.style.cssText += `position:fixed;z-index:3000;pointer-events:none;opacity:.9;width:${r.width}px;left:${r.left}px;top:${r.top}px;box-shadow:0 6px 18px rgba(0,0,0,.35);`;
+      document.body.appendChild(clone);
+    }
+    ev.preventDefault(); // evita rolar a página enquanto arrasta
+    clone.style.left = (t.clientX - clone.offsetWidth / 2) + 'px';
+    clone.style.top = (t.clientY - clone.offsetHeight / 2) + 'px';
+    cal.querySelectorAll('.cal-dia.dragover').forEach(el => el.classList.remove('dragover'));
+    const alvo = document.elementFromPoint(t.clientX, t.clientY);
+    const dia = alvo && alvo.closest ? alvo.closest('.cal-dia:not(.vazio)') : null;
+    if (dia && cal.contains(dia)) { dia.classList.add('dragover'); ultimoDia = dia; }
+    else ultimoDia = null;
+  }, { passive: false });
+
+  cal.addEventListener('touchend', () => {
+    if (!arrastando) { limpar(); return; }
+    const alvoDia = ultimoDia;
+    const dId = docId;
+    limpar();
+    if (!dId || !alvoDia) return;
+    const num = parseInt(alvoDia.querySelector('.cal-num')?.textContent, 10);
+    if (!num) return;
+    const novoData = `${anoAtual}-${String(mesAtual+1).padStart(2,'0')}-${String(num).padStart(2,'0')}`;
+    pedirConfirmacaoReagendar(dId, novoData);
+  });
+
+  cal.addEventListener('touchcancel', limpar);
+}
+
+function pedirConfirmacaoReagendar(docId, novoData) {
+  const p = pulverizacoes.find(x => x._docId === docId);
+  if (!p) return;
+  if (p.data === novoData) return; // soltou no mesmo dia — nada a fazer
+  _reagPend = { docId, novoData };
+  const planejadaOrig = p.dataOriginal || p.data;
+  const jaFoiAlterada = !!p.dataOriginal;
+  document.getElementById('reagendarCorpo').innerHTML = `
+    <div style="font-size:.95rem;line-height:1.55;">
+      Mover <strong>${sanitizar(p.talhaoNome || p.talhaoId || '—')}</strong>${p.fazenda ? ` <span style="color:var(--c);">(${sanitizar(p.fazenda)})</span>` : ''}<br>
+      de <strong>${formatarData(p.data)}</strong>
+      para <strong style="color:var(--v);">${formatarData(novoData)}</strong>?
+    </div>
+    <div style="margin-top:12px;background:var(--vb);border:1px solid #a7d7a7;border-radius:var(--rs);padding:10px 12px;font-size:.8rem;color:#2f6b32;line-height:1.5;">
+      📌 Data planejada original: <strong>${formatarData(planejadaOrig)}</strong>${jaFoiAlterada ? '' : ' (será guardada no registro)'}<br>
+      A alteração fica registrada para consulta (planejada · alterada · executada).
+    </div>`;
+  document.getElementById('overlayReagendar').classList.add('open');
+}
+
+window.fecharReagendar = function() {
+  _reagPend = null;
+  document.getElementById('overlayReagendar').classList.remove('open');
+};
+
+window.confirmarReagendar = async function() {
+  if (!_reagPend || !isAdmin()) { fecharReagendar(); return; }
+  const { docId, novoData } = _reagPend;
+  const p = pulverizacoes.find(x => x._docId === docId);
+  if (!p) { fecharReagendar(); return; }
+  const dataAnterior = p.data;
+  const patch = {
+    data: novoData,
+    dataAlteradaEm: new Date().toISOString(),
+    alteradaPor: usuarioAtual?.email || 'admin'
+  };
+  // Guarda a 1ª data planejada só uma vez (não sobrescreve em reagendamentos seguintes)
+  if (!p.dataOriginal) patch.dataOriginal = dataAnterior;
+  try {
+    await updateDoc(doc(db, 'pulverizacoes', docId), patch);
+    await registrarLog('pulverizacao_reagendada', `${usuarioAtual?.email || 'admin'} reagendou pulverização ${p.talhaoNome || p.talhaoId || ''} de ${formatarData(dataAnterior)} para ${formatarData(novoData)}`);
+  } catch (e) {
+    alert('Não foi possível reagendar: ' + (e?.message || e));
+  }
+  fecharReagendar();
+};
 
 // ══════════════════════════════
 // LISTA
@@ -360,6 +516,17 @@ function renderCardPulv(p) {
   const adm = isAdmin(), podConf = podeConfirmar();
   const sit = calcStatusAplicacao(p);
   const dataPlanejada = p.data ? formatarData(p.data) : '—';
+  // Histórico de datas: planejada (original) · alterada (reagendamento) · executada
+  const foiReagendada = !!(p.dataOriginal && p.dataOriginal !== p.data);
+  const dataExecutada = p.dataRealizada ? formatarData(p.dataRealizada) : null;
+  let histDatas = '';
+  if (foiReagendada || dataExecutada) {
+    const partes = [];
+    partes.push(`📌 Planejada: <strong>${formatarData(p.dataOriginal || p.data)}</strong>`);
+    if (foiReagendada) partes.push(`🗓️ Reagendada: <strong>${formatarData(p.data)}</strong>`);
+    if (dataExecutada) partes.push(`✅ Executada: <strong>${dataExecutada}</strong>`);
+    histDatas = `<div class="pulv-hist-datas">${partes.join(' · ')}</div>`;
+  }
   const pd = p.paramsDrone || {};
   const temParamsDrone = pd.alturaVoo || pd.larguraFaixa || pd.velocidade || pd.volumeCalda;
   const badge = badgeStatus(sit.status);
@@ -388,6 +555,7 @@ function renderCardPulv(p) {
       <div>
         <div class="pulv-titulo">💧 <span class="pulv-faz-tag" style="background:${corFaz};">${escAttrCal(p.fazenda||'—')}</span> ${p.talhaoNome||p.talhaoId||'—'}</div>
         <div class="pulv-meta">📅 ${dataPlanejada} · ${p.modoAplicacao||'—'}${sit.haTotal?' · '+fmt(sit.haTotal,1)+' ha':''}</div>
+        ${histDatas}
         ${p.drone?`<div class="pulv-drone">🚁 Drone: ${p.drone}</div>`:''}
       </div>
       <div class="pulv-status-wrap">
@@ -1515,6 +1683,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .ev-pend{opacity:.88;}
 .ev-feito{opacity:1;}
 .ev-feito::before{content:'✓ ';font-weight:800;}
+/* Arrastar-e-soltar (reagendar, só admin) */
+.cal-evento.arrastavel{cursor:grab;}
+.cal-evento.arrastavel:active{cursor:grabbing;}
+.cal-evento.arrastando{opacity:.4;}
+.cal-dia.dragover{border-color:var(--v);border-width:2px;background:var(--vb);box-shadow:inset 0 0 0 2px var(--v);}
 /* Legenda de fazendas no calendário */
 .legenda-fazendas{display:flex;flex-wrap:wrap;gap:5px;padding:6px 4px 8px;}
 .leg-faz-chip{display:inline-block;font-size:.66rem;color:white;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.02em;line-height:1.3;}
@@ -1534,6 +1707,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .pulv-header{padding:12px 14px;display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
 .pulv-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:1rem;}
 .pulv-meta{font-size:.72rem;color:var(--c);margin-top:2px;}
+.pulv-hist-datas{font-size:.7rem;color:var(--c);margin-top:3px;line-height:1.5;background:#f6f8f6;border-radius:6px;padding:4px 8px;display:inline-block;}
 .pulv-drone{font-size:.72rem;color:#1d4ed8;margin-top:2px;font-weight:600;}
 .chip-praga{display:inline-flex;align-items:center;gap:3px;background:#7c3aed;color:white;border-radius:12px;padding:2px 8px 2px 9px;font-size:.68rem;font-weight:700;margin:2px 2px 2px 0;}
 .chip-praga button{background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:.75rem;padding:0 0 0 2px;}
@@ -1750,6 +1924,22 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
     <div class="modal-body" id="listaDia"></div>
     <div style="padding:0 20px 20px;">
       <button onclick="abrirModalMapaPlano(_diaAtual)" style="width:100%;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;" id="btnAddNoDia">🗺️ Planejar neste dia</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR REAGENDAMENTO (arrastar-e-soltar, só admin) -->
+<div class="overlay" id="overlayReagendar" onclick="if(event.target===this)fecharReagendar()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">
+      <span>🗓️ Reagendar pulverização</span>
+      <button class="btn-fechar" onclick="fecharReagendar()">✕</button>
+    </div>
+    <div class="modal-body" id="reagendarCorpo"></div>
+    <div style="padding:0 20px 20px;display:flex;gap:10px;">
+      <button onclick="fecharReagendar()" style="flex:1;background:#f1f1f1;border:1px solid #ddd;color:#444;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;">Cancelar</button>
+      <button onclick="confirmarReagendar()" style="flex:1;background:var(--v);border:none;color:white;border-radius:var(--rs);padding:12px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;">✓ Confirmar alteração</button>
     </div>
   </div>
 </div>
