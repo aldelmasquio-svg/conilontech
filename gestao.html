@@ -151,6 +151,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .pulv-hist{display:flex;flex-direction:column;gap:8px;margin-top:6px;}
 .pulv-hist-item{display:flex;gap:11px;background:#f8fafc;border:1px solid var(--cb);border-left:3px solid #2563eb;border-radius:9px;padding:9px 11px;}
 .phi-data{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:700;color:#1e40af;white-space:nowrap;flex-shrink:0;padding-top:1px;}
+.phi-tempo{font-family:'Barlow',sans-serif;font-size:.64rem;font-weight:500;color:var(--c);margin-top:2px;}
 .phi-corpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;}
 .phi-linha{display:flex;flex-wrap:wrap;gap:5px;}
 .phi-modo{font-size:.72rem;color:var(--c);}
@@ -838,6 +839,19 @@ function _tempoRelativo(d) {
   if (dias < 7) return `há ${dias} dias`;
   if (dias < 30) return `há ${Math.floor(dias/7)} sem`;
   return formatarData(d).slice(0,5); // DD/MM
+}
+// "Há quanto tempo" — rótulo informativo que também cobre datas antigas (meses/anos).
+function _haQuantoTempo(d) {
+  if (!d) return '';
+  const dias = Math.floor((new Date(hoje()) - new Date(d)) / 86400000);
+  if (dias < 0) return 'programada';
+  if (dias === 0) return 'hoje';
+  if (dias === 1) return 'ontem';
+  if (dias < 30) return `há ${dias} dias`;
+  const meses = Math.floor(dias / 30);
+  if (meses < 12) return `há ${meses} ${meses > 1 ? 'meses' : 'mês'}`;
+  const anos = Math.floor(dias / 365);
+  return `há ${anos} ano${anos > 1 ? 's' : ''}`;
 }
 // Feed cronológico de atividades recentes de todos os módulos.
 function _feedAtividades(limite) {
@@ -1986,7 +2000,7 @@ function _pulvMostrarTalhao(t, info) {
     </div>
     <div class="secao-sub">${info.qtd>0?`${info.qtd} aplicaç${info.qtd>1?'ões':'ão'} no período — mais recente primeiro`:'Nenhuma pulverização neste talhão no período selecionado.'}</div>
     ${evs.length ? `<div class="pulv-hist">${evs.map(e => `<div class="pulv-hist-item">
-        <div class="phi-data">📅 ${e.data?formatarData(e.data):'—'}</div>
+        <div class="phi-data">📅 ${e.data?formatarData(e.data):'—'}${e.data?`<div class="phi-tempo">${_haQuantoTempo(e.data)}</div>`:''}</div>
         <div class="phi-corpo">
           ${e.pragas&&e.pragas.length?`<div class="phi-linha">${e.pragas.map(pr=>`<span class="praga-prod-chip" style="background:#ede9fe;color:#6d28d9;border:none;">🐛 ${escHtml(pr)}</span>`).join(' ')}</div>`:''}
           ${e.produtos&&e.produtos.length?`<div class="phi-linha">${e.produtos.map(pr=>`<span class="praga-prod-chip">🧪 ${escHtml(pr.nome)}${pr.dose?` · ${escHtml(String(pr.dose))} ${escHtml(pr.un||'')}/ha`:''}</span>`).join('')}</div>`:''}
