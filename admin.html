@@ -108,6 +108,7 @@ function gerarMenu() {
       { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
       { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
       { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
+      { href:'amostragem.html',   ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
     ]},
     { label: 'Análise', items: [
       { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
@@ -152,6 +153,7 @@ function renderizarUsuarios() {
     {id:'herbicida',label:'Herbicida'},
     {id:'calibracao',label:'Calibração'},
     {id:'avaliacoes',label:'Avaliações'},
+    {id:'amostragem',label:'Amostragem (solo/folha)'},
     {id:'pedidos',label:'Pedidos'},
     {id:'cotacoes',label:'Cotações'},
     {id:'estoque',label:'Estoque'},
@@ -163,7 +165,7 @@ function renderizarUsuarios() {
   const NIVEIS = ['nenhum','encarregado','operador','gerente','admin'];
   const modLabel = id => (MODS.find(m=>m.id===id)?.label||id);
   const GRUPOS = [
-    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','herbicida','calibracao','avaliacoes','atividades','equipe']},
+    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','herbicida','calibracao','avaliacoes','amostragem','atividades','equipe']},
     {titulo:'Compras e estoque', ids:['estoque','pedidos','cotacoes']},
     {titulo:'Análise e gestão', ids:['gestao','analises','recomendacoes','planejamento']},
   ];
@@ -265,6 +267,7 @@ window.abrirFazendasUsuario = function(uid) {
     {id:'herbicida',label:'Herbicida',ico:'🌿'},
     {id:'calibracao',label:'Calibração',ico:'⚙️'},
     {id:'avaliacoes',label:'Avaliações',ico:'📍'},
+    {id:'amostragem',label:'Amostragem',ico:'🧫'},
     {id:'pedidos',label:'Pedidos',ico:'📦'},
     {id:'cotacoes',label:'Cotações',ico:'💰'},
     {id:'estoque',label:'Estoque',ico:'🏬'},
