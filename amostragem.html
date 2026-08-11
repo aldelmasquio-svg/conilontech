@@ -11,7 +11,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -33,11 +33,14 @@ let usuarioAtual=null, perfilAtual={};
 let talhoes=[], pontos=[], coletas=[];
 let map, mapaIniciado=false, talhaoLayers=[], pontoMarkers={}, pontoSel=null;
 let anoAtivo = new Date().getFullYear();
+let rodadaAtiva = 1;                                              // rodada dentro do ano (1ª/2ª/3ª amostragem)
+let cfgRodadas = 3, cfgRotulos = null;                           // quantas amostragens por ano + rótulos
 let filtroFazenda='todas', sidebarAberta=true;
 let fazFechadas=new Set(), talFechados=new Set();
 let _sbFazKeys=[], _sbTalKeys=[];
-let _previewPontos=null, _previewTalhao=null, _previewLayer=[];   // grade gerada, aguardando salvar
+let _previewPontos=null, _previewTalhao=null, _previewLayer=[], _previewSubstituir=false;   // grade gerada, aguardando salvar
 let _coletaCtx=null;                                             // GPS capturado p/ a coleta atual
+let _movendoPontoId=null;                                        // ponto sendo reposicionado por toque no mapa
 let locWatchId=null, locMarker=null, locAccCircle=null;
 
 // ─── AUTH ───
@@ -53,7 +56,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserEmail').textContent=user.email;
   gerarMenu();
-  if (podeGerenciar()) document.getElementById('marcarBar').style.display='flex';
+  if (podeGerenciar()) { document.getElementById('marcarBar').style.display='flex'; document.getElementById('btnCfgCamp').style.display='inline-block'; }
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('appContent').style.display='flex';
   iniciarMapa();
@@ -154,23 +157,38 @@ function areaHaPoligono(coords){
   }
   return Math.abs(area/2)/10000;
 }
-// Gera uma grade (zigue-zague) de ~alvo pontos DENTRO do polígono do talhão.
-function gerarGrade(coords, alvo){
+// Gera uma grade (zigue-zague) de ~alvo pontos DENTRO do polígono do talhão,
+// mantendo um recuo mínimo (metros) da borda para não mascarar a amostra (efeito bordadura).
+function gerarGrade(coords, alvo, recuoM){
+  recuoM = recuoM||0;
   const pts=normLatLngs(coords);
   const lats=pts.map(p=>p[0]), lngs=pts.map(p=>p[1]);
   const minLat=Math.min(...lats), maxLat=Math.max(...lats), minLng=Math.min(...lngs), maxLng=Math.max(...lngs);
   const latMid=(minLat+maxLat)/2;
   const mLat=110540, mLng=111320*Math.cos(latMid*Math.PI/180);
+  const proj=pts.map(p=>[p[1]*mLng, p[0]*mLat]); // arestas projetadas em metros
+  function bordoOk(y,x){
+    if(recuoM<=0) return true;
+    const px=x*mLng, py=y*mLat; let min=Infinity;
+    for(let i=0,j=proj.length-1;i<proj.length;j=i++){
+      const ax=proj[i][0],ay=proj[i][1],bx=proj[j][0],by=proj[j][1];
+      const dx=bx-ax,dy=by-ay,len2=dx*dx+dy*dy||1e-9;
+      let t=((px-ax)*dx+(py-ay)*dy)/len2; t=t<0?0:(t>1?1:t);
+      const cx=ax+t*dx, cy=ay+t*dy;
+      const d=Math.hypot(px-cx,py-cy); if(d<min)min=d;
+    }
+    return min>=recuoM;
+  }
   const wM=Math.max(1,(maxLng-minLng)*mLng), hM=Math.max(1,(maxLat-minLat)*mLat);
   let spacing=Math.sqrt((wM*hM)/Math.max(1,alvo));
   let best=[];
-  for(let it=0; it<16; it++){
+  for(let it=0; it<18; it++){
     const dLatDeg=spacing/mLat, dLngDeg=spacing/mLng;
     const rows=[]; let ri=0;
     for(let y=minLat+dLatDeg/2; y<=maxLat; y+=dLatDeg, ri++){
       const row=[];
       for(let x=minLng+dLngDeg/2; x<=maxLng; x+=dLngDeg){
-        if(pontoNoPoligono(y,x,coords)) row.push([y,x]);
+        if(pontoNoPoligono(y,x,coords) && bordoOk(y,x)) row.push([y,x]);
       }
       if(ri%2) row.reverse();
       rows.push(row);
@@ -190,10 +208,11 @@ function gerarGrade(coords, alvo){
 function pontosVisiveis(){ return pontos.filter(p=>fazendaPermitida(p.fazenda) && (filtroFazenda==='todas'||p.fazenda===filtroFazenda)); }
 function pontosDoTalhao(talId){ return pontos.filter(p=>p.talhaoId===talId); }
 function coletasDoPonto(pontoId){ return coletas.filter(c=>c.pontoId===pontoId).sort((a,b)=>String(b.data||b.criadoEm||'').localeCompare(String(a.data||a.criadoEm||''))); }
-function coletasDoPontoAno(pontoId,ano){ return coletas.filter(c=>c.pontoId===pontoId && String(c.ano)===String(ano)); }
-// Estado de um ponto na campanha (ano) ativa: 'completo' (solo+folha) | 'parcial' | 'pendente'
-function statusPontoAno(pontoId,ano){
-  const cs=coletasDoPontoAno(pontoId,ano);
+// Coletas de um ponto numa campanha = ano + rodada (coletas antigas sem rodada contam como 1ª)
+function coletasDoPontoCamp(pontoId,ano,rodada){ return coletas.filter(c=>c.pontoId===pontoId && String(c.ano)===String(ano) && (Number(c.rodada)||1)===rodada); }
+// Estado de um ponto na campanha ativa: 'completo' (solo+folha) | 'parcial' | 'pendente'
+function statusPontoCamp(pontoId,ano,rodada){
+  const cs=coletasDoPontoCamp(pontoId,ano,rodada);
   if(!cs.length) return {estado:'pendente', tipos:[]};
   const tipos=[...new Set(cs.flatMap(c=>c.tipos||[]))];
   const completo = tipos.includes('solo') && tipos.includes('folha');
@@ -201,13 +220,21 @@ function statusPontoAno(pontoId,ano){
 }
 function tiposBadge(tipos){ return (tipos||[]).map(t=> t==='solo'?'S':(t==='folha'?'F':'')).join(''); }
 function tiposTxt(tipos){ return (tipos||[]).map(t=> t==='solo'?'Solo':(t==='folha'?'Folha':t)).join(' + '); }
-function anosComColeta(){ return [...new Set(coletas.map(c=>Number(c.ano)).filter(Boolean))]; }
+function rotuloRodada(r){ return (cfgRotulos && cfgRotulos[r-1]) ? cfgRotulos[r-1] : `${r}ª`; }
+function campanhaTxt(ano,rodada){ return `${ano} · ${rotuloRodada(rodada)}`; }
 
 // ─── MAPA ───
 function iniciarMapa(){
   if(mapaIniciado) return; mapaIniciado=true;
   map=L.map('map',{center:[-18.7166,-40.4000],zoom:13,zoomControl:true,scrollWheelZoom:true});
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19}).addTo(map);
+  // clique no mapa reposiciona o ponto quando o modo "mover" está armado
+  map.on('click', e=>{
+    if(!_movendoPontoId) return;
+    const id=_movendoPontoId; _movendoPontoId=null;
+    ajustarPonto(id, e.latlng.lat, e.latlng.lng);
+    if(pontoSel===id) selecionarPonto(id);
+  });
 }
 function corStatus(estado){ return estado==='completo'?'#16a34a':(estado==='parcial'?'#d97706':'#94a3b8'); }
 function iconePonto(estado, badge, sel){
@@ -233,7 +260,7 @@ function renderPontos(){
   const podeArrastar=podeGerenciar();
   vis.forEach(p=>{
     if(p.lat==null||p.lng==null) return;
-    const st=statusPontoAno(p._docId,anoAtivo);
+    const st=statusPontoCamp(p._docId,anoAtivo,rodadaAtiva);
     const sel=pontoSel===p._docId;
     const mk=L.marker([p.lat,p.lng],{icon:iconePonto(st.estado, tiposBadge(st.tipos)||'', sel), draggable:podeArrastar}).addTo(map);
     mk.bindTooltip(sanitizar(nomePonto(p)),{direction:'top'});
@@ -249,8 +276,9 @@ function nomePonto(p){ return (p.nome||'').trim() || `Ponto ${p.ordem!=null?p.or
 
 // ─── SIDEBAR ───
 function renderSidebar(){
-  // seletor de ano
+  // seletor de ano + rodada
   document.getElementById('anoLabel').textContent=anoAtivo;
+  renderRodadaChips();
   const fazSel=document.getElementById('filtroFaz');
   const fzs=[...new Set(pontos.filter(p=>fazendaPermitida(p.fazenda)).map(p=>p.fazenda).filter(Boolean))].sort();
   const atual=fazSel.value;
@@ -258,8 +286,8 @@ function renderSidebar(){
   if(fzs.includes(atual)||atual==='todas') fazSel.value=atual;
 
   const vis=pontosVisiveis();
-  const totalAno=vis.filter(p=>statusPontoAno(p._docId,anoAtivo).estado!=='pendente').length;
-  document.getElementById('sidebarCount').textContent=vis.length?`${totalAno}/${vis.length} em ${anoAtivo}`:'';
+  const totalAno=vis.filter(p=>statusPontoCamp(p._docId,anoAtivo,rodadaAtiva).estado!=='pendente').length;
+  document.getElementById('sidebarCount').textContent=vis.length?`${totalAno}/${vis.length}`:'';
   const cont=document.getElementById('sidebarList');
   if(!vis.length){ cont.innerHTML=`<div class="sb-vazio">Nenhum ponto de coleta ainda.${podeGerenciar()?'<br>Toque em <b>▦ Gerar pontos</b> para criar a grade num talhão.':''}</div>`; return; }
   const porFaz={};
@@ -275,14 +303,14 @@ function renderSidebar(){
       const ti=_sbTalKeys.push(talKey)-1;
       const tFechado=talFechados.has(talKey);
       const arr=porTal[tk].slice().sort((a,b)=>(a.ordem||0)-(b.ordem||0));
-      const feitos=arr.filter(p=>statusPontoAno(p._docId,anoAtivo).estado!=='pendente').length;
+      const feitos=arr.filter(p=>statusPontoCamp(p._docId,anoAtivo,rodadaAtiva).estado!=='pendente').length;
       const pts=arr.map(p=>{
-        const st=statusPontoAno(p._docId,anoAtivo);
+        const st=statusPontoCamp(p._docId,anoAtivo,rodadaAtiva);
         return `<div class="msb-item ${pontoSel===p._docId?'active':''}" onclick="selPonto('${p._docId}')">
           <span class="msb-dot" style="background:${corStatus(st.estado)}"></span>
           <div class="msb-info">
             <div class="msb-nome">${sanitizar(nomePonto(p))}</div>
-            <div class="msb-sub" style="color:var(--c)">${st.estado==='pendente'?'pendente em '+anoAtivo:'coletado · '+tiposTxt(st.tipos)}</div>
+            <div class="msb-sub" style="color:var(--c)">${st.estado==='pendente'?'pendente':'coletado · '+tiposTxt(st.tipos)}</div>
           </div>
         </div>`;
       }).join('');
@@ -308,6 +336,16 @@ function renderSidebar(){
 window.toggleFaz=function(i){ const f=_sbFazKeys[i]; if(f==null)return; if(fazFechadas.has(f))fazFechadas.delete(f); else fazFechadas.add(f); renderSidebar(); };
 window.toggleTal=function(i){ const k=_sbTalKeys[i]; if(k==null)return; if(talFechados.has(k))talFechados.delete(k); else talFechados.add(k); renderSidebar(); };
 window.mudarAno=function(d){ anoAtivo+=d; renderPontos(); if(pontoSel) selecionarPonto(pontoSel); };
+window.setRodada=function(r){ rodadaAtiva=r; renderPontos(); if(pontoSel) selecionarPonto(pontoSel); };
+function renderRodadaChips(){
+  const box=document.getElementById('rodadaChips'); if(!box) return;
+  if(rodadaAtiva>cfgRodadas) rodadaAtiva=cfgRodadas;
+  let html='';
+  for(let r=1;r<=cfgRodadas;r++){
+    html+=`<button class="rodada-chip ${r===rodadaAtiva?'on':''}" onclick="setRodada(${r})">${sanitizar(rotuloRodada(r))}</button>`;
+  }
+  box.innerHTML=html;
+}
 
 // ─── PAINEL DO PONTO ───
 function selecionarPonto(id){
@@ -316,10 +354,12 @@ function selecionarPonto(id){
   if(p.lat!=null&&p.lng!=null) map.setView([p.lat,p.lng], Math.max(map.getZoom(),17), {animate:true});
   renderPontos();
   const gm=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
-  const st=statusPontoAno(id,anoAtivo);
+  const camp=campanhaTxt(anoAtivo,rodadaAtiva);
+  const st=statusPontoCamp(id,anoAtivo,rodadaAtiva);
   const statusHtml = st.estado==='pendente'
-    ? `<div class="status-chip pend">⏳ Pendente em ${anoAtivo}</div>`
-    : `<div class="status-chip ${st.estado==='completo'?'ok':'parc'}">${st.estado==='completo'?'✅ Coletado':'🟠 Parcial'} em ${anoAtivo} · ${tiposTxt(st.tipos)}</div>`;
+    ? `<div class="status-chip pend">⏳ Pendente · ${sanitizar(camp)}</div>`
+    : `<div class="status-chip ${st.estado==='completo'?'ok':'parc'}">${st.estado==='completo'?'✅ Coletado':'🟠 Parcial'} · ${sanitizar(camp)} · ${tiposTxt(st.tipos)}</div>`;
+  const movendo = _movendoPontoId===id;
   document.getElementById('pNome').textContent=nomePonto(p);
   document.getElementById('pFaz').innerHTML=`${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${sanitizar(p.fazenda||'')}`;
   document.getElementById('pBody').innerHTML=`
@@ -330,10 +370,18 @@ function selecionarPonto(id){
         <span class="loc-coord">📍 ${Number(p.lat).toFixed(6)}, ${Number(p.lng).toFixed(6)}</span>
         <a class="btn-maps" href="${gm}" target="_blank" rel="noopener">🧭 Abrir no Google Maps</a>
       </div>
-      <div class="loc-hint">Todo ano a coleta é feita neste mesmo ponto.</div>
+      <div class="loc-hint">A coleta é sempre feita neste mesmo ponto, ano após ano.</div>
     </div>
+    ${podeGerenciar()?`<div class="secao editar-pt">
+      <div class="secao-tit">Editar ponto</div>
+      <div class="editar-row">
+        <button class="btn-edit ${movendo?'on':''}" onclick="toggleMover('${id}')">${movendo?'✕ Cancelar (toque no mapa)':'✥ Mover ponto'}</button>
+        <button class="btn-edit" onclick="abrirRenomear('${id}')">✏️ Renomear</button>
+      </div>
+      <div class="editar-hint">Para mover: toque em <b>Mover</b> e depois no novo local no mapa. Você também pode arrastar o pino.</div>
+    </div>`:''}
     ${podeRegistrar()?`<div class="secao coleta-cta">
-      <button class="btn-coletar" onclick="confirmarColetaGps('${id}')">🎯 Confirmar coleta ${anoAtivo} (GPS)</button>
+      <button class="btn-coletar" onclick="confirmarColetaGps('${id}')">🎯 Confirmar coleta · ${sanitizar(camp)} (GPS)</button>
       <div class="coleta-nota">O GPS valida se você está a até ${MARGEM_M} m do ponto.</div>
     </div>`:''}
     <div class="secao"><div class="secao-tit">Histórico de coletas</div><div id="coletaList"></div></div>`;
@@ -351,7 +399,7 @@ function renderColetaList(id){
     const fora=c.dentroMargem===false;
     return `<div class="coleta-row">
       <div class="coleta-top">
-        <span class="coleta-ano">${sanitizar(String(c.ano||'—'))}</span>
+        <span class="coleta-ano">${sanitizar(campanhaTxt(c.ano||'—', Number(c.rodada)||1))}</span>
         <span class="coleta-data">📅 ${formatarData(c.data)}</span>
         ${podeGerenciar()?`<button class="hist-del" title="Excluir coleta" onclick="excluirColeta('${c._docId}')">✕</button>`:''}
       </div>
@@ -397,7 +445,7 @@ function abrirModalColeta(p){
   const btn=document.getElementById('mcSalvar');
   btn.textContent = dentro ? '💾 Registrar coleta' : '⚠️ Registrar fora da margem';
   btn.style.background = dentro ? 'var(--acc)' : 'var(--danger)';
-  document.getElementById('mcAno').textContent=anoAtivo;
+  document.getElementById('mcAno').textContent=campanhaTxt(anoAtivo,rodadaAtiva);
   document.getElementById('overlayColeta').classList.add('open');
 }
 window.fecharModalColeta=function(){ document.getElementById('overlayColeta').classList.remove('open'); _coletaCtx=null; };
@@ -413,7 +461,7 @@ window.salvarColeta=async function(){
   try{
     await addDoc(collection(db,'amostragemColetas'),{
       pontoId:ctx.pontoId, talhaoId:p.talhaoId||'', talhaoNome:p.talhaoNome||'', fazenda:p.fazenda||'',
-      ano:anoAtivo, data, tipos,
+      ano:anoAtivo, rodada:rodadaAtiva, data, tipos,
       lat:ctx.lat, lng:ctx.lng, precisaoGps:Math.round(ctx.acc),
       distanciaM:Math.round(ctx.dist), dentroMargem:ctx.dentro,
       obs, coletadoPor:usuarioAtual.email, criadoEm:new Date().toISOString()
@@ -427,12 +475,12 @@ window.salvarColeta=async function(){
 window.abrirModalGrade=function(){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
   const disponiveis=talhoes
-    .filter(t=>t.coordenadas&&t.coordenadas.length>=3&&fazendaPermitida(t.fazenda)&&pontosDoTalhao(t.id).length===0)
+    .filter(t=>t.coordenadas&&t.coordenadas.length>=3&&fazendaPermitida(t.fazenda))
     .sort((a,b)=>String(a.id||'').localeCompare(String(b.id||''),'pt',{numeric:true}));
   const sel=document.getElementById('mgTalhao');
   if(!disponiveis.length){
-    sel.innerHTML=`<option value="">— nenhum talhão livre —</option>`;
-    document.getElementById('mgAviso').textContent='Todos os talhões com mapa já possuem pontos. Exclua os pontos de um talhão para gerar de novo, ou ajuste/adicione pontos individualmente.';
+    sel.innerHTML=`<option value="">— nenhum talhão com mapa —</option>`;
+    document.getElementById('mgAviso').textContent='Nenhum talhão com polígono cadastrado. Cadastre o talhão no Mapa primeiro.';
   } else {
     sel.innerHTML=disponiveis.map(t=>`<option value="${sanitizar(t.id)}">${sanitizar((t.id||'')+' · '+(t.nome||''))}</option>`).join('');
     document.getElementById('mgAviso').textContent='';
@@ -444,23 +492,37 @@ window.fecharModalGrade=function(){ document.getElementById('overlayGrade').clas
 window.overlayGradeClick=function(e){ if(e.target.id==='overlayGrade') fecharModalGrade(); };
 window.atualizarSugestaoGrade=function(){
   const t=talhoes.find(x=>x.id===document.getElementById('mgTalhao').value);
-  if(!t){ document.getElementById('mgInfo').textContent=''; return; }
+  const subRow=document.getElementById('mgSubstituir');
+  if(!t){ document.getElementById('mgInfo').textContent=''; if(subRow) subRow.style.display='none'; return; }
   const ha=areaHaPoligono(t.coordenadas);
   const sug=Math.max(4, Math.min(20, Math.round(ha)));
   document.getElementById('mgQtd').value=sug;
   document.getElementById('mgInfo').textContent=`Área ~${ha.toFixed(1)} ha · sugestão ${sug} pontos`;
+  const existentes=pontosDoTalhao(t.id).length;
+  if(subRow){
+    if(existentes>0){
+      subRow.style.display='';
+      const nColetas=coletas.filter(c=>c.talhaoId===t.id).length;
+      document.getElementById('mgSubTxt').innerHTML=`Este talhão já tem <b>${existentes} ponto(s)</b>.`+(nColetas?` <b style="color:var(--danger)">Substituir apaga também ${nColetas} coleta(s) do histórico.</b>`:'');
+      document.getElementById('mgSubChk').checked=false;
+    } else { subRow.style.display='none'; }
+  }
 };
 window.gerarGradePreview=function(){
   const t=talhoes.find(x=>x.id===document.getElementById('mgTalhao').value);
   if(!t){ toast('⚠️ Escolha um talhão.'); return; }
   let alvo=parseInt(document.getElementById('mgQtd').value,10); if(!alvo||alvo<1) alvo=6; if(alvo>40) alvo=40;
-  const grade=gerarGrade(t.coordenadas, alvo);
-  if(!grade.length){ toast('⚠️ Não consegui posicionar pontos nesse talhão.'); return; }
-  _previewPontos=grade; _previewTalhao=t;
+  let recuo=parseInt(document.getElementById('mgRecuo').value,10); if(isNaN(recuo)||recuo<0) recuo=0; if(recuo>200) recuo=200;
+  const existentes=pontosDoTalhao(t.id).length;
+  const substituir = existentes>0 && document.getElementById('mgSubChk').checked;
+  if(existentes>0 && !substituir){ toast('⚠️ Marque "substituir" para regerar este talhão.'); return; }
+  let grade=gerarGrade(t.coordenadas, alvo, recuo);
+  if(!grade.length){ toast(`⚠️ Nenhum ponto cabe com recuo de ${recuo} m. Reduza o recuo.`); return; }
+  _previewPontos=grade; _previewTalhao=t; _previewSubstituir=substituir;
   fecharModalGrade();
   desenharPreview();
   document.getElementById('gradeConfirmBar').style.display='flex';
-  document.getElementById('gradeConfirmTxt').textContent=`${grade.length} pontos em ${t.nome||t.id}`;
+  document.getElementById('gradeConfirmTxt').textContent=`${grade.length} pontos em ${t.nome||t.id}${substituir?' (substitui)':''}`;
   try{ map.fitBounds(normLatLngs(t.coordenadas),{padding:[50,50],maxZoom:17}); }catch(e){}
 };
 function desenharPreview(){
@@ -472,15 +534,19 @@ function desenharPreview(){
 }
 function limparPreview(){ _previewLayer.forEach(m=>map.removeLayer(m)); _previewLayer=[]; }
 window.cancelarPreview=function(){
-  _previewPontos=null; _previewTalhao=null; limparPreview();
+  _previewPontos=null; _previewTalhao=null; _previewSubstituir=false; limparPreview();
   document.getElementById('gradeConfirmBar').style.display='none';
 };
 window.salvarPreview=async function(){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
-  const t=_previewTalhao, grade=_previewPontos;
+  const t=_previewTalhao, grade=_previewPontos, substituir=_previewSubstituir;
   if(!t||!grade||!grade.length){ cancelarPreview(); return; }
   const btn=document.getElementById('gradeSalvarBtn'); const txt=btn.innerHTML; btn.innerHTML='Salvando...'; btn.disabled=true;
   try{
+    if(substituir){
+      for(const c of coletas.filter(x=>x.talhaoId===t.id)) await deleteDoc(doc(db,'amostragemColetas',c._docId));
+      for(const p of pontosDoTalhao(t.id)) await deleteDoc(doc(db,'amostragemPontos',p._docId));
+    }
     let ordem=1;
     for(const pt of grade){
       await addDoc(collection(db,'amostragemPontos'),{
@@ -526,6 +592,53 @@ async function ajustarPonto(id, lat, lng){
   try{ await updateDoc(doc(db,'amostragemPontos',id),{lat,lng}); toast('📍 Ponto ajustado.'); }
   catch(e){ toast('❌ Erro ao ajustar: '+e.message); renderPontos(); }
 }
+// Mover ponto tocando no mapa (arma/desarma o modo)
+window.toggleMover=function(id){
+  if(!podeGerenciar()) return;
+  _movendoPontoId = (_movendoPontoId===id) ? null : id;
+  if(_movendoPontoId) toast('👉 Toque no mapa, no novo local do ponto.');
+  if(pontoSel) selecionarPonto(pontoSel);
+};
+// Renomear ponto
+let _renomeandoId=null;
+window.abrirRenomear=function(id){
+  if(!podeGerenciar()) return;
+  const p=pontos.find(x=>x._docId===id); if(!p) return;
+  _renomeandoId=id;
+  document.getElementById('mrNome').value=nomePonto(p);
+  document.getElementById('overlayRenomear').classList.add('open');
+  setTimeout(()=>document.getElementById('mrNome').focus(),100);
+};
+window.fecharRenomear=function(){ document.getElementById('overlayRenomear').classList.remove('open'); _renomeandoId=null; };
+window.overlayRenomearClick=function(e){ if(e.target.id==='overlayRenomear') fecharRenomear(); };
+window.salvarRenomear=async function(){
+  if(!podeGerenciar()||!_renomeandoId){ fecharRenomear(); return; }
+  const nome=(document.getElementById('mrNome').value||'').trim();
+  if(!nome){ toast('⚠️ Digite um nome.'); return; }
+  const id=_renomeandoId;
+  try{ await updateDoc(doc(db,'amostragemPontos',id),{nome}); fecharRenomear(); toast('✏️ Ponto renomeado.'); if(pontoSel===id) selecionarPonto(id); }
+  catch(e){ toast('❌ Erro: '+e.message); }
+};
+
+// ─── CONFIG DA CAMPANHA (nº de rodadas por ano + rótulos, admin) ───
+window.abrirConfigCampanha=function(){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  document.getElementById('ccQtd').value=cfgRodadas;
+  document.getElementById('ccRotulos').value=(cfgRotulos||[]).join(', ');
+  document.getElementById('overlayConfig').classList.add('open');
+};
+window.fecharConfigCampanha=function(){ document.getElementById('overlayConfig').classList.remove('open'); };
+window.overlayConfigClick=function(e){ if(e.target.id==='overlayConfig') fecharConfigCampanha(); };
+window.salvarConfigCampanha=async function(){
+  if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
+  let n=parseInt(document.getElementById('ccQtd').value,10); if(!n||n<1) n=1; if(n>6) n=6;
+  const rot=(document.getElementById('ccRotulos').value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  try{
+    await setDoc(doc(db,'amostragemConfig','geral'),{ rodadas:n, rotulos:rot }, {merge:true});
+    fecharConfigCampanha();
+    toast('✅ Campanha atualizada.');
+  }catch(e){ toast('❌ Erro: '+e.message); }
+};
 
 // Diálogo de confirmação próprio (confirm() nativo não aparece em vários navegadores de celular)
 let _confirmResolver=null;
@@ -602,6 +715,13 @@ window.fazerLogout=async function(){ await signOut(auth); window.location.href='
 
 // ─── LISTENERS ───
 function iniciarListeners(){
+  onSnapshot(doc(db,'amostragemConfig','geral'), snap => {
+    const d=snap.exists()?snap.data():{};
+    cfgRodadas=Math.max(1,Math.min(6, Number(d.rodadas)||3));
+    cfgRotulos=Array.isArray(d.rotulos)&&d.rotulos.length?d.rotulos:null;
+    if(rodadaAtiva>cfgRodadas) rodadaAtiva=cfgRodadas;
+    renderSidebar(); if(pontoSel) selecionarPonto(pontoSel);
+  });
   onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); desenharTalhoes(); renderPontos(); });
   onSnapshot(collection(db,'amostragemPontos'), snap => { pontos=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderPontos(); if(pontoSel && !pontos.some(p=>p._docId===pontoSel)) fecharPainel(); else if(pontoSel) selecionarPonto(pontoSel); });
   onSnapshot(collection(db,'amostragemColetas'), snap => { coletas=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderPontos(); if(pontoSel) renderColetaList(pontoSel); });
@@ -652,6 +772,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .ano-sel button{background:white;border:1.5px solid var(--cb);border-radius:7px;width:26px;height:26px;font-size:1rem;font-weight:700;color:var(--acc);cursor:pointer;line-height:1;}
 .ano-atual{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;color:var(--ve);}
 .ano-cap{font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);}
+.ano-cfg{background:none;border:none;cursor:pointer;font-size:.9rem;color:var(--c);padding:2px 4px;}
+.rodada-row{display:flex;gap:5px;padding:6px 10px 8px;border-bottom:1px solid var(--cl);background:#faf5ff;flex-shrink:0;flex-wrap:wrap;}
+.rodada-chip{flex:1;min-width:44px;border:1.5px solid var(--cb);background:white;color:var(--c);border-radius:7px;padding:5px 6px;font-size:.72rem;font-weight:700;font-family:'Barlow Condensed',sans-serif;cursor:pointer;}
+.rodada-chip.on{background:var(--acc);border-color:var(--acc);color:#fff;}
 .msb-filter{padding:6px 10px;border-bottom:1px solid var(--cl);flex-shrink:0;}
 .msb-filter select{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:5px 8px;font-size:.72rem;font-family:'Barlow',sans-serif;color:var(--t);outline:none;background:white;}
 #sidebarList{overflow-y:auto;flex:1;min-height:0;}
@@ -694,6 +818,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .loc-hint{font-size:.66rem;color:var(--c);font-style:italic;}
 .btn-maps{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#eef2ff;border:1.5px solid #c7d2fe;color:#4338ca;border-radius:9px;padding:9px;font-size:.8rem;font-weight:700;text-decoration:none;font-family:'Barlow Condensed',sans-serif;}
 .btn-maps:active{background:#e0e7ff;}
+.editar-pt{background:#f8fafc;border:1px solid var(--cb);border-radius:11px;padding:11px;}
+.editar-row{display:flex;gap:8px;}
+.btn-edit{flex:1;background:white;border:1.5px solid var(--cb);color:var(--t);border-radius:8px;padding:9px;font-size:.78rem;font-weight:700;cursor:pointer;font-family:'Barlow',sans-serif;}
+.btn-edit.on{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
+.editar-hint{font-size:.66rem;color:var(--c);margin-top:7px;line-height:1.4;}
 .coleta-cta{background:#faf5ff;border:1px solid #e9d5ff;border-radius:11px;padding:11px;}
 .btn-coletar{width:100%;background:var(--acc);border:none;color:#fff;border-radius:9px;padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;}
 .btn-coletar:active{transform:scale(.98);}
@@ -801,11 +930,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div class="ano-sel">
         <button onclick="mudarAno(-1)">‹</button>
         <div style="text-align:center;line-height:1.1;">
-          <div class="ano-cap">Campanha</div>
+          <div class="ano-cap">Campanha (ano)</div>
           <div class="ano-atual" id="anoLabel"></div>
         </div>
         <button onclick="mudarAno(1)">›</button>
+        <button class="ano-cfg" id="btnCfgCamp" onclick="abrirConfigCampanha()" title="Configurar rodadas" style="display:none;">⚙️</button>
       </div>
+      <div class="rodada-row" id="rodadaChips"></div>
       <div class="msb-filter">
         <select id="filtroFaz" onchange="setFiltroFaz(this)"><option value="todas">Todas as fazendas</option></select>
       </div>
@@ -844,8 +975,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div class="mg-aviso" id="mgAviso"></div>
       <div class="fg"><label>Talhão</label><select id="mgTalhao" onchange="atualizarSugestaoGrade()"></select></div>
       <div class="fg"><label>Quantidade de pontos</label><input type="number" id="mgQtd" min="1" max="40" value="6"></div>
+      <div class="fg"><label>Recuo mínimo da borda (m)</label><input type="number" id="mgRecuo" min="0" max="200" value="15"><span style="font-size:.62rem;color:var(--c);">Afasta os pontos do limite do talhão para não mascarar a amostra (bordadura).</span></div>
       <div class="mg-info" id="mgInfo"></div>
-      <div class="mg-info">Os pontos são distribuídos automaticamente dentro do talhão (zigue-zague). Depois você pode arrastar, adicionar ou excluir pontos no mapa.</div>
+      <div class="mg-aviso" id="mgSubstituir" style="display:none;">
+        <div id="mgSubTxt" style="margin-bottom:6px;"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:700;cursor:pointer;"><input type="checkbox" id="mgSubChk" style="width:18px;height:18px;"> Substituir os pontos atuais deste talhão</label>
+      </div>
+      <div class="mg-info">Os pontos são distribuídos automaticamente dentro do talhão (zigue-zague). Depois você pode arrastar, mover ou excluir pontos no mapa.</div>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharModalGrade()">Cancelar</button>
@@ -873,6 +1009,35 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharModalColeta()">Cancelar</button>
       <button class="btn-save" id="mcSalvar" onclick="salvarColeta()">💾 Registrar coleta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL RENOMEAR PONTO -->
+<div class="overlay" id="overlayRenomear" onclick="overlayRenomearClick(event)">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-header"><div class="modal-title">✏️ Renomear ponto</div><button class="panel-close" onclick="fecharRenomear()">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>Nome do ponto</label><input type="text" id="mrNome" placeholder="Ex: Ponto 5, Baixada, Perto do carreador..."></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharRenomear()">Cancelar</button>
+      <button class="btn-save" onclick="salvarRenomear()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIG CAMPANHA -->
+<div class="overlay" id="overlayConfig" onclick="overlayConfigClick(event)">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header"><div class="modal-title">⚙️ Campanhas por ano</div><button class="panel-close" onclick="fecharConfigCampanha()">✕</button></div>
+    <div class="modal-body">
+      <div class="fg"><label>Quantas amostragens por ano</label><input type="number" id="ccQtd" min="1" max="6" value="3"></div>
+      <div class="fg"><label>Rótulos (opcional, separados por vírgula)</label><input type="text" id="ccRotulos" placeholder="Ex: Pré-florada, Pós-colheita, Fim de safra"><span style="font-size:.62rem;color:var(--c);">Deixe vazio para usar 1ª, 2ª, 3ª…</span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharConfigCampanha()">Cancelar</button>
+      <button class="btn-save" onclick="salvarConfigCampanha()">💾 Salvar</button>
     </div>
   </div>
 </div>
