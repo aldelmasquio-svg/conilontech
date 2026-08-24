@@ -220,15 +220,42 @@ function renderizarCalendario() {
 function escAttrCal(s){return String(s||'').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 
 // Renderiza a legenda de cores das fazendas (chips coloridos no topo do calendário)
+let _legendaFaz = [];
 function renderLegendaFazendas() {
   const el = document.getElementById('legendaFazendas');
   if (!el) return;
   const fazs = listaFazendasOrdenadas();
+  _legendaFaz = fazs;
   if (!fazs.length) { el.innerHTML = ''; return; }
-  el.innerHTML = fazs.map(f =>
-    `<span class="leg-faz-chip" style="background:${corFazenda(f)};">${sanitizar(f)}</span>`
+  el.innerHTML = fazs.map((f,i) =>
+    `<span class="leg-faz-chip" onclick="verPendenciasFazenda(${i})" title="Ver pendências de ${sanitizar(f)}" style="background:${corFazenda(f)};cursor:pointer;">${sanitizar(f)}</span>`
   ).join('');
 }
+
+// Clique numa fazenda da legenda → pulverizações não realizadas dela (atrasadas × programadas)
+window.verPendenciasFazenda = function(i) {
+  const faz = _legendaFaz[i]; if (faz == null) return;
+  const hojeStr = new Date().toISOString().slice(0,10);
+  const naoFeitas = pulverizacoes.filter(p => {
+    if (p.fazenda !== faz) return false;
+    const s = calcStatusAplicacao(p).status;
+    return s === 'pendente' || s === 'parcial';
+  }).sort((a,b) => String(a.data||'').localeCompare(String(b.data||'')));
+  const atrasadas = naoFeitas.filter(p => p.data && p.data < hojeStr);
+  const programadas = naoFeitas.filter(p => !p.data || p.data >= hojeStr);
+  document.getElementById('tituloFaz').innerHTML = `💧 <span class="pulv-faz-tag" style="background:${corFazenda(faz)};">${sanitizar(faz)}</span>`;
+  const box = document.getElementById('listaFaz');
+  if (!naoFeitas.length) {
+    box.innerHTML = `<div style="text-align:center;color:var(--c);padding:28px 16px;font-size:.95rem;line-height:1.6;">✅ Nenhuma pulverização pendente<br>nesta fazenda.</div>`;
+  } else {
+    let html = '';
+    if (atrasadas.length) html += `<div class="faz-sec-tit atrasada">⚠️ Atrasadas · ${atrasadas.length}</div>` + atrasadas.map(p => renderCardPulv(p)).join('');
+    if (programadas.length) html += `<div class="faz-sec-tit programada">📅 Programadas · ${programadas.length}</div>` + programadas.map(p => renderCardPulv(p)).join('');
+    box.innerHTML = html;
+  }
+  document.getElementById('overlayFaz').classList.add('open');
+};
+window.fecharFaz = function() { document.getElementById('overlayFaz').classList.remove('open'); };
 
 window.mesAnterior = function() { mesAtual--; if(mesAtual<0){mesAtual=11;anoAtual--;} renderizarCalendario(); };
 window.mesProximo = function() { mesAtual++; if(mesAtual>11){mesAtual=0;anoAtual++;} renderizarCalendario(); };
@@ -1691,7 +1718,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .cal-dia.dragover{border-color:var(--v);border-width:2px;background:var(--vb);box-shadow:inset 0 0 0 2px var(--v);}
 /* Legenda de fazendas no calendário */
 .legenda-fazendas{display:flex;flex-wrap:wrap;gap:5px;padding:6px 4px 8px;}
-.leg-faz-chip{display:inline-block;font-size:.66rem;color:white;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.02em;line-height:1.3;}
+.leg-faz-chip{display:inline-block;font-size:.66rem;color:white;font-weight:700;padding:3px 9px;border-radius:99px;letter-spacing:.02em;line-height:1.3;transition:transform .1s,box-shadow .1s;}
+.leg-faz-chip:active{transform:scale(.95);}
+.faz-sec-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;padding:6px 0 2px;letter-spacing:.02em;}
+.faz-sec-tit.atrasada{color:#b91c1c;}
+.faz-sec-tit.programada{color:var(--c);}
 .pulv-faz-tag{display:inline-block;font-size:.65rem;color:white;font-weight:700;padding:2px 7px;border-radius:99px;letter-spacing:.02em;vertical-align:middle;margin-right:3px;}
 /* LISTA */
 #viewLista{padding:12px 14px 20px;display:none;flex-direction:column;gap:10px;}
@@ -1926,6 +1957,18 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
     <div style="padding:0 20px 20px;">
       <button onclick="abrirModalMapaPlano(_diaAtual)" style="width:100%;background:var(--vb);border:1px solid #a7d7a7;color:var(--v);border-radius:var(--rs);padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;" id="btnAddNoDia">🗺️ Planejar neste dia</button>
     </div>
+  </div>
+</div>
+
+<!-- PENDÊNCIAS POR FAZENDA (clique na legenda) -->
+<div class="overlay" id="overlayFaz" onclick="if(event.target===this)fecharFaz()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">
+      <span id="tituloFaz"></span>
+      <button class="btn-fechar" onclick="fecharFaz()">✕</button>
+    </div>
+    <div class="modal-body" id="listaFaz"></div>
   </div>
 </div>
 
