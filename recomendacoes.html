@@ -716,10 +716,11 @@ window.onTrocaTalhao = function() {
     return {am, an, data: an?.dataLaudo || an?.dataEntrada || ''};
   }).sort((a,b) => b.data.localeCompare(a.data));
   if (!amosOrd.length) {
-    selAn.innerHTML = '<option value="">Nenhuma análise de solo vinculada</option>';
+    selAn.innerHTML = '<option value="">Sem análise vinculada — recomendação parcial (só N)</option>';
     selAn.disabled = true;
+    window.recWIP.amostraId = '';
   } else {
-    selAn.innerHTML = '<option value="">— selecione —</option>' + amosOrd.map(o =>
+    selAn.innerHTML = '<option value="">⚪ Sem análise (recomendação só de N)</option>' + amosOrd.map(o =>
       `<option value="${escAttr(o.am._docId)}">${escHtml(o.am.nome + (o.am.profundidade?' ('+o.am.profundidade+'cm)':'') + ' · ' + formatarData(o.data))}</option>`
     ).join('');
     selAn.disabled = false;
@@ -769,9 +770,34 @@ window.renderRecomendacao = function() {
     return;
   }
   if (!am) {
-    cont.innerHTML = `<div class="vazio"><div class="ico">🔬</div><p>Selecione uma análise de solo vinculada a este talhão.<br>
-      <span style="font-size:.78rem;">Se não existe, cadastre em "🔬 Análises" e vincule.</span></p></div>`;
-    rodape.classList.remove('visivel');
+    // Recomendação SEM análise de solo: só o Nitrogênio (baseado na produtividade) é
+    // calculável; P, K, calagem e micros dependem dos teores do solo.
+    const prod = window.recWIP.produtividade;
+    const _fase = window.recWIP.fase || 'producao';
+    const _faseLabel = {producao:'Lavoura em produção', reforma:'Lavoura em reforma', plantio:'Lavoura em plantio'}[_fase] || 'Lavoura em produção';
+    const _faseIco = {producao:'🌿', reforma:'🔄', plantio:'🌱'}[_fase] || '🌿';
+    let html = `<div style="display:flex;align-items:center;gap:7px;margin-bottom:2px;">
+        <span class="fase-tag ${_fase}">${_faseIco} ${_faseLabel}</span>
+        <span style="font-size:.7rem;color:var(--c);">Sem análise de solo vinculada</span>
+      </div>`;
+    html += `<div class="alerta-info" style="margin:6px 0 12px;">🔬 <strong>Recomendação sem análise de solo.</strong> O <strong>Nitrogênio</strong> é calculado só pela produtividade esperada e já pode ser usado/salvo. <strong>Fósforo, Potássio, Calagem e Micronutrientes</strong> dependem dos teores do solo — vincule uma análise (aba "🔬 Análises") para liberar esses cálculos.</div>`;
+    html += renderCardN(prod);
+    html += `<div class="card-rec">
+      <div class="card-rec-head"><div class="card-rec-tit">🧪 Fósforo · Potássio · Calagem · Micros <span class="card-rec-sub">requer análise</span></div></div>
+      <div class="card-rec-body"><div class="alerta-tec" style="margin:0;">⚠️ Estes cálculos dependem da análise de solo (P, K, V%, Ca, Mg, CTC, micronutrientes). Vincule uma análise de solo ao talhão para calculá-los.</div></div>
+    </div>`;
+    html += `<div class="card-rec">
+      <div class="card-rec-head" onclick="toggleCard('obs')">
+        <div class="card-rec-tit">📝 Observações</div>
+        <button class="card-rec-toggle" type="button">▼</button>
+      </div>
+      <div class="card-rec-body">
+        <textarea id="recObs" oninput="window.recWIP.observacoes=this.value" placeholder="Anotações técnicas, condições de campo, ressalvas..." style="width:100%;min-height:60px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:'Barlow',sans-serif;font-size:.85rem;resize:vertical;outline:none;">${escHtml(window.recWIP.observacoes||'')}</textarea>
+      </div>
+    </div>`;
+    cont.innerHTML = html;
+    renderRodape(prod, {});
+    rodape.classList.add('visivel');
     return;
   }
   const params = am.parametros || {};
@@ -1798,7 +1824,7 @@ window.salvarRecomendacao = async function() {
   if (!podeEditar()) { toast('⛔ Sem permissão.'); return; }
   const w = window.recWIP;
   if (!w.talhaoId) { toast('⚠️ Selecione um talhão.'); return; }
-  if (!w.amostraId) { toast('⚠️ Selecione uma análise.'); return; }
+  // Análise de solo é opcional: sem ela salva a recomendação parcial (só N).
   if (!w.produtividade || w.produtividade <= 0) { toast('⚠️ Informe a produtividade esperada.'); return; }
   const btn = document.getElementById('btnSalvarRec');
   btn.disabled = true; btn.textContent = 'Salvando...';
@@ -1933,7 +1959,7 @@ window.salvarRecomendacao = async function() {
 
 window.copiarResumo = function() {
   const w = window.recWIP;
-  if (!w.talhaoId || !w.amostraId || !w.produtividade) {
+  if (!w.talhaoId || !w.produtividade) {
     toast('⚠️ Complete a recomendação primeiro.'); return;
   }
   const talhao = talhoes.find(t => t._docId === w.talhaoId);
