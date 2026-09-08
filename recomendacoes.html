@@ -488,6 +488,10 @@ window.recWIP = {
   produtividade: null,
   manual: 'incaper',
   fase: 'producao',
+  // Níveis informados pela experiência quando NÃO há análise de solo:
+  // manualP = 'muitoBaixo'|'baixo'|'medio'|'alto' | null ; manualK = 0..3 | null
+  manualP: null,
+  manualK: null,
   // calagem
   metodoCalagem: 'v',     // 'v' (saturação V%) | 'equilibrio' (equilíbrio iônico CTC)
   v2: 60,
@@ -780,11 +784,14 @@ window.renderRecomendacao = function() {
         <span class="fase-tag ${_fase}">${_faseIco} ${_faseLabel}</span>
         <span style="font-size:.7rem;color:var(--c);">Sem análise de solo vinculada</span>
       </div>`;
-    html += `<div class="alerta-info" style="margin:6px 0 12px;">🔬 <strong>Recomendação sem análise de solo.</strong> O <strong>Nitrogênio</strong> é calculado só pela produtividade esperada e já pode ser usado/salvo. <strong>Fósforo, Potássio, Calagem e Micronutrientes</strong> dependem dos teores do solo — vincule uma análise (aba "🔬 Análises") para liberar esses cálculos.</div>`;
+    html += `<div class="alerta-info" style="margin:6px 0 12px;">🔬 <strong>Recomendação sem análise de solo.</strong> O <strong>Nitrogênio</strong> sai da produtividade; para <strong>Fósforo e Potássio</strong> você informa o nível do talhão pela sua experiência (abaixo) e o app calcula a dose. <strong>Calagem e Micronutrientes</strong> precisam da análise de solo.</div>`;
     html += renderCardN(prod);
+    html += renderCardNiveisManuais();
+    html += renderCardPManual(prod);
+    html += renderCardKManual(prod);
     html += `<div class="card-rec">
-      <div class="card-rec-head"><div class="card-rec-tit">🧪 Fósforo · Potássio · Calagem · Micros <span class="card-rec-sub">requer análise</span></div></div>
-      <div class="card-rec-body"><div class="alerta-tec" style="margin:0;">⚠️ Estes cálculos dependem da análise de solo (P, K, V%, Ca, Mg, CTC, micronutrientes). Vincule uma análise de solo ao talhão para calculá-los.</div></div>
+      <div class="card-rec-head"><div class="card-rec-tit">🟤 Calagem · 🟣 Micronutrientes <span class="card-rec-sub">requer análise</span></div></div>
+      <div class="card-rec-body"><div class="alerta-tec" style="margin:0;">⚠️ Calagem (V%, Ca, Mg, CTC) e micronutrientes precisam da análise de solo — não dá pra estimar com segurança pela experiência.</div></div>
     </div>`;
     html += `<div class="card-rec">
       <div class="card-rec-head" onclick="toggleCard('obs')">
@@ -1320,6 +1327,93 @@ function valorAplicar(nutriente, sugerido) {
 }
 
 // ━━━ CARD: NITROGÊNIO ━━━
+// ━━━ NÍVEIS INFORMADOS PELA EXPERIÊNCIA (sem análise) ━━━
+// P e K são classificados por nível de solo; sem laudo, o produtor informa a classe
+// e a dose sai da MESMA tabela (produtividade × classe).
+function _doseP_cls(prod, cls){
+  const l = window.TABELA_P.find(r => prod >= r.prodMin && prod <= r.prodMax);
+  const i = ['muitoBaixo','baixo','medio','alto'].indexOf(cls);
+  return (l && i >= 0) ? l.dose[i] : null;
+}
+function _doseK_idx(prod, idx){
+  const l = window.TABELA_N_K.find(r => prod >= r.prodMin && prod <= r.prodMax);
+  return (l && idx != null && idx >= 0) ? l.k[idx] : null;
+}
+window.setManualP = function(v){ window.recWIP.manualP = v || null; onRecalcular(); };
+window.setManualK = function(v){ window.recWIP.manualK = (v === '' || v == null) ? null : parseInt(v,10); onRecalcular(); };
+
+function renderCardNiveisManuais(){
+  const p = window.recWIP.manualP || '';
+  const k = window.recWIP.manualK == null ? '' : String(window.recWIP.manualK);
+  const selCss = 'border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:\'Barlow\',sans-serif;font-size:.85rem;outline:none;background:white;min-width:150px;';
+  const opt = (val, cur, txt) => `<option value="${val}" ${String(cur)===String(val)?'selected':''}>${txt}</option>`;
+  return `<div class="card-rec" id="cardNiveis">
+    <div class="card-rec-head" onclick="toggleCard('niveis')">
+      <div class="card-rec-tit">🧭 Níveis do solo pela experiência <span class="card-rec-sub">sem análise</span></div>
+      <button class="card-rec-toggle" type="button">▼</button>
+    </div>
+    <div class="card-rec-body">
+      <div style="font-size:.74rem;color:var(--c);margin-bottom:10px;line-height:1.45;">Informe o nível de fertilidade do talhão pela sua experiência — o app calcula a dose de P e K pela mesma tabela usada com análise. Deixe em "—" o que não quiser estimar.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--c);font-weight:700;">🔴 Fósforo (P) no solo</label>
+          <select style="${selCss}" onchange="setManualP(this.value)">
+            <option value="">—</option>
+            ${opt('muitoBaixo',p,'Muito baixo')}${opt('baixo',p,'Baixo')}${opt('medio',p,'Médio')}${opt('alto',p,'Alto')}
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <label style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;color:var(--c);font-weight:700;">🔵 Potássio (K) no solo</label>
+          <select style="${selCss}" onchange="setManualK(this.value)">
+            <option value="">—</option>
+            ${opt('0',k,'Baixo')}${opt('1',k,'Médio')}${opt('2',k,'Alto')}${opt('3',k,'Muito alto')}
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderCardPManual(prod){
+  const aberto = window.recWIP.cardsAbertos.p !== false;
+  const cls = window.recWIP.manualP;
+  const head = (sub) => `<div class="card-rec-head" onclick="toggleCard('p')"><div class="card-rec-tit">🔴 Fósforo (P₂O₅) <span class="card-rec-sub">${sub}</span></div><button class="card-rec-toggle" type="button">▼</button></div>`;
+  const wrap = (sub, body) => `<div class="card-rec ${aberto?'':'fechado'}" id="cardP">${head(sub)}<div class="card-rec-body">${body}</div></div>`;
+  if (prod == null || prod <= 0) return wrap('aguardando produtividade', `<div class="alerta-info" style="margin:0;">ℹ️ <strong>Informe a produtividade esperada acima.</strong></div>`);
+  if (!cls) return wrap('informe o nível', `<div class="alerta-info" style="margin:0;">ℹ️ Escolha o nível de <strong>P</strong> do talhão no card "🧭 Níveis do solo" acima.</div>`);
+  const dose = _doseP_cls(prod, cls);
+  if (dose == null) return wrap('', `<div class="alerta-tec" style="margin:0;">⚠️ Produtividade fora das faixas da tabela.</div>`);
+  const labelCls = {muitoBaixo:'Muito Baixo',baixo:'Baixo',medio:'Médio',alto:'Alto'}[cls];
+  const tag = cls==='medio'?'md':cls==='baixo'?'bx':cls==='muitoBaixo'?'mb':'at';
+  return wrap(`${fmt(valorAplicar('p2o5',dose),0)} kg/ha`, `
+    ${renderDoseBox('p2o5', dose, 'kg P₂O₅/ha/ano')}
+    <div class="dose-explica">
+      <strong>Nível informado:</strong> <span class="cls-tag cls-${tag}">${labelCls}</span> (pela experiência, sem análise)<br>
+      <strong>Produtividade:</strong> ${fmt(prod,0)} sc/ha → ${dose} kg P₂O₅/ha
+      ${dose === 0 ? '<br><span style="color:var(--ok);font-size:.7rem;">✓ Solo bem suprido — não precisa P.</span>' : ''}
+    </div>`);
+}
+
+function renderCardKManual(prod){
+  const aberto = window.recWIP.cardsAbertos.k !== false;
+  const idx = window.recWIP.manualK;
+  const head = (sub) => `<div class="card-rec-head" onclick="toggleCard('k')"><div class="card-rec-tit">🔵 Potássio (K₂O) <span class="card-rec-sub">${sub}</span></div><button class="card-rec-toggle" type="button">▼</button></div>`;
+  const wrap = (sub, body) => `<div class="card-rec ${aberto?'':'fechado'}" id="cardK">${head(sub)}<div class="card-rec-body">${body}</div></div>`;
+  if (prod == null || prod <= 0) return wrap('aguardando produtividade', `<div class="alerta-info" style="margin:0;">ℹ️ <strong>Informe a produtividade esperada acima.</strong></div>`);
+  if (idx == null) return wrap('informe o nível', `<div class="alerta-info" style="margin:0;">ℹ️ Escolha o nível de <strong>K</strong> do talhão no card "🧭 Níveis do solo" acima.</div>`);
+  const dose = _doseK_idx(prod, idx);
+  if (dose == null) return wrap('', `<div class="alerta-tec" style="margin:0;">⚠️ Produtividade fora das faixas da tabela.</div>`);
+  const labelK = ['Baixo','Médio','Alto','Muito alto'][idx];
+  const clsK = idx===0?'bx':idx===3?'at':'md';
+  return wrap(`${fmt(valorAplicar('k2o',dose),0)} kg/ha`, `
+    ${renderDoseBox('k2o', dose, 'kg K₂O/ha/ano')}
+    <div class="dose-explica">
+      <strong>Nível informado:</strong> <span class="cls-tag cls-${clsK}">${labelK}</span> (pela experiência, sem análise)<br>
+      <strong>Produtividade:</strong> ${fmt(prod,0)} sc/ha → ${dose} kg K₂O/ha
+      ${dose === 0 ? '<br><span style="color:var(--ok);font-size:.7rem;">✓ Solo bem suprido — não precisa K.</span>' : ''}
+    </div>`);
+}
+
 function renderCardN(prod) {
   const aberto = window.recWIP.cardsAbertos.n !== false;
   if (prod == null || prod <= 0) {
@@ -1541,12 +1635,16 @@ function renderRodape(prod, params) {
     const idxCls = ['muitoBaixo','baixo','medio','alto'].indexOf(faixa.cls);
     const linhaP = window.TABELA_P.find(r => prod >= r.prodMin && prod <= r.prodMax);
     if (linhaP) pDose = linhaP.dose[idxCls];
+  } else if (!w.amostraId && w.manualP) {
+    pDose = _doseP_cls(prod, w.manualP); // nível informado pela experiência
   }
   // K
   let kDose = null;
   if (params.potassio != null && linhaNK) {
     const faixaK = FAIXAS_K_SOLO.find(f => params.potassio >= f.min && params.potassio < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
     kDose = linhaNK.k[faixaK.idx];
+  } else if (!w.amostraId && w.manualK != null) {
+    kDose = _doseK_idx(prod, w.manualK); // nível informado pela experiência
   }
   // Calagem
   let calcDose = null;
@@ -1845,11 +1943,15 @@ window.salvarRecomendacao = async function() {
       const idx = ['muitoBaixo','baixo','medio','alto'].indexOf(faixa.cls);
       const linhaP = window.TABELA_P.find(r => w.produtividade >= r.prodMin && w.produtividade <= r.prodMax);
       if (linhaP) pDose = linhaP.dose[idx];
+    } else if (!w.amostraId && w.manualP) {
+      pDose = _doseP_cls(w.produtividade, w.manualP); // nível informado pela experiência
     }
     let kDose = null;
     if (params.potassio != null && linhaNK) {
       const faixaK = FAIXAS_K_SOLO.find(f => params.potassio >= f.min && params.potassio < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
       kDose = linhaNK.k[faixaK.idx];
+    } else if (!w.amostraId && w.manualK != null) {
+      kDose = _doseK_idx(w.produtividade, w.manualK); // nível informado pela experiência
     }
     let calagem = {metodo: w.metodoCalagem, dose_sugerida: 0, dose: 0, tipo: null};
     if (w.metodoCalagem === 'v') {
@@ -1916,6 +2018,9 @@ window.salvarRecomendacao = async function() {
       amostraNome: am?.nome || '',
       analiseId: am?.analiseId || '',
       dataAnalise: analise?.dataLaudo || analise?.dataEntrada || '',
+      // Níveis P/K informados pela experiência (só quando não há análise vinculada)
+      manualP: (!w.amostraId ? (w.manualP || null) : null),
+      manualK: (!w.amostraId ? (w.manualK == null ? null : w.manualK) : null),
       fase: w.fase || 'producao',
       produtividade: w.produtividade,
       manual: w.manual,
@@ -1978,11 +2083,15 @@ window.copiarResumo = function() {
     const idx = ['muitoBaixo','baixo','medio','alto'].indexOf(faixa.cls);
     const linhaP = window.TABELA_P.find(r => w.produtividade >= r.prodMin && w.produtividade <= r.prodMax);
     if (linhaP) pDose = linhaP.dose[idx];
+  } else if (!w.amostraId && w.manualP) {
+    pDose = _doseP_cls(w.produtividade, w.manualP);
   }
   let kDose = null;
   if (params.potassio != null && linhaNK) {
     const faixaK = FAIXAS_K_SOLO.find(f => params.potassio >= f.min && params.potassio < f.max) || FAIXAS_K_SOLO[FAIXAS_K_SOLO.length-1];
     kDose = linhaNK.k[faixaK.idx];
+  } else if (!w.amostraId && w.manualK != null) {
+    kDose = _doseK_idx(w.produtividade, w.manualK);
   }
   let calagemTxt = '';
   if (w.metodoCalagem === 'v') {
@@ -2224,6 +2333,8 @@ window.editarRecomendacao = function(id) {
     produtividade: r.produtividade,
     manual: r.manual || 'incaper',
     fase: r.fase || 'producao',
+    manualP: r.manualP || null,
+    manualK: (r.manualK == null ? null : r.manualK),
     metodoCalagem: metodo,
     v2: r.calagem?.v2 || 60,
     ca2: r.calagem?.ca2 || 3.0,
@@ -2280,6 +2391,7 @@ window.limparRecomendacao = function() {
   window.editandoId = null;
   window.recWIP = {
     talhaoId:'', amostraId:'', produtividade:null, manual:'incaper', fase:'producao',
+    manualP:null, manualK:null,
     metodoCalagem:'v', v2:60, ca2:3.0, mg2:1.0, prnt:80, profundidade:20,
     eqCaPct:60, eqMgPct:15, eqKPct:5, eqProdutoCaId:null, eqProdutoMgId:null,
     ajustes: {n:null, p2o5:null, k2o:null, calagem:null, zn:null, b:null, cu:null, mn:null},
