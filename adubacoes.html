@@ -1133,14 +1133,19 @@ window.abrirEdicaoAp=function(pid,aid){
 function renderizarEProds(){
   document.getElementById('eProds').innerHTML=_eProds.map((p,i)=>`
     <div class="ep-row">
-      <input class="ep-nome" value="${p.produto}" onchange="_eProds[${i}].produto=this.value" placeholder="Produto">
-      <input class="ep-dose" type="number" value="${p.dose}" step="0.01" onchange="_eProds[${i}].dose=this.value">
-      <select class="ep-und" onchange="_eProds[${i}].unidade=this.value">
+      <input class="ep-nome" value="${sanitizar(p.produto)}" onchange="setEProdNome(${i},this.value)" placeholder="Produto">
+      <input class="ep-dose" type="number" value="${sanitizar(p.dose)}" step="0.01" onchange="setEProdDose(${i},this.value)">
+      <select class="ep-und" onchange="setEProdUnd(${i},this.value)">
         ${['kg','g','L','mL','t','sc'].map(u=>`<option ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
       </select>
       <button onclick="remEProd(${i})" class="btn-rm">✕</button>
     </div>`).join('');
 }
+// Bridges p/ o modal de edição — os onchange inline rodam no escopo GLOBAL e não
+// enxergam o _eProds do módulo; sem estas pontes as edições de produto eram perdidas.
+window.setEProdNome=function(i,v){ if(_eProds[i]) _eProds[i].produto=v; };
+window.setEProdDose=function(i,v){ if(_eProds[i]) _eProds[i].dose=v; };
+window.setEProdUnd=function(i,v){ if(_eProds[i]) _eProds[i].unidade=v; };
 window.addEProd=function(){_eProds.push({produto:'',dose:'',unidade:'kg'});renderizarEProds();};
 window.remEProd=function(i){_eProds.splice(i,1);renderizarEProds();};
 window.fecharEdicao=function(){document.getElementById('overlayEdit').classList.remove('open');};
