@@ -2748,6 +2748,12 @@ function renderNutrientes() {
   if (nutrSafra) {
     const safraSel = safras.find(s => String(s.anoIni) === nutrSafra);
     if (safraSel) { ({ inicio, fim } = safraRange(safraSel.anoIni)); lblPeriodo = `Safra ${safraSel.label}`; }
+  } else {
+    // Padrão: usa a janela da safra configurada em Adubações (ex.: jun/2026 → mar/2027),
+    // e não o período curto do topo — assim o "total da safra" (▮) considera TODO o
+    // planejamento da safra, não só o que foi planejado até o mês atual.
+    const jan = _safraJanela();
+    if (jan) { inicio = jan.ini; fim = jan.fim; lblPeriodo = 'Safra atual'; }
   }
   const talhoesBase = (faz ? talhoes.filter(t => t.fazenda === faz) : talhoes)
     .slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
@@ -2770,7 +2776,7 @@ function renderNutrientes() {
     ${safras.length ? `<div class="filtro-grupo">
       <span class="filtro-label">🗓️ Safra</span>
       <select class="filtro-sel" id="selNutrSafra" onchange="window.setNutrSafra(this.value)">
-        <option value="">Período do topo</option>
+        <option value="">Safra atual (Adubações)</option>
         ${safras.map(s => `<option value="${s.anoIni}"${String(s.anoIni) === nutrSafra ? ' selected' : ''}>Safra ${s.label}</option>`).join('')}
       </select>
     </div>` : ''}
