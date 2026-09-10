@@ -38,7 +38,7 @@ onAuthStateChanged(auth,async(user)=>{
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('appContent').style.display='flex';
   gerarMenu();
-  if(!isAdmin())document.getElementById('fabNovoPedido').style.display='none';
+  _fabsPlanej(isAdmin());
   checarRascunhoCot();
   onSnapshot(collection(db,'talhoes'),snap=>{talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()}));if(pedMapIniciado)renderizarPedPoligonos();});
   onSnapshot(collection(db,'cotacoes'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarCotacoes();if(tabAtual==='comparar')renderComparar();if(cotacaoAberta)sincronizarModal();});
@@ -140,7 +140,63 @@ function clicarTalhao(id){
 }
 window.clicarTalhao=clicarTalhao;
 window.togglePedSidebar=function(){pedSidebarAberta=!pedSidebarAberta;const sb=document.getElementById('pedSidebar'),btn=document.getElementById('btnExpandPedSb');if(sb)sb.style.display=pedSidebarAberta?'flex':'none';if(btn)btn.style.display=pedSidebarAberta?'none':'flex';if(pedMap)setTimeout(()=>pedMap.invalidateSize(),100);};
-function iniciarNovoPedido(){if(!isAdmin()){toast('⛔ Sem permissão.');return;}pedidoWIP={itens:[]};adicionarItemPedido();pedItemAtivo=0;document.getElementById('painelPedido').style.display='flex';document.getElementById('fabNovoPedido').style.display='none';renderizarItensPedido();}
+function iniciarNovoPedido(){if(!isAdmin()){toast('⛔ Sem permissão.');return;}pedidoWIP={itens:[]};adicionarItemPedido();pedItemAtivo=0;document.getElementById('painelPedido').style.display='flex';_fabsPlanej(false);renderizarItensPedido();}
+
+// ═══ IMPORTAR LISTA (colar do Excel / consolidado) — cria cotação com quantidades totais ═══
+function _fabsPlanej(mostrar){ const d=mostrar?'flex':'none'; ['fabNovoPedido','fabImportar'].forEach(id=>{const e=document.getElementById(id); if(e)e.style.display=d;}); }
+const _UNIDS_IMP={t:'t',ton:'t',tonelada:'t',toneladas:'t',kg:'kg',quilo:'kg',quilos:'kg',g:'g',l:'L',litro:'L',litros:'L',ml:'mL',sc:'sc',un:'un',und:'un',unid:'un'};
+let _importItens=[];
+// Aceita número US ("1,900" = 1900 · "56.00" = 56) e BR ("1.900,50" = 1900,5 · "56,00" = 56)
+function _numImport(s){ s=String(s).trim().replace(/[^\d.,\-]/g,''); if(!s||s==='-')return NaN; const hasC=s.includes(','),hasD=s.includes('.'); if(hasC&&hasD){ if(s.lastIndexOf(',')>s.lastIndexOf('.'))s=s.replace(/\./g,'').replace(',','.'); else s=s.replace(/,/g,''); } else if(hasC){ const a=s.split(',').pop(); if(a.length===3)s=s.replace(/,/g,''); else s=s.replace(',','.'); } const n=parseFloat(s); return isNaN(n)?NaN:n; }
+function _parseLista(txt){
+  const out=[];
+  txt.split(/\r?\n/).forEach(raw=>{
+    const line=raw.replace(/\s+$/,''); if(!line.trim())return;
+    let cells=line.includes('\t')?line.split('\t'):line.split(/\s{2,}/);
+    cells=cells.map(c=>c.trim());
+    if(cells.length<2)return;
+    const prod=cells[0]; if(!prod)return;
+    // pula cabeçalho, títulos de categoria e linhas de subtotal/total
+    if(/^(produto|subtotal|total|consolidado|somat|ureia e cloreto|adubos formulados|c[aá]lcio|micronutriente|l[ií]quido)/i.test(prod))return;
+    let unidade=''; for(const c of cells.slice(1)){ const k=c.toLowerCase().replace(/[.\s]/g,''); if(_UNIDS_IMP[k]){unidade=_UNIDS_IMP[k];break;} }
+    let qtd=NaN; for(let i=cells.length-1;i>=1;i--){ const n=_numImport(cells[i]); if(!isNaN(n)&&n>0){qtd=n;break;} }
+    if(isNaN(qtd))return;
+    out.push({produto:prod,unidade:unidade||'kg',quantidade:qtd});
+  });
+  return out;
+}
+window.abrirImport=function(){ if(!isAdmin()){toast('⛔ Sem permissão.');return;} _importItens=[]; document.getElementById('impTexto').value=''; document.getElementById('impPreview').innerHTML=''; document.getElementById('impCriar').disabled=true; document.getElementById('impOverlay').classList.add('open'); };
+window.fecharImport=function(){ document.getElementById('impOverlay').classList.remove('open'); };
+window.processarImport=function(){ _importItens=_parseLista(document.getElementById('impTexto').value||''); renderImportPreview(); };
+function renderImportPreview(){
+  const box=document.getElementById('impPreview');
+  document.getElementById('impCriar').disabled=_importItens.length===0;
+  if(!_importItens.length){ box.innerHTML='<div style="color:var(--c);font-size:.82rem;padding:10px 0;">Nenhum item reconhecido. Cole a lista e toque em "Processar".</div>'; return; }
+  const uns=['t','kg','g','L','mL','sc','un'];
+  box.innerHTML=`<div style="font-size:.72rem;color:var(--c);margin:10px 0 6px;font-weight:700;">${_importItens.length} itens reconhecidos — confira e ajuste antes de criar:</div>`+
+    `<div class="imp-tbl">${_importItens.map((it,i)=>`<div class="imp-row">
+      <input class="imp-prod" value="${escAttr(it.produto)}" oninput="setImportItem(${i},'produto',this.value)">
+      <input class="imp-qtd" type="number" inputmode="decimal" step="0.01" value="${it.quantidade}" oninput="setImportItem(${i},'quantidade',this.value)">
+      <select class="imp-un" onchange="setImportItem(${i},'unidade',this.value)">${uns.map(u=>`<option ${it.unidade===u?'selected':''}>${u}</option>`).join('')}</select>
+      <button class="imp-rm" onclick="removeImportItem(${i})">✕</button>
+    </div>`).join('')}</div>`;
+}
+window.setImportItem=function(i,campo,val){ if(!_importItens[i])return; _importItens[i][campo]= campo==='quantidade'?(parseFloat(val)||0):val; };
+window.removeImportItem=function(i){ _importItens.splice(i,1); renderImportPreview(); };
+window.criarCotacaoImport=async function(){
+  if(!isAdmin()){toast('⛔ Sem permissão.');return;}
+  const itens=_importItens.filter(it=>(it.produto||'').trim()&&it.quantidade>0);
+  if(!itens.length){toast('⚠️ Nenhum item válido.');return;}
+  const btn=document.getElementById('impCriar'); btn.disabled=true; btn.textContent='Criando...';
+  try{
+    const itensFS=itens.map(it=>{ const unidade=it.unidade||'kg'; const total=Math.round((it.quantidade||0)*100)/100; return { produto:it.produto.trim(), modo:'terrestre', dosePorHa:null, unidade, areaTotal:0, total, quantidade:`${total.toLocaleString('pt-BR')} ${unidade}`, talhoes:[] }; });
+    await addDoc(collection(db,'cotacoes'),{itens:itensFS,status:'aberta',fornecedores:[],origem:'importado',criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
+    fecharImport();
+    toast('✅ Cotação criada com '+itensFS.length+' itens! Adicione os fornecedores na aba Cotação.');
+    abrirTab('lista',document.getElementById('ptab-lista'));
+  }catch(e){ toast('❌ Erro ao criar: '+(e?.message||e)); }
+  btn.disabled=false; btn.textContent='✅ Criar cotação';
+};
 window.iniciarNovoPedido=iniciarNovoPedido;
 const MODO_APLIC={terrestre:'🚜 Terrestre',aerea:'✈️ Aérea',fertirrigacao:'💧 Fertirrigação',drench:'🌱 Drench'};
 function adicionarItemPedido(){if(!pedidoWIP)return;pedidoWIP.itens.push({produto:'',quantidade:'',unidade:'kg',modo:'terrestre',talhoes:new Set()});pedItemAtivo=pedidoWIP.itens.length-1;renderizarItensPedido();}
@@ -246,7 +302,7 @@ window.pedRepetirTalhoes=function(destino,origem){
   renderizarItensPedido();
   if(typeof toast==='function') toast(`🔁 Talhões do Insumo ${origem+1} aplicados (${dst.talhoes.size-antes} novo(s)).`);
 };
-window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar esta cotação?'))return;pedidoWIP=null;pedItemAtivo=null;limparRascunhoCot();document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();};
+window.cancelarPedido=function(){if(pedidoWIP&&!confirm('Cancelar esta cotação?'))return;pedidoWIP=null;pedItemAtivo=null;limparRascunhoCot();document.getElementById('painelPedido').style.display='none';_fabsPlanej(isAdmin());renderizarPedPoligonos();};
 
 // ─── RASCUNHO AUTOMÁTICO (evita perder edições se o salvamento falhar) ───
 const RASCUNHO_KEY='cotacaoRascunhoWIP';
@@ -270,7 +326,7 @@ window.recuperarRascunhoCot=function(){
   pedItemAtivo=0;
   document.getElementById('rascunhoBanner').style.display='none';
   document.getElementById('painelPedido').style.display='flex';
-  document.getElementById('fabNovoPedido').style.display='none';
+  _fabsPlanej(false);
   abrirTab('mapa',document.getElementById('ptab-mapa'));
   renderizarItensPedido();
   toast('🗒️ Rascunho recuperado! Confira e salve novamente.');
@@ -309,7 +365,7 @@ window.salvarPedidoWIP=async function(){
     // Cotação nasce "aberta", sem fornecedores; as propostas entram na aba Cotação
     await addDoc(collection(db,'cotacoes'),{itens:itensFS,status:'aberta',fornecedores:[],criadoEm:new Date().toISOString(),criadoPor:usuarioAtual.email});
     limparRascunhoCot();
-    pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';document.getElementById('fabNovoPedido').style.display=isAdmin()?'flex':'none';renderizarPedPoligonos();
+    pedidoWIP=null;pedItemAtivo=null;document.getElementById('painelPedido').style.display='none';_fabsPlanej(isAdmin());renderizarPedPoligonos();
     toast('✅ Cotação criada! Agora adicione os fornecedores na aba Cotação.');
     abrirTab('lista',document.getElementById('ptab-lista'));
   }catch(e){
@@ -811,6 +867,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .btn-repetir:active{transform:scale(.96);}
 .btn-add-item{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:9px;font-size:.82rem;font-family:'Barlow',sans-serif;cursor:pointer;margin-top:4px;}
 #fabNovoPedido{display:none;position:absolute;bottom:16px;right:16px;background:var(--v);border:none;color:white;border-radius:50px;padding:13px 20px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
+#fabImportar{display:none;position:absolute;bottom:64px;right:16px;background:white;border:1.5px solid var(--v);color:var(--v);border-radius:50px;padding:11px 18px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;cursor:pointer;box-shadow:var(--sf);z-index:1000;align-items:center;gap:8px;}
+.imp-tbl{display:flex;flex-direction:column;gap:6px;}
+.imp-row{display:grid;grid-template-columns:1fr 88px 60px 30px;gap:6px;align-items:center;}
+.imp-row input,.imp-row select{border:1.5px solid var(--cb);border-radius:7px;padding:7px 8px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;min-width:0;}
+.imp-rm{background:#fee2e2;color:#dc2626;border:none;border-radius:6px;width:28px;height:32px;cursor:pointer;font-size:.7rem;}
 #btnExpandPedSb{display:none;position:absolute;top:10px;left:10px;z-index:1001;background:white;border:none;border-radius:10px;padding:9px 13px;cursor:pointer;box-shadow:var(--sf);font-size:.75rem;font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);}
 #pmod-lista{flex:1;overflow:hidden;flex-direction:column;display:none;}
 .lista-hdr{padding:11px 14px;background:white;border-bottom:1px solid var(--cb);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
@@ -1019,6 +1080,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
           <button class="btn-cancelar-ped" onclick="cancelarPedido()">Cancelar</button>
         </div>
       </div>
+      <button id="fabImportar" onclick="abrirImport()">📋 Importar lista</button>
       <button id="fabNovoPedido" onclick="iniciarNovoPedido()">＋ Nova Cotação</button>
     </div>
     <div id="pmod-lista">
@@ -1049,6 +1111,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="cot-modal-footer">
       <button class="btn-fechar-cot" onclick="alternarStatusCotacao()">🔒 Fechar/Reabrir</button>
       <button class="btn-salvar-cot" id="btnSalvarCot" onclick="salvarCotacaoForn()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- IMPORTAR LISTA (colar do Excel/consolidado) -->
+<div class="cot-overlay" id="impOverlay" onclick="if(event.target===this)fecharImport()">
+  <div class="cot-modal">
+    <div class="cot-modal-hdr">
+      <div><div class="cot-modal-tit">📋 Importar lista para cotação</div><div class="cot-modal-sub">Cole a lista (produto · unidade · quantidade). Pode colar direto do Excel/consolidado.</div></div>
+      <button onclick="fecharImport()" style="background:rgba(255,255,255,.15);border:none;color:white;border-radius:8px;width:32px;height:32px;cursor:pointer;font-size:1rem;">✕</button>
+    </div>
+    <div class="cot-modal-body">
+      <textarea id="impTexto" placeholder="Cole aqui a lista. Aceita colar a tabela do Excel direto (produto, unidade e a coluna de total). Ex:&#10;14 02 14 - Organomineral    t    56&#10;Ureia    t    191,5&#10;Sulfato de Zinco    kg    1900" style="width:100%;min-height:120px;border:1.5px solid var(--cb);border-radius:8px;padding:10px;font-family:'DM Mono',monospace;font-size:.8rem;resize:vertical;outline:none;box-sizing:border-box;"></textarea>
+      <button onclick="processarImport()" style="margin-top:8px;background:var(--ve);color:white;border:none;border-radius:8px;padding:9px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;cursor:pointer;">⚙️ Processar</button>
+      <div id="impPreview"></div>
+    </div>
+    <div class="cot-modal-footer">
+      <button onclick="fecharImport()" style="flex:1;background:var(--cl);border:1px solid var(--cb);color:var(--c);border-radius:8px;padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;cursor:pointer;">Cancelar</button>
+      <button id="impCriar" onclick="criarCotacaoImport()" disabled style="flex:2;background:var(--v);border:none;color:white;border-radius:8px;padding:11px;font-family:'Barlow Condensed',sans-serif;font-weight:800;cursor:pointer;">✅ Criar cotação</button>
     </div>
   </div>
 </div>
