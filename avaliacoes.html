@@ -31,6 +31,7 @@ let talhoes=[], plantas=[], registros=[], fotos=[];
 let map, mapaIniciado=false, talhaoLayers=[], plantaMarkers={}, plantaSel=null;
 let tempMarker=null, tempLatLng=null, tempTalhao=null, tempAccuracy=null;
 let filtroFazenda='todas', sidebarAberta=true;
+let _mapaAjustado=false; // o mapa só se auto-enquadra na 1ª carga (ou ao trocar filtro) — não ao fechar o painel
 let fazFechadas=new Set(), talFechados=new Set(); // accordion: fazendas/talhões recolhidos
 let _sbFazKeys=[], _sbTalKeys=[];                 // chaves por índice p/ os toggles inline
 let fotosNovas=[];               // dataURIs pendentes na avaliação sendo criada
@@ -196,7 +197,7 @@ function desenharTalhoes(){
     poly.bindTooltip(sanitizar(t.nome||t.id),{permanent:false,direction:'center',className:'tal-tip'});
     talhaoLayers.push(poly);
   });
-  if(bounds.length && !plantasVisiveis().length){ try{ map.fitBounds(bounds,{padding:[40,40],maxZoom:15}); }catch(e){} }
+  if(bounds.length && !plantasVisiveis().length && !_mapaAjustado){ try{ map.fitBounds(bounds,{padding:[40,40],maxZoom:15}); }catch(e){} }
 }
 function renderPlantas(){
   Object.values(plantaMarkers).forEach(m=>map.removeLayer(m)); plantaMarkers={};
@@ -211,7 +212,7 @@ function renderPlantas(){
     bounds.push([p.lat,p.lng]);
   });
   renderSidebar();
-  if(bounds.length && !plantaSel){ try{ map.fitBounds(bounds,{padding:[60,60],maxZoom:17}); }catch(e){} }
+  if(bounds.length && !plantaSel && !_mapaAjustado){ try{ map.fitBounds(bounds,{padding:[60,60],maxZoom:17}); _mapaAjustado=true; }catch(e){} }
 }
 
 // ─── SIDEBAR ───
@@ -558,7 +559,7 @@ window.lbTouchStart=function(e){ _lbTouchX=e.changedTouches[0].clientX; };
 window.lbTouchEnd=function(e){ if(_lbTouchX==null)return; const dx=e.changedTouches[0].clientX-_lbTouchX; if(Math.abs(dx)>40) window.lbNav(dx>0?-1:1); _lbTouchX=null; };
 window.fecharPainel=function(){ plantaSel=null; document.getElementById('infoPanel').classList.remove('visible'); renderPlantas(); };
 function fecharPainel(){ window.fecharPainel(); }
-window.setFiltroFaz=function(sel){ filtroFazenda=sel.value; renderPlantas(); };
+window.setFiltroFaz=function(sel){ filtroFazenda=sel.value; _mapaAjustado=false; renderPlantas(); }; // trocar de fazenda re-enquadra uma vez
 window.toggleSidebar=function(){
   sidebarAberta=!sidebarAberta;
   document.getElementById('mapaSidebar').style.display=sidebarAberta?'flex':'none';
