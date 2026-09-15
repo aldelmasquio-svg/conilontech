@@ -32,6 +32,7 @@ let map, mapaIniciado=false, talhaoLayers=[], plantaMarkers={}, plantaSel=null;
 let tempMarker=null, tempLatLng=null, tempTalhao=null, tempAccuracy=null;
 let filtroFazenda='todas', sidebarAberta=true;
 let _mapaAjustado=false; // o mapa só se auto-enquadra na 1ª carga (ou ao trocar filtro) — não ao fechar o painel
+let _sbInit=false;       // na 1ª renderização da sidebar, colapsa todas as fazendas (visão minimizada)
 let fazFechadas=new Set(), talFechados=new Set(); // accordion: fazendas/talhões recolhidos
 let _sbFazKeys=[], _sbTalKeys=[];                 // chaves por índice p/ os toggles inline
 let fotosNovas=[];               // dataURIs pendentes na avaliação sendo criada
@@ -132,19 +133,30 @@ function pontoNoPoligono(lat,lng,coords){
 }
 function talhaoDoPonto(lat,lng){ return talhoes.find(t=>t.coordenadas&&t.coordenadas.length>=3&&pontoNoPoligono(lat,lng,t.coordenadas)); }
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
-// Comprime a imagem no próprio dispositivo (redimensiona + JPEG) → dataURI leve p/ salvar no Firestore
-function comprimirImagem(file, maxDim=1024, quality=0.6){
+// Comprime a imagem no próprio dispositivo → dataURI para salvar no Firestore.
+// Cada foto vira 1 documento; o limite do Firestore é 1 MB/doc, então NÃO dá pra
+// guardar o arquivo 100% original. Buscamos a MAIOR qualidade que ainda cabe:
+// tenta 1920px @85% e vai reduzindo (dimensão/qualidade) só se passar do limite.
+function comprimirImagem(file, maxDim=1920, quality=0.85){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
     reader.onload=e=>{
       const img=new Image();
       img.onload=()=>{
-        let w=img.width, h=img.height;
-        if(w>=h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
-        else if(h>w && h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
-        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-        canvas.getContext('2d').drawImage(img,0,0,w,h);
-        try{ resolve(canvas.toDataURL('image/jpeg',quality)); }catch(err){ reject(err); }
+        const CAP=900000; // ~900 KB de dataURI (folga sob o limite de 1 MB por documento)
+        const combos=[[maxDim,quality],[1600,0.82],[1400,0.78],[1280,0.72],[1024,0.6]];
+        let melhor=null;
+        for(const [dim,q] of combos){
+          let w=img.width, h=img.height;
+          if(w>=h && w>dim){ h=Math.round(h*dim/w); w=dim; }
+          else if(h>w && h>dim){ w=Math.round(w*dim/h); h=dim; }
+          const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+          canvas.getContext('2d').drawImage(img,0,0,w,h);
+          let uri; try{ uri=canvas.toDataURL('image/jpeg',q); }catch(err){ reject(err); return; }
+          melhor=uri;
+          if(uri.length<=CAP) break; // cabe com essa qualidade → usa
+        }
+        resolve(melhor);
       };
       img.onerror=reject; img.src=e.target.result;
     };
@@ -229,6 +241,8 @@ function renderSidebar(){
   const tituloDe=p=>((p.descricao||'').trim()||(p.codigoPlaqueta||'').trim()||'Ponto sem descrição');
   const porFaz={};
   vis.forEach(p=>{ const f=p.fazenda||'Sem fazenda'; (porFaz[f]=porFaz[f]||[]).push(p); });
+  // Abre com todas as fazendas recolhidas (visão minimizada) — só na 1ª carga
+  if(!_sbInit){ Object.keys(porFaz).forEach(f=>fazFechadas.add(f)); _sbInit=true; }
   _sbFazKeys=[]; _sbTalKeys=[];
   cont.innerHTML=Object.keys(porFaz).sort((a,b)=>a.localeCompare(b,'pt')).map(f=>{
     const fi=_sbFazKeys.push(f)-1;
@@ -343,36 +357,76 @@ function intervaloTxt(dias){
   const mTxt=`${meses} ${meses>1?'meses':'mês'}`;
   return `${dias} dias · ~${resto?mTxt+' e '+resto+'d':mTxt}`;
 }
+// Resolve o par: compA = Antes, compB = Depois. Default: mais antiga × mais recente.
+function _cmpResolver(fs){
+  if(!compA || !fs.some(f=>f._docId===compA)) compA=fs[0]._docId;
+  if(!compB || !fs.some(f=>f._docId===compB)) compB=fs[fs.length-1]._docId;
+  if(compA===compB){ const outra=fs.find(f=>f._docId!==compA); if(outra) compB=outra._docId; }
+  const fa=fs.find(f=>f._docId===compA), fb=fs.find(f=>f._docId===compB);
+  const dias=(fa&&fb)?Math.round(Math.abs(new Date(_dataFoto(fb))-new Date(_dataFoto(fa)))/86400000):null;
+  return {fa,fb,dias};
+}
+// Faixa de miniaturas com botões Antes/Depois em cada foto
+function _cmpStrip(fs){
+  return fs.map(f=>{
+    const isA=f._docId===compA, isB=f._docId===compB;
+    return `<div class="cmp-item ${isA?'is-a':''} ${isB?'is-b':''}">
+      <img src="${f.dataURI}" onclick="abrirLightbox('${f._docId}')">
+      <div class="cmp-item-data">${formatarData(f.data)}</div>
+      <div class="cmp-item-btns">
+        <button class="cmp-ab ${isA?'on-a':''}" onclick="setCmpFoto('a','${f._docId}')">Antes</button>
+        <button class="cmp-ab ${isB?'on-b':''}" onclick="setCmpFoto('b','${f._docId}')">Depois</button>
+      </div>
+    </div>`;
+  }).join('');
+}
 function renderComparador(id){
   const box=document.getElementById('cmpBox'); if(!box) return;
   const fs=fotosDaPlanta(id); // ordenadas por data (asc)
-  const datas=[...new Set(fs.map(_dataFoto).filter(Boolean))];
-  if(datas.length<2){ box.innerHTML=''; return; } // precisa de pelo menos 2 datas para "antes × depois"
-  // foto de referência escolhida (padrão: a mais recente)
-  if(!compB || !fs.some(f=>f._docId===compB)) compB=fs[fs.length-1]._docId;
-  const fb=fs.find(f=>f._docId===compB);
-  const dB=_dataFoto(fb);
-  // par de comparação sempre de DATA DIFERENTE: pega a data anterior mais próxima; se não houver, a posterior mais próxima
-  const anteriores=fs.filter(f=>_dataFoto(f)<dB);
-  const posteriores=fs.filter(f=>_dataFoto(f)>dB);
-  const outra = anteriores.length ? anteriores[anteriores.length-1] : posteriores[posteriores.length-1];
-  compA=outra._docId;
-  // exibe sempre na ordem cronológica (antes = data menor, depois = data maior)
-  const cronoA = _dataFoto(fb) <= _dataFoto(outra) ? fb : outra;
-  const cronoB = _dataFoto(fb) <= _dataFoto(outra) ? outra : fb;
-  const dias = Math.round((new Date(_dataFoto(cronoB)) - new Date(_dataFoto(cronoA)))/86400000);
+  if(fs.length<2){ box.innerHTML=''; return; } // precisa de pelo menos 2 fotos
+  const {fa,fb,dias}=_cmpResolver(fs);
   box.innerHTML=`<div class="secao">
-    <div class="secao-tit">📸 Comparar antes / depois</div>
-    <div class="cmp-pair">
-      <div class="cmp-side"><div class="cmp-lbl antes">ANTES · ${formatarData(cronoA.data)}</div><img src="${cronoA.dataURI}" onclick="abrirLightbox('${cronoA._docId}')"></div>
-      <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS · ${formatarData(cronoB.data)}</div><img src="${cronoB.dataURI}" onclick="abrirLightbox('${cronoB._docId}')"></div>
+    <div class="secao-tit" style="display:flex;justify-content:space-between;align-items:center;">📸 Comparar antes / depois
+      <button class="cmp-full-btn" onclick="abrirCmpFull('${id}')">🔍 Tela cheia</button>
     </div>
-    <div class="cmp-intervalo">⏱️ <b>${intervaloTxt(dias)}</b> entre um monitoramento e o outro</div>
-    <div class="cmp-hint">Toque numa foto abaixo: ela vira a referência e o par é montado com a data diferente mais próxima.</div>
-    <div class="cmp-strip">${fs.map(f=>`<img class="cmp-mini ${f._docId===cronoB._docId?'on':(f._docId===cronoA._docId?'antes':'')}" src="${f.dataURI}" title="${formatarData(f.data)}" onclick="setComp('${f._docId}')">`).join('')}</div>
+    <div class="cmp-pair">
+      <div class="cmp-side"><div class="cmp-lbl antes">ANTES${fa?` · ${formatarData(fa.data)}`:''}</div>${fa?`<img src="${fa.dataURI}" onclick="abrirLightbox('${fa._docId}')">`:'<div class="cmp-vazio">escolha uma foto</div>'}</div>
+      <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS${fb?` · ${formatarData(fb.data)}`:''}</div>${fb?`<img src="${fb.dataURI}" onclick="abrirLightbox('${fb._docId}')">`:'<div class="cmp-vazio">escolha uma foto</div>'}</div>
+    </div>
+    ${dias!=null?`<div class="cmp-intervalo">⏱️ <b>${intervaloTxt(dias)}</b> entre as duas fotos</div>`:''}
+    <div class="cmp-hint">Marque <b>Antes</b> e <b>Depois</b> nas fotos abaixo. Toque na foto grande para ampliar.</div>
+    <div class="cmp-strip">${_cmpStrip(fs)}</div>
   </div>`;
 }
-window.setComp=function(fid){ compB=fid; renderComparador(plantaSel); };
+window.setCmpFoto=function(slot,fid){
+  if(slot==='a'){ compA=fid; if(compB===fid) compB=null; }
+  else { compB=fid; if(compA===fid) compA=null; }
+  if(plantaSel) renderComparador(plantaSel);
+  if(cmpFullPlanta) renderCmpFull();
+};
+window.setComp=function(fid){ window.setCmpFoto('b',fid); }; // compat
+
+// ─── COMPARAÇÃO EM TELA CHEIA ───
+let cmpFullPlanta=null;
+window.abrirCmpFull=function(id){ cmpFullPlanta=id||plantaSel; renderCmpFull(); document.getElementById('cmpFull').classList.add('open'); };
+window.fecharCmpFull=function(){ cmpFullPlanta=null; document.getElementById('cmpFull').classList.remove('open'); };
+function renderCmpFull(){
+  const id=cmpFullPlanta; if(!id) return;
+  const fs=fotosDaPlanta(id);
+  const p=plantas.find(x=>x._docId===id);
+  document.getElementById('cmpFullTit').textContent=((p&&p.descricao)||'').trim()||((p&&p.codigoPlaqueta)||'').trim()||'Comparar fotos';
+  const body=document.getElementById('cmpFullBody');
+  if(fs.length<2){ body.innerHTML='<div style="color:#ccc;text-align:center;padding:40px 20px;">Este ponto tem menos de 2 fotos para comparar.</div>'; return; }
+  const {fa,fb,dias}=_cmpResolver(fs);
+  body.innerHTML=`
+    <div class="cmpf-pair">
+      <div class="cmpf-side"><div class="cmp-lbl antes">ANTES${fa?` · ${formatarData(fa.data)}`:''}</div>${fa?`<img src="${fa.dataURI}">`:'<div class="cmp-vazio">escolha uma foto</div>'}</div>
+      <div class="cmpf-side"><div class="cmp-lbl depois">DEPOIS${fb?` · ${formatarData(fb.data)}`:''}</div>${fb?`<img src="${fb.dataURI}">`:'<div class="cmp-vazio">escolha uma foto</div>'}</div>
+    </div>
+    ${dias!=null?`<div class="cmp-intervalo" style="margin:12px auto;max-width:360px;">⏱️ <b>${intervaloTxt(dias)}</b> entre as duas fotos</div>`:''}
+    <div class="cmpf-hint">Marque <b>Antes</b> e <b>Depois</b> nas fotos abaixo</div>
+    <div class="cmpf-strip">${_cmpStrip(fs)}</div>`;
+}
 
 // ─── MINHA LOCALIZAÇÃO (mostra no mapa, sem criar ponto) ───
 function iniciarLocalizacao(){
@@ -691,17 +745,42 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 /* Comparador */
 .cmp-pair{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .cmp-side{display:flex;flex-direction:column;gap:4px;}
-.cmp-side img{width:100%;height:120px;object-fit:cover;border-radius:9px;border:1px solid var(--cb);cursor:pointer;}
+.cmp-side img{width:100%;height:170px;object-fit:cover;border-radius:9px;border:1px solid var(--cb);cursor:pointer;}
+.cmp-vazio{width:100%;height:170px;border-radius:9px;border:1.5px dashed var(--cb);display:flex;align-items:center;justify-content:center;color:var(--c);font-size:.72rem;background:var(--cl);}
 .cmp-lbl{font-size:.58rem;font-weight:800;letter-spacing:.06em;text-align:center;border-radius:20px;padding:2px 0;}
 .cmp-lbl.antes{background:#fef3c7;color:#92400e;}
 .cmp-lbl.depois{background:#dcfce7;color:#166534;}
 .cmp-intervalo{margin-top:8px;text-align:center;font-size:.76rem;color:#4338ca;background:#eef2ff;border:1px solid #c7d2fe;border-radius:20px;padding:5px 10px;}
 .cmp-intervalo b{font-family:'DM Mono',monospace;}
-.cmp-hint{font-size:.66rem;color:var(--c);margin-top:6px;text-align:center;}
-.cmp-strip{display:flex;gap:5px;overflow-x:auto;margin-top:6px;padding-bottom:2px;}
-.cmp-mini{width:44px;height:44px;object-fit:cover;border-radius:6px;border:2px solid transparent;cursor:pointer;flex-shrink:0;opacity:.65;}
-.cmp-mini.on{border-color:#16a34a;opacity:1;}
-.cmp-mini.antes{border-color:#f59e0b;opacity:1;}
+.cmp-hint{font-size:.66rem;color:var(--c);margin-top:6px;text-align:center;line-height:1.4;}
+.cmp-full-btn{background:var(--acc);color:#fff;border:none;border-radius:20px;padding:4px 10px;font-size:.66rem;font-weight:700;cursor:pointer;font-family:'Barlow Condensed',sans-serif;letter-spacing:.02em;}
+/* Faixa de fotos com seletor Antes/Depois */
+.cmp-strip{display:flex;gap:9px;overflow-x:auto;margin-top:8px;padding-bottom:4px;}
+.cmp-item{flex-shrink:0;width:80px;display:flex;flex-direction:column;gap:3px;border-radius:8px;padding:3px;border:2px solid transparent;background:var(--cl);}
+.cmp-item.is-a{border-color:#f59e0b;}
+.cmp-item.is-b{border-color:#16a34a;}
+.cmp-item>img{width:100%;height:64px;object-fit:cover;border-radius:5px;cursor:pointer;}
+.cmp-item-data{font-size:.58rem;color:var(--c);text-align:center;font-family:'DM Mono',monospace;}
+.cmp-item-btns{display:flex;gap:3px;}
+.cmp-ab{flex:1;font-size:.58rem;font-weight:700;border:1px solid var(--cb);background:white;color:var(--c);border-radius:5px;padding:3px 0;cursor:pointer;}
+.cmp-ab.on-a{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
+.cmp-ab.on-b{background:#dcfce7;border-color:#16a34a;color:#166534;}
+/* Comparação em tela cheia */
+.cmp-full{position:fixed;inset:0;background:rgba(17,20,15,.97);z-index:4600;display:none;flex-direction:column;padding:14px;}
+.cmp-full.open{display:flex;}
+.cmp-full-hdr{display:flex;align-items:center;justify-content:space-between;color:white;padding:4px 4px 12px;flex-shrink:0;}
+.cmp-full-hdr .t{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cmp-full-close{background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:50%;width:38px;height:38px;font-size:1.1rem;cursor:pointer;flex-shrink:0;}
+#cmpFullBody{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.cmpf-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.cmpf-side{display:flex;flex-direction:column;gap:5px;}
+.cmpf-side img{width:100%;max-height:56vh;object-fit:contain;border-radius:9px;background:#000;}
+.cmpf-hint{color:#cbd5c0;font-size:.72rem;text-align:center;margin:8px 0 4px;}
+.cmpf-strip{display:flex;gap:10px;overflow-x:auto;padding:6px 2px 10px;}
+.cmpf-strip .cmp-item{width:92px;background:rgba(255,255,255,.08);}
+.cmpf-strip .cmp-item-data{color:#cbd5c0;}
+.cmpf-strip .cmp-item>img{height:72px;}
+@media(max-width:560px){.cmpf-pair{grid-template-columns:1fr;}.cmpf-side img{max-height:38vh;}}
 .panel-actions{padding:4px 14px 16px;}
 .btn-del-panel{width:100%;background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);border-radius:8px;padding:9px;font-size:.78rem;cursor:pointer;font-weight:700;}
 /* BOTÃO FLUTUANTE */
@@ -823,6 +902,15 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
   <img id="lightboxImg" src="" alt="" ontouchstart="lbTouchStart(event)" ontouchend="lbTouchEnd(event)" onclick="event.stopPropagation()">
   <button class="lb-nav lb-next" id="lbNext" onclick="lbNav(1,event)">›</button>
   <div class="lightbox-cap" id="lightboxCap"></div>
+</div>
+
+<!-- COMPARAÇÃO EM TELA CHEIA -->
+<div class="cmp-full" id="cmpFull">
+  <div class="cmp-full-hdr">
+    <span class="t" id="cmpFullTit"></span>
+    <button class="cmp-full-close" onclick="fecharCmpFull()">✕</button>
+  </div>
+  <div id="cmpFullBody"></div>
 </div>
 
 <!-- CONFIRMAÇÃO DE EXCLUSÃO -->
