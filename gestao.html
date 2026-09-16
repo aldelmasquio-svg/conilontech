@@ -848,7 +848,8 @@ function _haQuantoTempo(d) {
   if (dias < 0) return 'programada';
   if (dias === 0) return 'hoje';
   if (dias === 1) return 'ontem';
-  if (dias < 30) return `há ${dias} dias`;
+  // Para pulverização é mais útil contar em DIAS até 90 dias; só acima disso vira mês.
+  if (dias < 90) return `há ${dias} dias`;
   const meses = Math.floor(dias / 30);
   if (meses < 12) return `há ${meses} ${meses > 1 ? 'meses' : 'mês'}`;
   const anos = Math.floor(dias / 365);
