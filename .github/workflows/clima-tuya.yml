@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+    inputs:
+      diagnostico:
+        description: 'Só diagnóstico (lê a Tuya e imprime; não grava no Firestore)'
+        type: boolean
+        default: false
 
 # Uma execução por vez; a próxima espera a atual terminar (sem sobreposição).
 concurrency:
@@ -35,3 +40,4 @@ jobs:
           TUYA_ACCESS_SECRET: ${{ secrets.TUYA_ACCESS_SECRET }}
           TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DIAGNOSTICO: ${{ inputs.diagnostico }}
