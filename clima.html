@@ -170,7 +170,7 @@ function trocarEstacao(id){
   if(!id){ render(); return; }
   unsubStatus=onSnapshot(doc(db,'clima',id,'status','ultimo'), s=>{ statusUlt=s.exists()?s.data():null; renderStatus(); });
   unsubRes=onSnapshot(query(collection(db,'clima',id,'resumos'),orderBy('data','desc'),limit(31)), s=>{
-    resumos=s.docs.map(d=>d.data()); renderHistorico();
+    resumos=s.docs.map(d=>d.data()); renderHistorico(); renderLamina();
   });
   ouvirDia();
 }
@@ -189,7 +189,7 @@ function ouvirAno(ano){
   anoCarregado=ano; resumosAno=[];
   unsubAno=onSnapshot(query(collection(db,'clima',estacaoId,'resumos'),
       where('data','>=',ano+'-01-01'), where('data','<=',ano+'-12-31')), s=>{
-    resumosAno=s.docs.map(d=>d.data()).sort((a,b)=>a.data<b.data?-1:1); renderChuva();
+    resumosAno=s.docs.map(d=>d.data()).sort((a,b)=>a.data<b.data?-1:1); renderChuva(); renderLamina();
   });
 }
 
@@ -202,6 +202,8 @@ window.mudarDia=function(delta){
 };
 window.setDia=function(v){ if(!v||v>hojeEstacao()) return; diaSel=v; ouvirDia(); };
 window.setChuvaView=function(v){ chuvaView=v; renderChuva(); };
+window.setFaseKc=function(v){ if(!FASES_KC[v]) return; faseKc=v; lsSet(LS_FASE,v); renderLamina(); };
+window.setSistIrr=function(v){ if(!SISTEMAS_IRR[v]) return; sistIrr=v; lsSet(LS_SIST,v); renderLamina(); };
 window.setGraf=function(g){ grafSel=g; renderGrafico(); document.querySelectorAll('.gchip').forEach(b=>b.classList.toggle('on',b.dataset.g===g)); };
 
 // ─── RENDER ───
@@ -274,6 +276,7 @@ function render(){
         <div class="eto-chuva"><div class="eto-val chuva">${fmt(r.chuvaMm,1)}<small> mm</small></div><div class="eto-lbl">Chuva</div></div>
       </div>
       ${r.completo?'':'<div class="aviso-parc">ETo e radiação só valem com o dia completo (≥ 90% dos minutos).</div>'}
+      <div id="laminaBox"></div>
       <div class="res-grid">
         <div class="rg"><span>Temperatura mín / máx</span><b>${fmt(r.Tmin,1)} / ${fmt(r.Tmax,1)} °C</b></div>
         <div class="rg"><span>Temperatura média</span><b>${fmt(r.Tmed,1)} °C</b></div>
@@ -295,6 +298,7 @@ function render(){
     </div>`;
   alvo.innerHTML=nav+agoraHtml+janelaHtml(pts,chaves,ehHoje)+resumoHtml+grafHtml+chuvaHtml()+histHtml();
   renderGrafico();
+  renderLamina();
   renderChuva();
   renderHistorico();
 }
@@ -417,6 +421,50 @@ function renderGrafico(){
     scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0,font:{size:10}}}, y:{ticks:{font:{size:10}}, beginAtZero:grafSel!=='t', ...(grafSel==='janela'?{title:{display:true,text:'Delta T (°C)',font:{size:10}}}:{})},
       ...(grafSel==='janela'?{y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{size:10}},title:{display:true,text:'vento (km/h)',font:{size:10}}}}:{})},
   }, plugins: grafSel==='janela' ? [faixaDeltaT] : []});
+}
+
+// ─── LÂMINA SUGERIDA ───
+// Lâmina líquida = Kc × ETo(dia anterior) − chuva(dia anterior), mínimo 0.
+// Lâmina bruta = líquida ÷ eficiência do sistema. 1 mm = 10 m³/ha.
+const FASES_KC={
+  nova:      {label:'Lavoura nova (1º ano)',        kc:0.8},
+  formacao:  {label:'Em formação (2º ano)',          kc:0.9},
+  adulta:    {label:'Adulta em produção',            kc:1.0},
+  cobertura: {label:'Adulta com mato/cobertura',     kc:1.1},
+};
+const SISTEMAS_IRR={
+  gotejo:   {label:'💧 Gotejo',   ef:0.90},
+  aspersao: {label:'🌦️ Aspersão', ef:0.75},
+};
+const LS_FASE='climaFaseKc', LS_SIST='climaSistIrr';
+let faseKc = FASES_KC[lsGet(LS_FASE)] ? lsGet(LS_FASE) : 'adulta';
+let sistIrr = SISTEMAS_IRR[lsGet(LS_SIST)] ? lsGet(LS_SIST) : 'gotejo';
+function resumoDoDia(data){
+  return resumos.find(r=>r.data===data) || resumosAno.find(r=>r.data===data) || null;
+}
+function renderLamina(){
+  const el=document.getElementById('laminaBox'); if(!el||!diaSel) return;
+  const ontem=somarDias(diaSel,-1), r=resumoDoDia(ontem);
+  const F=FASES_KC[faseKc], S=SISTEMAS_IRR[sistIrr];
+  const selFase=`<select class="lm-sel" onchange="setFaseKc(this.value)">${Object.entries(FASES_KC).map(([id,f])=>`<option value="${id}"${id===faseKc?' selected':''}>${f.label} · Kc ${fmt(f.kc,2)}</option>`).join('')}</select>`;
+  const selSist=`<div class="lm-sist">${Object.entries(SISTEMAS_IRR).map(([id,x])=>`<button class="pv-modo${id===sistIrr?' on':''}" onclick="setSistIrr('${id}')">${x.label}<small>eficiência ${fmt(x.ef*100,0)}%</small></button>`).join('')}</div>`;
+  let corpo;
+  if(!r || r.ETo==null){
+    corpo=`<div class="lm-sem">Sem ETo do dia anterior (${formatarData(ontem).slice(0,5)}) — não dá para sugerir a lâmina.</div>`;
+  } else {
+    const etc=F.kc*r.ETo, chuva=r.chuvaMm||0;
+    const liq=Math.max(0,etc-chuva), bruta=liq/S.ef;
+    corpo=`<div class="lm-res">
+        <div><div class="lm-val">${fmt(bruta,1)}<small> mm</small></div><div class="lm-lbl">Lâmina bruta a aplicar</div></div>
+        <div class="lm-m3"><div class="lm-val m3">${fmt(bruta*10,0)}<small> m³/ha</small></div><div class="lm-lbl">líquida ${fmt(liq,1)} mm</div></div>
+      </div>
+      <div class="lm-conta">Base ${formatarData(ontem).slice(0,5)}: ETo ${fmt(r.ETo,1)} × Kc ${fmt(F.kc,2)} = ${fmt(etc,1)} mm − chuva ${fmt(chuva,1)} mm${liq===0?' → chuva cobriu a demanda':''} · ÷ ${fmt(S.ef*100,0)}%</div>
+      ${r.completo?'':`<div class="aviso-parc">⚠️ O dia ${formatarData(ontem).slice(0,5)} está incompleto (${fmt(r.coberturaPct,0)}% dos minutos) — ETo aproximada.</div>`}`;
+  }
+  el.innerHTML=`<div class="lm">
+      <div class="lm-tit">💧 Lâmina sugerida para ${diaSel===hojeEstacao()?'hoje':formatarData(diaSel).slice(0,5)}</div>
+      ${selFase}${selSist}${corpo}
+    </div>`;
 }
 
 const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
@@ -622,6 +670,18 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .ch-v small{font-size:.66rem;font-weight:500;}
 .ch-l{font-size:.7rem;color:#1e3a8a;font-weight:700;margin-top:2px;}
 .ch-n{font-size:.6rem;color:var(--c);margin-top:1px;}
+.lm{margin-top:10px;border:1.5px solid #bfdbfe;background:#f8fbff;border-radius:10px;padding:10px 12px;}
+.lm-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.98rem;color:#1e3a8a;margin-bottom:8px;}
+.lm-sel{width:100%;border:1.5px solid var(--cb);border-radius:9px;padding:8px 10px;font-family:'Barlow',sans-serif;font-size:.84rem;font-weight:600;background:white;margin-bottom:8px;}
+.lm-sist{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.lm-res{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;}
+.lm-val{font-family:'DM Mono',monospace;font-weight:800;font-size:1.5rem;color:#1d4ed8;line-height:1;}
+.lm-val small{font-size:.74rem;font-weight:500;}
+.lm-val.m3{font-size:1.1rem;color:#0e7490;}
+.lm-m3{text-align:right;}
+.lm-lbl{font-size:.66rem;color:var(--c);margin-top:3px;}
+.lm-conta{font-size:.68rem;color:#334155;margin-top:8px;font-family:'DM Mono',monospace;line-height:1.4;}
+.lm-sem{font-size:.8rem;color:var(--c);}
 .htab tr{cursor:pointer;}
 .htab tr.sel td{background:var(--vb);font-weight:700;}
 .parc{color:#b45309;font-weight:700;margin-left:1px;}
