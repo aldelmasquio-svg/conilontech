@@ -284,9 +284,9 @@ function render(){
 }
 
 // ─── JANELA DE PULVERIZAÇÃO ───
-// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio até 10 km/h (mínimo em JANELA.ventoMin) E sem chuva
+// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio até 5 km/h (limites em JANELA) E sem chuva
 // (intensidade = 0 e chuva da última hora = 0). Delta T = temperatura − bulbo úmido.
-const JANELA={dtMin:2, dtMax:8, ventoMin:0, ventoMax:10, minJanela:15};
+const JANELA={dtMin:2, dtMax:8, ventoMin:0, ventoMax:5, minJanela:15};
 // Bulbo úmido — Stull (2011), válido p/ UR 5–99% e −20…50 °C (erro < 0,3 °C).
 function bulboUmido(T,UR){
   return T*Math.atan(0.151977*Math.sqrt(UR+8.313659)) + Math.atan(T+UR) - Math.atan(UR-1.676331)
