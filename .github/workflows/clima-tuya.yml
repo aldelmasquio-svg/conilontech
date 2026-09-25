@@ -2,7 +2,9 @@ name: Clima — coletor Tuya (Estação Km 18)
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # A cada 5 min, deslocado 2 min (…:02, :07, :12…) para fugir do pico de
+    # agendamentos em minutos "redondos" no GitHub.
+    - cron: '2-59/5 * * * *'
   workflow_dispatch:
     inputs:
       diagnostico:
