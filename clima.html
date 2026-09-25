@@ -284,9 +284,17 @@ function render(){
 }
 
 // ─── JANELA DE PULVERIZAÇÃO ───
-// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio entre 3 e 10 km/h E sem chuva
-// (intensidade = 0 e chuva da última hora = 0). Delta T = temperatura − bulbo úmido.
-const JANELA={dtMin:2, dtMax:8, ventoMin:3, ventoMax:10, minJanela:15};
+// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio dentro do limite do tipo de
+// aplicação (MODOS_PULV) E sem chuva (intensidade = 0 e chuva da última hora = 0).
+// Delta T = temperatura − bulbo úmido.
+const JANELA={dtMin:2, dtMax:8, minJanela:15};
+const MODOS_PULV={
+  drone:  {label:'🚁 Drone',  ventoMin:0, ventoMax:5},
+  trator: {label:'🚜 Trator', ventoMin:0, ventoMax:7},
+};
+const LS_MODO_PULV='climaModoPulv';
+let modoPulv = MODOS_PULV[lsGet(LS_MODO_PULV)] ? lsGet(LS_MODO_PULV) : 'drone';
+window.setModoPulv=function(m){ if(!MODOS_PULV[m]) return; modoPulv=m; lsSet(LS_MODO_PULV,m); render(); };
 // Bulbo úmido — Stull (2011), válido p/ UR 5–99% e −20…50 °C (erro < 0,3 °C).
 function bulboUmido(T,UR){
   return T*Math.atan(0.151977*Math.sqrt(UR+8.313659)) + Math.atan(T+UR) - Math.atan(UR-1.676331)
@@ -294,14 +302,15 @@ function bulboUmido(T,UR){
 }
 function deltaT(p){ return (p&&p.t!=null&&p.ur!=null) ? p.t-bulboUmido(p.t,Math.min(Math.max(p.ur,5),99)) : null; }
 function avaliarPulv(p){
+  const M=MODOS_PULV[modoPulv];
   const dt=deltaT(p);
   if(dt==null||p.u==null) return {st:'sd', motivos:['sem dados']};
   const v=p.u*3.6, motivos=[];
   if((p.ctx||0)>0||(p.c1h||0)>0) motivos.push('chuva');
   if(dt<JANELA.dtMin) motivos.push('Delta T baixo (ar muito úmido)');
   if(dt>JANELA.dtMax) motivos.push('Delta T alto (ar seco, gota evapora)');
-  if(v<JANELA.ventoMin) motivos.push('vento fraco (risco de inversão)');
-  if(v>JANELA.ventoMax) motivos.push('vento forte (deriva)');
+  if(v<M.ventoMin) motivos.push('vento fraco (risco de inversão)');
+  if(v>M.ventoMax) motivos.push(`vento acima de ${M.ventoMax} km/h (deriva)`);
   return {st:motivos.length?'nao':'ok', dt, v, motivos};
 }
 // Avalia cada minuto do dia (0…fim) e agrupa em trechos contínuos de mesmo status.
@@ -335,16 +344,19 @@ function janelaHtml(pts, chaves, ehHoje){
       ? `<div class="pv-agora nao"><div class="pv-ico">⛔</div><div><b>Não recomendado agora</b><div class="pv-det">${a.motivos.map(sanitizar).join(' · ')}</div><div class="pv-det">Delta T ${fmt(a.dt,1)} °C · vento ${fmt(a.v,1)} km/h · leitura ${k}</div></div></div>`
       : `<div class="pv-agora sd"><div class="pv-ico">❔</div><div><b>Sem dados suficientes agora</b></div></div>`;
   }
+  const M=MODOS_PULV[modoPulv];
+  const seletor=`<div class="pv-modos">${Object.entries(MODOS_PULV).map(([id,m])=>`<button class="pv-modo${id===modoPulv?' on':''}" onclick="setModoPulv('${id}')">${m.label}<small>vento até ${m.ventoMax} km/h</small></button>`).join('')}</div>`;
   const marcas=[0,6,12,18,24].map(h=>`<span style="left:${h/24*100}%">${h}h</span>`).join('');
   return `<div class="card">
       <div class="card-tit">🎯 Janela de pulverização</div>
+      ${seletor}
       ${agora}
       <div class="pv-barra" style="background:linear-gradient(to right,${grad}${ehHoje?`,#f4f1ea ${((fim+1)/total*100).toFixed(3)}% 100%`:''})"></div>
       <div class="pv-marcas">${marcas}</div>
       <div class="pv-res"><b>${fmt(minApto/60,1)} h</b> em condição adequada ${ehHoje?'até agora':'no dia'}</div>
       <div class="pv-jan">${janelas.length?janelas.map(t=>`<span class="pv-chip">${hm(t.ini)}–${hm(t.fim+1>1439?1439:t.fim+1)}</span>`).join(''):`<span class="pv-nenhuma">Nenhuma janela contínua de ${JANELA.minJanela} min ou mais.</span>`}</div>
       <div class="pv-leg"><span><i style="background:#22c55e"></i>adequado</span><span><i style="background:#ef4444"></i>inadequado</span><span><i style="background:#d6d3cb"></i>sem dados</span></div>
-      <div class="nota">Critério: Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C, vento médio ${JANELA.ventoMin}–${JANELA.ventoMax} km/h e sem chuva na última hora. Veja o gráfico "🎯 Delta T" abaixo.</div>
+      <div class="nota">Critério: Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C, vento médio ${M.ventoMin>0?M.ventoMin+'–'+M.ventoMax:'até '+M.ventoMax} km/h (${M.label.replace(/^\S+\s/,'').toLowerCase()}) e sem chuva na última hora. Veja o gráfico "🎯 Delta T" abaixo.</div>
     </div>`;
 }
 
@@ -549,6 +561,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .pv-agora.nao{background:#fee2e2;color:#7f1d1d;}
 .pv-agora.sd{background:var(--cl);color:var(--c);}
 .pv-ico{font-size:1.4rem;line-height:1;}
+.pv-modos{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;}
+.pv-modo{border:1.5px solid var(--cb);background:white;color:var(--c);border-radius:10px;padding:8px 6px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:1px;}
+.pv-modo small{font-family:'Barlow',sans-serif;font-weight:500;font-size:.64rem;}
+.pv-modo.on{background:var(--acc);border-color:var(--acc);color:white;}
 .pv-det{font-size:.74rem;margin-top:2px;opacity:.9;}
 .pv-barra{height:22px;border-radius:6px;border:1px solid var(--cb);}
 .pv-marcas{position:relative;height:14px;font-size:.6rem;color:var(--c);margin-top:2px;}
