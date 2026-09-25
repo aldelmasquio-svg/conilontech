@@ -419,6 +419,32 @@ def diagnostico(horas):
     tuya.autenticar()
     print(f"== janela {fmt(ini)} → {fmt(fim)}")
 
+    for path_m in (f"/v2.0/cloud/thing/{device}/model",
+                   f"/v1.0/iot-03/devices/{device}/specification"):
+        print(f"== {path_m.replace(device, '<id>')}")
+        try:
+            res = tuya.get(path_m) or {}
+        except TuyaErro as e:
+            print(f"  ERRO {e}")
+            continue
+        txt = res.get("model") if isinstance(res, dict) else None
+        if isinstance(txt, str):
+            try:
+                res = json.loads(txt)
+            except ValueError:
+                pass
+        props = []
+        for sv in (res.get("services") or []) if isinstance(res, dict) else []:
+            props += sv.get("properties") or []
+        if props:
+            for p in props:
+                if p.get("code") in CODES:
+                    print(f"  {p.get('code'):24} {json.dumps(p.get('typeSpec'), ensure_ascii=False)[:200]}")
+        else:
+            for item in (res.get("status") or []) + (res.get("functions") or []):
+                if item.get("code") in CODES:
+                    print(f"  {item.get('code'):24} {item.get('type')} {str(item.get('values'))[:200]}")
+
     print("== snapshot (code | time | value)")
     for p in sorted(tuya.snapshot(device), key=lambda p: str(p.get("code"))):
         ts = _ms(p.get("time"))
