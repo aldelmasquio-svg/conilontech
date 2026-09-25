@@ -407,6 +407,58 @@ def limpar_bruto(db, base, agora):
     return apagados
 
 
+
+# ----------------------------------------------------------- diagnóstico ----
+def diagnostico(horas):
+    """Só leitura (não usa Firestore): mostra o que a Tuya devolve."""
+    tuya = Tuya(os.environ["TUYA_ACCESS_ID"], os.environ["TUYA_ACCESS_SECRET"])
+    device = os.environ["TUYA_DEVICE_ID"]
+    fmt = lambda ms: datetime.fromtimestamp(ms / 1000, FUSO).strftime("%d/%m %H:%M:%S")  # noqa: E731
+    fim = int(time.time() * 1000)
+    ini = fim - horas * 3600 * 1000
+    tuya.autenticar()
+    print(f"== janela {fmt(ini)} → {fmt(fim)}")
+
+    print("== snapshot (code | time | value)")
+    for p in sorted(tuya.snapshot(device), key=lambda p: str(p.get("code"))):
+        ts = _ms(p.get("time"))
+        print(f"  {p.get('code')!s:28} | {fmt(ts) if ts else '-':15} | {str(p.get('value'))[:40]}"
+              f"{'' if p.get('code') in CODES else '   (fora da lista)'}")
+
+    print("== todos os códigos juntos, página a página")
+    path = f"/v2.0/cloud/thing/{device}/report-logs"
+    row_key, total = None, 0
+    for pg in range(1, 40):
+        params = {"codes": ",".join(CODES), "start_time": ini, "end_time": fim, "size": PAGINA}
+        if row_key:
+            params["last_row_key"] = row_key
+        res = tuya.get(path, params) or {}
+        lg = res.get("logs") or []
+        total += len(lg)
+        ts = [_ms(x.get("event_time")) for x in lg]
+        print(f"  pág {pg}: {len(lg)} logs, {fmt(ts[0]) if ts else '-'} … {fmt(ts[-1]) if ts else '-'}, "
+              f"has_more={res.get('has_more')}, chaves={sorted(k for k in res if k != 'logs')}")
+        row_key = res.get("last_row_key")
+        if not res.get("has_more") or not row_key:
+            break
+    print(f"  total {total}")
+
+    print("== um código por vez (1ª página)")
+    for code in CODES:
+        try:
+            res = tuya.get(path, {"codes": code, "start_time": ini, "end_time": fim,
+                                  "size": PAGINA}) or {}
+        except TuyaErro as e:
+            print(f"  {code:24} ERRO {e}")
+            continue
+        lg = res.get("logs") or []
+        ts = sorted(_ms(x.get("event_time")) for x in lg)
+        ex = ", ".join(str(x.get("value"))[:16] for x in lg[:3])
+        print(f"  {code:24} {len(lg):3} logs, {fmt(ts[0]) if ts else '-'} … "
+              f"{fmt(ts[-1]) if ts else '-'}, has_more={res.get('has_more')}, ex: {ex}")
+    print(f"== {tuya.chamadas} chamadas")
+    return 0
+
 # ------------------------------------------------------------------ main ----
 def main():
     for nome in ("TUYA_ACCESS_ID", "TUYA_ACCESS_SECRET", "TUYA_DEVICE_ID",
@@ -414,6 +466,8 @@ def main():
         if not os.environ.get(nome):
             print(f"::error::variável {nome} ausente")
             return 1
+    if os.environ.get("DIAGNOSTICO") == "true":
+        return diagnostico(int(os.environ.get("DIAGNOSTICO_HORAS") or 24))
 
     db = iniciar_firestore()
     base = db.collection("clima").document(ESTACAO_ID)
