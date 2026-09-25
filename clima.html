@@ -247,6 +247,7 @@ function render(){
         <div class="ag-item"><div class="ag-val">${fmt(p.rad,0)}<small>W/m²</small></div><div class="ag-lbl">Radiação</div></div>
         <div class="ag-item"><div class="ag-val">${fmt(p.orv,1)}<small>°C</small></div><div class="ag-lbl">Ponto de orvalho</div></div>
         <div class="ag-item"><div class="ag-val">${fmt(p.uv,0)}</div><div class="ag-lbl">Índice UV</div></div>
+        <div class="ag-item ag-dt"><div class="ag-val">${fmt(deltaT(p),1)}<small>°C</small></div><div class="ag-lbl">Delta T</div></div>
       </div>
     </div>`;
   }
@@ -273,13 +274,78 @@ function render(){
     </div>`;
   const grafHtml=`<div class="card">
       <div class="gchips">
-        ${[['t','🌡️ Temperatura'],['ur','💧 Umidade'],['vento','💨 Vento'],['rad','☀️ Radiação'],['chuva','🌧️ Chuva']].map(([g,l])=>`<button class="gchip${g===grafSel?' on':''}" data-g="${g}" onclick="setGraf('${g}')">${l}</button>`).join('')}
+        ${[['t','🌡️ Temperatura'],['ur','💧 Umidade'],['vento','💨 Vento'],['rad','☀️ Radiação'],['chuva','🌧️ Chuva'],['janela','🎯 Delta T']].map(([g,l])=>`<button class="gchip${g===grafSel?' on':''}" data-g="${g}" onclick="setGraf('${g}')">${l}</button>`).join('')}
       </div>
       <div class="graf-box"><canvas id="grafDia"></canvas></div>
     </div>`;
-  alvo.innerHTML=nav+agoraHtml+resumoHtml+grafHtml+histHtml();
+  alvo.innerHTML=nav+agoraHtml+janelaHtml(pts,chaves,ehHoje)+resumoHtml+grafHtml+histHtml();
   renderGrafico();
   renderHistorico();
+}
+
+// ─── JANELA DE PULVERIZAÇÃO ───
+// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio entre 3 e 10 km/h E sem chuva
+// (intensidade = 0 e chuva da última hora = 0). Delta T = temperatura − bulbo úmido.
+const JANELA={dtMin:2, dtMax:8, ventoMin:3, ventoMax:10, minJanela:15};
+// Bulbo úmido — Stull (2011), válido p/ UR 5–99% e −20…50 °C (erro < 0,3 °C).
+function bulboUmido(T,UR){
+  return T*Math.atan(0.151977*Math.sqrt(UR+8.313659)) + Math.atan(T+UR) - Math.atan(UR-1.676331)
+    + 0.00391838*Math.pow(UR,1.5)*Math.atan(0.023101*UR) - 4.686035;
+}
+function deltaT(p){ return (p&&p.t!=null&&p.ur!=null) ? p.t-bulboUmido(p.t,Math.min(Math.max(p.ur,5),99)) : null; }
+function avaliarPulv(p){
+  const dt=deltaT(p);
+  if(dt==null||p.u==null) return {st:'sd', motivos:['sem dados']};
+  const v=p.u*3.6, motivos=[];
+  if((p.ctx||0)>0||(p.c1h||0)>0) motivos.push('chuva');
+  if(dt<JANELA.dtMin) motivos.push('Delta T baixo (ar muito úmido)');
+  if(dt>JANELA.dtMax) motivos.push('Delta T alto (ar seco, gota evapora)');
+  if(v<JANELA.ventoMin) motivos.push('vento fraco (risco de inversão)');
+  if(v>JANELA.ventoMax) motivos.push('vento forte (deriva)');
+  return {st:motivos.length?'nao':'ok', dt, v, motivos};
+}
+// Avalia cada minuto do dia (0…fim) e agrupa em trechos contínuos de mesmo status.
+function trechosPulv(pts, fim){
+  const trechos=[];
+  for(let i=0;i<=fim;i++){
+    const k=String(Math.floor(i/60)).padStart(2,'0')+':'+String(i%60).padStart(2,'0');
+    const st=pts[k]?avaliarPulv(pts[k]).st:'sd';
+    const ult=trechos[trechos.length-1];
+    if(ult&&ult.st===st) ult.fim=i; else trechos.push({st,ini:i,fim:i});
+  }
+  return trechos;
+}
+function hm(min){ return String(Math.floor(min/60)).padStart(2,'0')+':'+String(min%60).padStart(2,'0'); }
+function janelaHtml(pts, chaves, ehHoje){
+  if(!chaves.length) return '';
+  const [h1,m1]=chaves[chaves.length-1].split(':').map(Number);
+  const fim=ehHoje? h1*60+m1 : 1439;
+  const trechos=trechosPulv(pts,fim);
+  const minApto=trechos.filter(t=>t.st==='ok').reduce((a,t)=>a+t.fim-t.ini+1,0);
+  const janelas=trechos.filter(t=>t.st==='ok' && t.fim-t.ini+1>=JANELA.minJanela);
+  const COR={ok:'#22c55e',nao:'#ef4444',sd:'#d6d3cb'};
+  const total=ehHoje?1440:fim+1;
+  const grad=trechos.map(t=>`${COR[t.st]} ${(t.ini/total*100).toFixed(3)}% ${((t.fim+1)/total*100).toFixed(3)}%`).join(',');
+  let agora='';
+  if(ehHoje){
+    const k=chaves[chaves.length-1], a=avaliarPulv(pts[k]);
+    agora = a.st==='ok'
+      ? `<div class="pv-agora ok"><div class="pv-ico">✅</div><div><b>Condição adequada agora</b><div class="pv-det">Delta T ${fmt(a.dt,1)} °C · vento ${fmt(a.v,1)} km/h · sem chuva · leitura ${k}</div></div></div>`
+      : a.st==='nao'
+      ? `<div class="pv-agora nao"><div class="pv-ico">⛔</div><div><b>Não recomendado agora</b><div class="pv-det">${a.motivos.map(sanitizar).join(' · ')}</div><div class="pv-det">Delta T ${fmt(a.dt,1)} °C · vento ${fmt(a.v,1)} km/h · leitura ${k}</div></div></div>`
+      : `<div class="pv-agora sd"><div class="pv-ico">❔</div><div><b>Sem dados suficientes agora</b></div></div>`;
+  }
+  const marcas=[0,6,12,18,24].map(h=>`<span style="left:${h/24*100}%">${h}h</span>`).join('');
+  return `<div class="card">
+      <div class="card-tit">🎯 Janela de pulverização</div>
+      ${agora}
+      <div class="pv-barra" style="background:linear-gradient(to right,${grad}${ehHoje?`,#f4f1ea ${((fim+1)/total*100).toFixed(3)}% 100%`:''})"></div>
+      <div class="pv-marcas">${marcas}</div>
+      <div class="pv-res"><b>${fmt(minApto/60,1)} h</b> em condição adequada ${ehHoje?'até agora':'no dia'}</div>
+      <div class="pv-jan">${janelas.length?janelas.map(t=>`<span class="pv-chip">${hm(t.ini)}–${hm(t.fim+1>1439?1439:t.fim+1)}</span>`).join(''):`<span class="pv-nenhuma">Nenhuma janela contínua de ${JANELA.minJanela} min ou mais.</span>`}</div>
+      <div class="pv-leg"><span><i style="background:#22c55e"></i>adequado</span><span><i style="background:#ef4444"></i>inadequado</span><span><i style="background:#d6d3cb"></i>sem dados</span></div>
+      <div class="nota">Critério: Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C, vento médio ${JANELA.ventoMin}–${JANELA.ventoMax} km/h e sem chuva na última hora. Veja o gráfico "🎯 Delta T" abaixo.</div>
+    </div>`;
 }
 
 const SERIES={
@@ -288,7 +354,17 @@ const SERIES={
   vento: [{c:'u',   l:'Vento médio (km/h)',    cor:'#16a34a', f:v=>v*3.6}, {c:'raj', l:'Rajada (km/h)', cor:'#f59e0b', f:v=>v*3.6}],
   rad:   [{c:'rad', l:'Radiação (W/m²)',       cor:'#eab308', fill:true}],
   chuva: [{c:'c24h',l:'Chuva 24 h (mm)',       cor:'#1d4ed8', fill:true}, {c:'ctx', l:'Intensidade (mm/h)', cor:'#7c3aed'}],
+  janela:[{fn:deltaT,l:'Delta T (°C)',          cor:'#0f766e'}, {c:'u', l:'Vento médio (km/h)', cor:'#94a3b8', f:v=>v*3.6, eixo:'y1'}],
 };
+// Pinta a faixa ideal de Delta T (2–8 °C) no fundo do gráfico.
+const faixaDeltaT={id:'faixaDeltaT', beforeDatasetsDraw(ch){
+  const {ctx,chartArea:a,scales:{y}}=ch; if(!a||!y) return;
+  const y1=y.getPixelForValue(JANELA.dtMax), y2=y.getPixelForValue(JANELA.dtMin);
+  ctx.save(); ctx.fillStyle='rgba(34,197,94,.14)';
+  const top=Math.max(a.top,Math.min(y1,y2)), bot=Math.min(a.bottom,Math.max(y1,y2));
+  if(bot>top) ctx.fillRect(a.left,top,a.right-a.left,bot-top);
+  ctx.restore();
+}};
 function renderGrafico(){
   if(_chartDia){ _chartDia.destroy(); _chartDia=null; }
   const cv=document.getElementById('grafDia');
@@ -302,15 +378,17 @@ function renderGrafico(){
   const labels=[]; for(let i=0;i<=fim;i++) labels.push(String(Math.floor(i/60)).padStart(2,'0')+':'+String(i%60).padStart(2,'0'));
   const datasets=SERIES[grafSel].map(s=>({
     label:s.l, borderColor:s.cor, backgroundColor:s.fill?s.cor+'33':s.cor, fill:!!s.fill,
-    data:labels.map(k=>{ const v=pts[k]?.[s.c]; return v==null?null:(s.f?s.f(v):v); }),
+    data:labels.map(k=>{ if(s.fn){ const x=pts[k]?s.fn(pts[k]):null; return x==null?null:+x.toFixed(2); } const v=pts[k]?.[s.c]; return v==null?null:(s.f?s.f(v):v); }),
+    yAxisID:s.eixo||'y',
     borderWidth:1.6, pointRadius:0, tension:.2, spanGaps:false,
   }));
   _chartDia=new Chart(cv,{type:'line',data:{labels,datasets},options:{
     responsive:true, maintainAspectRatio:false, animation:false,
     interaction:{mode:'index',intersect:false},
     plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
-    scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0,font:{size:10}}}, y:{ticks:{font:{size:10}}, beginAtZero:grafSel!=='t'}},
-  }});
+    scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0,font:{size:10}}}, y:{ticks:{font:{size:10}}, beginAtZero:grafSel!=='t', ...(grafSel==='janela'?{title:{display:true,text:'Delta T (°C)',font:{size:10}}}:{})},
+      ...(grafSel==='janela'?{y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{size:10}},title:{display:true,text:'vento (km/h)',font:{size:10}}}}:{})},
+  }, plugins: grafSel==='janela' ? [faixaDeltaT] : []});
 }
 
 function histHtml(){
@@ -464,6 +542,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .htab tr.sel td{background:var(--vb);font-weight:700;}
 .parc{color:#b45309;font-weight:700;margin-left:1px;}
 .nota{font-size:.64rem;color:var(--c);margin-top:6px;}
+.ag-dt{grid-column:span 4;}
+@media(max-width:420px){ .ag-dt{grid-column:span 2;} }
+.pv-agora{display:flex;gap:10px;align-items:flex-start;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:.88rem;}
+.pv-agora.ok{background:#dcfce7;color:#14532d;}
+.pv-agora.nao{background:#fee2e2;color:#7f1d1d;}
+.pv-agora.sd{background:var(--cl);color:var(--c);}
+.pv-ico{font-size:1.4rem;line-height:1;}
+.pv-det{font-size:.74rem;margin-top:2px;opacity:.9;}
+.pv-barra{height:22px;border-radius:6px;border:1px solid var(--cb);}
+.pv-marcas{position:relative;height:14px;font-size:.6rem;color:var(--c);margin-top:2px;}
+.pv-marcas span{position:absolute;transform:translateX(-50%);}
+.pv-marcas span:first-child{transform:none;}
+.pv-marcas span:last-child{transform:translateX(-100%);}
+.pv-res{font-size:.84rem;margin-top:8px;}
+.pv-jan{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.pv-chip{font-family:'DM Mono',monospace;font-size:.76rem;font-weight:700;background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;}
+.pv-nenhuma{font-size:.76rem;color:var(--c);}
+.pv-leg{display:flex;gap:12px;font-size:.66rem;color:var(--c);margin-top:8px;}
+.pv-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px;}
 </style>
 </head>
 <body>
