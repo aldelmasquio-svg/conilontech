@@ -45,6 +45,7 @@ de entradas de índice.
 | sol | min | sunlight_time |
 | c1h / c24h | mm | rain_1h / rain_24h ÷10 |
 | ctx | mm/h | rain_rate ÷10 |
+| cmes | mm | rain_month ÷10 (só snapshot; acumulado do mês da estação, p/ conferência) — coluna acrescentada depois, pontos antigos têm 15 colunas |
 
 Escalas conferidas no modelo do dispositivo (`/v1.0/iot-03/devices/{id}/specification`):
 vento km/h scale 1, luz Klux scale 2, temperatura/orvalho °C scale 1, chuva mm scale 1.
@@ -64,7 +65,7 @@ enviou **qualquer** código nos 30 min anteriores; sem isso fica fora de `pontos
 `RsMJ` (Σ rad × 60 s), `chuvaMm` (maior rain_24h do dia), `insolacaoMin`
 (maior sunlight_time), `Pmed` (hPa), `altitudeEstimadaM` (pela Pmed, FAO-56
 eq. 7 invertida), `minutosCobertos`, `coberturaPct` (sobre 1440), `completo`
-(≥ 90 %), `ETo` (mm, FAO-56 Penman-Monteith; `null` se faltar dado).
+(≥ 90 %), `chuvaMesMm` (maior rain_month do dia), `DTmin/DTmax/DTmed` (Delta T = T − bulbo úmido de Stull), `horasAptoDrone`/`horasAptoTrator` (minutos com Delta T 2–8 °C, vento ≤ 5/7 km/h e sem chuva — mesmo critério de `clima.html`), `ETo` (mm, FAO-56 Penman-Monteith; `null` se faltar dado).
 O dia de hoje é parcial até terminar (`completo:false`).
 
 ## Diagnóstico
