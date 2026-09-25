@@ -597,6 +597,9 @@ def main():
             "pontos": {k: codificar_ponto(v) for k, v in mesclado.items()},
             "resumo": res,
         })
+        # Cópia leve só do resumo, p/ a página listar o histórico sem baixar
+        # os ~100 KB de pontos de cada dia.
+        base.collection("resumos").document(dia).set({"data": dia, **res})
         resumo_log.append(f"{dia}: {res['minutosCobertos']} min ({res['coberturaPct']}%), "
                           f"T {res['Tmin']}–{res['Tmax']} °C, UR {res['URmin']}–{res['URmax']} %, "
                           f"P {res['Pmed']} hPa, Rs {res['RsMJ']} MJ, ETo {res['ETo']} mm")

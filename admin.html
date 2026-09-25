@@ -100,6 +100,7 @@ function gerarMenu() {
       { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
       { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
       { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'clima.html',         ico:'🌦️', label:'Clima' },
       { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
       { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
       { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
@@ -150,6 +151,7 @@ function renderizarUsuarios() {
     {id:'pulverizacao',label:'Pulverização'},
     {id:'drench',label:'Drench Preventivo'},
     {id:'irrigacao',label:'Irrigação'},
+    {id:'clima',label:'Clima (estação meteorológica)'},
     {id:'herbicida',label:'Herbicida'},
     {id:'calibracao',label:'Calibração'},
     {id:'avaliacoes',label:'Avaliações'},
@@ -165,7 +167,7 @@ function renderizarUsuarios() {
   const NIVEIS = ['nenhum','encarregado','operador','gerente','admin'];
   const modLabel = id => (MODS.find(m=>m.id===id)?.label||id);
   const GRUPOS = [
-    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','herbicida','calibracao','avaliacoes','amostragem','atividades','equipe']},
+    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','clima','herbicida','calibracao','avaliacoes','amostragem','atividades','equipe']},
     {titulo:'Compras e estoque', ids:['estoque','pedidos','cotacoes']},
     {titulo:'Análise e gestão', ids:['gestao','analises','recomendacoes','planejamento']},
   ];
@@ -264,6 +266,7 @@ window.abrirFazendasUsuario = function(uid) {
     {id:'pulverizacao',label:'Pulverização',ico:'💧'},
     {id:'drench',label:'Drench Preventivo',ico:'🌱'},
     {id:'irrigacao',label:'Irrigação',ico:'💦'},
+    {id:'clima',label:'Clima',ico:'🌦️'},
     {id:'herbicida',label:'Herbicida',ico:'🌿'},
     {id:'calibracao',label:'Calibração',ico:'⚙️'},
     {id:'avaliacoes',label:'Avaliações',ico:'📍'},
