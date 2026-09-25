@@ -284,9 +284,9 @@ function render(){
 }
 
 // ─── JANELA DE PULVERIZAÇÃO ───
-// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio entre 3 e 10 km/h E sem chuva
+// Minuto "apto" = Delta T entre 2 e 8 °C E vento médio até 10 km/h (mínimo em JANELA.ventoMin) E sem chuva
 // (intensidade = 0 e chuva da última hora = 0). Delta T = temperatura − bulbo úmido.
-const JANELA={dtMin:2, dtMax:8, ventoMin:3, ventoMax:10, minJanela:15};
+const JANELA={dtMin:2, dtMax:8, ventoMin:0, ventoMax:10, minJanela:15};
 // Bulbo úmido — Stull (2011), válido p/ UR 5–99% e −20…50 °C (erro < 0,3 °C).
 function bulboUmido(T,UR){
   return T*Math.atan(0.151977*Math.sqrt(UR+8.313659)) + Math.atan(T+UR) - Math.atan(UR-1.676331)
@@ -344,7 +344,7 @@ function janelaHtml(pts, chaves, ehHoje){
       <div class="pv-res"><b>${fmt(minApto/60,1)} h</b> em condição adequada ${ehHoje?'até agora':'no dia'}</div>
       <div class="pv-jan">${janelas.length?janelas.map(t=>`<span class="pv-chip">${hm(t.ini)}–${hm(t.fim+1>1439?1439:t.fim+1)}</span>`).join(''):`<span class="pv-nenhuma">Nenhuma janela contínua de ${JANELA.minJanela} min ou mais.</span>`}</div>
       <div class="pv-leg"><span><i style="background:#22c55e"></i>adequado</span><span><i style="background:#ef4444"></i>inadequado</span><span><i style="background:#d6d3cb"></i>sem dados</span></div>
-      <div class="nota">Critério: Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C, vento médio ${JANELA.ventoMin}–${JANELA.ventoMax} km/h e sem chuva na última hora. Veja o gráfico "🎯 Delta T" abaixo.</div>
+      <div class="nota">Critério: Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C, vento médio ${JANELA.ventoMin>0?JANELA.ventoMin+'–'+JANELA.ventoMax:'até '+JANELA.ventoMax} km/h e sem chuva na última hora. Veja o gráfico "🎯 Delta T" abaixo.</div>
     </div>`;
 }
 
