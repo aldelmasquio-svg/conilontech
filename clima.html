@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ConilonTech · Clima</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
+  authDomain: "talhoes-df836.firebaseapp.com",
+  projectId: "talhoes-df836",
+  storageBucket: "talhoes-df836.firebasestorage.app",
+  messagingSenderId: "1047022702039",
+  appId: "1:1047022702039:web:001cf6a3c028c494ab8f92"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+enableMultiTabIndexedDbPersistence(db).catch(()=>{});
+
+// Dados gravados pelo coletor (clima/coletor.py, GitHub Actions) em
+// clima/{estacao}/{dias,resumos,status}. Esta página é só leitura.
+let usuarioAtual=null, perfilAtual={};
+let estacoes=[], estacaoId=null, diaSel=null;
+let diaDoc=null, resumos=[], statusUlt=null;
+let grafSel='t';
+let unsubDia=null, unsubRes=null, unsubStatus=null;
+let _chartDia=null, _chartHist=null;
+const LS_ESTACAO='climaEstacao';
+
+// ─── AUTH ───
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href='login.html'; return; }
+  usuarioAtual=user;
+  const snap=await getDoc(doc(db,'usuarios',user.uid));
+  if (!snap.exists()) { await signOut(auth); return; }
+  perfilAtual=snap.data();
+  if (!perfilAtual.modulos && perfilAtual.perfil==='admin') perfilAtual.modulos={clima:'admin',admin:'admin'};
+  // Página de consulta aberta por padrão (como a Agenda): só bloqueia se o
+  // admin definir explicitamente o módulo 'clima' como 'nenhum'.
+  if (!ehAdminSistema() && perfilAtual.modulos?.clima==='nenhum') { window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserEmail').textContent=user.email;
+  gerarMenu();
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appContent').style.display='flex';
+  iniciarListeners();
+});
+
+function nivelAcesso(mod) {
+  const _mods = perfilAtual.modulos || {};
+  if (_mods[mod]) return _mods[mod];
+  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
+  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
+  if (perfilAtual.perfil === 'admin') return 'admin';
+  return 'nenhum';
+}
+function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+function fazendaPermitida(fazenda){
+  if (ehAdminSistema() || !fazenda) return true;
+  const permitidas = perfilAtual.fazendasModulo?.clima;
+  if (!permitidas || !permitidas.length) return true;
+  return permitidas.includes(fazenda);
+}
+
+function gerarMenu() {
+  const isAdm = ehAdminSistema();
+  const pg = (window.location.pathname.split('/').pop() || 'index.html');
+  const secoes = [
+    { label: 'Principal', items: [
+      { href:'index.html',         ico:'📊', label:'Dashboard' },
+      { href:'agenda.html',        ico:'📅', label:'Agenda' },
+      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
+      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
+      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
+      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
+      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
+      { href:'clima.html',         ico:'🌦️', label:'Clima' },
+      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
+      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
+      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
+      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
+      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
+      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
+      { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
+      { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
+      { href:'amostragem.html',   ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
+    ]},
+    { label: 'Análise', items: [
+      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
+      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
+      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
+      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
+      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
+    ]},
+  ];
+  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
+    const html = s.items.map(m => {
+      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
+      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
+    }).filter(Boolean).join('');
+    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
+  }).join('');
+}
+
+// ─── HELPERS ───
+function formatarData(d){ if(!d) return '—'; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
+function fmt(n,d=1){ if(n==null||isNaN(n)||!isFinite(n)) return '—'; return Number(n).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+function lsSet(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+function estacaoAtual(){ return estacoes.find(e=>e.id===estacaoId)||null; }
+function fusoAtual(){ return estacaoAtual()?.fuso || 'America/Sao_Paulo'; }
+// Data de hoje (YYYY-MM-DD) no fuso da estação — os docs de dia usam o dia local dela.
+function hojeEstacao(){ return new Intl.DateTimeFormat('en-CA',{timeZone:fusoAtual(),year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
+function horaEstacao(d){ return new Intl.DateTimeFormat('pt-BR',{timeZone:fusoAtual(),hour:'2-digit',minute:'2-digit'}).format(d); }
+function somarDias(iso,n){ const d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
+function setorVento(g){ if(g==null) return ''; const S=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']; return S[Math.round(g/22.5)%16]; }
+function tsParaDate(t){ if(!t) return null; if(typeof t.toDate==='function') return t.toDate(); const d=new Date(t); return isNaN(d)?null:d; }
+function tempoRelativo(d){
+  if(!d) return '—';
+  const min=Math.round((Date.now()-d.getTime())/60000);
+  if(min<1) return 'agora'; if(min<60) return `há ${min} min`;
+  const h=Math.floor(min/60); if(h<48) return `há ${h} h`;
+  return `há ${Math.floor(h/24)} dias`;
+}
+
+// Pontos: {"HH:MM": "v1,v2,..."} na ordem de `campos` → {chave: {campo: valor}}
+function decodificarPontos(d){
+  const campos=(d?.campos||[]).map(c=>typeof c==='string'?c:c.nome);
+  const out={};
+  Object.entries(d?.pontos||{}).forEach(([k,s])=>{
+    const partes=String(s).split(','); const o={};
+    campos.forEach((c,i)=>{ const v=partes[i]; o[c]=(v===undefined||v==='')?null:parseFloat(v); });
+    out[k]=o;
+  });
+  return out;
+}
+
+// ─── LISTENERS ───
+function iniciarListeners(){
+  onSnapshot(collection(db,'clima'), snap => {
+    estacoes=snap.docs.map(d=>({id:d.id,...d.data()}))
+      .filter(e=>fazendaPermitida(e.fazenda))
+      .sort((a,b)=>String(a.nome||a.id).localeCompare(String(b.nome||b.id),'pt-BR'));
+    if(!estacoes.find(e=>e.id===estacaoId)){
+      const salvo=lsGet(LS_ESTACAO);
+      trocarEstacao(estacoes.find(e=>e.id===salvo)?.id || estacoes[0]?.id || null);
+    } else renderSeletor();
+  }, err => { document.getElementById('climaConteudo').innerHTML=`<div class="vazio">Não foi possível ler os dados do clima (${sanitizar(err.code||err.message)}).</div>`; });
+}
+
+function trocarEstacao(id){
+  estacaoId=id;
+  if(id) lsSet(LS_ESTACAO,id);
+  diaSel=hojeEstacao();
+  diaDoc=null; resumos=[]; statusUlt=null;
+  [unsubRes,unsubStatus].forEach(u=>u&&u());
+  unsubRes=unsubStatus=null;
+  renderSeletor(); renderStatus();
+  if(!id){ render(); return; }
+  unsubStatus=onSnapshot(doc(db,'clima',id,'status','ultimo'), s=>{ statusUlt=s.exists()?s.data():null; renderStatus(); });
+  unsubRes=onSnapshot(query(collection(db,'clima',id,'resumos'),orderBy('data','desc'),limit(31)), s=>{
+    resumos=s.docs.map(d=>d.data()); renderHistorico();
+  });
+  ouvirDia();
+}
+
+function ouvirDia(){
+  if(unsubDia){ unsubDia(); unsubDia=null; }
+  diaDoc=null; render();
+  if(!estacaoId||!diaSel) return;
+  unsubDia=onSnapshot(doc(db,'clima',estacaoId,'dias',diaSel), s=>{ diaDoc=s.exists()?s.data():{vazio:true}; render(); });
+}
+
+// ─── CONTROLES (bridges p/ os handlers inline — script é type="module") ───
+window.setEstacao=function(id){ trocarEstacao(id); };
+window.mudarDia=function(delta){
+  const novo=somarDias(diaSel,delta);
+  if(novo>hojeEstacao()) return;
+  diaSel=novo; ouvirDia();
+};
+window.setDia=function(v){ if(!v||v>hojeEstacao()) return; diaSel=v; ouvirDia(); };
+window.setGraf=function(g){ grafSel=g; renderGrafico(); document.querySelectorAll('.gchip').forEach(b=>b.classList.toggle('on',b.dataset.g===g)); };
+
+// ─── RENDER ───
+function renderSeletor(){
+  const sel=document.getElementById('selEstacao');
+  if(!estacoes.length){ sel.innerHTML='<option value="">Nenhuma estação</option>'; sel.disabled=true; return; }
+  sel.disabled=estacoes.length<2;
+  sel.innerHTML=estacoes.map(e=>`<option value="${sanitizar(e.id)}"${e.id===estacaoId?' selected':''}>${sanitizar(e.nome||e.id)}${e.fazenda?' · '+sanitizar(e.fazenda):''}</option>`).join('');
+}
+
+function renderStatus(){
+  const el=document.getElementById('climaStatus'); if(!el) return;
+  if(!statusUlt){ el.innerHTML=''; return; }
+  const d=tsParaDate(statusUlt.data);
+  const velho=d && (Date.now()-d.getTime())>30*60000;
+  if(statusUlt.ok===false){
+    el.innerHTML=`<div class="st st-erro">⚠️ Última coleta falhou ${tempoRelativo(d)} (${statusUlt.falhasSeguidas||1}× seguidas): ${sanitizar(statusUlt.mensagem||'')}</div>`;
+  } else if(velho){
+    el.innerHTML=`<div class="st st-aviso">⏳ Sem coleta nova ${tempoRelativo(d)} — o coletor pode estar atrasado.</div>`;
+  } else {
+    el.innerHTML=`<div class="st st-ok">● Coleta automática em dia · última ${tempoRelativo(d)}</div>`;
+  }
+}
+
+function render(){
+  const alvo=document.getElementById('climaConteudo');
+  if(!estacoes.length){
+    alvo.innerHTML='<div class="vazio">Nenhuma estação meteorológica cadastrada ainda.</div>';
+    return;
+  }
+  const hoje=hojeEstacao();
+  const ehHoje=diaSel===hoje;
+  const nav=`<div class="dia-nav">
+      <button class="dn-btn" onclick="mudarDia(-1)">‹</button>
+      <input type="date" class="dn-data" value="${diaSel}" max="${hoje}" onchange="setDia(this.value)">
+      <button class="dn-btn" onclick="mudarDia(1)"${ehHoje?' disabled':''}>›</button>
+      ${ehHoje?'':`<button class="dn-hoje" onclick="setDia('${hoje}')">Hoje</button>`}
+    </div>`;
+  if(diaDoc===null){ alvo.innerHTML=nav+'<div class="vazio"><div class="spinner" style="margin:0 auto"></div></div>'+histHtml(); renderHistorico(); return; }
+  if(diaDoc.vazio){ alvo.innerHTML=nav+`<div class="vazio">Sem dados da estação em ${formatarData(diaSel)}.</div>`+histHtml(); renderHistorico(); return; }
+
+  const pts=decodificarPontos(diaDoc);
+  const chaves=Object.keys(pts).sort();
+  const r=diaDoc.resumo||{};
+  let agoraHtml='';
+  if(ehHoje && chaves.length){
+    const k=chaves[chaves.length-1], p=pts[k];
+    agoraHtml=`<div class="card agora">
+      <div class="card-tit">Agora <span class="card-sub">leitura das ${k}</span></div>
+      <div class="agora-grid">
+        <div class="ag-item ag-temp"><div class="ag-val">${fmt(p.t,1)}<small>°C</small></div><div class="ag-lbl">Temperatura</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.ur,0)}<small>%</small></div><div class="ag-lbl">Umidade</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.u!=null?p.u*3.6:null,1)}<small>km/h</small></div><div class="ag-lbl">Vento ${setorVento(p.dir)}</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.raj!=null?p.raj*3.6:null,1)}<small>km/h</small></div><div class="ag-lbl">Rajada</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.c24h,1)}<small>mm</small></div><div class="ag-lbl">Chuva 24 h</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.rad,0)}<small>W/m²</small></div><div class="ag-lbl">Radiação</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.orv,1)}<small>°C</small></div><div class="ag-lbl">Ponto de orvalho</div></div>
+        <div class="ag-item"><div class="ag-val">${fmt(p.uv,0)}</div><div class="ag-lbl">Índice UV</div></div>
+      </div>
+    </div>`;
+  }
+  const selo = r.completo
+    ? '<span class="selo selo-ok">dia completo</span>'
+    : `<span class="selo selo-parc">${ehHoje?'dia em andamento':'dados incompletos'} · ${fmt(r.coberturaPct,0)}%</span>`;
+  const resumoHtml=`<div class="card">
+      <div class="card-tit">Resumo do dia ${selo}</div>
+      <div class="eto-box">
+        <div><div class="eto-val">${fmt(r.ETo,1)}<small> mm</small></div><div class="eto-lbl">ETo (evapotranspiração de referência)</div></div>
+        <div class="eto-chuva"><div class="eto-val chuva">${fmt(r.chuvaMm,1)}<small> mm</small></div><div class="eto-lbl">Chuva</div></div>
+      </div>
+      ${r.completo?'':'<div class="aviso-parc">ETo e radiação só valem com o dia completo (≥ 90% dos minutos).</div>'}
+      <div class="res-grid">
+        <div class="rg"><span>Temperatura mín / máx</span><b>${fmt(r.Tmin,1)} / ${fmt(r.Tmax,1)} °C</b></div>
+        <div class="rg"><span>Temperatura média</span><b>${fmt(r.Tmed,1)} °C</b></div>
+        <div class="rg"><span>Umidade mín / máx</span><b>${fmt(r.URmin,0)} / ${fmt(r.URmax,0)} %</b></div>
+        <div class="rg"><span>Vento médio (2 m)</span><b>${fmt(r.u2med!=null?r.u2med*3.6:null,1)} km/h</b></div>
+        <div class="rg"><span>Rajada máxima</span><b>${fmt(r.rajadaMaxKmh,1)} km/h${r.rajadaHora?' às '+sanitizar(r.rajadaHora):''}</b></div>
+        <div class="rg"><span>Radiação solar</span><b>${fmt(r.RsMJ,1)} MJ/m²</b></div>
+        <div class="rg"><span>Insolação</span><b>${r.insolacaoMin!=null?fmt(r.insolacaoMin/60,1)+' h':'—'}</b></div>
+        <div class="rg"><span>Pressão média</span><b>${fmt(r.Pmed,0)} hPa</b></div>
+      </div>
+    </div>`;
+  const grafHtml=`<div class="card">
+      <div class="gchips">
+        ${[['t','🌡️ Temperatura'],['ur','💧 Umidade'],['vento','💨 Vento'],['rad','☀️ Radiação'],['chuva','🌧️ Chuva']].map(([g,l])=>`<button class="gchip${g===grafSel?' on':''}" data-g="${g}" onclick="setGraf('${g}')">${l}</button>`).join('')}
+      </div>
+      <div class="graf-box"><canvas id="grafDia"></canvas></div>
+    </div>`;
+  alvo.innerHTML=nav+agoraHtml+resumoHtml+grafHtml+histHtml();
+  renderGrafico();
+  renderHistorico();
+}
+
+const SERIES={
+  t:     [{c:'t',   l:'Temperatura (°C)',      cor:'#dc2626'}, {c:'orv', l:'Ponto de orvalho (°C)', cor:'#0891b2'}],
+  ur:    [{c:'ur',  l:'Umidade relativa (%)',  cor:'#2563eb'}],
+  vento: [{c:'u',   l:'Vento médio (km/h)',    cor:'#16a34a', f:v=>v*3.6}, {c:'raj', l:'Rajada (km/h)', cor:'#f59e0b', f:v=>v*3.6}],
+  rad:   [{c:'rad', l:'Radiação (W/m²)',       cor:'#eab308', fill:true}],
+  chuva: [{c:'c24h',l:'Chuva 24 h (mm)',       cor:'#1d4ed8', fill:true}, {c:'ctx', l:'Intensidade (mm/h)', cor:'#7c3aed'}],
+};
+function renderGrafico(){
+  if(_chartDia){ _chartDia.destroy(); _chartDia=null; }
+  const cv=document.getElementById('grafDia');
+  if(!cv||!diaDoc||diaDoc.vazio||typeof Chart==='undefined') return;
+  const pts=decodificarPontos(diaDoc);
+  const chaves=Object.keys(pts).sort();
+  if(!chaves.length) return;
+  // Eixo contínuo de minutos (buracos ficam como null → linha interrompida).
+  const [h1,m1]=chaves[chaves.length-1].split(':').map(Number);
+  const fim=diaSel===hojeEstacao()? h1*60+m1 : 1439;
+  const labels=[]; for(let i=0;i<=fim;i++) labels.push(String(Math.floor(i/60)).padStart(2,'0')+':'+String(i%60).padStart(2,'0'));
+  const datasets=SERIES[grafSel].map(s=>({
+    label:s.l, borderColor:s.cor, backgroundColor:s.fill?s.cor+'33':s.cor, fill:!!s.fill,
+    data:labels.map(k=>{ const v=pts[k]?.[s.c]; return v==null?null:(s.f?s.f(v):v); }),
+    borderWidth:1.6, pointRadius:0, tension:.2, spanGaps:false,
+  }));
+  _chartDia=new Chart(cv,{type:'line',data:{labels,datasets},options:{
+    responsive:true, maintainAspectRatio:false, animation:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+    scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0,font:{size:10}}}, y:{ticks:{font:{size:10}}, beginAtZero:grafSel!=='t'}},
+  }});
+}
+
+function histHtml(){
+  return `<div class="card">
+      <div class="card-tit">Últimos dias <span class="card-sub">ETo × chuva</span></div>
+      <div id="histBalanco"></div>
+      <div class="graf-box hist"><canvas id="grafHist"></canvas></div>
+      <div id="histTabela"></div>
+    </div>`;
+}
+function renderHistorico(){
+  if(_chartHist){ _chartHist.destroy(); _chartHist=null; }
+  const tab=document.getElementById('histTabela'); if(!tab) return;
+  const box=document.getElementById('grafHist')?.parentElement;
+  if(box) box.style.display=resumos.length?'':'none';
+  if(!resumos.length){ tab.innerHTML='<div class="vazio pq">Ainda sem histórico.</div>'; document.getElementById('histBalanco').innerHTML=''; return; }
+  const hoje=hojeEstacao();
+  const bal=n=>{
+    const ini=somarDias(hoje,-n);
+    const ds=resumos.filter(r=>r.data>ini && r.data<hoje && r.completo);
+    const eto=ds.reduce((a,r)=>a+(r.ETo||0),0), ch=ds.reduce((a,r)=>a+(r.chuvaMm||0),0);
+    return {n:ds.length,eto,ch,saldo:ch-eto};
+  };
+  const b7=bal(7), b30=bal(30);
+  const cel=(b,rot,tot)=>`<div class="bal"><div class="bal-tit">${rot}</div>
+      ${b.n?`<div class="bal-lin"><span>ETo</span><b>${fmt(b.eto,1)} mm</b></div>
+      <div class="bal-lin"><span>Chuva</span><b>${fmt(b.ch,1)} mm</b></div>
+      <div class="bal-lin saldo ${b.saldo<0?'neg':'pos'}"><span>Saldo</span><b>${b.saldo>0?'+':''}${fmt(b.saldo,1)} mm</b></div>
+      <div class="bal-n">${b.n} de ${tot} dias completos</div>`:'<div class="bal-n">sem dias completos</div>'}</div>`;
+  document.getElementById('histBalanco').innerHTML=`<div class="bal-grid">${cel(b7,'7 dias',7)}${cel(b30,'30 dias',30)}</div>`;
+
+  const ord=[...resumos].sort((a,b)=>a.data<b.data?-1:1);
+  const cv=document.getElementById('grafHist');
+  if(cv && typeof Chart!=='undefined'){
+    _chartHist=new Chart(cv,{type:'bar',data:{
+      labels:ord.map(r=>formatarData(r.data).slice(0,5)),
+      datasets:[
+        {label:'ETo (mm)', data:ord.map(r=>r.ETo??null), backgroundColor:ord.map(r=>r.completo?'#f59e0b':'#fcd9a0')},
+        {label:'Chuva (mm)', data:ord.map(r=>r.chuvaMm??null), backgroundColor:'#3b82f6'},
+      ]},options:{responsive:true,maintainAspectRatio:false,animation:false,
+        plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+        scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{beginAtZero:true,ticks:{font:{size:10}}}}}});
+  }
+  tab.innerHTML=`<table class="htab"><thead><tr><th>Dia</th><th>Mín/Máx</th><th>Chuva</th><th>ETo</th></tr></thead><tbody>
+    ${resumos.map(r=>`<tr class="${r.data===diaSel?'sel':''}" onclick="setDia('${sanitizar(r.data)}')">
+      <td>${formatarData(r.data).slice(0,5)}</td>
+      <td>${fmt(r.Tmin,0)}–${fmt(r.Tmax,0)}°</td>
+      <td>${fmt(r.chuvaMm,1)}</td>
+      <td>${fmt(r.ETo,1)}${r.completo?'':'<span class="parc" title="dia incompleto">*</span>'}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="nota">* dia incompleto (menos de 90% dos minutos) — ETo aproximada. Toque num dia para abrir.</div>`;
+}
+
+window.toggleMenu=function(){ document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu=function(){ document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout=async function(){ await signOut(auth); window.location.href='login.html'; };
+</script>
+
+<style>
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;--bg:#f4f1ea;--acc:#0891b2;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:9000;}
+.spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--acc);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;}
+.hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
+.menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
+.menu-secao{font-size:.58rem;text-transform:uppercase;letter-spacing:.12em;color:rgba(255,255,255,.35);padding:12px 12px 4px;font-weight:700;}
+#menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
+.menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
+#appContent{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
+.topo{background:white;border-bottom:1px solid var(--cb);padding:10px 14px;flex-shrink:0;}
+.topo-in{display:flex;flex-direction:column;gap:8px;}
+.sel-est{display:flex;align-items:center;gap:8px;}
+.sel-est label{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);font-weight:700;flex-shrink:0;}
+.sel-est select{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:9px;padding:9px 10px;font-family:'Barlow',sans-serif;font-size:.92rem;font-weight:600;background:white;color:var(--t);}
+.sel-est select:disabled{opacity:1;background:var(--cl);}
+.st{font-size:.74rem;font-weight:600;border-radius:8px;padding:6px 10px;}
+.st-ok{color:#166534;background:#dcfce7;}
+.st-aviso{color:#92400e;background:#fef3c7;}
+.st-erro{color:#991b1b;background:#fee2e2;}
+.scroll{flex:1;overflow-y:auto;min-height:0;}
+.wrap{padding:12px 12px 40px;display:flex;flex-direction:column;gap:12px;}
+@media(min-width:600px){ .wrap,.topo-in{ max-width:580px; margin:0 auto; } }
+.vazio{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:26px 16px;text-align:center;color:var(--c);font-size:.88rem;}
+.vazio.pq{box-shadow:none;padding:12px;}
+.dia-nav{display:flex;align-items:center;gap:8px;}
+.dn-btn{width:40px;height:40px;border-radius:10px;border:1.5px solid var(--cb);background:white;font-size:1.3rem;font-weight:700;color:var(--ve);cursor:pointer;flex-shrink:0;}
+.dn-btn:disabled{opacity:.35;cursor:default;}
+.dn-data{flex:1;min-width:0;height:40px;border:1.5px solid var(--cb);border-radius:10px;padding:0 10px;font-family:'Barlow',sans-serif;font-size:.95rem;font-weight:600;background:white;text-align:center;}
+.dn-hoje{height:40px;border:none;border-radius:10px;background:var(--acc);color:white;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;padding:0 12px;cursor:pointer;flex-shrink:0;}
+.card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:13px 14px;}
+.card-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;color:var(--ve);margin-bottom:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.card-sub{font-family:'Barlow',sans-serif;font-weight:500;font-size:.72rem;color:var(--c);}
+.agora{background:linear-gradient(135deg,#ecfeff,#e0f2fe);}
+.agora-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+@media(max-width:420px){ .agora-grid{grid-template-columns:repeat(2,1fr);} }
+.ag-item{background:rgba(255,255,255,.75);border-radius:10px;padding:8px 6px;text-align:center;}
+.ag-val{font-family:'DM Mono',monospace;font-weight:700;font-size:1.15rem;color:#0e7490;}
+.ag-val small{font-size:.62rem;margin-left:2px;color:#155e75;font-weight:500;}
+.ag-temp .ag-val{color:#dc2626;}
+.ag-lbl{font-size:.64rem;color:#155e75;margin-top:2px;}
+.selo{font-family:'Barlow',sans-serif;font-size:.64rem;font-weight:700;border-radius:20px;padding:2px 9px;}
+.selo-ok{background:#dcfce7;color:#166534;}
+.selo-parc{background:#fef3c7;color:#92400e;}
+.eto-box{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;background:var(--vb);border-radius:10px;padding:12px 14px;}
+.eto-val{font-family:'DM Mono',monospace;font-weight:800;font-size:1.7rem;color:var(--v);line-height:1;}
+.eto-val small{font-size:.8rem;font-weight:500;}
+.eto-val.chuva{color:#1d4ed8;}
+.eto-lbl{font-size:.68rem;color:var(--c);margin-top:4px;}
+.eto-chuva{text-align:right;}
+.aviso-parc{font-size:.7rem;color:#92400e;margin-top:6px;}
+.res-grid{display:grid;grid-template-columns:1fr;margin-top:8px;}
+@media(min-width:440px){ .res-grid{grid-template-columns:1fr 1fr;column-gap:16px;} }
+.rg{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px solid var(--cl);font-size:.8rem;}
+.rg span{color:var(--c);}
+.rg b{font-family:'DM Mono',monospace;font-size:.8rem;white-space:nowrap;}
+.gchips{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;}
+.gchip{white-space:nowrap;border:1.5px solid var(--cb);background:white;color:var(--c);border-radius:20px;padding:6px 11px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.8rem;cursor:pointer;flex-shrink:0;}
+.gchip.on{background:var(--acc);border-color:var(--acc);color:white;}
+.graf-box{position:relative;height:240px;}
+.graf-box.hist{height:180px;margin:10px 0;}
+.bal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.bal{background:var(--cl);border-radius:10px;padding:9px 11px;}
+.bal-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;color:var(--ve);margin-bottom:4px;}
+.bal-lin{display:flex;justify-content:space-between;font-size:.76rem;padding:2px 0;}
+.bal-lin span{color:var(--c);}
+.bal-lin b{font-family:'DM Mono',monospace;}
+.bal-lin.saldo{border-top:1px solid var(--cb);margin-top:3px;padding-top:4px;}
+.bal-lin.saldo.neg b{color:#dc2626;}
+.bal-lin.saldo.pos b{color:#1d4ed8;}
+.bal-n{font-size:.62rem;color:var(--c);margin-top:3px;}
+.htab{width:100%;border-collapse:collapse;font-size:.8rem;}
+.htab th{text-align:left;font-size:.62rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);padding:6px 4px;border-bottom:1.5px solid var(--cb);}
+.htab td{padding:8px 4px;border-bottom:1px solid var(--cl);font-family:'DM Mono',monospace;}
+.htab tr{cursor:pointer;}
+.htab tr.sel td{background:var(--vb);font-weight:700;}
+.parc{color:#b45309;font-weight:700;margin-left:1px;}
+.nota{font-size:.64rem;color:var(--c);margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="spinner"></div></div>
+
+<header class="app-header">
+  <div class="hdr-logo">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div style="margin-left:4px;"><span>Conilon Tech</span><span class="hdr-sub">Clima</span></div>
+  </div>
+  <div class="hdr-user" id="userNome"></div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<div class="menu-lateral" id="menuLateral">
+  <div class="menu-topo">
+    <div class="menu-app-nome">🌿 Conilon Tech</div>
+    <div class="menu-user-nome" id="menuUserNome"></div>
+    <div class="menu-user-email" id="menuUserEmail"></div>
+  </div>
+  <div id="menuModulos"></div>
+  <div class="menu-rodape"><button class="btn-logout" onclick="fazerLogout()">Sair da conta</button></div>
+</div>
+
+<div id="appContent" style="display:none;flex:1;flex-direction:column;overflow:hidden;min-height:0;">
+  <div class="topo">
+    <div class="topo-in">
+      <div class="sel-est">
+        <label for="selEstacao">🌦️ Estação</label>
+        <select id="selEstacao" onchange="setEstacao(this.value)"><option>Carregando…</option></select>
+      </div>
+      <div id="climaStatus"></div>
+    </div>
+  </div>
+  <div class="scroll">
+    <div class="wrap" id="climaConteudo"></div>
+  </div>
+</div>
+</body>
+</html>

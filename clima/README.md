@@ -21,6 +21,7 @@ e a si mesmo pela API, para o GitHub não desativá-los após 60 dias sem commit
 | `status/cursor` | `ate` (ms, fim do último minuto processado), `ultimoEventTime`, `ultimoReporte`, `estado` (último valor bruto de cada código, p/ carry-forward) |
 | `status/ultimo` | `ok, mensagem, data, falhasSeguidas, logsRecebidos, minutosGravados, diasTocados, chamadasTuya` |
 | `dias/{YYYY-MM-DD}` | dia local (America/Sao_Paulo): `pontos`, `campos`, `resumo` |
+| `resumos/{YYYY-MM-DD}` | só o `resumo` do dia (+ `data`) — leve, para listar histórico |
 | `bruto/{ISO}` (`_p2`…) | logs brutos `{c,t,v}` de cada execução + snapshot; apagados após 90 dias |
 
 **`pontos`**: mapa `"HH:MM"` → string CSV com os valores na ordem de `campos`
