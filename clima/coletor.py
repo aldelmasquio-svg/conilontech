@@ -51,12 +51,15 @@ CODES = [
     "temp_current_external", "humidity_outdoor", "dew_point_temp",
     "atmospheric_pressture", "windspeed_avg", "windspeed_gust", "Wind_speed",
     "Wing_direction", "Light_intensity", "uv_index", "sunlight_time",
-    "rain_1h", "rain_24h", "rain_rate",
+    "rain_1h", "rain_24h", "rain_rate", "rain_month",
 ]
 # A API de report-logs recusa estes códigos ("Parameter error", 40000303) e,
 # na consulta conjunta, simplesmente os omite. Vêm só do snapshot (1 amostra
 # por execução, ~5 min), tratado como evento no horário `time` da propriedade.
-CODES_SO_SNAPSHOT = {"Wind_speed", "Wing_direction", "Light_intensity", "sunlight_time"}
+# rain_month (acumulado do mês, da própria estação) entra só para conferir o
+# total mensal calculado a partir de rain_24h.
+CODES_SO_SNAPSHOT = {"Wind_speed", "Wing_direction", "Light_intensity", "sunlight_time",
+                     "rain_month"}
 CODES_LOG = [c for c in CODES if c not in CODES_SO_SNAPSHOT]
 # Códigos cujo valor por minuto é o MÁXIMO do minuto (demais: último valor).
 CODES_MAX = {"windspeed_gust", "Wind_speed"}
@@ -67,6 +70,7 @@ CAMPOS = [
     ("u", "m/s", 2), ("raj", "m/s", 2), ("vel", "m/s", 2), ("dir", "°", 0),
     ("lux", "klux", 2), ("rad", "W/m²", 0), ("uv", "índice", 1),
     ("sol", "min", 0), ("c1h", "mm", 1), ("c24h", "mm", 1), ("ctx", "mm/h", 1),
+    ("cmes", "mm", 1),  # acrescentado depois: pontos antigos têm 15 colunas
 ]
 IDX = {nome: i for i, (nome, _, _) in enumerate(CAMPOS)}
 
@@ -146,6 +150,8 @@ def converter(code, raw):
         return {"c24h": x / 10}
     if code == "rain_rate":
         return {"ctx": x / 10}
+    if code == "rain_month":
+        return {"cmes": x / 10}
     return {}
 
 
@@ -335,6 +341,34 @@ def montar_serie(logs, snapshot, estado, ultimo_reporte, inicio_ms, fim_ms):
     return pontos, estado, ultimo_reporte
 
 
+# ------------------------------------------------- Delta T / pulverização ----
+# Mesmo critério do card "Janela de pulverização" de clima.html (JANELA /
+# MODOS_PULV) — mantenha os dois iguais.
+PULV_DT_MIN, PULV_DT_MAX = 2.0, 8.0
+PULV_VENTO_MAX_KMH = {"Drone": 5.0, "Trator": 7.0}
+
+
+def bulbo_umido(t, ur):
+    """Temperatura de bulbo úmido (°C) — Stull (2011)."""
+    ur = min(max(ur, 5.0), 99.0)
+    return (t * math.atan(0.151977 * math.sqrt(ur + 8.313659)) + math.atan(t + ur)
+            - math.atan(ur - 1.676331) + 0.00391838 * ur ** 1.5 * math.atan(0.023101 * ur)
+            - 4.686035)
+
+
+def delta_t(v):
+    t, ur = v[IDX["t"]], v[IDX["ur"]]
+    return None if t is None or ur is None else t - bulbo_umido(t, ur)
+
+
+def minuto_apto(v, vento_max_kmh):
+    dt, u = delta_t(v), v[IDX["u"]]
+    if dt is None or u is None:
+        return False
+    chuva = (v[IDX["ctx"]] or 0) > 0 or (v[IDX["c1h"]] or 0) > 0
+    return not chuva and PULV_DT_MIN <= dt <= PULV_DT_MAX and u * 3.6 <= vento_max_kmh
+
+
 # ---------------------------------------------------------------- resumo ----
 def resumir(dia, pontos):
     """pontos: {"HH:MM": [valores]} de um dia local → dict de resumo."""
@@ -364,6 +398,7 @@ def resumir(dia, pontos):
         "chuvaMm": r2(max(vals("c24h")) if vals("c24h") else None, 1),
         "insolacaoMin": r2(max(vals("sol")) if vals("sol") else None, 0),
         "Pmed": r2(media(p), 1),
+        "chuvaMesMm": r2(max(vals("cmes")) if vals("cmes") else None, 1),
         "minutosCobertos": cobertos,
         "coberturaPct": round(cobertos / 1440 * 100, 1),
         "completo": cobertos / 1440 >= LIMIAR_COMPLETO,
@@ -371,6 +406,13 @@ def resumir(dia, pontos):
         "ETo": None,
         "calculadoEm": datetime.now(timezone.utc),
     }
+    dts = [x for x in (delta_t(v) for v in pontos.values()) if x is not None]
+    res["DTmin"] = r2(min(dts) if dts else None, 1)
+    res["DTmax"] = r2(max(dts) if dts else None, 1)
+    res["DTmed"] = r2(media(dts), 1)
+    for nome, vmax in PULV_VENTO_MAX_KMH.items():
+        n = sum(1 for v in pontos.values() if minuto_apto(v, vmax))
+        res[f"horasApto{nome}"] = round(n / 60, 1)
     if res["Pmed"] is not None:
         res["altitudeEstimadaM"] = round(altitude_pela_pressao(res["Pmed"] / 10))
     if None not in (res["Tmax"], res["Tmin"], res["URmax"], res["URmin"],

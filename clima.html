@@ -10,7 +10,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -31,8 +31,9 @@ let usuarioAtual=null, perfilAtual={};
 let estacoes=[], estacaoId=null, diaSel=null;
 let diaDoc=null, resumos=[], statusUlt=null;
 let grafSel='t';
-let unsubDia=null, unsubRes=null, unsubStatus=null;
-let _chartDia=null, _chartHist=null;
+let unsubDia=null, unsubRes=null, unsubStatus=null, unsubAno=null;
+let _chartDia=null, _chartHist=null, _chartChuva=null;
+let resumosAno=[], anoCarregado=null, chuvaView='mes';
 const LS_ESTACAO='climaEstacao';
 
 // ─── AUTH ───
@@ -163,8 +164,8 @@ function trocarEstacao(id){
   if(id) lsSet(LS_ESTACAO,id);
   diaSel=hojeEstacao();
   diaDoc=null; resumos=[]; statusUlt=null;
-  [unsubRes,unsubStatus].forEach(u=>u&&u());
-  unsubRes=unsubStatus=null;
+  [unsubRes,unsubStatus,unsubAno].forEach(u=>u&&u());
+  unsubRes=unsubStatus=unsubAno=null; resumosAno=[]; anoCarregado=null;
   renderSeletor(); renderStatus();
   if(!id){ render(); return; }
   unsubStatus=onSnapshot(doc(db,'clima',id,'status','ultimo'), s=>{ statusUlt=s.exists()?s.data():null; renderStatus(); });
@@ -178,7 +179,18 @@ function ouvirDia(){
   if(unsubDia){ unsubDia(); unsubDia=null; }
   diaDoc=null; render();
   if(!estacaoId||!diaSel) return;
+  if(diaSel.slice(0,4)!==anoCarregado) ouvirAno(diaSel.slice(0,4));
   unsubDia=onSnapshot(doc(db,'clima',estacaoId,'dias',diaSel), s=>{ diaDoc=s.exists()?s.data():{vazio:true}; render(); });
+}
+
+// Resumos do ano inteiro (docs leves, ~1 KB) para o acumulado de chuva.
+function ouvirAno(ano){
+  if(unsubAno){ unsubAno(); unsubAno=null; }
+  anoCarregado=ano; resumosAno=[];
+  unsubAno=onSnapshot(query(collection(db,'clima',estacaoId,'resumos'),
+      where('data','>=',ano+'-01-01'), where('data','<=',ano+'-12-31')), s=>{
+    resumosAno=s.docs.map(d=>d.data()).sort((a,b)=>a.data<b.data?-1:1); renderChuva();
+  });
 }
 
 // ─── CONTROLES (bridges p/ os handlers inline — script é type="module") ───
@@ -189,6 +201,7 @@ window.mudarDia=function(delta){
   diaSel=novo; ouvirDia();
 };
 window.setDia=function(v){ if(!v||v>hojeEstacao()) return; diaSel=v; ouvirDia(); };
+window.setChuvaView=function(v){ chuvaView=v; renderChuva(); };
 window.setGraf=function(g){ grafSel=g; renderGrafico(); document.querySelectorAll('.gchip').forEach(b=>b.classList.toggle('on',b.dataset.g===g)); };
 
 // ─── RENDER ───
@@ -227,8 +240,8 @@ function render(){
       <button class="dn-btn" onclick="mudarDia(1)"${ehHoje?' disabled':''}>›</button>
       ${ehHoje?'':`<button class="dn-hoje" onclick="setDia('${hoje}')">Hoje</button>`}
     </div>`;
-  if(diaDoc===null){ alvo.innerHTML=nav+'<div class="vazio"><div class="spinner" style="margin:0 auto"></div></div>'+histHtml(); renderHistorico(); return; }
-  if(diaDoc.vazio){ alvo.innerHTML=nav+`<div class="vazio">Sem dados da estação em ${formatarData(diaSel)}.</div>`+histHtml(); renderHistorico(); return; }
+  if(diaDoc===null){ alvo.innerHTML=nav+'<div class="vazio"><div class="spinner" style="margin:0 auto"></div></div>'+chuvaHtml()+histHtml(); renderChuva(); renderHistorico(); return; }
+  if(diaDoc.vazio){ alvo.innerHTML=nav+`<div class="vazio">Sem dados da estação em ${formatarData(diaSel)}.</div>`+chuvaHtml()+histHtml(); renderChuva(); renderHistorico(); return; }
 
   const pts=decodificarPontos(diaDoc);
   const chaves=Object.keys(pts).sort();
@@ -270,6 +283,8 @@ function render(){
         <div class="rg"><span>Radiação solar</span><b>${fmt(r.RsMJ,1)} MJ/m²</b></div>
         <div class="rg"><span>Insolação</span><b>${r.insolacaoMin!=null?fmt(r.insolacaoMin/60,1)+' h':'—'}</b></div>
         <div class="rg"><span>Pressão média</span><b>${fmt(r.Pmed,0)} hPa</b></div>
+        <div class="rg"><span>Delta T mín / máx</span><b>${fmt(r.DTmin,1)} / ${fmt(r.DTmax,1)} °C</b></div>
+        <div class="rg"><span>Delta T médio</span><b>${fmt(r.DTmed,1)} °C</b></div>
       </div>
     </div>`;
   const grafHtml=`<div class="card">
@@ -278,8 +293,9 @@ function render(){
       </div>
       <div class="graf-box"><canvas id="grafDia"></canvas></div>
     </div>`;
-  alvo.innerHTML=nav+agoraHtml+janelaHtml(pts,chaves,ehHoje)+resumoHtml+grafHtml+histHtml();
+  alvo.innerHTML=nav+agoraHtml+janelaHtml(pts,chaves,ehHoje)+resumoHtml+grafHtml+chuvaHtml()+histHtml();
   renderGrafico();
+  renderChuva();
   renderHistorico();
 }
 
@@ -403,6 +419,51 @@ function renderGrafico(){
   }, plugins: grafSel==='janela' ? [faixaDeltaT] : []});
 }
 
+const MESES=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function chuvaHtml(){
+  return `<div class="card">
+      <div class="card-tit">🌧️ Chuva acumulada</div>
+      <div id="chuvaKpis"></div>
+      <div class="gchips" id="chuvaChips"></div>
+      <div class="graf-box hist"><canvas id="grafChuva"></canvas></div>
+      <div class="nota" id="chuvaNota"></div>
+    </div>`;
+}
+function renderChuva(){
+  if(_chartChuva){ _chartChuva.destroy(); _chartChuva=null; }
+  const kp=document.getElementById('chuvaKpis'); if(!kp||!diaSel) return;
+  const ano=diaSel.slice(0,4), mes=diaSel.slice(0,7), mIdx=+diaSel.slice(5,7)-1;
+  const doAno=resumosAno.filter(r=>r.data.slice(0,4)===ano);
+  const doMes=doAno.filter(r=>r.data.slice(0,7)===mes);
+  const soma=rs=>rs.reduce((a,r)=>a+(r.chuvaMm||0),0);
+  const rDia=doAno.find(r=>r.data===diaSel) || (diaDoc&&!diaDoc.vazio?diaDoc.resumo:null);
+  // Acumulador mensal da própria estação (rain_month), p/ conferência.
+  const estMes=[...doMes].reverse().find(r=>r.chuvaMesMm!=null)?.chuvaMesMm;
+  kp.innerHTML=`<div class="ch-kpis">
+      <div class="ch-k"><div class="ch-v">${fmt(rDia?.chuvaMm,1)}<small> mm</small></div><div class="ch-l">Dia ${formatarData(diaSel).slice(0,5)}</div></div>
+      <div class="ch-k"><div class="ch-v">${fmt(soma(doMes),1)}<small> mm</small></div><div class="ch-l">${MESES[mIdx]}</div><div class="ch-n">${doMes.length} dia${doMes.length===1?'':'s'} com dados</div></div>
+      <div class="ch-k"><div class="ch-v">${fmt(soma(doAno),1)}<small> mm</small></div><div class="ch-l">Ano ${ano}</div><div class="ch-n">${doAno.length} dia${doAno.length===1?'':'s'} com dados</div></div>
+    </div>`;
+  document.getElementById('chuvaChips').innerHTML=[['mes',`📅 Dias de ${MESES[mIdx].toLowerCase()}`],['ano',`🗓️ Meses de ${ano}`]]
+    .map(([v,l])=>`<button class="gchip${v===chuvaView?' on':''}" onclick="setChuvaView('${v}')">${l}</button>`).join('');
+  let labels, data;
+  if(chuvaView==='ano'){
+    labels=MESES.map(m=>m.slice(0,3));
+    data=MESES.map((_,i)=>{ const rs=doAno.filter(r=>+r.data.slice(5,7)===i+1); return rs.length?+soma(rs).toFixed(1):null; });
+  } else {
+    const nDias=new Date(Date.UTC(+ano,mIdx+1,0)).getUTCDate();
+    labels=Array.from({length:nDias},(_,i)=>String(i+1));
+    data=labels.map(d=>{ const r=doMes.find(x=>+x.data.slice(8,10)===+d); return r&&r.chuvaMm!=null?r.chuvaMm:null; });
+  }
+  const cv=document.getElementById('grafChuva');
+  if(cv && typeof Chart!=='undefined'){
+    _chartChuva=new Chart(cv,{type:'bar',data:{labels,datasets:[{label:'Chuva (mm)',data,backgroundColor:'#3b82f6'}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},
+        scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{beginAtZero:true,suggestedMax:5,ticks:{font:{size:10}}}}}});
+  }
+  document.getElementById('chuvaNota').innerHTML=`Soma da chuva de cada dia registrado; dias sem dados não entram.${estMes!=null?` Acumulado do mês informado pela própria estação: <b>${fmt(estMes,1)} mm</b>.`:''}`;
+}
+
 function histHtml(){
   return `<div class="card">
       <div class="card-tit">Últimos dias <span class="card-sub">ETo × chuva</span></div>
@@ -444,14 +505,17 @@ function renderHistorico(){
         plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
         scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{beginAtZero:true,ticks:{font:{size:10}}}}}});
   }
-  tab.innerHTML=`<table class="htab"><thead><tr><th>Dia</th><th>Mín/Máx</th><th>Chuva</th><th>ETo</th></tr></thead><tbody>
+  const campoApto=modoPulv==='trator'?'horasAptoTrator':'horasAptoDrone';
+  tab.innerHTML=`<table class="htab"><thead><tr><th>Dia</th><th>T mín/máx</th><th>Chuva</th><th>ETo</th><th>ΔT mín/máx</th><th title="horas adequadas para pulverizar">🎯 h</th></tr></thead><tbody>
     ${resumos.map(r=>`<tr class="${r.data===diaSel?'sel':''}" onclick="setDia('${sanitizar(r.data)}')">
       <td>${formatarData(r.data).slice(0,5)}</td>
       <td>${fmt(r.Tmin,0)}–${fmt(r.Tmax,0)}°</td>
       <td>${fmt(r.chuvaMm,1)}</td>
-      <td>${fmt(r.ETo,1)}${r.completo?'':'<span class="parc" title="dia incompleto">*</span>'}</td></tr>`).join('')}
+      <td>${fmt(r.ETo,1)}${r.completo?'':'<span class="parc" title="dia incompleto">*</span>'}</td>
+      <td>${r.DTmin!=null?fmt(r.DTmin,1)+'–'+fmt(r.DTmax,1):'—'}</td>
+      <td class="apto">${fmt(r[campoApto],1)}</td></tr>`).join('')}
     </tbody></table>
-    <div class="nota">* dia incompleto (menos de 90% dos minutos) — ETo aproximada. Toque num dia para abrir.</div>`;
+    <div class="nota">* dia incompleto (menos de 90% dos minutos) — ETo aproximada. 🎯 h = horas adequadas para pulverizar (${MODOS_PULV[modoPulv].label}, Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C). Toque num dia para abrir.</div>`;
 }
 
 window.toggleMenu=function(){ document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
@@ -549,7 +613,15 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .bal-n{font-size:.62rem;color:var(--c);margin-top:3px;}
 .htab{width:100%;border-collapse:collapse;font-size:.8rem;}
 .htab th{text-align:left;font-size:.62rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);padding:6px 4px;border-bottom:1.5px solid var(--cb);}
-.htab td{padding:8px 4px;border-bottom:1px solid var(--cl);font-family:'DM Mono',monospace;}
+.htab td{padding:8px 3px;border-bottom:1px solid var(--cl);font-family:'DM Mono',monospace;font-size:.74rem;}
+.htab th{padding:6px 3px;}
+.htab td.apto{color:#15803d;font-weight:700;}
+.ch-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.ch-k{background:#eff6ff;border-radius:10px;padding:9px 8px;text-align:center;}
+.ch-v{font-family:'DM Mono',monospace;font-weight:800;font-size:1.15rem;color:#1d4ed8;}
+.ch-v small{font-size:.66rem;font-weight:500;}
+.ch-l{font-size:.7rem;color:#1e3a8a;font-weight:700;margin-top:2px;}
+.ch-n{font-size:.6rem;color:var(--c);margin-top:1px;}
 .htab tr{cursor:pointer;}
 .htab tr.sel td{background:var(--vb);font-weight:700;}
 .parc{color:#b45309;font-weight:700;margin-left:1px;}
