@@ -53,6 +53,11 @@ CODES = [
     "Wing_direction", "Light_intensity", "uv_index", "sunlight_time",
     "rain_1h", "rain_24h", "rain_rate",
 ]
+# A API de report-logs recusa estes códigos ("Parameter error", 40000303) e,
+# na consulta conjunta, simplesmente os omite. Vêm só do snapshot (1 amostra
+# por execução, ~5 min), tratado como evento no horário `time` da propriedade.
+CODES_SO_SNAPSHOT = {"Wind_speed", "Wing_direction", "Light_intensity", "sunlight_time"}
+CODES_LOG = [c for c in CODES if c not in CODES_SO_SNAPSHOT]
 # Códigos cujo valor por minuto é o MÁXIMO do minuto (demais: último valor).
 CODES_MAX = {"windspeed_gust", "Wind_speed"}
 
@@ -75,19 +80,36 @@ def _num(v):
     return x if math.isfinite(x) else None
 
 
+_SETORES = {"N": 0, "NNE": 22.5, "NE": 45, "ENE": 67.5, "E": 90, "ESE": 112.5,
+            "SE": 135, "SSE": 157.5, "S": 180, "SSW": 202.5, "SW": 225,
+            "WSW": 247.5, "W": 270, "WNW": 292.5, "NW": 315, "NNW": 337.5}
+
+
 def decodificar_direcao(v):
-    """Wing_direction vem em base64; hipótese: últimos 2 bytes big-endian = graus."""
+    """Wing_direction (raw base64, 9 bytes). Observado:
+       "AABFAAAAYABw" → 00 00 45 00 | 00 | 00 60 | 00 70 → "E",   96°
+       "AFNFAAAAjQHA" → 00 53 45 00 | 00 | 00 8d | 01 c0 → "SE",  141°
+       "AFNTRQAAmwHA" → 00 53 53 45 | 00 | 00 9b | 01 c0 → "SSE", 155°
+    Bytes 0-3 = nome do setor em ASCII (preenchido com 00); bytes 5-6
+    (big-endian) = graus.
+    Os graus só são aceitos se caírem no setor do nome (±45°); senão usa o
+    centro do setor."""
     if isinstance(v, (int, float)):
         g = float(v)
-    else:
-        try:
-            b = base64.b64decode(str(v), validate=False)
-        except Exception:
-            return None
-        if len(b) < 2:
-            return None
-        g = float(int.from_bytes(b[-2:], "big"))
-    return g if 0 <= g <= 360 else None
+        return g if 0 <= g <= 360 else None
+    try:
+        b = base64.b64decode(str(v), validate=False)
+    except Exception:
+        return None
+    if len(b) < 7:
+        return None
+    nome = b[0:4].replace(b"\x00", b"").decode("ascii", "ignore").strip().upper()
+    g = float(int.from_bytes(b[5:7], "big"))
+    centro = _SETORES.get(nome)
+    if centro is None:
+        return g if 0 <= g <= 360 else None
+    dif = abs((g - centro + 180) % 360 - 180)
+    return g if 0 <= g <= 360 and dif <= 45 else float(centro)
 
 
 def converter(code, raw):
@@ -263,22 +285,27 @@ def montar_serie(logs, snapshot, estado, ultimo_reporte, inicio_ms, fim_ms):
     """
     estado = {k: dict(v) for k, v in (estado or {}).items()}
 
-    # Snapshot: propriedade com `time` < início vale para todo o intervalo
-    # (não mudou desde então). Só semeia se for mais nova que o estado salvo.
-    for p in snapshot:
-        code, ts = p.get("code"), _ms(p.get("time"))
-        if code not in CODES or ts is None or ts >= inicio_ms:
-            continue
-        if code not in estado or estado[code]["t"] < ts:
-            estado[code] = {"t": ts, "v": p.get("value")}
-        if ultimo_reporte is None or ts > ultimo_reporte:
-            ultimo_reporte = ts
-
     eventos = []
     for lg in logs:
         code, ts = lg.get("code"), _ms(lg.get("event_time"))
         if code in CODES and ts is not None and inicio_ms <= ts < fim_ms:
             eventos.append((ts, code, lg.get("value")))
+
+    # Snapshot: propriedade com `time` < início vale para todo o intervalo
+    # (não mudou desde então) → semeia o estado se for mais nova que ele.
+    # Códigos só-snapshot com `time` dentro do intervalo (ou no último minuto,
+    # ainda não processado — antecipado para fim−1 ms) viram evento.
+    for p in snapshot:
+        code, ts = p.get("code"), _ms(p.get("time"))
+        if code not in CODES or ts is None:
+            continue
+        if ts < inicio_ms:
+            if code not in estado or estado[code]["t"] < ts:
+                estado[code] = {"t": ts, "v": p.get("value")}
+            if ultimo_reporte is None or ts > ultimo_reporte:
+                ultimo_reporte = ts
+        elif code in CODES_SO_SNAPSHOT:
+            eventos.append((min(ts, fim_ms - 1), code, p.get("value")))
     eventos.sort(key=lambda e: e[0])
 
     atual = [None] * len(CAMPOS)
@@ -521,7 +548,7 @@ def main():
     aviso = None
     try:
         tuya.autenticar()
-        logs = tuya.report_logs(device, CODES, inicio_ms, fim_ms)
+        logs = tuya.report_logs(device, CODES_LOG, inicio_ms, fim_ms)
         try:
             snapshot = tuya.snapshot(device)
         except TuyaErro as e:

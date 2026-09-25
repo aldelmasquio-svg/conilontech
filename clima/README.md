@@ -37,13 +37,22 @@ de entradas de índice.
 | u | m/s | windspeed_avg ÷10 ÷3,6 |
 | raj | m/s | windspeed_gust ÷10 ÷3,6 — **máximo do minuto** |
 | vel | m/s | Wind_speed ÷10 ÷3,6 — **máximo do minuto** |
-| dir | ° | Wing_direction (base64, últimos 2 bytes big-endian — hipótese) |
+| dir | ° | Wing_direction (base64: bytes 0-3 = setor "SSE", bytes 5-6 = graus) |
 | lux | klux | Light_intensity ÷100 |
 | rad | W/m² | klux × 7,9 (aproximação) |
 | uv | índice | uv_index |
 | sol | min | sunlight_time |
 | c1h / c24h | mm | rain_1h / rain_24h ÷10 |
 | ctx | mm/h | rain_rate ÷10 |
+
+Escalas conferidas no modelo do dispositivo (`/v1.0/iot-03/devices/{id}/specification`):
+vento km/h scale 1, luz Klux scale 2, temperatura/orvalho °C scale 1, chuva mm scale 1.
+
+**Só via snapshot:** a API de report-logs recusa `Wind_speed`, `Wing_direction`,
+`Light_intensity` e `sunlight_time` (erro 40000303). Eles entram 1× por execução
+(~5 min, no horário da propriedade) e são repetidos até a próxima amostra —
+então `rad`/`RsMJ` são integrados com amostras de ~5 min e `vel` não é o
+máximo real do minuto (use `raj` para rajada).
 
 Demais variáveis: último valor conhecido (carry-forward — a estação só
 reporta quando o valor muda). Um minuto é **coberto** (e gravado) se a estação
@@ -56,6 +65,11 @@ enviou **qualquer** código nos 30 min anteriores; sem isso fica fora de `pontos
 eq. 7 invertida), `minutosCobertos`, `coberturaPct` (sobre 1440), `completo`
 (≥ 90 %), `ETo` (mm, FAO-56 Penman-Monteith; `null` se faltar dado).
 O dia de hoje é parcial até terminar (`completo:false`).
+
+## Diagnóstico
+**Run workflow** com a opção *"Só diagnóstico"* marcada: lê a Tuya e imprime o
+modelo (escala/unidade), o snapshot completo e quantos logs cada código
+devolve — **não grava nada no Firestore**.
 
 ## Idempotência
 Cada minuto é uma chave; reprocessar um intervalo sobrescreve os mesmos
