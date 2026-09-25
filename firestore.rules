@@ -50,7 +50,14 @@ service cloud.firestore {
     // (se qualquer match permite, o acesso é concedido). Coleções novas ficam
     // automaticamente cobertas por esta regra.
     match /{col}/{doc=**} {
-      allow read, write: if signedIn() && col != 'usuarios' && col != 'config';
+      allow read, write: if signedIn() && col != 'usuarios' && col != 'config' && col != 'clima';
+    }
+
+    // Estação meteorológica (coletor no GitHub Actions via Admin SDK, que
+    // ignora estas regras). Leitura para logados; escrita pelo app bloqueada.
+    match /clima/{doc=**} {
+      allow read:  if signedIn();
+      allow write: if false;
     }
   }
 }

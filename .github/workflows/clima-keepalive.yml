@@ -1,0 +1,26 @@
+name: Clima — keepalive
+
+# O GitHub desativa workflows agendados após 60 dias sem atividade no repo.
+# Este job reativa, pela API, o coletor E a si mesmo (também é cron), sem
+# criar commits. Roda 2x por mês — bem antes do limite de 60 dias.
+on:
+  schedule:
+    - cron: '17 9 1,15 * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+
+jobs:
+  reativar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reativar workflows agendados
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in clima-tuya.yml clima-keepalive.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable"
+            echo "reativado: $wf"
+          done
