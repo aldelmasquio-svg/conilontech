@@ -231,6 +231,23 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .tbl-resumo tbody tr:hover{background:var(--vb);}
 /* Bolinha colorida indicando fazenda */
 .faz-bullet{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:middle;flex-shrink:0;}
+/* Linhas clicáveis em "Total a comprar" */
+.compra-row{cursor:pointer;transition:background .12s;}
+.compra-row:hover{background:var(--vb)!important;}
+.compra-ver{font-size:.62rem;color:var(--v);font-weight:700;opacity:0;margin-left:6px;white-space:nowrap;}
+.compra-row:hover .compra-ver{opacity:1;}
+@media(hover:none){.compra-ver{opacity:.7;}}
+/* Modal "em quais talhões" */
+.compras-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:5000;display:none;align-items:flex-end;justify-content:center;}
+.compras-modal.open{display:flex;}
+@media(min-width:600px){.compras-modal.open{align-items:center;}}
+.cpm-sheet{background:white;border-radius:16px 16px 0 0;width:100%;max-width:640px;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;}
+@media(min-width:600px){.cpm-sheet{border-radius:16px;}}
+.cpm-hdr{padding:14px 16px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border-bottom:1px solid var(--cl);background:var(--ve);color:white;}
+.cpm-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.15rem;line-height:1.1;}
+.cpm-sub{font-size:.72rem;opacity:.85;margin-top:3px;}
+.cpm-close{background:rgba(255,255,255,.15);border:none;color:white;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:1rem;flex-shrink:0;}
+.cpm-body{padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 
 /* CALENDÁRIO (aba de pendências) */
 .cal-data-grupo{margin-bottom:10px;}
@@ -355,6 +372,20 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 
   <div class="tab-content" id="tabContent"></div>
 
+  <!-- MODAL: em quais talhões um produto será usado (aba Compras) -->
+  <div class="compras-modal" id="comprasModal" onclick="if(event.target===this)fecharComprasModal()">
+    <div class="cpm-sheet">
+      <div class="cpm-hdr">
+        <div>
+          <div class="cpm-tit" id="cpmTitulo"></div>
+          <div class="cpm-sub" id="cpmSub"></div>
+        </div>
+        <button class="cpm-close" onclick="fecharComprasModal()">✕</button>
+      </div>
+      <div class="cpm-body" id="cpmBody"></div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -422,6 +453,7 @@ let compraFazendaId = '';
 let compraDe = '';
 let compraAte = '';
 let compraSafra = '';
+let _comprasTotais = [], _comprasDetalhe = [], _comprasPeriodoLbl = ''; // dados p/ o modal "em quais talhões"
 
 // Filtro da aba "Nutrientes" (relatório de nutrientes já aplicados)
 let nutrTalhaoId = '';
@@ -2480,6 +2512,36 @@ window.setCompraSafra = function(v) {
   renderTab();
 };
 
+// Clique num produto da lista "Total a comprar" → modal com os talhões que usam o produto no período
+window.verTalhoesDoProduto = function(pi) {
+  const prod = _comprasTotais[pi];
+  if (!prod) return;
+  const rows = _comprasDetalhe
+    .filter(d => d.produto === prod.produto && d.unidade === prod.unidade)
+    .sort((a, b) => (b.qtd || 0) - (a.qtd || 0));
+  const areaTot = rows.reduce((s, r) => s + parseDose(r.area), 0);
+  document.getElementById('cpmTitulo').innerHTML = `🧪 ${escHtml(prod.produto)}`;
+  document.getElementById('cpmSub').innerHTML = `${rows.length} talhão(ões) · ${fmt(areaTot, 1)} ha · <strong>${fmt(prod.qtd, 2)} ${escHtml(prod.unidade)}</strong> no total · ${escHtml(_comprasPeriodoLbl)}`;
+  const body = document.getElementById('cpmBody');
+  if (!rows.length) {
+    body.innerHTML = `<div class="vazio"><div class="ico">🌾</div><p>Nenhum talhão para este produto no período.</p></div>`;
+  } else {
+    body.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+        <th>Fazenda</th><th>Talhão</th><th class="num">Área (ha)</th><th class="num">Dose (/ha)</th><th class="num">Quantidade</th>
+      </tr></thead><tbody>
+      ${rows.map(d => `<tr>
+        <td><span class="faz-bullet" style="background:${corFazenda(d.fazenda)};"></span>${escHtml(d.fazenda || '—')}</td>
+        <td>${escHtml(d.talhao)}</td>
+        <td class="num">${fmt(d.area, 1)}</td>
+        <td class="num">${fmt(d.doseHa, 2)} ${escHtml(d.unidade)}/ha</td>
+        <td class="num"><strong>${fmt(d.qtd, 2)} ${escHtml(d.unidade)}</strong></td>
+      </tr>`).join('')}
+      </tbody></table></div>`;
+  }
+  document.getElementById('comprasModal').classList.add('open');
+};
+window.fecharComprasModal = function() { document.getElementById('comprasModal').classList.remove('open'); };
+
 function renderCompras() {
   const cont = document.getElementById('tabContent');
   const meses = listaMesesPlanos();
@@ -2593,6 +2655,8 @@ function renderCompras() {
   const totaisOrd = Object.values(totais).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
   const areaTotal = talhoesSel.reduce((s, t) => s + parseDose(t.area), 0);
   const periodoLbl = compraDe === compraAte ? mesAnoAbrev(compraDe) : `${mesAnoAbrev(compraDe)} a ${mesAnoAbrev(compraAte)}`;
+  // Guarda p/ o modal "em quais talhões" (clique num produto da lista)
+  _comprasTotais = totaisOrd; _comprasDetalhe = detalhe; _comprasPeriodoLbl = periodoLbl;
 
   html += `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Período</div><div class="kpi-value" style="font-size:1.05rem;">${escHtml(periodoLbl)}</div><div class="kpi-aux">${mesesSel.length} mês(es)</div></div>
@@ -2608,12 +2672,12 @@ function renderCompras() {
 
   html += `<div class="secao">
     <div class="secao-tit">🛒 Total a comprar</div>
-    <div class="secao-sub">Soma das doses previstas nos planos de adubação × área dos talhões, no período selecionado.</div>
+    <div class="secao-sub">Soma das doses previstas nos planos de adubação × área dos talhões, no período selecionado. <strong>Toque num produto</strong> para ver em quais talhões ele será usado.</div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr>
       <th>Produto</th><th class="num">Dose média (kg/ha)</th><th class="num">Quantidade a comprar</th>
     </tr></thead><tbody>
-    ${totaisOrd.map(p => `<tr>
-      <td><strong>${escHtml(p.produto)}</strong></td>
+    ${totaisOrd.map((p, pi) => `<tr class="compra-row" onclick="verTalhoesDoProduto(${pi})" title="Ver em quais talhões">
+      <td><strong>${escHtml(p.produto)}</strong> <span class="compra-ver">🔎 talhões</span></td>
       <td class="num">${fmt(p.doseHa, 2)} ${escHtml(p.unidade)}/ha</td>
       <td class="num">${fmt(p.qtd, 2)} ${escHtml(p.unidade)}</td>
     </tr>`).join('')}
