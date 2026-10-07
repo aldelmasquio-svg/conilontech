@@ -248,6 +248,8 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .cpm-sub{font-size:.72rem;opacity:.85;margin-top:3px;}
 .cpm-close{background:rgba(255,255,255,.15);border:none;color:white;border-radius:8px;width:30px;height:30px;cursor:pointer;font-size:1rem;flex-shrink:0;}
 .cpm-body{padding:14px 16px;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.cpm-faz-row td{background:var(--vb);font-weight:800;color:var(--ve);font-size:.8rem;padding-top:9px!important;padding-bottom:9px!important;}
+.cpm-faz-sub{font-weight:600;color:var(--c);font-size:.68rem;}
 
 /* CALENDÁRIO (aba de pendências) */
 .cal-data-grupo{margin-bottom:10px;}
@@ -2516,9 +2518,7 @@ window.setCompraSafra = function(v) {
 window.verTalhoesDoProduto = function(pi) {
   const prod = _comprasTotais[pi];
   if (!prod) return;
-  const rows = _comprasDetalhe
-    .filter(d => d.produto === prod.produto && d.unidade === prod.unidade)
-    .sort((a, b) => (b.qtd || 0) - (a.qtd || 0));
+  const rows = _comprasDetalhe.filter(d => d.produto === prod.produto && d.unidade === prod.unidade);
   const areaTot = rows.reduce((s, r) => s + parseDose(r.area), 0);
   document.getElementById('cpmTitulo').innerHTML = `🧪 ${escHtml(prod.produto)}`;
   document.getElementById('cpmSub').innerHTML = `${rows.length} talhão(ões) · ${fmt(areaTot, 1)} ha · <strong>${fmt(prod.qtd, 2)} ${escHtml(prod.unidade)}</strong> no total · ${escHtml(_comprasPeriodoLbl)}`;
@@ -2526,17 +2526,24 @@ window.verTalhoesDoProduto = function(pi) {
   if (!rows.length) {
     body.innerHTML = `<div class="vazio"><div class="ico">🌾</div><p>Nenhum talhão para este produto no período.</p></div>`;
   } else {
+    // Agrupa por fazenda (alfabética) e, dentro, talhões em ordem alfabética
+    const porFaz = {};
+    rows.forEach(r => { const f = r.fazenda || 'Sem fazenda'; (porFaz[f] = porFaz[f] || []).push(r); });
+    const corpo = Object.keys(porFaz).sort((a, b) => a.localeCompare(b, 'pt-BR')).map(f => {
+      const arr = porFaz[f].slice().sort((a, b) => (a.talhao || '').localeCompare(b.talhao || '', 'pt-BR', { numeric: true }));
+      const subArea = arr.reduce((s, r) => s + parseDose(r.area), 0);
+      const subQtd = arr.reduce((s, r) => s + (r.qtd || 0), 0);
+      return `<tr class="cpm-faz-row"><td colspan="4"><span class="faz-bullet" style="background:${corFazenda(f)};"></span>${escHtml(f)} <span class="cpm-faz-sub">${arr.length} talhão(ões) · ${fmt(subArea, 1)} ha · ${fmt(subQtd, 2)} ${escHtml(prod.unidade)}</span></td></tr>`
+        + arr.map(d => `<tr>
+          <td>${escHtml(d.talhao)}</td>
+          <td class="num">${fmt(d.area, 1)}</td>
+          <td class="num">${fmt(d.doseHa, 2)} ${escHtml(d.unidade)}/ha</td>
+          <td class="num"><strong>${fmt(d.qtd, 2)} ${escHtml(d.unidade)}</strong></td>
+        </tr>`).join('');
+    }).join('');
     body.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>
-        <th>Fazenda</th><th>Talhão</th><th class="num">Área (ha)</th><th class="num">Dose (/ha)</th><th class="num">Quantidade</th>
-      </tr></thead><tbody>
-      ${rows.map(d => `<tr>
-        <td><span class="faz-bullet" style="background:${corFazenda(d.fazenda)};"></span>${escHtml(d.fazenda || '—')}</td>
-        <td>${escHtml(d.talhao)}</td>
-        <td class="num">${fmt(d.area, 1)}</td>
-        <td class="num">${fmt(d.doseHa, 2)} ${escHtml(d.unidade)}/ha</td>
-        <td class="num"><strong>${fmt(d.qtd, 2)} ${escHtml(d.unidade)}</strong></td>
-      </tr>`).join('')}
-      </tbody></table></div>`;
+        <th>Talhão</th><th class="num">Área (ha)</th><th class="num">Dose (/ha)</th><th class="num">Quantidade</th>
+      </tr></thead><tbody>${corpo}</tbody></table></div>`;
   }
   document.getElementById('comprasModal').classList.add('open');
 };
