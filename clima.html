@@ -32,9 +32,10 @@ let estacoes=[], estacaoId=null, diaSel=null;
 let diaDoc=null, resumos=[], statusUlt=null;
 let grafSel='t';
 let unsubDia=null, unsubRes=null, unsubStatus=null, unsubAno=null;
-let _chartDia=null, _chartHist=null, _chartChuva=null;
+let _chartDia=null, _chartHist=null, _chartChuva=null, _chartHistVar=null;
 let resumosAno=[], anoCarregado=null, chuvaView='mes';
 const LS_ESTACAO='climaEstacao';
+let histMetric=(lsGet('climaHistMetric')||'t'), histDias=(parseInt(lsGet('climaHistDias'))||15);
 
 // ─── AUTH ───
 onAuthStateChanged(auth, async (user) => {
@@ -170,7 +171,7 @@ function trocarEstacao(id){
   if(!id){ render(); return; }
   unsubStatus=onSnapshot(doc(db,'clima',id,'status','ultimo'), s=>{ statusUlt=s.exists()?s.data():null; renderStatus(); });
   unsubRes=onSnapshot(query(collection(db,'clima',id,'resumos'),orderBy('data','desc'),limit(31)), s=>{
-    resumos=s.docs.map(d=>d.data()); renderHistorico(); renderLamina();
+    resumos=s.docs.map(d=>d.data()); renderHistorico(); renderHistVar(); renderLamina();
   });
   ouvirDia();
 }
@@ -242,8 +243,8 @@ function render(){
       <button class="dn-btn" onclick="mudarDia(1)"${ehHoje?' disabled':''}>›</button>
       ${ehHoje?'':`<button class="dn-hoje" onclick="setDia('${hoje}')">Hoje</button>`}
     </div>`;
-  if(diaDoc===null){ alvo.innerHTML=nav+'<div class="vazio"><div class="spinner" style="margin:0 auto"></div></div>'+chuvaHtml()+histHtml(); renderChuva(); renderHistorico(); return; }
-  if(diaDoc.vazio){ alvo.innerHTML=nav+`<div class="vazio">Sem dados da estação em ${formatarData(diaSel)}.</div>`+chuvaHtml()+histHtml(); renderChuva(); renderHistorico(); return; }
+  if(diaDoc===null){ alvo.innerHTML=nav+'<div class="vazio"><div class="spinner" style="margin:0 auto"></div></div>'+histVarHtml()+chuvaHtml()+histHtml(); renderChuva(); renderHistorico(); renderHistVar(); return; }
+  if(diaDoc.vazio){ alvo.innerHTML=nav+`<div class="vazio">Sem dados da estação em ${formatarData(diaSel)}.</div>`+histVarHtml()+chuvaHtml()+histHtml(); renderChuva(); renderHistorico(); renderHistVar(); return; }
 
   const pts=decodificarPontos(diaDoc);
   const chaves=Object.keys(pts).sort();
@@ -296,11 +297,12 @@ function render(){
       </div>
       <div class="graf-box"><canvas id="grafDia"></canvas></div>
     </div>`;
-  alvo.innerHTML=nav+agoraHtml+janelaHtml(pts,chaves,ehHoje)+resumoHtml+grafHtml+chuvaHtml()+histHtml();
+  alvo.innerHTML=nav+agoraHtml+janelaHtml(pts,chaves,ehHoje)+resumoHtml+grafHtml+histVarHtml()+chuvaHtml()+histHtml();
   renderGrafico();
   renderLamina();
   renderChuva();
   renderHistorico();
+  renderHistVar();
 }
 
 // ─── JANELA DE PULVERIZAÇÃO ───
@@ -564,6 +566,64 @@ function renderHistorico(){
       <td class="apto">${fmt(r[campoApto],1)}</td></tr>`).join('')}
     </tbody></table>
     <div class="nota">* dia incompleto (menos de 90% dos minutos) — ETo aproximada. 🎯 h = horas adequadas para pulverizar (${MODOS_PULV[modoPulv].label}, Delta T ${JANELA.dtMin}–${JANELA.dtMax} °C). Toque num dia para abrir.</div>`;
+}
+
+// ─── HISTÓRICO DE VÁRIOS DIAS (a partir dos resumos diários) ───
+const HIST_METRICS=[['t','🌡️ Temperatura'],['ur','💧 Umidade'],['vento','💨 Vento'],['rad','☀️ Radiação']];
+const HIST_DIAS=[7,15,30];
+function histVarHtml(){
+  return `<div class="card">
+      <div class="card-tit">Histórico <span class="card-sub">vários dias</span></div>
+      <div class="gchips">${HIST_METRICS.map(([g,l])=>`<button class="gchip${g===histMetric?' on':''}" data-hm="${g}" onclick="setHistMetric('${g}')">${l}</button>`).join('')}</div>
+      <div class="gchips" style="margin-top:5px;">${HIST_DIAS.map(n=>`<button class="gchip${n===histDias?' on':''}" data-hd="${n}" onclick="setHistDias(${n})">${n} dias</button>`).join('')}</div>
+      <div class="graf-box hist"><canvas id="grafHistVar"></canvas></div>
+      <div class="nota" id="histVarNota"></div>
+    </div>`;
+}
+window.setHistMetric=function(g){ if(!HIST_METRICS.some(m=>m[0]===g))return; histMetric=g; lsSet('climaHistMetric',g); document.querySelectorAll('[data-hm]').forEach(b=>b.classList.toggle('on',b.dataset.hm===g)); renderHistVar(); };
+window.setHistDias=function(n){ histDias=n; lsSet('climaHistDias',String(n)); document.querySelectorAll('[data-hd]').forEach(b=>b.classList.toggle('on',+b.dataset.hd===n)); renderHistVar(); };
+function renderHistVar(){
+  if(_chartHistVar){ _chartHistVar.destroy(); _chartHistVar=null; }
+  const cv=document.getElementById('grafHistVar'); if(!cv) return;
+  const nota=document.getElementById('histVarNota');
+  const box=cv.parentElement;
+  const hoje=hojeEstacao();
+  const ini=somarDias(hoje,-(histDias-1));
+  const ord=[...resumos].filter(r=>r.data>=ini && r.data<=hoje).sort((a,b)=>a.data<b.data?-1:1);
+  if(!ord.length){ if(box) box.style.display='none'; if(nota) nota.textContent=''; return; }
+  if(box) box.style.display='';
+  const labels=ord.map(r=>formatarData(r.data).slice(0,5));
+  let tipo='line', yTitle='', datasets;
+  if(histMetric==='ur'){
+    yTitle='%';
+    datasets=[
+      {label:'UR máx', data:ord.map(r=>r.URmax??null), borderColor:'#0891b2', backgroundColor:'#0891b2', tension:.3, pointRadius:2, spanGaps:true},
+      {label:'UR mín', data:ord.map(r=>r.URmin??null), borderColor:'#f59e0b', backgroundColor:'#f59e0b', tension:.3, pointRadius:2, spanGaps:true},
+    ];
+  } else if(histMetric==='vento'){
+    yTitle='km/h';
+    datasets=[
+      {label:'Vento médio', data:ord.map(r=>r.u2med!=null?r.u2med*3.6:null), borderColor:'#2563eb', backgroundColor:'#2563eb', tension:.3, pointRadius:2, spanGaps:true},
+      {label:'Rajada máx', data:ord.map(r=>r.rajadaMaxKmh??null), borderColor:'#dc2626', backgroundColor:'#dc2626', tension:.3, pointRadius:2, spanGaps:true},
+    ];
+  } else if(histMetric==='rad'){
+    tipo='bar'; yTitle='MJ/m²';
+    datasets=[{label:'Radiação (MJ/m²)', data:ord.map(r=>r.RsMJ??null), backgroundColor:ord.map(r=>r.completo?'#f59e0b':'#fcd9a0')}];
+  } else { // temperatura
+    yTitle='°C';
+    datasets=[
+      {label:'Máx', data:ord.map(r=>r.Tmax??null), borderColor:'#dc2626', backgroundColor:'#dc2626', tension:.3, pointRadius:2, spanGaps:true},
+      {label:'Média', data:ord.map(r=>r.Tmed??null), borderColor:'#f59e0b', backgroundColor:'#f59e0b', tension:.3, pointRadius:2, spanGaps:true},
+      {label:'Mín', data:ord.map(r=>r.Tmin??null), borderColor:'#0891b2', backgroundColor:'#0891b2', tension:.3, pointRadius:2, spanGaps:true},
+    ];
+  }
+  if(cv && typeof Chart!=='undefined'){
+    _chartHistVar=new Chart(cv,{type:tipo,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+      scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{ticks:{font:{size:10}},title:{display:true,text:yTitle,font:{size:10}}}}}});
+  }
+  const incompletos=ord.filter(r=>!r.completo).length;
+  if(nota) nota.innerHTML = `${ord.length} dia(s) no período` + (incompletos?` · ${incompletos} dia(s) incompleto(s) (valores aproximados)`:'') + (histDias>31?' · histórico limitado aos últimos 31 dias':'');
 }
 
 window.toggleMenu=function(){ document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
