@@ -204,7 +204,7 @@ function renderizarCalendario() {
       <span class="cal-num">${d}</span>
       ${eventos.map(e=>{
         const cor = corFazenda(e.fazenda);
-        const modoIco = {Drone:'🚁',Tratorizado:'🚜',Terrestre:'🚶',Costal:'🎒'}[e.modoAplicacao] || '';
+        const modoIco = {Drone:'🚁',Tratorizado:'🚜',Terrestre:'🚶',Costal:'🎒',Turbina:'🌀',Jatão:'🔫'}[e.modoAplicacao] || '';
         // Só pulverizações ainda não realizadas podem ser arrastadas (só admin)
         const arrastavel = adm && !e.realizada;
         const dragAttrs = arrastavel ? ` draggable="true" data-doc="${e._docId}" ondragstart="pulvDragStart(event,'${e._docId}')" ondragend="pulvDragEnd(event)"` : '';
@@ -558,6 +558,8 @@ function renderCardPulv(p) {
   }
   const pd = p.paramsDrone || {};
   const temParamsDrone = pd.alturaVoo || pd.larguraFaixa || pd.velocidade || pd.volumeCalda;
+  const ptb = p.paramsTurbina || {};
+  const temParamsTurbina = ptb.volumeCalda || ptb.carreiras;
   const badge = badgeStatus(sit.status);
   // Barra de progresso (só pra parcial)
   const pctProg = sit.haTotal > 0 ? Math.min(100, sit.haAplicado / sit.haTotal * 100) : 0;
@@ -597,6 +599,9 @@ function renderCardPulv(p) {
       ${pd.larguraFaixa?` · Faixa: <strong>${sanitizar(pd.larguraFaixa)} m</strong>`:''}
       ${pd.velocidade?` · Vel: <strong>${sanitizar(pd.velocidade)} km/h</strong>`:''}
       ${pd.volumeCalda?` · Calda: <strong>${sanitizar(pd.volumeCalda)} L/ha</strong>`:''}
+    </div>`:''}
+    ${temParamsTurbina?`<div class="pulv-params-turbina">
+      🌀 ${ptb.volumeCalda?`Calda: <strong>${sanitizar(ptb.volumeCalda)} L/ha</strong>`:''}${(ptb.volumeCalda&&ptb.carreiras)?' · ':''}${ptb.carreiras==='pulando'?`Carreiras: <strong>pulando ${sanitizar(ptb.pularCarreiras||'?')}</strong>`:(ptb.carreiras?`Carreiras: <strong>todas</strong>`:'')}
     </div>`:''}
     ${getPragas(p).length?`<div class="pulv-praga">🐛 Alvo: <strong>${getPragas(p).map(a=>sanitizar(a)).join(' · ')}</strong></div>`:''}
     <div class="pulv-produtos">
@@ -1288,13 +1293,20 @@ window.abrirEditarPulv = function(docId) {
   document.getElementById('fModo').value = p.modoAplicacao || '';
   document.getElementById('fDrone').value = p.drone || '';
   const ehDrone = p.modoAplicacao === 'Drone';
+  const ehTurbina = p.modoAplicacao === 'Turbina' || p.modoAplicacao === 'Jatão';
   document.getElementById('fDroneRow').style.display = ehDrone ? 'block' : 'none';
   document.getElementById('fParamsDroneBox').style.display = ehDrone ? 'block' : 'none';
+  document.getElementById('fParamsTurbinaBox').style.display = ehTurbina ? 'block' : 'none';
   const pd = p.paramsDrone || {};
   document.getElementById('fAlturaVoo').value = pd.alturaVoo || '';
   document.getElementById('fLarguraFaixa').value = pd.larguraFaixa || '';
   document.getElementById('fVelocidade').value = pd.velocidade || '';
   document.getElementById('fVolumeCalda').value = pd.volumeCalda || '';
+  const pt = p.paramsTurbina || {};
+  document.getElementById('fVolCaldaT').value = pt.volumeCalda || '';
+  document.getElementById('fCarreiras').value = pt.carreiras || 'todas';
+  document.getElementById('fPularCarreiras').value = pt.pularCarreiras || '';
+  document.getElementById('fPularRow').style.display = pt.carreiras === 'pulando' ? '' : 'none';
   window.pragasWIP = getPragas(p);
   renderPragasWIP();
   document.getElementById('fObs').value = p.observacoes || '';
@@ -1330,17 +1342,26 @@ function destravarCamposPulv() {
 
 window.fecharNova = function() { document.getElementById('overlayNova').classList.remove('open'); };
 
+// Mostra/esconde a caixa certa conforme o modo: só o row quando "pulando carreiras"
+window.toggleCarreiras = function(sel, rowId) {
+  const r = document.getElementById(rowId); if (r) r.style.display = sel.value === 'pulando' ? '' : 'none';
+};
 window.toggleDrone = function(sel) {
-  const row = document.getElementById('fDroneRow');
-  const box = document.getElementById('fParamsDroneBox');
   const isDrone = sel.value === 'Drone';
-  row.style.display = isDrone ? 'block' : 'none';
-  if (box) box.style.display = isDrone ? 'block' : 'none';
+  const isTurbina = sel.value === 'Turbina' || sel.value === 'Jatão';
+  document.getElementById('fDroneRow').style.display = isDrone ? 'block' : 'none';
+  const dbox = document.getElementById('fParamsDroneBox'); if (dbox) dbox.style.display = isDrone ? 'block' : 'none';
+  const tbox = document.getElementById('fParamsTurbinaBox'); if (tbox) tbox.style.display = isTurbina ? 'block' : 'none';
   if (!isDrone) {
     document.getElementById('fDrone').value = '';
     ['fAlturaVoo','fLarguraFaixa','fVelocidade','fVolumeCalda'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
+  }
+  if (!isTurbina) {
+    ['fVolCaldaT','fPularCarreiras'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const c = document.getElementById('fCarreiras'); if (c) c.value = 'todas';
+    const pr = document.getElementById('fPularRow'); if (pr) pr.style.display = 'none';
   }
 };
 
@@ -1388,6 +1409,14 @@ window.salvarPulverizacao = async function() {
       paramsDrone = {alturaVoo:av, larguraFaixa:lf, velocidade:vl, volumeCalda:vc};
     }
   }
+  const ehTurbina = modo === 'Turbina' || modo === 'Jatão';
+  let paramsTurbina = null;
+  if (ehTurbina) {
+    const vc = document.getElementById('fVolCaldaT').value.trim();
+    const carreiras = document.getElementById('fCarreiras').value;
+    const pular = carreiras === 'pulando' ? document.getElementById('fPularCarreiras').value.trim() : '';
+    if (vc || carreiras === 'pulando') paramsTurbina = { volumeCalda:vc, carreiras, pularCarreiras:pular };
+  }
   const btn = document.getElementById('btnSalvarPulv');
   btn.disabled = true; btn.textContent = 'Salvando...';
   try {
@@ -1404,6 +1433,9 @@ window.salvarPulverizacao = async function() {
       // paramsDrone: se modo é Drone, salva; senão remove
       if (ehDrone && paramsDrone) update.paramsDrone = paramsDrone;
       else update.paramsDrone = null;  // limpa se mudou pra não-drone
+      // paramsTurbina: se modo é Turbina/Jatão, salva; senão remove
+      if (ehTurbina && paramsTurbina) update.paramsTurbina = paramsTurbina;
+      else update.paramsTurbina = null;
       // Campos só editáveis se NÃO realizada
       if (!editandoRealizada) {
         update.talhaoId = talhaoId;
@@ -1427,6 +1459,7 @@ window.salvarPulverizacao = async function() {
         realizada: false, criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       };
       if (paramsDrone) docPulv.paramsDrone = paramsDrone;
+      if (paramsTurbina) docPulv.paramsTurbina = paramsTurbina;
       await addDoc(collection(db,'pulverizacoes'), docPulv);
       await registrarLog('pulverizacao', `${usuarioAtual.email} planejou pulverização em ${talhao?.nome||talhaoId} para ${formatarData(data)}`);
       fecharNova();
@@ -1457,9 +1490,12 @@ window.abrirModalMapaPlano = function(dataInicial) {
   document.getElementById('mpDrone').value = 'Próprio';
   document.getElementById('mpDroneRow').style.display = 'none';
   document.getElementById('mpParamsDroneBox').style.display = 'none';
-  ['mpAlturaVoo','mpLarguraFaixa','mpVelocidade','mpVolumeCalda'].forEach(id => {
+  const mtb = document.getElementById('mpParamsTurbinaBox'); if (mtb) mtb.style.display = 'none';
+  ['mpAlturaVoo','mpLarguraFaixa','mpVelocidade','mpVolumeCalda','mpVolCaldaT','mpPularCarreiras'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  const mpc = document.getElementById('mpCarreiras'); if (mpc) mpc.value = 'todas';
+  const mppr = document.getElementById('mpPularRow'); if (mppr) mppr.style.display = 'none';
   window.mpPragasWIP = [];
   mpRenderPragas();
   document.getElementById('mpObs').value = '';
@@ -1567,13 +1603,20 @@ window.mpToggleCampos = function() {
 
 window.mpToggleDrone = function(sel) {
   const isDrone = sel.value === 'Drone';
+  const isTurbina = sel.value === 'Turbina' || sel.value === 'Jatão';
   document.getElementById('mpDroneRow').style.display = isDrone ? 'block' : 'none';
   document.getElementById('mpParamsDroneBox').style.display = isDrone ? 'block' : 'none';
+  const tbox = document.getElementById('mpParamsTurbinaBox'); if (tbox) tbox.style.display = isTurbina ? 'block' : 'none';
   if (!isDrone) {
     document.getElementById('mpDrone').value = 'Próprio';
     ['mpAlturaVoo','mpLarguraFaixa','mpVelocidade','mpVolumeCalda'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
+  }
+  if (!isTurbina) {
+    ['mpVolCaldaT','mpPularCarreiras'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const c = document.getElementById('mpCarreiras'); if (c) c.value = 'todas';
+    const pr = document.getElementById('mpPularRow'); if (pr) pr.style.display = 'none';
   }
 };
 
@@ -1605,6 +1648,14 @@ window.salvarMapaPlano = async function() {
     const vc = document.getElementById('mpVolumeCalda').value.trim();
     if (av || lf || vl || vc) paramsDrone = { alturaVoo: av, larguraFaixa: lf, velocidade: vl, volumeCalda: vc };
   }
+  const ehTurbina = modo === 'Turbina' || modo === 'Jatão';
+  let paramsTurbina = null;
+  if (ehTurbina) {
+    const vc = document.getElementById('mpVolCaldaT').value.trim();
+    const carreiras = document.getElementById('mpCarreiras').value;
+    const pular = carreiras === 'pulando' ? document.getElementById('mpPularCarreiras').value.trim() : '';
+    if (vc || carreiras === 'pulando') paramsTurbina = { volumeCalda:vc, carreiras, pularCarreiras:pular };
+  }
   const pragaAlvo = [...window.mpPragasWIP];
   const observacoes = document.getElementById('mpObs').value.trim();
   const btn = document.getElementById('btnSalvarMapaPlano');
@@ -1618,6 +1669,7 @@ window.salvarMapaPlano = async function() {
         criadoEm: new Date().toISOString(), criadoPor: usuarioAtual.email
       };
       if (paramsDrone) docPulv.paramsDrone = paramsDrone;
+      if (paramsTurbina) docPulv.paramsTurbina = paramsTurbina;
       await addDoc(collection(db, 'pulverizacoes'), docPulv);
       await registrarLog('pulverizacao', `${usuarioAtual.email} planejou pulverização em ${s.talhaoNome} para ${formatarData(s.data)}`);
     }
@@ -1788,6 +1840,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .pulv-travado input,.pulv-travado select{background:var(--cl)!important;color:var(--t4)!important;cursor:not-allowed;}
 input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-allowed;}
 .pulv-params-drone{padding:0 14px 8px;font-size:.78rem;color:#1e40af;background:linear-gradient(to bottom,#eff6ff,transparent);}
+.pulv-params-turbina{padding:0 14px 8px;font-size:.78rem;color:#6d28d9;background:linear-gradient(to bottom,#f5f3ff,transparent);}
 .campo-inp{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:11px;font-size:1rem;font-family:'Barlow',sans-serif;outline:none;background:white;}
 .campo-inp:focus{border-color:var(--v);}
 /* FAB */
@@ -2013,6 +2066,8 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
             <option value="Drone">Drone</option>
             <option value="Costal">Costal</option>
             <option value="Tratorizado">Tratorizado</option>
+            <option value="Turbina">Turbina</option>
+            <option value="Jatão">Jatão</option>
           </select>
         </div>
         <div class="campo" id="fDroneRow" style="display:none;">
@@ -2033,6 +2088,23 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
         <div class="campo-row">
           <div class="campo"><label>Velocidade (km/h)</label><input type="text" inputmode="decimal" id="fVelocidade" placeholder="ex: 23"></div>
           <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="fVolumeCalda" placeholder="ex: 8"></div>
+        </div>
+      </div>
+      <!-- Parâmetros de Turbina / Jatão (só aparece quando modo = Turbina ou Jatão) -->
+      <div id="fParamsTurbinaBox" style="display:none;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;">
+        <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:#6d28d9;font-weight:700;margin-bottom:8px;">🌀 Parâmetros (Turbina / Jatão)</div>
+        <div class="campo-row">
+          <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="fVolCaldaT" placeholder="ex: 400"></div>
+          <div class="campo"><label>Carreiras</label>
+            <select id="fCarreiras" onchange="toggleCarreiras(this,'fPularRow')">
+              <option value="todas">Passa em todas</option>
+              <option value="pulando">Pulando carreiras</option>
+            </select>
+          </div>
+        </div>
+        <div class="campo" id="fPularRow" style="display:none;">
+          <label>Pular quantas carreiras entre cada passada</label>
+          <input type="number" inputmode="numeric" min="1" id="fPularCarreiras" placeholder="ex: 1 (passa 1, pula 1)">
         </div>
       </div>
       <div class="campo" id="fPragaArea">
@@ -2095,6 +2167,8 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
               <option value="Drone">Drone</option>
               <option value="Costal">Costal</option>
               <option value="Tratorizado">Tratorizado</option>
+              <option value="Turbina">Turbina</option>
+              <option value="Jatão">Jatão</option>
             </select>
           </div>
           <div class="campo" id="mpDroneRow" style="display:none;">
@@ -2114,6 +2188,22 @@ input:disabled,select:disabled{background:var(--cl);color:var(--c);cursor:not-al
           <div class="campo-row">
             <div class="campo"><label>Velocidade (km/h)</label><input type="text" inputmode="decimal" id="mpVelocidade" placeholder="ex: 23"></div>
             <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="mpVolumeCalda" placeholder="ex: 8"></div>
+          </div>
+        </div>
+        <div id="mpParamsTurbinaBox" style="display:none;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:var(--rs);padding:10px 12px;margin-bottom:10px;">
+          <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;color:#6d28d9;font-weight:700;margin-bottom:8px;">🌀 Parâmetros (Turbina / Jatão)</div>
+          <div class="campo-row">
+            <div class="campo"><label>Volume de calda (L/ha)</label><input type="text" inputmode="decimal" id="mpVolCaldaT" placeholder="ex: 400"></div>
+            <div class="campo"><label>Carreiras</label>
+              <select id="mpCarreiras" onchange="toggleCarreiras(this,'mpPularRow')">
+                <option value="todas">Passa em todas</option>
+                <option value="pulando">Pulando carreiras</option>
+              </select>
+            </div>
+          </div>
+          <div class="campo" id="mpPularRow" style="display:none;">
+            <label>Pular quantas carreiras entre cada passada</label>
+            <input type="number" inputmode="numeric" min="1" id="mpPularCarreiras" placeholder="ex: 1 (passa 1, pula 1)">
           </div>
         </div>
         <div class="campo">
