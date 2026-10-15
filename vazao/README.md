@@ -10,21 +10,22 @@ gráfico e o volume do dia.
 | Item | Obs. |
 |---|---|
 | ESP32 DevKit (ESP32-WROOM-32) | qualquer "ESP32 Dev Module" |
-| Módulo TTL↔RS485 **3,3 V** (MAX3485) | ou módulo com direção automática (aí `PIN_DE = -1`) |
+| Conversor TTL↔RS485 **automático** (só VCC/TXD/RXD/GND no lado TTL; borne A+/B−) | `PIN_DE = -1` (padrão). Módulo com DE/RE (MAX3485): `PIN_DE = 4` |
 | Conversor step-down → 5 V (mini-560 ou similar) | alimentado pelo mesmo V+/V− do medidor — **meça a tensão antes** |
 | Fios e prensa-cabo | tudo dentro da caixa do medidor |
 
 ## Ligação
 ```
-Medidor 485+  ──  A  (módulo RS485)
-Medidor 485−  ──  B  (módulo RS485)
-Módulo RO     ──  GPIO16 (ESP32)
-Módulo DI     ──  GPIO17
-Módulo DE+RE  ──  GPIO4   (juntos; não existe em módulo automático)
-Módulo VCC/GND──  3V3 / GND do ESP32
-Step-down 5 V ──  pino 5V/VIN e GND do ESP32 (entrada: V+/V− do medidor)
+Medidor 485+   ──  A+  (conversor RS485)
+Medidor 485−   ──  B−  (conversor RS485)
+Conversor TXD  ──  TX2 (GPIO17 do ESP32)
+Conversor RXD  ──  RX2 (GPIO16)
+Conversor VCC  ──  3V3 do ESP32   (nunca o VIN)
+Conversor GND  ──  GND do ESP32
+Step-down 5 V  ──  VIN e GND do ESP32 (entrada: V+/V− do medidor)
+                   ou: carregador USB 5 V no conector USB-C (sem step-down)
 ```
-Se não vier nenhuma leitura, inverta A e B (é comum a serigrafia vir trocada).
+Se não vier nenhuma leitura: inverta TXD/RXD (cada fabricante etiqueta de um jeito); depois, A+/B−.
 
 ## Ajustes no medidor (teclado)
 | Menu | Ajuste |
