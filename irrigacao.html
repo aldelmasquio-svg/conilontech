@@ -14,7 +14,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -875,7 +875,7 @@ function renderPluv(){
 const VZ_OFFLINE_MS=3*60*1000;   // sem gravação há mais que isso → offline
 const VZ_MIN=0.3;                // m³/h abaixo disso = bomba parada / sem fluxo
 const VZ_Q_MIN=60;               // qualidade de sinal abaixo disso = sinal fraco
-let vzMedidores=[], vzCfg={}, vzDia=null, vzDias={}, vzUnsubs=[], vzDiaUnsubs=[], vzDiaChave='', vzCfgChave='', vzTimer=null;
+let vzMedidores=[], vzCfg={}, vzAlertas=[], vzDia=null, vzDias={}, vzUnsubs=[], vzDiaUnsubs=[], vzDiaChave='', vzCfgChave='', vzTimer=null;
 const vzFmt=(v,d=1)=>(v==null||!isFinite(v))?'—':Number(v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const vzNome=id=>{ const m=vzMedidores.find(x=>x.id===id); return (m&&m.nome)||id||'—'; };
 function vzRefComp(){
@@ -906,11 +906,14 @@ window.abrirVazao=function(){
     vzMedidores=snap.docs.map(d=>({id:d.id,...d.data()}));
     vzAssinarDias(); renderVzAoVivo(); renderVzDia(); renderVzCfg();
   },e=>toast('❌ Vazão: '+e.message)));
+  vzUnsubs.push(onSnapshot(query(collection(db,'vazaoAlertas'),orderBy('ts','desc'),limit(20)),snap=>{
+    vzAlertas=snap.docs.map(d=>({_id:d.id,...d.data()})); renderVzAlertas();
+  },()=>{}));
   vzUnsubs.push(onSnapshot(doc(db,'vazaoConfig','geral'),s=>{
     vzCfg=s.exists()?s.data():{}; vzCfgChave=''; renderVzAoVivo(); renderVzDia(); renderVzCfg();
   },()=>{}));
   vzTimer=setInterval(renderVzAoVivo,30000);   // atualiza "há x min" / offline
-  renderVzAoVivo(); renderVzDia(); renderVzCfg();
+  renderVzAoVivo(); renderVzAlertas(); renderVzDia(); renderVzCfg();
 };
 window.fecharVazao=function(){ vzLimpar(); document.getElementById('ovVazao').classList.remove('open'); };
 window.ovVazaoClick=function(e){ if(e.target.id==='ovVazao') fecharVazao(); };
@@ -962,6 +965,20 @@ function vzComparacaoHtml(vRef,vComp,nRef,nComp,unid,titulo){
   const dica=cls==='alerta'&&pct>0?'<div class="vz-cmp-dica">Possível vazamento, ramal aberto ou registro entre os dois pontos.</div>':'';
   return `<div class="vz-cmp ${cls}"><div class="vz-cmp-tit">${titulo} · limite ±${vzFmt(lim,0)}%</div><div class="vz-cmp-txt">${ico} ${txt}</div>${dica}</div>`;
 }
+const vzFaixa=m=>({min:Number(m?.alertaMin)||0, max:Number(m?.alertaMax)||0, minutos:Number(m?.alertaMinutos)||5});
+function renderVzAlertas(){
+  const el=document.getElementById('vzAlertasBox'); if(!el) return;
+  if(!vzMedidores.length&&!vzAlertas.length){ el.innerHTML=''; return; }
+  const ICO={alerta:'🚨',normal:'✅',info:'ℹ️'};
+  const hoje=hojeISO();
+  const linhas=vzAlertas.slice(0,10).map(a=>{
+    const quando=a.dia===hoje?`hoje ${a.hora||''}`:`${a.dia?formatarData(a.dia).slice(0,5):''} ${a.hora||''}`;
+    return `<div class="vz-al ${sanitizar(a.nivel||'')}"><span class="vz-al-ico">${ICO[a.nivel]||'•'}</span>
+      <div class="vz-al-txt"><div><b>${sanitizar(vzNome(a.medidor))}</b> · <span class="vz-al-q">${sanitizar(quando)}</span></div>${sanitizar(a.texto||'')}</div></div>`;
+  }).join('');
+  el.innerHTML=`<div class="pluv-lista-tit" style="margin:2px 0 6px;">🔔 Alertas recentes</div>
+    ${linhas||'<div class="pluv-vazio" style="margin-bottom:12px;">Nenhum alerta até agora. Configure a faixa de vazão em ⚙️ Configuração.</div>'}`;
+}
 function renderVzAoVivo(){
   const el=document.getElementById('vzAoVivo'); if(!el) return;
   if(!vzMedidores.length){
@@ -975,10 +992,14 @@ function renderVzAoVivo(){
     const sub=[u.q!=null?`Sinal Q ${u.q}`:'', u.total!=null?`Total ${vzFmt(Number(u.total),1)} m³`:'', u.rssi!=null?`Wi-Fi ${u.rssi} dBm`:'', Number(u.pendentes)>1?`${u.pendentes} min na fila`:'']
       .filter(Boolean).join(' · ');
     const avisoUn=(u.unidadeTotal!=null&&Number(u.unidadeTotal)>0)?'<div class="vz-aviso">Totalizador do medidor não está em m³ (ajuste M32).</div>':'';
+    const fx=vzFaixa(m), v=Number(u.vazao);
+    const fora=st.vivo&&((fx.min>0&&v>=VZ_MIN&&v<fx.min)||(fx.max>0&&v>fx.max));
+    const faixaTxt=fx.min>0||fx.max>0?`Faixa ${fx.min>0?vzFmt(fx.min,1):'—'} a ${fx.max>0?vzFmt(fx.max,1):'—'} m³/h`:'';
     return `<div class="vz-card ${st.cls}">
       <div class="vz-card-top"><span class="vz-nome">📟 ${sanitizar(m.nome||m.id)}</span>${papel}</div>
-      <div class="vz-val">${st.vivo?vzFmt(Number(u.vazao),2):'—'} <small>m³/h</small></div>
+      <div class="vz-val${fora?' fora':''}">${st.vivo?vzFmt(v,2):'—'} <small>m³/h</small></div>
       <div class="vz-st"><span class="vz-dot"></span>${sanitizar(st.txt)}</div>
+      ${faixaTxt?`<div class="vz-faixa${fora?' fora':''}">${fora?'⚠️ fora da faixa · ':''}${faixaTxt}</div>`:''}
       ${sub?`<div class="vz-sub">${sanitizar(sub)}</div>`:''}${avisoUn}
     </div>`;
   }).join('');
@@ -1045,27 +1066,52 @@ function renderVzCfg(){
   if(!podeGerenciar()||!vzMedidores.length){ el.innerHTML=''; vzCfgChave=''; return; }
   // Só redesenha quando muda a lista/nomes — o ESP32 atualiza `ultimo` a cada minuto e
   // redesenhar apagaria o que o admin estiver digitando.
-  const chave=vzMedidores.map(m=>m.id+':'+(m.nome||'')).join('|');
+  const chave=vzMedidores.map(m=>[m.id,m.nome||'',m.alertaMin??'',m.alertaMax??'',m.alertaMinutos??'',m.alertaLigaDesliga?1:0,m.ultimo?.fw||''].join(':')).join('|');
   if(chave===vzCfgChave) return;
   vzCfgChave=chave;
   const {ref,comp}=vzRefComp();
   const opts=sel=>vzMedidores.map(m=>`<option value="${sanitizar(m.id)}" ${m.id===sel?'selected':''}>${sanitizar(m.nome||m.id)}</option>`).join('');
   el.innerHTML=`<details class="vz-cfg"><summary>⚙️ Configuração (admin)</summary>
-    <div class="pluv-lista-tit" style="margin-top:10px;">Nome de cada medidor</div>
-    ${vzMedidores.map(m=>`<div class="pluv-campo"><label>ID ${sanitizar(m.id)}</label><input type="text" value="${sanitizar(m.nome||'')}" placeholder="${sanitizar(m.id)}" onchange="vzSalvarNome('${escJsPluv(m.id)}',this.value)"></div>`).join('')}
+    <div class="pluv-lista-tit" style="margin-top:10px;">Medidores e alertas</div>
+    ${vzMedidores.map((m,i)=>{ const fx=vzFaixa(m), fw=String(m.ultimo?.fw||'');
+      return `<div class="vz-cfg-med">
+      <div class="pluv-campo"><label>Nome (ID ${sanitizar(m.id)})</label><input type="text" id="vzm-${i}-nome" value="${sanitizar(m.nome||'')}" placeholder="${sanitizar(m.id)}"></div>
+      <div class="vz-cfg-row">
+        <div class="pluv-campo"><label>Vazão mínima (m³/h)</label><input type="number" id="vzm-${i}-min" min="0" step="0.1" value="${fx.min||''}" placeholder="sem alerta"></div>
+        <div class="pluv-campo"><label>Vazão máxima (m³/h)</label><input type="number" id="vzm-${i}-max" min="0" step="0.1" value="${fx.max||''}" placeholder="sem alerta"></div>
+        <div class="pluv-campo" style="width:90px;"><label>Por (min)</label><input type="number" id="vzm-${i}-minutos" min="1" max="120" step="1" value="${fx.minutos}"></div>
+      </div>
+      <label class="vz-chk"><input type="checkbox" id="vzm-${i}-ld" ${m.alertaLigaDesliga?'checked':''}> Avisar quando a bomba ligar e desligar</label>
+      ${fw&&fw<'1.1'?`<div class="vz-aviso">Este ESP32 está com o programa ${sanitizar(fw)}: grave a versão 1.1 para os alertas funcionarem.</div>`:''}
+      <button class="pluv-save" onclick="vzSalvarMedidor(${i})">Salvar ${sanitizar(m.nome||m.id)}</button>
+    </div>`; }).join('')}
+    <div class="vz-cfg-nota">A vazão mínima só alerta com a bomba rodando (bomba parada não é alerta). O alerta dispara se a condição durar o tempo escolhido; o ESP32 relê estes valores a cada 5 min.</div>
     <div class="pluv-lista-tit" style="margin-top:6px;">Comparação</div>
     <div class="vz-cfg-row">
       <div class="pluv-campo"><label>Referência (bomba)</label><select id="vzCfgRef">${opts(ref)}</select></div>
       <div class="pluv-campo"><label>Comparar com (lavoura)</label><select id="vzCfgComp">${opts(comp)}</select></div>
       <div class="pluv-campo" style="width:90px;"><label>Limite (%)</label><input type="number" id="vzCfgLim" min="0.5" step="0.5" value="${vzLimite()}"></div>
     </div>
-    <div class="vz-cfg-nota">Mesmo sem vazamento os dois medidores diferem um pouco (erro de cada aparelho e da instalação). Observe a diferença normal por alguns dias e ajuste o limite.</div>
+    <label class="vz-chk"><input type="checkbox" id="vzCfgDif" ${vzCfg.alertaDif?'checked':''}> Alertar quando a diferença passar do limite</label>
+    <div class="vz-cfg-nota">Mesmo sem vazamento os dois medidores diferem um pouco (erro de cada aparelho e da instalação). Observe a diferença normal por alguns dias e ajuste o limite. O alerta de diferença é avaliado pelo ESP32 da referência e usa o tempo ("Por") configurado nele.</div>
     <button class="pluv-save" onclick="vzSalvarCfg()">Salvar comparação</button>
   </details>`;
 }
-window.vzSalvarNome=async function(id,nome){
+window.vzSalvarMedidor=async function(i){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
-  try{ await updateDoc(doc(db,'vazaoMedidores',id),{nome:String(nome||'').trim()}); toast('✅ Nome salvo.'); }catch(e){ toast('❌ Erro: '+e.message); }
+  const m=vzMedidores[i]; if(!m) return;
+  const num=id=>{ const v=parseFloat(String(document.getElementById(id)?.value||'').replace(',','.')); return isFinite(v)&&v>0?v:0; };
+  const min=num(`vzm-${i}-min`), max=num(`vzm-${i}-max`), minutos=Math.round(num(`vzm-${i}-minutos`))||5;
+  if(min>0&&max>0&&max<=min){ toast('⚠️ A vazão máxima precisa ser maior que a mínima.'); return; }
+  if(minutos<1||minutos>120){ toast('⚠️ Tempo entre 1 e 120 minutos.'); return; }
+  try{
+    await updateDoc(doc(db,'vazaoMedidores',m.id),{
+      nome:String(document.getElementById(`vzm-${i}-nome`)?.value||'').trim(),
+      alertaMin:min, alertaMax:max, alertaMinutos:minutos,
+      alertaLigaDesliga:!!document.getElementById(`vzm-${i}-ld`)?.checked,
+    });
+    toast('✅ Salvo. O ESP32 aplica em até 5 min.');
+  }catch(e){ toast('❌ Erro: '+e.message); }
 };
 window.vzSalvarCfg=async function(){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
@@ -1073,7 +1119,8 @@ window.vzSalvarCfg=async function(){
   const lim=parseFloat(String(document.getElementById('vzCfgLim').value||'').replace(',','.'));
   if(ref===comp){ toast('⚠️ Escolha dois medidores diferentes.'); return; }
   if(!(lim>0)){ toast('⚠️ Informe o limite em %.'); return; }
-  try{ await setDoc(doc(db,'vazaoConfig','geral'),{ref,comp,limitePct:lim,atualizadoEm:new Date().toISOString(),atualizadoPor:usuarioAtual?.email||''},{merge:true}); toast('✅ Comparação salva.'); }catch(e){ toast('❌ Erro: '+e.message); }
+  const alertaDif=!!document.getElementById('vzCfgDif')?.checked;
+  try{ await setDoc(doc(db,'vazaoConfig','geral'),{ref,comp,limitePct:lim,alertaDif,atualizadoEm:new Date().toISOString(),atualizadoPor:usuarioAtual?.email||''},{merge:true}); toast('✅ Comparação salva.'); }catch(e){ toast('❌ Erro: '+e.message); }
 };
 
 window.toggleMenu=()=>{document.getElementById('menuLateral').classList.toggle('aberto');document.getElementById('menuOverlay').classList.toggle('aberto');};
@@ -1345,6 +1392,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .vz-cfg-row{display:flex;gap:8px;flex-wrap:wrap;}
 .vz-cfg-row .pluv-campo{flex:1;min-width:120px;}
 @media(max-width:480px){.hdr-user{display:none;}.btn-hdr-pluv{padding:7px 9px;}}
+.vz-val.fora{color:var(--danger);}
+.vz-faixa{font-size:.66rem;color:var(--c);margin-top:3px;}
+.vz-faixa.fora{color:var(--danger);font-weight:700;}
+.vz-al{display:flex;gap:8px;align-items:flex-start;padding:7px 9px;border-radius:8px;margin-bottom:5px;font-size:.76rem;background:var(--cl);}
+.vz-al.alerta{background:#fef2f2;} .vz-al.normal{background:#f0fdf4;} .vz-al.info{background:#eff6ff;}
+.vz-al-ico{flex-shrink:0;}
+.vz-al-txt{line-height:1.35;}
+.vz-al-q{color:var(--c);font-family:'DM Mono',monospace;font-size:.68rem;}
+.vz-cfg-med{border:1px solid var(--cb);border-radius:10px;padding:10px;margin-bottom:10px;}
+.vz-chk{display:flex !important;align-items:center;gap:7px;font-size:.78rem !important;margin:2px 0 8px;cursor:pointer;text-transform:none !important;letter-spacing:0 !important;font-weight:500 !important;color:var(--t) !important;}
+.vz-chk input{width:18px !important;height:18px;padding:0 !important;margin:0;flex-shrink:0;-webkit-appearance:checkbox !important;appearance:auto !important;}
 .vz-cfg-nota{font-size:.7rem;color:var(--c);margin:2px 0 10px;}
 </style>
 </head>
@@ -1477,6 +1535,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     <div class="modal-header"><div class="modal-title">💧 Vazão · medidores</div><button class="panel-close" onclick="fecharVazao()">✕</button></div>
     <div class="modal-body">
       <div id="vzAoVivo"></div>
+      <div id="vzAlertasBox"></div>
       <div id="vzDiaBox"></div>
       <div id="vzCfgBox"></div>
     </div>
