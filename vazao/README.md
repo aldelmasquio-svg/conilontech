@@ -55,12 +55,43 @@ pode escrever em coleções operacionais) já cobre `vazaoMedidores`.
 um número absurdo (ex. `1e-38`), troque `WORD_SWAP` no `config.h`. Confira também
 o total contra o display (M00/M02).
 
+## Alertas
+Configurados no app (**💧 Vazão → ⚙️ Configuração**, admin) e avaliados pelo próprio ESP32 a
+cada leitura (10 s), mesmo com o app fechado. O ESP32 relê os limites a cada 5 min.
+
+| Alerta | Quando | Configuração |
+|---|---|---|
+| Vazão **baixa** | bomba rodando (> 0,5 m³/h) e vazão abaixo do mínimo por N min | `alertaMin` no medidor |
+| Vazão **alta** | vazão acima do máximo por N min | `alertaMax` no medidor |
+| **Diferença** bomba × lavoura | só no medidor de referência: diferença maior que o limite % por N min, os dois online e com fluxo | `alertaDif` + `limitePct` em `vazaoConfig/geral` |
+| **Medidor não responde** | 10 min sem resposta do RS485 | sempre ligado |
+| Bomba **ligou / desligou** | fluxo começou ou parou (estável por 1 min); o desligou traz tempo rodando e volume | `alertaLigaDesliga` no medidor |
+
+N = `alertaMinutos` (padrão 5). Cada alerta avisa uma vez ao começar e uma vez quando normaliza
+(bomba que **para** encerra o alerta de vazão baixa sem aviso — parada não é problema).
+Bomba parada não gera alerta de vazão baixa; para detectar "deveria estar ligada e não está"
+é preciso saber o estado da bomba (futuro: medidor de energia ou o comando de partida).
+
+Todo aviso vai para a coleção `vazaoAlertas` (lista no app) e, se configurado, para o Telegram.
+
+### Alertas no Telegram (opcional)
+1. No Telegram, fale com **@BotFather** → `/newbot` → dê um nome → ele devolve o **token**
+   (algo como `123456789:AAH...`).
+2. Crie um **grupo** com as pessoas que devem receber os avisos e adicione o bot nele.
+   Mande qualquer mensagem no grupo.
+3. No navegador, abra `https://api.telegram.org/bot<TOKEN>/getUpdates` e procure
+   `"chat":{"id":-100...` — esse número (com o `-`) é o **chat id**.
+4. Preencha `TELEGRAM_TOKEN` e `TELEGRAM_CHAT` no `config.h` e grave o ESP32 de novo.
+
+O token fica só no `config.h` (fora do GitHub), nunca no Firestore.
+
 ## Firestore
 | Caminho | Conteúdo |
 |---|---|
-| `vazaoMedidores/{id}` | `ultimo` `{ok, vazao (m³/h, média do minuto), total (m³, totalizador NET), q (sinal 0–99), erro, unidadeTotal, rssi, pendentes, fw, dia, hora, ts (ms)}` — gravado pelo ESP32 · `nome` — editado no app |
+| `vazaoMedidores/{id}` | `alertaMin`, `alertaMax` (m³/h, 0 = desligado), `alertaMinutos`, `alertaLigaDesliga` — editados no app · `ultimo` `{ok, vazao (m³/h, média do minuto), total (m³, totalizador NET), q (sinal 0–99), erro, unidadeTotal, rssi, pendentes, fw, dia, hora, ts (ms)}` — gravado pelo ESP32 · `nome` — editado no app |
 | `vazaoMedidores/{id}/dias/{AAAA-MM-DD}` | `pontos` mapa `hHHMM` → `"vazao,total,q"`, `campos:"vazao,total,q"` (uma chave por minuto, hora local) |
-| `vazaoConfig/geral` | `{ref, comp, limitePct}` — par comparado e limite de alerta, editado no app (admin) |
+| `vazaoConfig/geral` | `{ref, comp, limitePct, alertaDif}` — par comparado, limite % e se a diferença gera alerta; editado no app (admin) |
+| `vazaoAlertas/{auto}` | `{medidor, tipo (baixa/alta/diferenca/semResposta/liga/desliga), nivel (alerta/normal/info), texto, dia, hora, ts}` — gravado pelo ESP32 |
 
 O ESP32 grava com `PATCH` + `updateMask`, então nunca apaga o `nome` dado no app.
 São 2 gravações por minuto por medidor (~5,8 mil/dia para dois) — dentro da cota

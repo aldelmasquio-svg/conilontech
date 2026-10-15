@@ -27,6 +27,12 @@
 #define PIN_TX           17     // TX2: TXD (ou DI) do módulo RS485 → GPIO17
 #define PIN_DE           -1     // -1 = conversor automático (só VCC/TXD/RXD/GND). Módulo com DE+RE: 4 (GPIO4).
 
+// ── Avisos no Telegram (opcional) ──
+// Deixe "" para não usar. Os alertas aparecem no app de qualquer jeito.
+// Como obter: vazao/README.md → "Alertas no Telegram".
+#define TELEGRAM_TOKEN ""        // token do bot criado no @BotFather
+#define TELEGRAM_CHAT  ""        // id do chat ou do grupo que recebe os avisos (grupo começa com -)
+
 // Ordem das palavras dos números REAL/LONG. O TUF-2000M manda a palavra baixa
 // primeiro (true). Se a vazão no app vier absurda (ex.: 1.2e-38 ou 4e+9)
 // enquanto o display mostra um valor normal, troque para false.
