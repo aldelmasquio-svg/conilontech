@@ -10,11 +10,14 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, orderBy, limit, getDocs, where, documentId } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -895,7 +898,8 @@ function vzEstado(m){
 }
 function vzLimpar(){
   vzUnsubs.forEach(f=>f()); vzUnsubs=[];
-  vzDiaUnsubs.forEach(f=>f()); vzDiaUnsubs=[]; vzDiaChave=''; vzCfgChave='';
+  vzDiaUnsubs.forEach(f=>f()); vzDiaUnsubs=[]; vzDiaChave=''; vzCfgChave=''; vzRelChave='';
+  vzDestroiDia(); if(vzRelChart){ vzRelChart.destroy(); vzRelChart=null; }
   if(vzTimer){ clearInterval(vzTimer); vzTimer=null; }
 }
 window.abrirVazao=function(){
@@ -905,6 +909,8 @@ window.abrirVazao=function(){
   vzUnsubs.push(onSnapshot(collection(db,'vazaoMedidores'),snap=>{
     vzMedidores=snap.docs.map(d=>({id:d.id,...d.data()}));
     vzAssinarDias(); renderVzAoVivo(); renderVzDia(); renderVzCfg();
+    const rk=vzMedidores.map(m=>m.id+':'+(m.nome||'')).join('|');
+    if(rk!==vzRelChave){ vzRelChave=rk; renderVzRel(); if(vzRelAberto) vzRelCarregar(); }
   },e=>toast('❌ Vazão: '+e.message)));
   vzUnsubs.push(onSnapshot(query(collection(db,'vazaoAlertas'),orderBy('ts','desc'),limit(20)),snap=>{
     vzAlertas=snap.docs.map(d=>({_id:d.id,...d.data()})); renderVzAlertas();
@@ -1013,6 +1019,50 @@ function renderVzAoVivo(){
   }
   el.innerHTML=`<div class="vz-cards">${cards}</div>${cmp}`;
 }
+// ── Gráficos com zoom (Chart.js + chartjs-plugin-zoom; sem eles cai no SVG simples) ──
+const VZ_CORES=['#2563eb','#f97316','#16a34a','#9333ea','#64748b'];
+const vzCor=i=>VZ_CORES[Math.min(i,VZ_CORES.length-1)];
+const vzChartOk=()=>typeof Chart!=='undefined';
+if(typeof Chart!=='undefined'&&window.ChartZoom){ try{ Chart.register(window.ChartZoom); }catch(e){} }
+const vzHM=m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.round(m)%60).padStart(2,'0')}`;
+const vzHoras=min=>`${Math.floor(min/60)}h${String(Math.round(min)%60).padStart(2,'0')}`;
+let vzDiaChart=null, vzDiaSkel='';
+// Resumo de um dia a partir do doc dias/{dia} (o mesmo cálculo da tabela do dia e do relatório)
+function vzResumoDia(diaDoc){
+  const pts=vzSerie(diaDoc), vol=vzVolume(pts), vs=pts.map(p=>p.v).filter(v=>v!=null), fl=vs.filter(v=>v>=VZ_MIN);
+  return {volume:pts.length?vol.m3:0, exato:vol.exato, minutosFluxo:fl.length, vazaoMax:vs.length?Math.max(...vs):0,
+          vazaoMedia:fl.length?fl.reduce((a,b)=>a+b,0)/fl.length:0, pontos:pts.length};
+}
+function vzDiaDatasets(series){
+  return series.map(s=>{
+    const data=[]; let prev=-99;
+    s.pts.forEach(p=>{ if(p.v==null) return; if(p.min-prev>3&&data.length) data.push({x:prev+1,y:null}); data.push({x:p.min,y:Math.max(0,p.v)}); prev=p.min; });
+    return {label:s.nome,data,borderColor:s.cor,backgroundColor:s.cor,borderWidth:1.6,pointRadius:0,pointHoverRadius:3,spanGaps:false,tension:0};
+  });
+}
+// Espaçamento das marcas do eixo das horas conforme o zoom
+function vzAjustaTicks(ch){
+  const sc=ch.scales.x; if(!sc) return;
+  const r=sc.max-sc.min, st=r>720?120:r>360?60:r>150?30:r>60?10:5;
+  if(ch.options.scales.x.ticks.stepSize!==st){ ch.options.scales.x.ticks.stepSize=st; ch.update('none'); }
+}
+const vzZoomCfg=limX=>({zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x',onZoomComplete:({chart})=>vzAjustaTicks(chart)},
+  pan:{enabled:true,mode:'x',onPanComplete:({chart})=>vzAjustaTicks(chart)},limits:{x:limX}});
+function vzCriaDiaChart(canvas,datasets){
+  return new Chart(canvas,{type:'line',data:{datasets},options:{
+    animation:false,responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'nearest',axis:'x',intersect:false},
+    scales:{x:{type:'linear',min:0,max:1440,ticks:{stepSize:120,maxRotation:0,callback:v=>vzHM(v)},grid:{color:'#eef0f3'}},
+            y:{beginAtZero:true,title:{display:true,text:'m³/h'},grid:{color:'#eef0f3'}}},
+    plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+      tooltip:{callbacks:{title:it=>it.length?vzHM(it[0].parsed.x):'',label:c=>`${c.dataset.label}: ${vzFmt(c.parsed.y,2)} m³/h`}},
+      zoom:vzZoomCfg({min:0,max:1440,minRange:20})}}});
+}
+function vzDestroiDia(){ if(vzDiaChart){ vzDiaChart.destroy(); vzDiaChart=null; } vzDiaSkel=''; }
+window.vzZoomReset=function(qual){
+  const ch=qual==='rel'?vzRelChart:vzDiaChart; if(!ch||!ch.resetZoom) return;
+  ch.resetZoom(); if(qual!=='rel') vzAjustaTicks(ch);
+};
 function vzGraficoSvg(series){
   const W=600,H=190,pl=36,pr=8,pt=10,pb=22;
   const todos=series.flatMap(s=>s.pts.map(p=>p.v).filter(v=>v!=null));
@@ -1032,34 +1082,164 @@ function vzGraficoSvg(series){
 }
 function renderVzDia(){
   const el=document.getElementById('vzDiaBox'); if(!el) return;
-  if(!vzMedidores.length){ el.innerHTML=''; return; }
+  if(!vzMedidores.length){ vzDestroiDia(); el.innerHTML=''; return; }
   const {ref,comp}=vzRefComp();
-  const CORES=['#2563eb','#f97316','#16a34a','#9333ea','#64748b'];
-  const ord=vzOrdenados();
-  const series=ord.map((m,i)=>({id:m.id,nome:m.nome||m.id,cor:CORES[Math.min(i,CORES.length-1)],pts:vzSerie(vzDias[m.id])}));
-  const linhas=series.map(s=>{
-    const vol=vzVolume(s.pts), vs=s.pts.map(p=>p.v).filter(v=>v!=null);
-    const minFluxo=s.pts.filter(p=>p.v!=null&&p.v>=VZ_MIN).length;
-    return {s,vol,maxV:vs.length?Math.max(...vs):null,minFluxo};
-  });
+  const series=vzOrdenados().map((m,i)=>({id:m.id,nome:m.nome||m.id,cor:vzCor(i),pts:vzSerie(vzDias[m.id])}));
+  const linhas=series.map(s=>({s,r:vzResumoDia(vzDias[s.id])}));
   const L=id=>linhas.find(l=>l.s.id===id);
-  const cmpDia=(L(ref)&&L(comp)&&L(ref).s.pts.length&&L(comp).s.pts.length)
-    ? vzComparacaoHtml(L(ref).vol.m3,L(comp).vol.m3,vzNome(ref),vzNome(comp),'m³','Volume do dia') : '';
+  const cmpDia=(L(ref)&&L(comp)&&L(ref).r.pontos&&L(comp).r.pontos)
+    ? vzComparacaoHtml(L(ref).r.volume,L(comp).r.volume,vzNome(ref),vzNome(comp),'m³','Volume do dia') : '';
   const hoje=vzDia===hojeISO();
-  el.innerHTML=`
-    <div class="pluv-hist-cab">
-      <button class="pluv-ano-btn" onclick="vzMudaDia(-1)">◀</button>
-      <span class="pluv-ano">${hoje?'Hoje':formatarData(vzDia)}</span>
-      <button class="pluv-ano-btn" onclick="vzMudaDia(1)" ${hoje?'disabled style="opacity:.35"':''}>▶</button>
-    </div>
-    ${vzGraficoSvg(series)}
+  // O esqueleto (e o gráfico) só é refeito quando muda o dia ou os medidores: o ESP32 grava a
+  // cada minuto e recriar o gráfico perderia o zoom de quem está olhando.
+  const skel=vzDia+'|'+series.map(s=>s.id+':'+s.nome).join(',')+'|'+vzChartOk();
+  if(skel!==vzDiaSkel||!document.getElementById('vzDiaTab')){
+    vzDestroiDia(); vzDiaSkel=skel;
+    el.innerHTML=`
+      <div class="pluv-hist-cab">
+        <button class="pluv-ano-btn" onclick="vzMudaDia(-1)">◀</button>
+        <span class="pluv-ano">${hoje?'Hoje':formatarData(vzDia)}</span>
+        <button class="pluv-ano-btn" onclick="vzMudaDia(1)" ${hoje?'disabled style="opacity:.35"':''}>▶</button>
+      </div>
+      ${vzChartOk()?`<div class="vz-chart-wrap"><canvas id="vzDiaCanvas"></canvas><div class="vz-chart-vazio" id="vzDiaVazio">Sem leituras neste dia.</div></div>
+      <div class="vz-zoom-dica"><span>Zoom: dois dedos ou roda do mouse · arraste para os lados</span><button class="vz-zoom-reset" onclick="vzZoomReset('dia')">↺ dia inteiro</button></div>`
+      :'<div id="vzDiaSvg"></div>'}
+      <div id="vzDiaTab"></div>`;
+    if(vzChartOk()) vzDiaChart=vzCriaDiaChart(document.getElementById('vzDiaCanvas'),vzDiaDatasets(series));
+  } else if(vzDiaChart){
+    const ds=vzDiaDatasets(series);
+    vzDiaChart.data.datasets.forEach((d,i)=>{ if(ds[i]) d.data=ds[i].data; });
+    vzDiaChart.update('none');
+  }
+  const vazio=document.getElementById('vzDiaVazio'); if(vazio) vazio.style.display=series.some(s=>s.pts.length)?'none':'flex';
+  const svg=document.getElementById('vzDiaSvg'); if(svg) svg.innerHTML=vzGraficoSvg(series);
+  document.getElementById('vzDiaTab').innerHTML=`
     <table class="vz-tab"><thead><tr><th>Medidor</th><th>Volume</th><th>Pico</th><th>Com fluxo</th></tr></thead><tbody>
       ${linhas.map(l=>`<tr><td><i class="vz-cor" style="background:${l.s.cor}"></i>${sanitizar(l.s.nome)}</td>
-        <td>${l.s.pts.length?`${l.vol.exato?'':'≈'}${vzFmt(l.vol.m3,1)} m³`:'—'}</td>
-        <td>${l.maxV!=null?vzFmt(l.maxV,1)+' m³/h':'—'}</td>
-        <td>${l.s.pts.length?`${Math.floor(l.minFluxo/60)}h${String(l.minFluxo%60).padStart(2,'0')}`:'—'}</td></tr>`).join('')}
+        <td>${l.r.pontos?`${l.r.exato?'':'≈'}${vzFmt(l.r.volume,1)} m³`:'—'}</td>
+        <td>${l.r.pontos?vzFmt(l.r.vazaoMax,1)+' m³/h':'—'}</td>
+        <td>${l.r.pontos?vzHoras(l.r.minutosFluxo):'—'}</td></tr>`).join('')}
     </tbody></table>
     ${cmpDia}`;
+}
+
+// ── Relatório: volume e horas de bomba por dia / semana / mês ──
+// Cada dia vira um resumo leve em vazaoMedidores/{id}/resumos/{dia}, calculado no app a partir de
+// dias/{dia} (o doc do minuto a minuto, ~70 KB) na 1ª vez que alguém abre o relatório. Ontem e
+// hoje são sempre recalculados (o ESP32 pode mandar minutos atrasados) e nunca gravados.
+const MESES_VZ=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+let vzRelGrupo='dia', vzRelMetrica='volume', vzRelRes={}, vzRelPrimeiro={}, vzRelChart=null, vzRelCarregando=false, vzRelAberto=false, vzRelErro='', vzRelChave='';
+const vzIso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const vzAddDias=(iso,n)=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+n); return vzIso(d); };
+const vzSegunda=iso=>{ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()-(d.getDay()+6)%7); return vzIso(d); };
+const VZ_GRUPOS={dia:'Por dia · 30 dias', semana:'Por semana · 12 semanas', mes:'Por mês · 12 meses'};
+function vzRelInicio(grupo=vzRelGrupo,hoje=hojeISO()){
+  if(grupo==='dia') return vzAddDias(hoje,-29);
+  if(grupo==='semana') return vzAddDias(vzSegunda(hoje),-7*11);
+  const d=new Date(hoje+'T12:00:00'); d.setDate(1); d.setMonth(d.getMonth()-11); return vzIso(d);
+}
+const vzRelChaveDe=(d,grupo=vzRelGrupo)=>grupo==='dia'?d:grupo==='semana'?vzSegunda(d):d.slice(0,7);
+function vzRelRotulo(k,grupo=vzRelGrupo){
+  if(grupo==='mes'){ const [a,m]=k.split('-'); return `${MESES_VZ[+m-1]}/${a.slice(2)}`; }
+  const [,m,d]=k.split('-'); return `${d}/${m}`;
+}
+// Agrega os resumos diários de um medidor nos períodos do grupo → [{k,rot,volume,minutos,dias}]
+function vzRelAgrega(resDias,grupo=vzRelGrupo,hoje=hojeISO()){
+  const out=[], idx={};
+  for(let d=vzRelInicio(grupo,hoje); d<=hoje; d=vzAddDias(d,1)){
+    const k=vzRelChaveDe(d,grupo);
+    if(!(k in idx)){ idx[k]=out.length; out.push({k,rot:vzRelRotulo(k,grupo),volume:0,minutos:0,dias:0}); }
+    const r=resDias?.[d]; if(!r||!r.pontos) continue;
+    const b=out[idx[k]]; b.volume+=Number(r.volume)||0; b.minutos+=Number(r.minutosFluxo)||0; if(r.minutosFluxo>0) b.dias++;
+  }
+  return out;
+}
+async function vzRelCarregar(){
+  if(vzRelCarregando) return;
+  vzRelCarregando=true; vzRelErro=''; renderVzRel();
+  const ini=vzRelInicio(), hoje=hojeISO(), ontem=vzAddDias(hoje,-1);
+  try{
+    for(const m of [...vzMedidores]){
+      const col=vzRelRes[m.id]=vzRelRes[m.id]||{};
+      if(vzRelPrimeiro[m.id]===undefined){
+        const s=await getDocs(query(collection(db,'vazaoMedidores',m.id,'dias'),orderBy(documentId()),limit(1)));
+        vzRelPrimeiro[m.id]=s.empty?null:s.docs[0].id;
+      }
+      const prim=vzRelPrimeiro[m.id]; if(!prim) continue;
+      const de=ini>prim?ini:prim;
+      const rs=await getDocs(query(collection(db,'vazaoMedidores',m.id,'resumos'),where('dia','>=',de)));
+      rs.forEach(d=>{ if(d.id<ontem) col[d.id]=d.data(); });
+      let falta=null;
+      for(let d=de; d<=hoje; d=vzAddDias(d,1)) if(!col[d]||d>=ontem){ falta=d; break; }
+      if(!falta) continue;
+      const ds=await getDocs(query(collection(db,'vazaoMedidores',m.id,'dias'),where(documentId(),'>=',falta),where(documentId(),'<=',hoje)));
+      const docs={}; ds.forEach(d=>{ docs[d.id]=d.data(); });
+      for(let d=falta; d<=hoje; d=vzAddDias(d,1)){
+        if(col[d]&&d<ontem) continue;
+        const r={dia:d,...(docs[d]?vzResumoDia(docs[d]):{volume:0,exato:false,minutosFluxo:0,vazaoMax:0,vazaoMedia:0,pontos:0})};
+        col[d]=r;
+        if(d<ontem) setDoc(doc(db,'vazaoMedidores',m.id,'resumos',d),{...r,calculadoEm:new Date().toISOString()}).catch(()=>{});
+      }
+    }
+  }catch(e){ vzRelErro=e.message||String(e); }
+  vzRelCarregando=false; renderVzRel();
+}
+window.vzRelToggle=function(aberto){ if(aberto===vzRelAberto) return; vzRelAberto=aberto; if(aberto) vzRelCarregar(); };
+window.vzRelSetGrupo=function(g){ if(!VZ_GRUPOS[g]||g===vzRelGrupo) return; vzRelGrupo=g; vzRelCarregar(); };
+window.vzRelSetMetrica=function(m){ vzRelMetrica=m==='horas'?'horas':'volume'; renderVzRel(); };
+window.vzRelAtualizar=function(){ vzRelCarregar(); };
+function renderVzRel(){
+  const el=document.getElementById('vzRelBox'); if(!el) return;
+  if(vzRelChart){ vzRelChart.destroy(); vzRelChart=null; }
+  if(!vzMedidores.length){ el.innerHTML=''; return; }
+  const ord=vzOrdenados(), hoje=hojeISO(), horas=vzRelMetrica==='horas';
+  const ag=ord.map((m,i)=>({m,cor:vzCor(i),b:vzRelAgrega(vzRelRes[m.id])}));
+  const temDados=ag.some(a=>a.b.some(b=>b.dias||b.volume));
+  const inicioDados=ord.map(m=>vzRelPrimeiro[m.id]).filter(Boolean).sort()[0];
+  const ini=vzRelInicio();
+  const resumo=ag.map(a=>{
+    const dias=Object.entries(vzRelRes[a.m.id]||{}).filter(([d,r])=>d>=ini&&d<=hoje&&r.pontos);
+    const vol=dias.reduce((s,[,r])=>s+(Number(r.volume)||0),0), min=dias.reduce((s,[,r])=>s+(Number(r.minutosFluxo)||0),0);
+    const comUso=dias.filter(([,r])=>r.minutosFluxo>0);
+    const maior=comUso.reduce((x,[d,r])=>!x||r.volume>x.r.volume?{d,r}:x,null);
+    return {a,vol,min,comUso:comUso.length,maior};
+  });
+  el.innerHTML=`<details class="vz-rel" ${vzRelAberto?'open':''} ontoggle="vzRelToggle(this.open)">
+    <summary>📊 Relatório: volume e horas de bomba</summary>
+    <div class="pluv-chips" style="margin-top:10px;">${Object.entries(VZ_GRUPOS).map(([k,t])=>`<button class="pluv-chip ${k===vzRelGrupo?'on':''}" onclick="vzRelSetGrupo('${k}')">${t}</button>`).join('')}</div>
+    <div class="pluv-chips">
+      <button class="pluv-chip ${!horas?'on':''}" onclick="vzRelSetMetrica('volume')">💧 Volume (m³)</button>
+      <button class="pluv-chip ${horas?'on':''}" onclick="vzRelSetMetrica('horas')">⏱️ Horas de bomba</button>
+      <button class="pluv-chip" onclick="vzRelAtualizar()" title="Recarregar">↻</button>
+    </div>
+    ${vzRelCarregando?'<div class="vz-rel-msg">Carregando… (na 1ª vez pode demorar alguns segundos)</div>':''}
+    ${vzRelErro?`<div class="vz-aviso">Erro ao carregar: ${sanitizar(vzRelErro)}</div>`:''}
+    ${!vzRelCarregando&&!temDados?'<div class="pluv-vazio">Ainda não há leituras neste período.</div>':''}
+    ${temDados?`${vzChartOk()?`<div class="vz-chart-wrap rel"><canvas id="vzRelCanvas"></canvas></div>
+      <div class="vz-zoom-dica"><span>Zoom: dois dedos ou roda do mouse · arraste para os lados</span><button class="vz-zoom-reset" onclick="vzZoomReset('rel')">↺ período inteiro</button></div>`:''}
+    <table class="vz-tab"><thead><tr><th>Medidor</th><th>Volume</th><th>Horas</th><th>Média/dia*</th><th>Maior dia</th></tr></thead><tbody>
+      ${resumo.map(r=>`<tr><td><i class="vz-cor" style="background:${r.a.cor}"></i>${sanitizar(r.a.m.nome||r.a.m.id)}</td>
+        <td>${vzFmt(r.vol,0)} m³</td><td>${vzHoras(r.min)}</td>
+        <td>${r.comUso?`${vzFmt(r.vol/r.comUso,0)} m³<br>${vzHoras(r.min/r.comUso)}`:'—'}</td>
+        <td>${r.maior?`${vzFmt(r.maior.r.volume,0)} m³<br>${formatarData(r.maior.d).slice(0,5)}`:'—'}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="vz-cfg-nota">* média dos dias em que a bomba rodou.${inicioDados&&inicioDados>ini?` Dados desde ${formatarData(inicioDados)}.`:''} O dia de hoje ainda está em andamento.</div>`:''}
+  </details>`;
+  const cv=document.getElementById('vzRelCanvas');
+  if(cv&&vzChartOk()){
+    const unid=horas?'h':'m³';
+    vzRelChart=new Chart(cv,{type:'bar',
+      data:{labels:ag[0].b.map(b=>b.rot),datasets:ag.map(a=>({label:a.m.nome||a.m.id,backgroundColor:a.cor,borderRadius:3,maxBarThickness:28,
+        data:a.b.map(b=>horas?Math.round(b.minutos/6)/10:Math.round(b.volume*10)/10)}))},
+      options:{animation:false,responsive:true,maintainAspectRatio:false,
+        scales:{x:{ticks:{maxRotation:0,autoSkip:true,font:{size:10}},grid:{display:false}},
+                y:{beginAtZero:true,title:{display:true,text:horas?'horas de bomba':'m³'},grid:{color:'#eef0f3'}}},
+        plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}},
+          tooltip:{callbacks:{title:it=>{ if(!it.length) return ''; const k=ag[0].b[it[0].dataIndex].k;
+              return vzRelGrupo==='semana'?`Semana de ${formatarData(k)}`:vzRelGrupo==='mes'?ag[0].b[it[0].dataIndex].rot:formatarData(k); },
+            label:c=>`${c.dataset.label}: ${horas?vzHoras(c.parsed.y*60):vzFmt(c.parsed.y,1)+' '+unid}`}},
+          zoom:{zoom:{wheel:{enabled:true},pinch:{enabled:true},mode:'x'},pan:{enabled:true,mode:'x'},limits:{x:{min:'original',max:'original',minRange:3}}}}}});
+  }
 }
 function renderVzCfg(){
   const el=document.getElementById('vzCfgBox'); if(!el) return;
@@ -1403,6 +1583,16 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .vz-cfg-med{border:1px solid var(--cb);border-radius:10px;padding:10px;margin-bottom:10px;}
 .vz-chk{display:flex !important;align-items:center;gap:7px;font-size:.78rem !important;margin:2px 0 8px;cursor:pointer;text-transform:none !important;letter-spacing:0 !important;font-weight:500 !important;color:var(--t) !important;}
 .vz-chk input{width:18px !important;height:18px;padding:0 !important;margin:0;flex-shrink:0;-webkit-appearance:checkbox !important;appearance:auto !important;}
+.vz-chart-wrap{position:relative;height:230px;background:white;border:1px solid var(--cl);border-radius:8px;padding:4px 4px 0;touch-action:pan-y;}
+.vz-chart-wrap.rel{height:250px;}
+.vz-chart-vazio{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:.8rem;color:var(--c);pointer-events:none;}
+.vz-zoom-dica{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.64rem;color:var(--c);margin:4px 0 10px;}
+.vz-zoom-reset{background:var(--cl);border:1px solid var(--cb);border-radius:6px;font-size:.68rem;padding:3px 8px;cursor:pointer;white-space:nowrap;color:var(--t);}
+.vz-rel{border-top:1px solid var(--cb);padding-top:10px;margin-bottom:12px;}
+.vz-rel summary{cursor:pointer;font-weight:700;font-size:.86rem;color:var(--ve);}
+.vz-tab td:not(:first-child){white-space:nowrap;}
+.vz-rel .vz-tab{font-size:.72rem;}
+.vz-rel-msg{font-size:.76rem;color:var(--c);margin:6px 0 10px;}
 .vz-cfg-nota{font-size:.7rem;color:var(--c);margin:2px 0 10px;}
 </style>
 </head>
@@ -1537,6 +1727,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <div id="vzAoVivo"></div>
       <div id="vzAlertasBox"></div>
       <div id="vzDiaBox"></div>
+      <div id="vzRelBox"></div>
       <div id="vzCfgBox"></div>
     </div>
     <div class="modal-footer"><button class="btn-cancel" onclick="fecharVazao()">Fechar</button></div>
