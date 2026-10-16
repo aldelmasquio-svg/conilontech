@@ -1,0 +1,16 @@
+name = "conilontech-assistente"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Modelo e esforço do Claude (pode trocar sem mexer no código).
+MODELO = "claude-opus-5-5"
+ESFORCO = "medium"
+
+# Segredos (NÃO coloque aqui — use `npx wrangler secret put NOME`):
+#   TELEGRAM_TOKEN            token do @BotFather
+#   TELEGRAM_WEBHOOK_SECRET   senha aleatória que você inventa
+#   TELEGRAM_USUARIOS         {"<id do chat>":"email@do.usuario"}
+#   ANTHROPIC_API_KEY         chave da API do Claude
+#   FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço (o mesmo do GitHub Actions do clima)
