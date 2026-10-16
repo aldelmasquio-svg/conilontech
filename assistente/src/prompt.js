@@ -12,7 +12,7 @@ Conceitos do app:
 • Safra/fazendas/talhões: cada talhão tem nome, fazenda e área (ha).
 
 Coleções principais (campos mais usados; use consultar com limite pequeno para descobrir outros):
-• talhoes {nome, fazenda, area}
+• talhoes {id (código do talhão, ex.: "AERO-05" — é o talhaoId usado nas outras coleções), nome, fazenda, area}
 • pulverizacoes {talhaoId, talhaoNome, fazenda, data (planejada AAAA-MM-DD), modoAplicacao, produtos[{produto,dose,unidade}], pragaAlvo[], observacoes, realizada (bool), dataRealizada, aplicacoes[] (execuções parciais com haAplicado/produtosUsados)} — registros antigos podem ter só data/produtosUsados.
 • drenchPrevencao {talhaoId, talhaoNome, fazenda, data, metodoAplicacao, alvoPrevencao (texto ou lista), produtos[{produto,modo,valor,unidade}], status ('pendente'|'realizado'), dataRealizado}
 • planosAdubacao {talhaoId, talhaoNome, fazenda, mesAno ("Julho/2026" ou "2026-07"), mesIdx (0-11), ano, aplicacoes[{modo, fase, semana, produtos[], feito, dataFeito}]}

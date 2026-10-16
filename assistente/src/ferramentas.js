@@ -120,6 +120,11 @@ function fmtData(d) {
   const [a, m, dd] = String(d).split('-');
   return `${dd}/${m}/${a}`;
 }
+// O app identifica o talhão pelo campo `id` (código como "AERO-05"), não pelo id do documento;
+// é esse código que vai em talhaoId/talhoes[].id. Documento sem `id` cai no id do documento.
+function codTalhao(t) {
+  return t.id != null && t.id !== '' ? String(t.id) : t._id;
+}
 function fmtNum(n) {
   return (Math.round(n * 100) / 100).toLocaleString('pt-BR');
 }
@@ -128,7 +133,7 @@ function fmtNum(n) {
 export const DEFINICOES = [
   {
     name: 'listar_talhoes',
-    description: 'Lista os talhões cadastrados (id, nome, fazenda, área em ha e outros dados simples). Use para descobrir o id de um talhão a partir do nome antes de consultar ou propor algo.',
+    description: 'Lista os talhões cadastrados (id = código do talhão usado no app, ex.: "AERO-05"; nome, fazenda, área em ha e outros dados simples). Use para descobrir o id de um talhão a partir do nome antes de consultar ou propor algo. Nas outras coleções, talhaoId é esse mesmo código.',
     input_schema: {
       type: 'object',
       properties: { fazenda: { type: 'string', description: 'Filtra por fazenda (opcional, nome exato).' } },
@@ -255,9 +260,9 @@ export class Ferramentas {
       .filter(t => fazendaPermitida(this.perfil, 'mapa', t.fazenda))
       .filter(t => !fazenda || normalizar(t.fazenda) === normalizar(fazenda))
       .map(t => {
-        const o = { id: t._id };
+        const o = { id: codTalhao(t) };
         for (const [k, v] of Object.entries(t)) {
-          if (k === '_id' || CAMPOS_PESADOS.has(k) || /^(criado|editado)/.test(k)) continue;
+          if (k === '_id' || k === 'id' || CAMPOS_PESADOS.has(k) || /^(criado|editado)/.test(k)) continue;
           if (typeof v === 'number' || typeof v === 'boolean' || (typeof v === 'string' && v.length <= 80)) o[k] = v;
         }
         return o;
@@ -322,7 +327,10 @@ export class Ferramentas {
     if (!Array.isArray(ids) || !ids.length) throw new Error('Informe ao menos um talhão (talhao_ids).');
     const todos = await this.talhoes();
     return ids.map(id => {
-      const t = todos.find(x => x._id === id);
+      const alvo = String(id).trim();
+      const t = todos.find(x => codTalhao(x) === alvo)
+        || todos.find(x => x._id === alvo)
+        || todos.find(x => normalizar(codTalhao(x)) === normalizar(alvo));
       if (!t) throw new Error(`Talhão não encontrado: ${id}. Use listar_talhoes para obter os ids.`);
       if (!fazendaPermitida(this.perfil, mod, t.fazenda)) throw new Error(`Seu usuário não tem acesso à fazenda ${t.fazenda}.`);
       return t;
@@ -346,7 +354,7 @@ export class Ferramentas {
     const docs = tals.map(t => ({
       colecao: 'pulverizacoes',
       dados: {
-        talhaoId: t._id, talhaoNome: t.nome || t._id, fazenda: t.fazenda || '',
+        talhaoId: codTalhao(t), talhaoNome: t.nome || codTalhao(t), fazenda: t.fazenda || '',
         data, modoAplicacao: modo, drone: '', produtos: prodsFS, pragaAlvo,
         observacoes: String(observacoes || '').trim(), realizada: false,
       },
@@ -378,7 +386,7 @@ export class Ferramentas {
         const dose = Number(it.dose_por_ha);
         if (!(dose > 0)) throw new Error(`Informe dose_por_ha para ${produto} (ou use quantidade_total sem talhões).`);
         const tals = await this._resolverTalhoes(it.talhao_ids, 'pedidos');
-        const talhoesArr = tals.map(t => ({ id: t._id, nome: t.nome || t._id, fazenda: t.fazenda || '', area: num(t.area) }));
+        const talhoesArr = tals.map(t => ({ id: codTalhao(t), nome: t.nome || codTalhao(t), fazenda: t.fazenda || '', area: num(t.area) }));
         const areaTotal = talhoesArr.reduce((s, t) => s + t.area, 0);
         if (!(areaTotal > 0)) throw new Error(`Os talhões de ${produto} não têm área cadastrada — informe quantidade_total.`);
         const total = Math.round(dose * areaTotal * 100) / 100;
