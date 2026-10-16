@@ -7,11 +7,13 @@ import { Firestore } from './firestore.js';
 import { Telegram } from './telegram.js';
 import { DEFINICOES, Ferramentas, executarProposta } from './ferramentas.js';
 import { SISTEMA } from './prompt.js';
+import { transcrever } from './audio.js';
 
 const MAX_HISTORICO = 16;      // mensagens (texto) guardadas por conversa
 const MAX_ITERACOES = 10;      // chamadas à API por mensagem do usuário
 const VALIDADE_PROPOSTA_MS = 2 * 60 * 60 * 1000;
 const FUSO = 'America/Sao_Paulo';
+const MAX_AUDIO_S = 300;        // mensagens de voz mais longas que isso são recusadas
 
 export default {
   async fetch(req, env) {
@@ -89,13 +91,41 @@ async function processarUpdate(update, env) {
 
   if (cb) return tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg);
 
+  const audio = msg.voice || msg.audio || msg.video_note;
+  if (audio) {
+    if ((audio.duration || 0) > MAX_AUDIO_S) {
+      await tg.enviar(chatId, `Áudio muito longo (máx. ${MAX_AUDIO_S / 60} min). Pode dividir em partes menores?`);
+      return;
+    }
+    await tg.digitando(chatId);
+    let transcricao, talhoes;
+    try {
+      talhoes = await fs.query('talhoes', { limite: 2000 });
+      const nomes = [...new Set(talhoes.flatMap(t => [t.fazenda, t.nome]).filter(Boolean))].join(', ');
+      transcricao = await transcrever(env.AI, await tg.baixarArquivo(audio.file_id), nomes);
+    } catch (e) {
+      await tg.enviar(chatId, `⚠️ Não consegui entender o áudio (${e.message}). Pode mandar de novo ou escrever?`);
+      return;
+    }
+    if (!transcricao) {
+      await tg.enviar(chatId, 'Não ouvi nada no áudio. 🤔 Pode repetir?');
+      return;
+    }
+    // Mostra o que foi entendido: o usuário percebe na hora se a transcrição errou um nome ou número.
+    await tg.enviar(chatId, `🎤 «${transcricao}»`);
+    await tg.digitando(chatId);
+    const texto = `${transcricao}\n(mensagem de voz transcrita automaticamente — nomes e números podem ter saído errados; se algo essencial parecer estranho, pergunte)`;
+    await conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, env, talhoes);
+    return;
+  }
+
   const texto = (msg.text || '').trim();
   if (!texto) {
-    await tg.enviar(chatId, 'Por enquanto eu só entendo mensagens de texto. 🙂');
+    await tg.enviar(chatId, 'Eu entendo mensagens de texto e de voz. 🙂');
     return;
   }
   if (texto === '/start' || texto === '/ajuda') {
-    await tg.enviar(chatId, `Olá, ${perfil.nome || email}! 👋\nPode me perguntar qualquer coisa do app — programação da semana, estoque, chuva, irrigação, aplicações por talhão… — e pedir agendamentos de pulverização ou pedidos de produto. Antes de gravar eu sempre peço sua confirmação.\n\n/limpar — começa uma conversa nova`);
+    await tg.enviar(chatId, `Olá, ${perfil.nome || email}! 👋\nPode me mandar texto ou áudio 🎤 e perguntar qualquer coisa do app — programação da semana, estoque, chuva, irrigação, aplicações por talhão… — e pedir agendamentos de pulverização ou pedidos de produto. Antes de gravar eu sempre peço sua confirmação.\n\n/limpar — começa uma conversa nova`);
     return;
   }
   if (texto === '/limpar') {
@@ -108,9 +138,10 @@ async function processarUpdate(update, env) {
   await conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, env);
 }
 
-async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, env) {
+async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, env, talhoes = null) {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const ferramentas = new Ferramentas(fs, perfil);
+  if (talhoes) ferramentas._talhoes = talhoes;
 
   // Histórico guardado só como texto (sem blocos de raciocínio), então pode ser truncado à vontade.
   const historico = Array.isArray(conv.historico) ? conv.historico : [];

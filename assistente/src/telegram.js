@@ -35,6 +35,15 @@ export class Telegram {
     return ultima;
   }
 
+  // Baixa um arquivo enviado ao bot (ex.: mensagem de voz). Limite da Bot API: 20 MB.
+  async baixarArquivo(fileId) {
+    const f = await this._chamar('getFile', { file_id: fileId });
+    if (!f?.file_path) throw new Error('não consegui baixar o áudio do Telegram');
+    const r = await fetch(`${this.api.replace('/bot', '/file/bot')}/${f.file_path}`);
+    if (!r.ok) throw new Error(`download do áudio falhou (HTTP ${r.status})`);
+    return new Uint8Array(await r.arrayBuffer());
+  }
+
   digitando(chatId) {
     return this._chamar('sendChatAction', { chat_id: chatId, action: 'typing' });
   }
