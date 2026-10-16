@@ -1,0 +1,15 @@
+{
+  "name": "conilontech-assistente",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "logs": "wrangler tail"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}
