@@ -197,6 +197,26 @@ export const DEFINICOES = [
           },
         },
         alvos: { type: 'array', items: { type: 'string' }, description: 'Pragas/doenças alvo (ex.: Ferrugem, Broca).' },
+        drone: { type: 'string', enum: ['Próprio', 'Terceiro'], description: 'Obrigatório quando modo = Drone.' },
+        params_drone: {
+          type: 'object',
+          description: 'Obrigatório quando modo = Drone. Pergunte ao usuário; o que ele não souber, omita (pode ser {}).',
+          properties: {
+            altura_voo: { type: 'number', description: 'metros' },
+            largura_faixa: { type: 'number', description: 'metros' },
+            velocidade: { type: 'number', description: 'km/h' },
+            volume_calda: { type: 'number', description: 'L/ha' },
+          },
+        },
+        params_turbina: {
+          type: 'object',
+          description: 'Obrigatório quando modo = Turbina ou Jatão. Pergunte ao usuário; o que ele não souber, omita (pode ser {}).',
+          properties: {
+            volume_calda: { type: 'number', description: 'L/ha' },
+            carreiras: { type: 'string', enum: ['todas', 'pulando'], description: 'Passa em todas as carreiras ou pulando.' },
+            pular_carreiras: { type: 'integer', description: 'Quando "pulando": quantas carreiras pula entre cada passada (1 = passa 1, pula 1).' },
+          },
+        },
         observacoes: { type: 'string' },
       },
       required: ['talhao_ids', 'data', 'modo', 'produtos'],
@@ -337,7 +357,7 @@ export class Ferramentas {
     });
   }
 
-  async proporPulverizacao({ talhao_ids, data, modo, produtos, alvos = [], observacoes = '' }) {
+  async proporPulverizacao({ talhao_ids, data, modo, produtos, alvos = [], drone, params_drone, params_turbina, observacoes = '' }) {
     if (nivelAcesso(this.perfil, 'pulverizacao') !== 'admin') throw new Error('Só administradores de Pulverização podem agendar pulverizações.');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data || '')) throw new Error('Data inválida — use AAAA-MM-DD.');
     const modos = ['Terrestre', 'Drone', 'Costal', 'Tratorizado', 'Turbina', 'Jatão'];
@@ -348,6 +368,24 @@ export class Ferramentas {
       if (!(Number(p.dose) > 0)) throw new Error(`Dose inválida para ${p.produto}.`);
       if (!['L', 'mL', 'kg', 'g'].includes(p.unidade)) throw new Error(`Unidade inválida para ${p.produto} (L, mL, kg ou g).`);
     }
+    // Parâmetros da aplicação, nos mesmos campos (strings, vírgula decimal) que o formulário do app grava.
+    const txt = v => (v == null || v === '' || isNaN(Number(v)) ? '' : String(v).replace('.', ','));
+    const ehDrone = modo === 'Drone';
+    const ehTurbina = modo === 'Turbina' || modo === 'Jatão';
+    let paramsDrone = null, paramsTurbina = null;
+    if (ehDrone) {
+      if (!['Próprio', 'Terceiro'].includes(drone)) throw new Error('Modo Drone: pergunte se o drone é Próprio ou Terceiro e informe em "drone".');
+      if (!params_drone || typeof params_drone !== 'object') throw new Error('Modo Drone: pergunte altura de voo (m), largura de faixa (m), velocidade (km/h) e volume de calda (L/ha) e envie em params_drone — o que o usuário não souber, omita (params_drone: {}).');
+      const pd = { alturaVoo: txt(params_drone.altura_voo), larguraFaixa: txt(params_drone.largura_faixa), velocidade: txt(params_drone.velocidade), volumeCalda: txt(params_drone.volume_calda) };
+      if (Object.values(pd).some(Boolean)) paramsDrone = pd;
+    }
+    if (ehTurbina) {
+      if (!params_turbina || typeof params_turbina !== 'object') throw new Error(`Modo ${modo}: pergunte o volume de calda (L/ha) e se passa em todas as carreiras ou pulando (quantas) e envie em params_turbina — o que o usuário não souber, omita (params_turbina: {}).`);
+      const carreiras = params_turbina.carreiras === 'pulando' ? 'pulando' : 'todas';
+      const pular = carreiras === 'pulando' ? txt(params_turbina.pular_carreiras) : '';
+      const vc = txt(params_turbina.volume_calda);
+      if (vc || carreiras === 'pulando') paramsTurbina = { volumeCalda: vc, carreiras, pularCarreiras: pular };
+    }
     const tals = await this._resolverTalhoes(talhao_ids, 'pulverizacao');
     const prodsFS = prods.map(p => ({ produto: String(p.produto).trim(), dose: String(p.dose).replace('.', ','), unidade: p.unidade }));
     const pragaAlvo = (alvos || []).map(a => String(a).trim()).filter(Boolean);
@@ -355,13 +393,27 @@ export class Ferramentas {
       colecao: 'pulverizacoes',
       dados: {
         talhaoId: codTalhao(t), talhaoNome: t.nome || codTalhao(t), fazenda: t.fazenda || '',
-        data, modoAplicacao: modo, drone: '', produtos: prodsFS, pragaAlvo,
+        data, modoAplicacao: modo, drone: ehDrone ? drone : '', produtos: prodsFS, pragaAlvo,
         observacoes: String(observacoes || '').trim(), realizada: false,
+        ...(paramsDrone ? { paramsDrone } : {}),
+        ...(paramsTurbina ? { paramsTurbina } : {}),
       },
     }));
+    const linhaParams = [];
+    if (ehDrone) {
+      const pd = paramsDrone || {};
+      const partes = [pd.alturaVoo && `altura ${pd.alturaVoo} m`, pd.larguraFaixa && `faixa ${pd.larguraFaixa} m`, pd.velocidade && `${pd.velocidade} km/h`, pd.volumeCalda && `calda ${pd.volumeCalda} L/ha`].filter(Boolean);
+      linhaParams.push(`Drone: ${drone}${partes.length ? ' · ' + partes.join(' · ') : ' · (sem parâmetros de voo)'}`);
+    }
+    if (ehTurbina) {
+      const pt = paramsTurbina || {};
+      const partes = [pt.volumeCalda && `calda ${pt.volumeCalda} L/ha`, pt.carreiras === 'pulando' ? `carreiras: pulando ${pt.pularCarreiras || '?'}` : 'carreiras: todas'].filter(Boolean);
+      linhaParams.push(`${modo}: ${partes.join(' · ')}`);
+    }
     const resumo = [
       '🗓️ Agendar pulverização',
       `Data: ${fmtData(data)} · ${modo}`,
+      ...linhaParams,
       `Talhões: ${tals.map(t => `${t.nome} (${t.fazenda || '—'})`).join(', ')}`,
       'Produtos:',
       ...prodsFS.map(p => `  • ${p.produto} — ${p.dose} ${p.unidade}/ha`),
