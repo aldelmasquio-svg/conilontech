@@ -11,6 +11,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema, nivelDoPerfil, semAcessoAoModulo } from './acesso.js';
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 enableMultiTabIndexedDbPersistence(db).catch(()=>{});
@@ -23,6 +24,7 @@ onAuthStateChanged(auth,async(user)=>{
   if(!snap.exists()){await signOut(auth);return;}
   perfilAtual=snap.data();
   if(!perfilAtual.modulos&&perfilAtual.perfil==='admin')perfilAtual.modulos={mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
+  if (semAcessoAoModulo(perfilAtual, 'pedidos')) { window.location.href = 'index.html'; return; }
   document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
   document.getElementById('menuUserEmail').textContent=user.email;
@@ -35,7 +37,7 @@ onAuthStateChanged(auth,async(user)=>{
   onSnapshot(collection(db,'pedidos'),snap=>{pedidos=snap.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.criadoEm||'').localeCompare(a.criadoEm||''));if(tabAtual==='lista')renderizarListaPedidos();});
   setTimeout(iniciarMapaPedidos,200);
 });
-function isAdmin(){return Object.values(perfilAtual.modulos||{}).includes('admin')||perfilAtual.perfil==='admin';}
+function isAdmin(){return nivelDoPerfil(perfilAtual,'pedidos')==='admin'||adminDoSistema(perfilAtual);}
 // Converte string com vírgula brasileira em número (ex: "13,5" → 13.5)
 function parseDose(s){if(s==null||s==='')return 0;const limpo=String(s).replace(/\s/g,'').replace(',','.');const n=parseFloat(limpo);return isNaN(n)?0:n;}
 function gerarMenu() {
