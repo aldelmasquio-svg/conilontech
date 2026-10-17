@@ -655,19 +655,6 @@ function atualizarFiltroFazenda() {
 
 const METODO_LABEL = {costal:'💪 Bomba Costal', turbina:'⚙️ Adaptação na Turbina', fertirrigacao:'💧 Fertirrigação'};
 
-function renderDoseLinha(pr, esp) {
-  const conv = converterDoses(pr, esp);
-  const un = sanitizar(pr.unidade||'');
-  return `<div class="prod-linha">
-    <span class="prod-nome">🧪 ${sanitizar(pr.produto)}</span>
-    <span class="dose-chips">
-      <span class="dose-chip ${pr.modo==='ha'?'principal':''}">${fmtNum(conv.doseHa,2)} ${un}/ha</span>
-      <span class="dose-chip ${pr.modo==='planta'?'principal':''}">${fmtNum(conv.dosePlanta,4)} ${un}/planta</span>
-      <span class="dose-chip ${pr.modo==='metro_linear'?'principal':''}">${fmtNum(conv.doseMl,4)} ${un}/m linear</span>
-    </span>
-  </div>`;
-}
-
 function renderDrenchDoses(d, esp) {
   const prods = (d.produtos||[]).map(normalizarProduto);
   if (!prods.length) return '';

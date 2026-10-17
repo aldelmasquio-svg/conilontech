@@ -1713,18 +1713,6 @@ function calcCalagemCaMgImpl(ca1, mg1, ca2, mg2, prnt, profundidade) {
   const fatorProf = profundidade / 20;
   return {nc, fatorProf, ncCorrigida:nc*fatorProf, formulaTxt:`NC = ((${ca2}+${mg2}) − (${ca1.toFixed(2)}+${mg1.toFixed(2)})) × 100 / ${prnt}`, jaCorrigido:false};
 }
-function calcComplementoCaMgImpl(ca, mg) {
-  const out = {};
-  if (ca != null) {
-    const faixa = window.TABELA_COMPLEMENTO.ca.find(f => ca <= f.ate);
-    out.ca = {valor:ca, dose:faixa.dose, nota:faixa.nota};
-  }
-  if (mg != null) {
-    const faixa = window.TABELA_COMPLEMENTO.mg.find(f => mg <= f.ate);
-    out.mg = {valor:mg, dose:faixa.dose, nota:faixa.nota};
-  }
-  return out;
-}
 function sugerirCalcarioImpl(ca, mg) {
   if (ca == null || mg == null) return null;
   const relCaMg = ca / mg;

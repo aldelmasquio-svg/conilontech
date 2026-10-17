@@ -716,19 +716,6 @@ function movimentacoesFiltradas() {
     return dt >= inicio && dt <= fim;
   });
 }
-function pedidosFiltrados() {
-  const faz = fazendaFiltro();
-  const {inicio, fim} = periodoFiltro();
-  return pedidos.filter(p => {
-    const dt = (p.criadoEm||'').slice(0,10);
-    if (dt && (dt < inicio || dt > fim)) return false;
-    if (faz) {
-      const ehDaFaz = (p.itens||[]).some(it => (it.talhoes||[]).some(t => t.fazenda === faz));
-      if (!ehDaFaz) return false;
-    }
-    return true;
-  });
-}
 
 // Mapa de produto → categoria (pra cruzar com movimentações)
 function getCategoriaProduto(produtoId) {
@@ -3193,11 +3180,6 @@ function parseDrEsp(esp) {
   const el = parseFloat(nums[0].replace(',','.')), ep = parseFloat(nums[1].replace(',','.'));
   if (!el || !ep) return null;
   return {el, ep};
-}
-function drDoseHa(p) {
-  const v = parseFloat(String(p.valor??'').replace(',','.'));
-  if (isNaN(v)) return null;
-  return v; // modo 'ha' é o mais comum; planta/metro_linear requerem espacamento
 }
 function drTotalProduto(p, area, esp) {
   const v = parseFloat(String(p.valor??'').replace(',','.'));

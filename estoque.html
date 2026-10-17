@@ -677,7 +677,6 @@ function fmt(n) {
   return Number(n||0).toLocaleString('pt-BR', {minimumFractionDigits:0, maximumFractionDigits:2});
 }
 function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return `${dd}/${m}/${a}`; }
-function formatarDataHora(iso) { if(!iso)return'—'; const d=new Date(iso); return d.toLocaleString('pt-BR'); }
 function sanitizar(s) { return String(s||'').replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
 function toast(msg, dur=3000) {
   const el = document.getElementById('toast');

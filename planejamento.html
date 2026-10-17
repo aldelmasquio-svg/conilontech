@@ -495,27 +495,6 @@ onAuthStateChanged(auth, async (user) => {
   });
 });
 
-// Helper: pega composição efetiva de um produto (local OU catálogo por nome)
-function normNomeAdubo(s) {
-  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]/g,'').trim();
-}
-function composicaoDoProduto(p) {
-  if (!p) return null;
-  if (p.composicao) return p.composicao;
-  // Fallback: busca no catálogo pelo nome normalizado
-  const nomeN = normNomeAdubo(p.nome);
-  const achou = catalogoAdubos.find(a => normNomeAdubo(a.nome) === nomeN);
-  if (achou) {
-    // Constrói objeto composicao limpo
-    const c = {};
-    ['n','p2o5','k2o','s','ca','mg','zn','b','cu','mn'].forEach(k => {
-      if (achou[k]) c[k] = achou[k];
-    });
-    return Object.keys(c).length ? c : null;
-  }
-  return null;
-}
-
 function temAcesso() {
   if (perfilAtual.perfil === 'admin') return true;
   const m = perfilAtual.modulos || {};
@@ -1068,15 +1047,6 @@ function renderModalMes() {
     ${selCount > 0 ? `✅ Adicionar ${selCount} mês${selCount>1?'es':''} selecionado${selCount>1?'s':''}` : 'Selecione os meses acima'}
   </button>`;
   body.innerHTML = html;
-  // Pré-selecionar valores sensatos (Jun ano base → Mar ano+1)
-  const selIniMes = document.getElementById('rangeIniMes');
-  const selIniAno = document.getElementById('rangeIniAno');
-  const selFimMes = document.getElementById('rangeFimMes');
-  const selFimAno = document.getElementById('rangeFimAno');
-  if (selIniMes) selIniMes.value = '6';
-  if (selIniAno) selIniAno.value = String(anoBase);
-  if (selFimMes) selFimMes.value = '3';
-  if (selFimAno) selFimAno.value = String(anoBase + 1);
 }
 
 window.mudarAnoModalMes = function(delta) {
@@ -1110,51 +1080,6 @@ window.adicionarSelecionados = function() {
   fecharModalMes();
   renderNovo();
   toast(`✅ ${count} mês${count>1?'es':''} adicionado${count>1?'s':''}`);
-};
-
-window.adicionarMes = function(mesYM) {
-  const meses = window.planWIP.meses || [];
-  if (meses.find(m => m.mes === mesYM)) {
-    toast('⚠️ Mês já adicionado');
-    return;
-  }
-  // Distribuição vazia, usuário preenche
-  const distribuicao = {};
-  NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
-  meses.push({mes: mesYM, distribuicao, adubos: []});
-  window.planWIP.meses = meses;
-  fecharModalMes();
-  renderNovo();
-  toast(`✅ ${labelMes(mesYM)} adicionado`);
-};
-
-window.adicionarIntervalo = function() {
-  const iniMes = parseInt(document.getElementById('rangeIniMes').value);
-  const iniAno = parseInt(document.getElementById('rangeIniAno').value);
-  const fimMes = parseInt(document.getElementById('rangeFimMes').value);
-  const fimAno = parseInt(document.getElementById('rangeFimAno').value);
-  if (iniAno > fimAno || (iniAno === fimAno && iniMes > fimMes)) {
-    toast('⚠️ Mês inicial deve ser anterior ao final'); return;
-  }
-  const mesesExist = window.planWIP.meses || [];
-  let mes = iniMes, ano = iniAno, adicionados = 0;
-  const maxIter = 36;
-  let iter = 0;
-  while ((ano < fimAno || (ano === fimAno && mes <= fimMes)) && iter < maxIter) {
-    const mesYM = `${ano}-${String(mes).padStart(2,'0')}`;
-    if (!mesesExist.find(m => m.mes === mesYM)) {
-      const distribuicao = {};
-      NUTRIENTES.forEach(n => { distribuicao[n.id] = ''; });
-      mesesExist.push({mes: mesYM, distribuicao, adubos: []});
-      adicionados++;
-    }
-    mes++; if (mes > 12) { mes = 1; ano++; }
-    iter++;
-  }
-  window.planWIP.meses = mesesExist;
-  fecharModalMes();
-  renderNovo();
-  toast(`✅ ${adicionados} mês(es) adicionado(s)`);
 };
 
 window.aplicarTemplate = function(tplId) {
