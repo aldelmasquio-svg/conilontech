@@ -11,6 +11,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema, nivelDoPerfil } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -57,15 +58,8 @@ onAuthStateChanged(auth, async (user) => {
   iniciarListeners();
 });
 
-function nivelAcesso(mod) {
-  const _mods = perfilAtual.modulos || {};
-  if (_mods[mod]) return _mods[mod];
-  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
-  if (perfilAtual.perfil === 'admin') return 'admin';
-  return 'nenhum';
-}
-function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
+function ehAdminSistema(){ return adminDoSistema(perfilAtual); }
 function fazendaPermitida(fazenda){
   if (ehAdminSistema() || !fazenda) return true;
   const permitidas = perfilAtual.fazendasModulo?.clima;
@@ -123,7 +117,6 @@ function estacaoAtual(){ return estacoes.find(e=>e.id===estacaoId)||null; }
 function fusoAtual(){ return estacaoAtual()?.fuso || 'America/Sao_Paulo'; }
 // Data de hoje (YYYY-MM-DD) no fuso da estação — os docs de dia usam o dia local dela.
 function hojeEstacao(){ return new Intl.DateTimeFormat('en-CA',{timeZone:fusoAtual(),year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()); }
-function horaEstacao(d){ return new Intl.DateTimeFormat('pt-BR',{timeZone:fusoAtual(),hour:'2-digit',minute:'2-digit'}).format(d); }
 function somarDias(iso,n){ const d=new Date(iso+'T12:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10); }
 function setorVento(g){ if(g==null) return ''; const S=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']; return S[Math.round(g/22.5)%16]; }
 function tsParaDate(t){ if(!t) return null; if(typeof t.toDate==='function') return t.toDate(); const d=new Date(t); return isNaN(d)?null:d; }

@@ -10,6 +10,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { nivelDoPerfil } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -89,15 +90,7 @@ onAuthStateChanged(auth, async (user) => {
   iniciarListeners();
 });
 
-function nivelAcesso(mod) {
-  const _mods = perfilAtual.modulos || {};
-  if (_mods[mod]) return _mods[mod];
-  // Ferramentas derivadas herdam do módulo-pai quando não definidas explicitamente (retrocompat)
-  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
-  if (perfilAtual.perfil === 'admin') return 'admin';
-  return 'nenhum';
-}
+function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
 function isAdmin() { return nivelAcesso('atividades')==='admin'; }
 function podeEditar() { return ['admin','operador','encarregado'].includes(nivelAcesso('atividades')); }
 

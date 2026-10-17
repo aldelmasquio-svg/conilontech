@@ -12,6 +12,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, query, where, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema, nivelDoPerfil } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -63,15 +64,8 @@ onAuthStateChanged(auth, async (user) => {
   iniciarListeners();
 });
 
-function nivelAcesso(mod) {
-  const _mods = perfilAtual.modulos || {};
-  if (_mods[mod]) return _mods[mod];
-  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
-  if (perfilAtual.perfil === 'admin') return 'admin';
-  return 'nenhum';
-}
-function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
+function ehAdminSistema(){ return adminDoSistema(perfilAtual); }
 function podeGerenciar(){ return ehAdminSistema() || nivelAcesso('amostragem')==='admin'; }
 function podeRegistrar(){ return podeGerenciar() || ['gerente','encarregado','operador'].includes(nivelAcesso('amostragem')); }
 function fazendaPermitida(fazenda){
@@ -125,7 +119,6 @@ function gerarMenu() {
 function hoje(){ return new Date().toISOString().slice(0,10); }
 function formatarData(d){ if(!d) return '—'; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
 function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
-function corFazenda(nome){ const cores=['#2563eb','#16a34a','#d97706','#7c3aed','#dc2626','#0891b2','#db2777','#65a30d']; let h=0; for(const c of String(nome||'')) h=(h*31+c.charCodeAt(0))%cores.length; return cores[h]; }
 function normLatLngs(coords){ return (coords||[]).map(c=>{ if(Array.isArray(c)) return [c[0],c[1]]; if(c.lat!==undefined) return [c.lat,c.lng]; if(c.latitude!==undefined) return [c.latitude,c.longitude]; return c; }); }
 function pontoNoPoligono(lat,lng,coords){
   const pts=normLatLngs(coords); let dentro=false;

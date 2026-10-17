@@ -397,6 +397,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { semAcessoAoModulo } from './acesso.js';
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -500,6 +501,7 @@ onAuthStateChanged(auth, async (user) => {
   const snap = await getDoc(doc(db,'usuarios',user.uid));
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
+  if (semAcessoAoModulo(perfilAtual, 'gestao')) { window.location.href = 'index.html'; return; }
   // perfil admin auto-fill
   if (!perfilAtual.modulos && perfilAtual.perfil==='admin') {
     perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',estoque:'admin',gestao:'admin'};
@@ -714,19 +716,6 @@ function movimentacoesFiltradas() {
     const dt = m.data || m.criadoEm?.slice(0,10);
     if (!dt) return false;
     return dt >= inicio && dt <= fim;
-  });
-}
-function pedidosFiltrados() {
-  const faz = fazendaFiltro();
-  const {inicio, fim} = periodoFiltro();
-  return pedidos.filter(p => {
-    const dt = (p.criadoEm||'').slice(0,10);
-    if (dt && (dt < inicio || dt > fim)) return false;
-    if (faz) {
-      const ehDaFaz = (p.itens||[]).some(it => (it.talhoes||[]).some(t => t.fazenda === faz));
-      if (!ehDaFaz) return false;
-    }
-    return true;
   });
 }
 
@@ -3193,11 +3182,6 @@ function parseDrEsp(esp) {
   const el = parseFloat(nums[0].replace(',','.')), ep = parseFloat(nums[1].replace(',','.'));
   if (!el || !ep) return null;
   return {el, ep};
-}
-function drDoseHa(p) {
-  const v = parseFloat(String(p.valor??'').replace(',','.'));
-  if (isNaN(v)) return null;
-  return v; // modo 'ha' é o mais comum; planta/metro_linear requerem espacamento
 }
 function drTotalProduto(p, area, esp) {
   const v = parseFloat(String(p.valor??'').replace(',','.'));

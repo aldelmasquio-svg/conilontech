@@ -13,6 +13,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, getDocs, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { nivelDoPerfil, semAcessoAoModulo } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -75,6 +76,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
     perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
   }
+  if (semAcessoAoModulo(perfilAtual, 'pulverizacao')) { window.location.href = 'index.html'; return; }
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserEmail').textContent = user.email;
@@ -85,15 +87,7 @@ onAuthStateChanged(auth, async (user) => {
   if (isAdmin()) document.getElementById('btnNovaPulv').style.display = 'flex';
 });
 
-function nivelAcesso(mod) {
-  const _mods = perfilAtual.modulos || {};
-  if (_mods[mod]) return _mods[mod];
-  // Ferramentas derivadas herdam do módulo-pai quando não definidas explicitamente (retrocompat)
-  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
-  if (perfilAtual.perfil === 'admin') return 'admin';
-  return 'nenhum';
-}
+function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
 function isAdmin() { return nivelAcesso('pulverizacao') === 'admin'; }
 function podeConfirmar() { return ['admin','gerente','encarregado','operador'].includes(nivelAcesso('pulverizacao')); }
 
@@ -1065,11 +1059,6 @@ window.confirmarDuplicarPulv = async function() {
   btn.disabled = false; btn.textContent = '📋 Duplicar';
 };
 
-window.confirmarPulv = async function(docId) {
-  // Mantida pra compatibilidade caso algum botão antigo ainda chame, mas agora abre o relatório
-  abrirRelatorioPulv(docId);
-};
-
 // Desfaz só a ÚLTIMA aplicação parcial (estorna estoque dela)
 window.desfazerUltimaParcial = async function(docId) {
   try {
@@ -1239,35 +1228,6 @@ window.addMpPraga = function() {
   inp.value = ''; mpRenderPragas();
 };
 window.remMpPraga = function(i) { window.mpPragasWIP.splice(i,1); mpRenderPragas(); };
-
-window.abrirModalNova = function(dataInicial) {
-  if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }
-  window.pulvEditandoId = null;
-  window.pulvEditandoRealizada = false;
-  window.produtosWIP = [];
-  // Atualizar título e botão do modal
-  document.getElementById('tituloNova').textContent = '💧 Nova Pulverização';
-  document.getElementById('btnSalvarPulv').textContent = '💾 Salvar';
-  document.getElementById('avisoEdicaoRealizada').style.display = 'none';
-  // Resetar campos
-  document.getElementById('fData').value = dataInicial || hoje();
-  document.getElementById('fTalhao').value = '';
-  document.getElementById('fModo').value = '';
-  document.getElementById('fDrone').value = '';
-  document.getElementById('fDroneRow').style.display = 'none';
-  document.getElementById('fParamsDroneBox').style.display = 'none';
-  ['fAlturaVoo','fLarguraFaixa','fVelocidade','fVolumeCalda'].forEach(id => {
-    const el = document.getElementById(id); if (el) el.value = '';
-  });
-  window.pragasWIP = [];
-  renderPragasWIP();
-  document.getElementById('fObs').value = '';
-  // Desbloquear todos os campos (caso tenha sido edição de realizada antes)
-  destravarCamposPulv();
-  renderizarProdutosWIP();
-  atualizarSelectTalhoes();
-  document.getElementById('overlayNova').classList.add('open');
-};
 
 window.abrirEditarPulv = function(docId) {
   if (!isAdmin()) { toast('⛔ Sem permissão.'); return; }

@@ -10,6 +10,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema, nivelDoPerfil } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -55,15 +56,8 @@ onAuthStateChanged(auth, async (user) => {
   iniciarListeners();
 });
 
-function nivelAcesso(mod) {
-  const _mods = perfilAtual.modulos || {};
-  if (_mods[mod]) return _mods[mod];
-  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
-  if (perfilAtual.perfil === 'admin') return 'admin';
-  return 'nenhum';
-}
-function ehAdminSistema(){ return Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil==='admin'; }
+function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
+function ehAdminSistema(){ return adminDoSistema(perfilAtual); }
 function podeGerenciar(){ return ehAdminSistema() || nivelAcesso('calibracao')==='admin'; }
 function podeRegistrar(){ return podeGerenciar() || ['gerente','encarregado','operador'].includes(nivelAcesso('calibracao')); }
 function fazendaPermitida(fazenda){
@@ -118,7 +112,10 @@ function hoje(){ return new Date().toISOString().slice(0,10); }
 function formatarData(d){ if(!d) return '—'; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
 function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
-function num(id){ const el=document.getElementById(id); if(!el) return 0; const v=parseFloat(String(el.value).replace(',','.')); return isNaN(v)?0:v; }
+function num(id){ const el=document.getElementById(id); if(!el) return 0; let s=String(el.value).trim();
+  // ponto de milhar pt-BR ("2.000", "1.234,5"); "1.5" continua decimal. shortcut: "1.250" vira 1250, não 1,25
+  if(/^[1-9]\d{0,2}(\.\d{3})+(,\d*)?$/.test(s)) s=s.replace(/\./g,'');
+  const v=parseFloat(s.replace(',','.')); return isNaN(v)||v<0?0:v; }
 function fmt(n,d){ if(n==null||isNaN(n)||!isFinite(n)) return '—'; return Number(n).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}); }
 // aceita "1:30" (mm:ss), "1:30:00" (hh:mm:ss) ou segundos
 function parseTempo(s){

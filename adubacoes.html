@@ -10,6 +10,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { nivelDoPerfil, semAcessoAoModulo } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -75,6 +76,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
     perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'};
   }
+  if (semAcessoAoModulo(perfilAtual, 'adubacao')) { window.location.href = 'index.html'; return; }
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserEmail').textContent = user.email;
@@ -84,15 +86,7 @@ onAuthStateChanged(auth, async (user) => {
   iniciarListeners();
 });
 
-function nivelAcesso(mod) {
-  const _mods = perfilAtual.modulos || {};
-  if (_mods[mod]) return _mods[mod];
-  // Ferramentas derivadas herdam do módulo-pai quando não definidas explicitamente (retrocompat)
-  const _heranca = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-  if (_heranca[mod] && _mods[_heranca[mod]]) return _mods[_heranca[mod]];
-  if (perfilAtual.perfil === 'admin') return 'admin';
-  return 'nenhum';
-}
+function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
 function isAdmin() { return nivelAcesso('adubacao') === 'admin'; }
 function podeMarcar() { return ['admin','gerente','operador','encarregado'].includes(nivelAcesso('adubacao')); }
 function fazendaPermitida(nomeFazenda) {
@@ -442,25 +436,6 @@ function fmtNum(n){ if(n==null||isNaN(n))return'0'; return (Math.round(n*10)/10)
 function setoresDoTalhao(talhaoId){
   return setoresIrrig.filter(s=>s.talhaoId===talhaoId)
     .sort((a,b)=>String(a.nome||'').localeCompare(String(b.nome||''),'pt',{numeric:true,sensitivity:'base'}));
-}
-function blocoKgPorSetor(dose, unidade, talhaoId){
-  if(!talhaoId) return '';
-  const sets=setoresDoTalhao(talhaoId);
-  const un=(unidade||'kg');
-  if(!sets.length){
-    return `<div class="setor-kg-box vazio">💧 <b>kg por setor:</b> nenhum setor de irrigação cadastrado neste talhão. Cadastre os setores em <b>Irrigação</b> para ver a dose por setor.</div>`;
-  }
-  const d=parseFloat(String(dose).replace(',','.'))||0;
-  const linhas=sets.map(s=>{
-    const a=areaDoSetor(s);
-    return `<div class="setor-kg-linha"><span class="setor-kg-nome">${sanitizar(s.nome)}</span><span class="setor-kg-area">${fmtHa(a)}</span><span class="setor-kg-val">${fmtNum(d*a)} ${un}</span></div>`;
-  }).join('');
-  const areaTot=sets.reduce((x,s)=>x+areaDoSetor(s),0);
-  return `<div class="setor-kg-box">
-    <div class="setor-kg-tit">💧 kg por setor <span class="setor-kg-hint">${fmtNum(d)} ${un}/ha × área</span></div>
-    ${linhas}
-    <div class="setor-kg-linha total"><span class="setor-kg-nome">Total · ${sets.length} setor${sets.length!==1?'es':''}</span><span class="setor-kg-area">${fmtHa(areaTot)}</span><span class="setor-kg-val">${fmtNum(d*areaTot)} ${un}</span></div>
-  </div>`;
 }
 // Quebra consolidada: uma tabela só, setores nas linhas × adubos nas colunas.
 // Evita repetir a lista de setores (e a área) para cada adubo da fertirrigação.
