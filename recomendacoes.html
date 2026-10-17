@@ -6,22 +6,22 @@
 <title>Conilon Tech · Recomendações</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&family=DM+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <style>
 :root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--blue:#3b82f6;--purple:#8b5cf6;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
 
 .loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
-.loading-text{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+.loading-text{font-family:var(--font-display);font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
 
 /* HEADER */
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
 .header-left{display:flex;align-items:center;gap:12px;}
 .header-titles{line-height:1;}
-.header-title-main{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-main{font-family:var(--font-display);font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
 .header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
 .header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
 .btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
@@ -36,25 +36,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
 .menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
 .menu-body{flex:1;padding:10px;overflow-y:auto;}
-.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:var(--font-body);font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
 .menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
 .menu-ico{font-size:1.1rem;}
 .menu-footer{padding:14px;}
-.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:var(--font-display);font-weight:700;font-size:.9rem;cursor:pointer;}
 
 .app-main{display:flex;flex-direction:column;}
 
 /* TABS DE TOPO (Nova | Lista) */
 .tabs-top{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;position:sticky;top:54px;z-index:199;}
-.tab-top{flex:1;padding:13px 8px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;}
+.tab-top{flex:1;padding:13px 8px;border:none;background:none;cursor:pointer;font-family:var(--font-display);font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.04em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;}
 .tab-top.ativa{color:var(--v);border-bottom-color:var(--v);}
 
 /* CABEÇALHO STICKY DA RECOMENDAÇÃO */
 .rec-sticky{background:white;border-bottom:1px solid var(--cb);padding:10px 12px;flex-shrink:0;position:sticky;top:94px;z-index:197;box-shadow:0 2px 6px rgba(0,0,0,.04);}
 .rec-sticky-row{display:flex;gap:7px;flex-wrap:wrap;}
 .rec-sticky-col{flex:1;min-width:120px;}
-.rec-sticky-col label{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.62rem;text-transform:uppercase;color:var(--c);letter-spacing:.04em;margin-bottom:3px;}
-.rec-sticky-col select,.rec-sticky-col input{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:7px 9px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;}
+.rec-sticky-col label{display:block;font-family:var(--font-display);font-weight:700;font-size:.62rem;text-transform:uppercase;color:var(--c);letter-spacing:.04em;margin-bottom:3px;}
+.rec-sticky-col select,.rec-sticky-col input{width:100%;border:1.5px solid var(--cb);border-radius:7px;padding:7px 9px;font-size:.85rem;font-family:var(--font-body);outline:none;background:white;color:var(--ve);font-weight:600;}
 .rec-sticky-col select:focus,.rec-sticky-col input:focus{border-color:var(--v);}
 .rec-hist-prod{font-size:.65rem;color:var(--c);margin-top:3px;font-style:italic;}
 
@@ -74,7 +74,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .card-rec{display:block;width:100%;background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
 .card-rec-head{padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;background:#fafafa;border-bottom:1px solid var(--cl);user-select:none;-webkit-user-select:none;}
 .card-rec.fechado .card-rec-head{border-bottom:none;}
-.card-rec-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
+.card-rec-tit{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);display:flex;align-items:center;gap:8px;flex:1;min-width:0;}
 .card-rec-sub{font-size:.7rem;color:var(--c);font-weight:600;}
 .card-rec-toggle{background:none;border:none;color:var(--c);font-size:1.1rem;cursor:pointer;padding:5px 8px;transition:transform .2s;pointer-events:none;}
 .card-rec.fechado .card-rec-toggle{transform:rotate(-90deg);}
@@ -82,7 +82,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .card-rec.fechado .card-rec-body{display:none !important;}
 
 /* DESTAQUES (resultados) */
-.dose-grande{font-family:'DM Mono',monospace;font-weight:700;font-size:1.6rem;color:var(--ve);line-height:1;}
+.dose-grande{font-family:var(--font-mono);font-weight:700;font-size:1.6rem;color:var(--ve);line-height:1;}
 
 /* AJUSTE DE DOSE (sugerido vs aplicar) */
 .dose-box{background:var(--vb);border:1px solid var(--v);border-radius:8px;padding:11px;margin-bottom:9px;}
@@ -91,13 +91,13 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .dose-col-sug{flex:1;text-align:center;padding:5px 8px;border-right:1px dashed var(--cb);}
 .dose-col-apl{flex:1.2;text-align:center;padding:5px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
 .dose-label{font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;font-weight:700;}
-.dose-sug-val{font-family:'DM Mono',monospace;font-weight:700;font-size:1.5rem;color:var(--c);line-height:1;margin-top:3px;}
-.dose-apl-inp{font-family:'DM Mono',monospace;font-weight:800;font-size:1.6rem;color:var(--ve);text-align:center;border:2px solid var(--v);border-radius:6px;padding:5px 6px;width:100%;max-width:120px;outline:none;background:white;}
+.dose-sug-val{font-family:var(--font-mono);font-weight:700;font-size:1.5rem;color:var(--c);line-height:1;margin-top:3px;}
+.dose-apl-inp{font-family:var(--font-mono);font-weight:800;font-size:1.6rem;color:var(--ve);text-align:center;border:2px solid var(--v);border-radius:6px;padding:5px 6px;width:100%;max-width:120px;outline:none;background:white;}
 .dose-apl-inp:focus{box-shadow:0 0 0 3px var(--vb);}
 .dose-box.ajustada .dose-apl-inp{border-color:#f59e0b;color:#92400e;}
 .dose-un-small{font-size:.7rem;color:var(--c);margin-top:-2px;}
 .tag-ajustada{display:inline-flex;align-items:center;gap:3px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;padding:1px 7px;border-radius:99px;font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;}
-.btn-restaurar{background:none;border:1px dashed var(--cb);color:var(--c);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;padding:3px 8px;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
+.btn-restaurar{background:none;border:1px dashed var(--cb);color:var(--c);font-family:var(--font-display);font-weight:700;font-size:.66rem;padding:3px 8px;border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;}
 .btn-restaurar:hover{background:var(--cl);color:var(--ve);border-style:solid;}
 .dose-unidade{font-size:.75rem;color:var(--c);margin-left:4px;font-weight:600;}
 .dose-zero{color:var(--c);}
@@ -118,25 +118,25 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .params-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;}
 .param-mini{background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:7px 9px;}
 .param-mini-lab{font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.03em;font-weight:700;}
-.param-mini-val{font-family:'DM Mono',monospace;font-weight:700;font-size:.95rem;color:var(--ve);margin-top:2px;}
+.param-mini-val{font-family:var(--font-mono);font-weight:700;font-size:.95rem;color:var(--ve);margin-top:2px;}
 .param-mini-cls{margin-top:3px;}
 
 /* INPUTS DENTRO DOS CARDS */
 .inp-linha{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
-.inp-linha label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.03em;flex:1;min-width:90px;}
-.inp-linha input,.inp-linha select{border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:.85rem;font-family:'DM Mono',monospace;background:white;outline:none;width:80px;text-align:right;}
-.inp-linha select{width:140px;text-align:left;font-family:'Barlow',sans-serif;font-weight:600;}
+.inp-linha label{font-family:var(--font-display);font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.03em;flex:1;min-width:90px;}
+.inp-linha input,.inp-linha select{border:1.5px solid var(--cb);border-radius:6px;padding:6px 9px;font-size:.85rem;font-family:var(--font-mono);background:white;outline:none;width:80px;text-align:right;}
+.inp-linha select{width:140px;text-align:left;font-family:var(--font-body);font-weight:600;}
 .inp-linha input:focus,.inp-linha select:focus{border-color:var(--v);}
-.inp-linha-un{font-size:.7rem;color:var(--c);font-family:'DM Mono',monospace;}
+.inp-linha-un{font-size:.7rem;color:var(--c);font-family:var(--font-mono);}
 
 /* BOTÕES SEGMENTADOS (escolha de método) */
 .seg-btns{display:flex;background:#fafafa;border:1px solid var(--cb);border-radius:7px;padding:3px;gap:3px;margin-bottom:9px;}
-.seg-btn{flex:1;border:none;background:transparent;padding:7px 9px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.78rem;color:var(--c);border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;}
+.seg-btn{flex:1;border:none;background:transparent;padding:7px 9px;font-family:var(--font-display);font-weight:700;font-size:.78rem;color:var(--c);border-radius:5px;cursor:pointer;text-transform:uppercase;letter-spacing:.03em;}
 .seg-btn.ativo{background:var(--v);color:white;box-shadow:0 1px 4px rgba(45,106,45,.3);}
 
 /* FÓRMULAS */
-.formula-box{background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:7px;padding:8px 11px;font-family:'DM Mono',monospace;font-size:.74rem;color:#92400e;line-height:1.55;margin:8px 0;overflow-x:auto;}
-.formula-box strong{font-family:'Barlow Condensed',sans-serif;color:#78350f;}
+.formula-box{background:#fffbeb;border:1px solid #fde68a;border-left:4px solid #f59e0b;border-radius:7px;padding:8px 11px;font-family:var(--font-mono);font-size:.74rem;color:#92400e;line-height:1.55;margin:8px 0;overflow-x:auto;}
+.formula-box strong{font-family:var(--font-display);color:#78350f;}
 
 /* ALERTAS */
 .alerta-tec{background:#fef3c7;border:1px solid #fde68a;border-left:4px solid var(--warn);border-radius:7px;padding:8px 11px;font-size:.78rem;color:#92400e;line-height:1.45;margin-top:8px;}
@@ -151,30 +151,30 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .eq-linha.ok{border-left-color:var(--ok);background:#f0fdf4;}
 .eq-linha.warn{border-left-color:var(--warn);background:#fffbeb;}
 .eq-linha.err{border-left-color:var(--danger);background:#fef2f2;}
-.eq-linha-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);margin-bottom:4px;}
+.eq-linha-tit{font-family:var(--font-display);font-weight:800;font-size:.85rem;color:var(--ve);margin-bottom:4px;}
 .eq-linha-vals{display:flex;flex-wrap:wrap;gap:9px;font-size:.7rem;}
 .eq-linha-vals > div{display:flex;flex-direction:column;align-items:flex-start;gap:0;}
-.eq-lab{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;}
-.eq-val{font-family:'DM Mono',monospace;font-weight:700;font-size:.82rem;color:var(--ve);}
+.eq-lab{font-family:var(--font-display);font-weight:700;font-size:.62rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;}
+.eq-val{font-family:var(--font-mono);font-weight:700;font-size:.82rem;color:var(--ve);}
 .eq-val.ok{color:var(--ok);}
 .eq-val.def{color:var(--danger);}
 
 .prod-sug-box{background:white;border:1px solid var(--cl);border-radius:8px;padding:9px 11px;margin-bottom:5px;}
 .prod-sug-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-.prod-sug-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;}
-.prod-sug-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.88rem;color:var(--ve);margin-top:2px;}
-.prod-sug-formula{font-family:'DM Mono',monospace;font-size:.62rem;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;display:inline-block;margin-left:4px;}
-.prod-sug-dose{font-family:'DM Mono',monospace;font-weight:800;font-size:1.4rem;color:var(--ve);line-height:1;}
+.prod-sug-tit{font-family:var(--font-display);font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;}
+.prod-sug-nome{font-family:var(--font-display);font-weight:800;font-size:.88rem;color:var(--ve);margin-top:2px;}
+.prod-sug-formula{font-family:var(--font-mono);font-size:.62rem;background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;display:inline-block;margin-left:4px;}
+.prod-sug-dose{font-family:var(--font-mono);font-weight:800;font-size:1.4rem;color:var(--ve);line-height:1;}
 .prod-sug-un{font-size:.66rem;color:var(--c);}
-.prod-sug-detail{margin-top:6px;font-size:.7rem;color:var(--c);line-height:1.5;font-family:'DM Mono',monospace;}
+.prod-sug-detail{margin-top:6px;font-size:.7rem;color:var(--c);line-height:1.5;font-family:var(--font-mono);}
 
 .inp-linha-mini{display:flex;flex-direction:column;}
-.inp-linha-mini label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}
-.inp-linha-mini input, .inp-linha-mini select{border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;font-family:'DM Mono',monospace;font-weight:700;font-size:.82rem;color:var(--ve);outline:none;background:white;width:100%;}
+.inp-linha-mini label{font-family:var(--font-display);font-weight:700;font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}
+.inp-linha-mini input, .inp-linha-mini select{border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;font-family:var(--font-mono);font-weight:700;font-size:.82rem;color:var(--ve);outline:none;background:white;width:100%;}
 .inp-linha-mini input:focus, .inp-linha-mini select:focus{border-color:var(--v);}
-.sel-fonte{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-family:'Barlow',sans-serif;font-size:.78rem;color:var(--ve);outline:none;background:white;font-weight:600;}
+.sel-fonte{width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-family:var(--font-body);font-size:.78rem;color:var(--ve);outline:none;background:white;font-weight:600;}
 .sel-fonte:focus{border-color:var(--v);box-shadow:0 0 0 2px var(--vb);}
-.btn-calcular{width:100%;margin-top:10px;background:var(--v);color:white;border:none;border-radius:var(--rs);padding:13px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.95rem;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
+.btn-calcular{width:100%;margin-top:10px;background:var(--v);color:white;border:none;border-radius:var(--rs);padding:13px;font-family:var(--font-display);font-weight:800;font-size:.95rem;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;}
 .btn-calcular:active{transform:scale(.98);background:var(--ve);}
 
 /* FONTE DE INFORMAÇÃO */
@@ -184,10 +184,10 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .rec-rodape{background:white;border-top:2px solid var(--v);padding:9px 12px;flex-shrink:0;display:none;flex-direction:column;gap:7px;box-shadow:0 -3px 10px rgba(0,0,0,.08);}
 .rec-rodape.visivel{display:flex;}
 .rec-rodape-resumo{display:flex;gap:6px;flex-wrap:wrap;font-size:.7rem;}
-.rec-rodape-item{background:var(--vb);border:1px solid var(--v);border-radius:99px;padding:3px 9px;color:var(--ve);font-family:'DM Mono',monospace;font-weight:700;font-size:.7rem;}
+.rec-rodape-item{background:var(--vb);border:1px solid var(--v);border-radius:99px;padding:3px 9px;color:var(--ve);font-family:var(--font-mono);font-weight:700;font-size:.7rem;}
 .rec-rodape-item.zero{background:var(--cl);border-color:var(--cb);color:var(--c);}
 .rec-rodape-acoes{display:flex;gap:6px;}
-.rec-rodape-acoes button{flex:1;border:none;border-radius:7px;padding:9px 8px;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.82rem;cursor:pointer;letter-spacing:.03em;text-transform:uppercase;}
+.rec-rodape-acoes button{flex:1;border:none;border-radius:7px;padding:9px 8px;font-family:var(--font-display);font-weight:800;font-size:.82rem;cursor:pointer;letter-spacing:.03em;text-transform:uppercase;}
 .btn-salvar{background:var(--v);color:white;}
 .btn-salvar:active{transform:scale(.97);}
 .btn-copiar{background:#fafafa;color:var(--c);border:1px solid var(--cb);}
@@ -196,7 +196,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 /* LISTA DE RECOMENDAÇÕES SALVAS */
 .busca-salvas-wrap{display:flex;align-items:center;gap:8px;background:white;border:1.5px solid var(--cb);border-radius:var(--rad);box-shadow:var(--s);padding:9px 12px;margin-bottom:12px;position:sticky;top:0;z-index:5;}
 .busca-salvas-ico{font-size:.95rem;flex-shrink:0;opacity:.7;}
-.busca-salvas-input{flex:1;min-width:0;border:none;outline:none;font-size:.9rem;font-family:'Barlow',sans-serif;background:transparent;color:var(--t);}
+.busca-salvas-input{flex:1;min-width:0;border:none;outline:none;font-size:.9rem;font-family:var(--font-body);background:transparent;color:var(--t);}
 .busca-salvas-limpar{background:var(--cl);border:none;color:var(--c);width:26px;height:26px;border-radius:50%;font-size:.8rem;cursor:pointer;flex-shrink:0;}
 #listaSalvasItens > *{margin-bottom:10px;}
 #listaSalvasItens > *:last-child{margin-bottom:0;}
@@ -206,7 +206,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .rec-card-status-aplicada{border-left-color:var(--ok);}
 .rec-card-status-cancelada{border-left-color:var(--danger);opacity:.7;}
 .rec-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-.rec-card-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.98rem;color:var(--ve);}
+.rec-card-tit{font-family:var(--font-display);font-weight:800;font-size:.98rem;color:var(--ve);}
 .rec-card-meta{font-size:.72rem;color:var(--c);margin-top:2px;line-height:1.4;}
 .rec-status-badge{font-size:.62rem;padding:2px 9px;border-radius:99px;color:white;font-weight:700;letter-spacing:.02em;text-transform:uppercase;flex-shrink:0;}
 .rec-status-rascunho{background:var(--c);}
@@ -214,9 +214,9 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .rec-status-aplicada{background:var(--ok);}
 .rec-status-cancelada{background:var(--danger);}
 .rec-card-doses{display:flex;gap:5px;flex-wrap:wrap;margin-top:8px;}
-.rec-card-dose{font-family:'DM Mono',monospace;font-size:.7rem;background:var(--vb);color:var(--ve);padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid var(--v);}
+.rec-card-dose{font-family:var(--font-mono);font-size:.7rem;background:var(--vb);color:var(--ve);padding:2px 7px;border-radius:99px;font-weight:700;border:1px solid var(--v);}
 .rec-card-acoes{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap;}
-.btn-acao{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 10px;font-size:.72rem;color:var(--c);cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;letter-spacing:.02em;text-transform:uppercase;}
+.btn-acao{background:none;border:1.5px solid var(--cb);border-radius:6px;padding:6px 10px;font-size:.72rem;color:var(--c);cursor:pointer;font-family:var(--font-display);font-weight:700;letter-spacing:.02em;text-transform:uppercase;}
 .btn-acao.primary{background:var(--v);border-color:var(--v);color:white;}
 .btn-acao.danger{border-color:#fca5a5;color:var(--danger);}
 
@@ -234,7 +234,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);min-hei
 .overlay-rec.aberto{display:flex;}
 .modal-rec{background:white;border-radius:16px 16px 0 0;width:100%;max-width:720px;max-height:calc(100dvh - 30px);display:flex;flex-direction:column;box-shadow:var(--sf);overflow:hidden;}
 .modal-rec-head{padding:14px 16px;border-bottom:1px solid var(--cb);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;background:var(--ve);color:white;}
-.modal-rec-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;}
+.modal-rec-titulo{font-family:var(--font-display);font-weight:800;font-size:1.1rem;}
 .modal-rec-fechar{background:rgba(255,255,255,.12);border:none;color:white;font-size:1.2rem;width:34px;height:34px;border-radius:7px;cursor:pointer;}
 .modal-rec-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 16px;}
 
@@ -532,7 +532,7 @@ onAuthStateChanged(auth, async (user) => {
     perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin'};
   }
   if (!temAcesso()) {
-    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:3rem;">⛔</div><div style="font-family:Barlow Condensed,sans-serif;font-weight:700;font-size:1.1rem;color:var(--c);margin-top:10px;">Sem permissão</div><a href="index.html" style="display:inline-block;margin-top:14px;color:var(--v);">← Voltar</a></div>';
+    document.getElementById('loadingScreen').innerHTML = '<div style="text-align:center;padding:30px;"><div style="font-size:3rem;">⛔</div><div style="font-family:var(--font-display);font-weight:700;font-size:1.1rem;color:var(--c);margin-top:10px;">Sem permissão</div><a href="index.html" style="display:inline-block;margin-top:14px;color:var(--v);">← Voltar</a></div>';
     return;
   }
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
@@ -800,7 +800,7 @@ window.renderRecomendacao = function() {
         <button class="card-rec-toggle" type="button">▼</button>
       </div>
       <div class="card-rec-body">
-        <textarea id="recObs" oninput="window.recWIP.observacoes=this.value" placeholder="Anotações técnicas, condições de campo, ressalvas..." style="width:100%;min-height:60px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:'Barlow',sans-serif;font-size:.85rem;resize:vertical;outline:none;">${escHtml(window.recWIP.observacoes||'')}</textarea>
+        <textarea id="recObs" oninput="window.recWIP.observacoes=this.value" placeholder="Anotações técnicas, condições de campo, ressalvas..." style="width:100%;min-height:60px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:var(--font-body);font-size:.85rem;resize:vertical;outline:none;">${escHtml(window.recWIP.observacoes||'')}</textarea>
       </div>
     </div>`;
     cont.innerHTML = html;
@@ -841,7 +841,7 @@ window.renderRecomendacao = function() {
       <button class="card-rec-toggle" type="button">▼</button>
     </div>
     <div class="card-rec-body">
-      <textarea id="recObs" oninput="window.recWIP.observacoes=this.value" placeholder="Anotações técnicas, condições de campo, ressalvas..." style="width:100%;min-height:60px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:'Barlow',sans-serif;font-size:.85rem;resize:vertical;outline:none;">${escHtml(window.recWIP.observacoes||'')}</textarea>
+      <textarea id="recObs" oninput="window.recWIP.observacoes=this.value" placeholder="Anotações técnicas, condições de campo, ressalvas..." style="width:100%;min-height:60px;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:var(--font-body);font-size:.85rem;resize:vertical;outline:none;">${escHtml(window.recWIP.observacoes||'')}</textarea>
     </div>
   </div>`;
   cont.innerHTML = html;
@@ -1067,7 +1067,7 @@ function renderPainelEquilibrio(params, w) {
   const optsCa = fontesCa.map(p => `<option value="${escAttr(p._docId)}" ${w.eqProdutoCaId===p._docId?'selected':''}>${escHtml(p.nome)}</option>`).join('');
   const inputsBase = `
     <div style="background:#fafafa;border-radius:7px;padding:10px;margin-top:9px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.78rem;color:var(--ve);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">⚙️ Metas e profundidade</div>
+      <div style="font-family:var(--font-display);font-weight:800;font-size:.78rem;color:var(--ve);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;">⚙️ Metas e profundidade</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(95px,1fr));gap:6px;margin-bottom:8px;">
         <div class="inp-linha-mini"><label>Ca (%CTC)</label><input type="text" inputmode="decimal" id="inpEqCa" value="${w.eqCaPct||60}"></div>
         <div class="inp-linha-mini"><label>Mg (%CTC)</label><input type="text" inputmode="decimal" id="inpEqMg" value="${w.eqMgPct||15}"></div>
@@ -1240,7 +1240,7 @@ function renderSugestaoProdutos(sug, produtos, w, res) {
     return `<div class="alerta-info" style="margin-top:9px;background:#dcfce7;border-color:#86efac;color:#15803d;border-left-color:#22c55e;">✓ Sem necessidade de correção de bases. Solo equilibrado.</div>`;
   }
   return `<div style="margin-top:9px;">
-    <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.78rem;color:var(--ve);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;">🛒 Produtos sugeridos</div>
+    <div style="font-family:var(--font-display);font-weight:800;font-size:.78rem;color:var(--ve);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;">🛒 Produtos sugeridos</div>
     ${blocos.join('')}
   </div>`;
 }
@@ -1346,7 +1346,7 @@ window.setManualK = function(v){ window.recWIP.manualK = (v === '' || v == null)
 function renderCardNiveisManuais(){
   const p = window.recWIP.manualP || '';
   const k = window.recWIP.manualK == null ? '' : String(window.recWIP.manualK);
-  const selCss = 'border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:\'Barlow\',sans-serif;font-size:.85rem;outline:none;background:white;min-width:150px;';
+  const selCss = 'border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-family:var(--font-body);font-size:.85rem;outline:none;background:white;min-width:150px;';
   const opt = (val, cur, txt) => `<option value="${val}" ${String(cur)===String(val)?'selected':''}>${txt}</option>`;
   return `<div class="card-rec" id="cardNiveis">
     <div class="card-rec-head" onclick="toggleCard('niveis')">
@@ -1571,17 +1571,17 @@ function renderCardMicros(params) {
     return `<div style="background:#fafafa;border-radius:8px;border:1px solid var(--cl);margin-bottom:7px;overflow:hidden;${foiAjustado?'border-color:#f59e0b;background:#fffbeb;':''}">
       <div style="padding:8px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
         <div style="flex:1;min-width:0;">
-          <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.88rem;color:var(--ve);">${escHtml(m.nome)}</div>
+          <div style="font-family:var(--font-display);font-weight:700;font-size:.88rem;color:var(--ve);">${escHtml(m.nome)}</div>
           <div style="font-size:.7rem;color:var(--c);">${fmt(m.valor, m.valor < 1 ? 2 : 1)} ${escHtml(m.un)} · <span class="cls-tag cls-${cls}">${labelCls}</span></div>
         </div>
         <div style="display:flex;align-items:center;gap:7px;">
           <div style="text-align:right;">
             <div style="font-size:.58rem;color:var(--c);text-transform:uppercase;font-weight:700;line-height:1;">Sugerido</div>
-            <div style="font-family:'DM Mono',monospace;font-weight:700;font-size:1.1rem;color:var(--c);line-height:1.2;">${m.dose}</div>
+            <div style="font-family:var(--font-mono);font-weight:700;font-size:1.1rem;color:var(--c);line-height:1.2;">${m.dose}</div>
           </div>
           <div style="text-align:right;">
             <div style="font-size:.58rem;color:var(--ve);text-transform:uppercase;font-weight:700;line-height:1;">Aplicar</div>
-            <input type="text" inputmode="decimal" value="${fmt(aplicar,0)}" oninput="setAjuste('${k}', this.value, ${m.dose})" style="font-family:'DM Mono',monospace;font-weight:800;font-size:1.1rem;color:var(--ve);text-align:center;border:1.5px solid var(--v);border-radius:5px;padding:3px 4px;width:54px;outline:none;background:white;${foiAjustado?'border-color:#f59e0b;color:#92400e;':''}">
+            <input type="text" inputmode="decimal" value="${fmt(aplicar,0)}" oninput="setAjuste('${k}', this.value, ${m.dose})" style="font-family:var(--font-mono);font-weight:800;font-size:1.1rem;color:var(--ve);text-align:center;border:1.5px solid var(--v);border-radius:5px;padding:3px 4px;width:54px;outline:none;background:white;${foiAjustado?'border-color:#f59e0b;color:#92400e;':''}">
           </div>
           <span class="dose-unidade" style="font-size:.66rem;">kg/ha</span>
         </div>
@@ -2230,8 +2230,8 @@ window.verRecomendacao = function(id) {
     const foiAjust = (valSug !== null && valSug !== undefined && Number(val) !== Number(valSug));
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--cl);gap:8px;">
       <span style="flex:1;">${lab}</span>
-      ${foiAjust ? `<span style="font-family:'DM Mono',monospace;font-size:.78rem;color:var(--c);text-decoration:line-through;">${valSug}</span>` : ''}
-      <span style="font-family:'DM Mono',monospace;font-weight:700;color:${foiAjust?'#92400e':'var(--ve)'};">${val}</span>
+      ${foiAjust ? `<span style="font-family:var(--font-mono);font-size:.78rem;color:var(--c);text-decoration:line-through;">${valSug}</span>` : ''}
+      <span style="font-family:var(--font-mono);font-weight:700;color:${foiAjust?'#92400e':'var(--ve)'};">${val}</span>
       ${foiAjust ? `<span class="tag-ajustada">✏️</span>` : ''}
     </div>`;
   };
@@ -2251,7 +2251,7 @@ window.verRecomendacao = function(id) {
       <div><strong>Status:</strong> <span class="rec-status-badge rec-status-${r.status||'rascunho'}">${(r.status||'rascunho').toUpperCase()}</span></div>
     </div>
     <div style="background:white;padding:11px;border-radius:8px;border:1px solid var(--cl);margin-bottom:11px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);margin-bottom:8px;font-size:.95rem;">ADUBAÇÃO (kg/ha/ano)</div>
+      <div style="font-family:var(--font-display);font-weight:800;color:var(--ve);margin-bottom:8px;font-size:.95rem;">ADUBAÇÃO (kg/ha/ano)</div>
       ${linhaNut('Nitrogênio (N)', r.n_sugerido ?? r.n, r.n)}
       ${linhaNut('Fósforo (P₂O₅)', r.p2o5_sugerido ?? r.p2o5, r.p2o5)}
       ${linhaNut('Potássio (K₂O)', r.k2o_sugerido ?? r.k2o, r.k2o)}
@@ -2259,7 +2259,7 @@ window.verRecomendacao = function(id) {
       <div style="font-size:.66rem;color:var(--c);margin-top:6px;font-style:italic;">✏️ = valor ajustado manualmente (riscado = sugerido pela tabela)</div>
     </div>
     <div style="background:white;padding:11px;border-radius:8px;border:1px solid var(--cl);margin-bottom:11px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--ve);margin-bottom:8px;font-size:.95rem;">CORREÇÃO DO SOLO</div>
+      <div style="font-family:var(--font-display);font-weight:800;color:var(--ve);margin-bottom:8px;font-size:.95rem;">CORREÇÃO DO SOLO</div>
       ${calagemTxt}
     </div>
     ${r.observacoes ? `<div style="background:#fffbeb;padding:10px;border-radius:8px;border:1px solid #fde68a;font-size:.82rem;line-height:1.5;"><strong>Observações:</strong><br>${escHtml(r.observacoes)}</div>` : ''}
@@ -2300,8 +2300,8 @@ function renderCalagemTxt(c) {
   const foiAjust = Number(c.dose) !== Number(sug);
   return `<div style="font-size:.82rem;line-height:1.6;">
     <strong>Calcário:</strong>
-    ${foiAjust ? `<span style="font-family:'DM Mono',monospace;color:var(--c);text-decoration:line-through;margin-right:6px;">${fmt(sug,0)}</span>` : ''}
-    <span style="font-family:'DM Mono',monospace;font-weight:700;color:${foiAjust?'#92400e':'var(--ve)'};">${fmt(c.dose,0)} kg/ha</span>
+    ${foiAjust ? `<span style="font-family:var(--font-mono);color:var(--c);text-decoration:line-through;margin-right:6px;">${fmt(sug,0)}</span>` : ''}
+    <span style="font-family:var(--font-mono);font-weight:700;color:${foiAjust?'#92400e':'var(--ve)'};">${fmt(c.dose,0)} kg/ha</span>
     ${foiAjust ? `<span class="tag-ajustada" style="margin-left:5px;">✏️ Ajustado</span>` : ''}
     ${c.tipo ? ` (${c.tipo === 'dolomitico' ? 'dolomítico' : c.tipo === 'calcitico' ? 'calcítico' : 'magnesiano'})` : ''}<br>
     <span style="font-size:.72rem;color:var(--c);">Método: ${c.metodo === 'v' ? `V% (V₂=${c.v2})` : `Ca+Mg (Ca=${c.ca2}, Mg=${c.mg2})`} · PRNT ${c.prnt}% · ${c.profundidade}cm</span>
@@ -2413,33 +2413,33 @@ function renderTabelasAdmin() {
       ℹ️ Estas tabelas servem de base pros cálculos. Por enquanto, edição direta dos valores é <strong>read-only</strong> (mostra os defaults). Em uma próxima entrega vou habilitar a edição. Pra mudar agora, fale comigo.
     </div>
     <div style="margin-top:14px;">
-      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 1 — Nitrogênio + Potássio</h3>
-      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+      <h3 style="font-family:var(--font-display);color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 1 — Nitrogênio + Potássio</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:var(--font-mono);">
         ${window.TABELA_N_K.map(r => `<div>${r.prodMin}-${r.prodMax===9999?'+':r.prodMax} sc/ha → N: ${r.n}, K: [${r.k.join(', ')}]</div>`).join('')}
       </div>
     </div>
     <div style="margin-top:14px;">
-      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 2 — Fósforo</h3>
-      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+      <h3 style="font-family:var(--font-display);color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 2 — Fósforo</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:var(--font-mono);">
         ${window.TABELA_P.map(r => `<div>${r.prodMin}-${r.prodMax===9999?'+':r.prodMax} sc/ha → dose: [${r.dose.join(', ')}]</div>`).join('')}
       </div>
     </div>
     <div style="margin-top:14px;">
-      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 3 — Micronutrientes</h3>
-      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+      <h3 style="font-family:var(--font-display);color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 3 — Micronutrientes</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:var(--font-mono);">
         ${Object.entries(window.TABELA_MICROS).map(([k,m]) => `<div>${m.nome}: ${m.faixas.map(f=>`≤${f.ate}→${f.dose}`).join(' · ')}</div>`).join('')}
       </div>
     </div>
     <div style="margin-top:14px;">
-      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 4 — Complemento Ca/Mg</h3>
-      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+      <h3 style="font-family:var(--font-display);color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Tabela 4 — Complemento Ca/Mg</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:var(--font-mono);">
         <div><strong>Ca:</strong> ${window.TABELA_COMPLEMENTO.ca.map(f=>`≤${f.ate}→${f.dose}kg`).join(' · ')}</div>
         <div><strong>Mg:</strong> ${window.TABELA_COMPLEMENTO.mg.map(f=>`≤${f.ate}→${f.dose}kg`).join(' · ')}</div>
       </div>
     </div>
     <div style="margin-top:14px;">
-      <h3 style="font-family:'Barlow Condensed',sans-serif;color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Metas de calagem</h3>
-      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:'DM Mono',monospace;">
+      <h3 style="font-family:var(--font-display);color:var(--ve);font-size:1.05rem;margin-bottom:8px;">📊 Metas de calagem</h3>
+      <div style="background:#fafafa;border:1px solid var(--cl);border-radius:7px;padding:10px;font-size:.78rem;line-height:1.6;font-family:var(--font-mono);">
         ${Object.entries(window.METAS_CALAGEM).map(([k,m]) => `<div><strong>${m.nome}</strong>: V₂=${m.v2}%, Ca₂=${m.ca2}, Mg₂=${m.mg2}</div>`).join('')}
       </div>
     </div>

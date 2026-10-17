@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ConilonTech · Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script type="module">
@@ -332,8 +332,8 @@ function atualizarProducaoSafra() {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display:false }, tooltip: { callbacks: { label: c => c.parsed.y.toLocaleString('pt-BR')+' sacas' } } },
       scales: {
-        y: { beginAtZero:true, ticks:{ font:{size:10, family:'Barlow'}, color:'#5a6b48' }, grid:{ color:'#f0ece3' } },
-        x: { ticks:{ font:{size:10, family:'Barlow'}, color:'#5a6b48' }, grid:{ display:false } }
+        y: { beginAtZero:true, ticks:{ font:{size:10, family:'Inter'}, color:'#5a6b48' }, grid:{ color:'#f0ece3' } },
+        x: { ticks:{ font:{size:10, family:'Inter'}, color:'#5a6b48' }, grid:{ display:false } }
       }
     }
   });
@@ -394,7 +394,7 @@ function atualizarGraficoStatus() {
     },
     options: {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Barlow', size: 11 }, padding: 12, boxWidth: 10 } } },
+      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Inter', size: 11 }, padding: 12, boxWidth: 10 } } },
       cutout: '65%'
     }
   });
@@ -547,13 +547,13 @@ window.fazerLogout = async function() { await signOut(auth); window.location.hre
 <style>
 :root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
 .loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 /* HEADER */
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
-.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-logo{font-family:var(--font-display);font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
 .hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
 .btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -563,15 +563,15 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
 .menu-lateral.aberto{transform:translateX(0);}
 .menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
-.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-app-nome{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:white;}
 .menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
 .menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
 #menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
-.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:var(--font-body);font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;text-decoration:none;}
 .menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
 .menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
 .menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
-.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:var(--font-display);font-weight:700;font-size:.9rem;cursor:pointer;}
 /* CONTEÚDO */
 .app-main{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch;}
 @media(min-width:600px){.app-main{max-width:580px;margin:0 auto;width:100%;}}
@@ -580,49 +580,49 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .atalho-btn{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:5px;text-decoration:none;color:var(--t);transition:.15s;}
 .atalho-btn:active{transform:scale(.97);}
 .atalho-ico{font-size:20px;}
-.atalho-label{font-size:.62rem;font-weight:700;text-align:center;color:var(--ve);font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.03em;}
+.atalho-label{font-size:.62rem;font-weight:700;text-align:center;color:var(--ve);font-family:var(--font-display);text-transform:uppercase;letter-spacing:.03em;}
 /* KPIs — faixa única e compacta */
 .stats-strip{background:white;border-radius:var(--rad);box-shadow:var(--s);display:flex;align-items:stretch;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 .stat-mini{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 10px;gap:2px;min-width:58px;cursor:pointer;}
-.stat-mini-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
+.stat-mini-val{font-family:var(--font-display);font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
 .stat-mini.alerta .stat-mini-val{color:#d97706;}
 .stat-mini-lbl{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.02em;text-align:center;white-space:nowrap;margin-top:2px;}
 .stat-sep{width:1px;flex-shrink:0;background:var(--cl);margin:10px 0;}
 /* SEÇÕES */
-.sec-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
+.sec-title{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
 .sec-link{font-size:.72rem;color:var(--v);font-weight:600;text-decoration:none;}
 .sec-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;margin-bottom:16px;}
 .sec-sub{font-size:.68rem;color:var(--c);padding:0 14px;margin-top:-4px;margin-bottom:8px;line-height:1.4;}
 /* GAUGE */
 .gauge-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px 0 10px;margin-bottom:16px;}
 .gauge-hdr-row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:4px;padding:0 16px;}
-.gauge-hdr{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
+.gauge-hdr{font-family:var(--font-display);font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
 .gauge-sub{font-size:.7rem;color:var(--c);padding:0 16px;}
 /* Anéis de adubação por fazenda (linha rolável) */
 .faz-gauge-scroll{display:flex;gap:16px;overflow-x:auto;padding:12px 16px 4px;-webkit-overflow-scrolling:touch;}
 .faz-gauge-item{display:flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;flex-shrink:0;}
 .faz-gauge-ring{width:54px;height:54px;border-radius:50%;background:conic-gradient(var(--cor) calc(var(--p)*1%), var(--cl) 0);display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0;}
 .faz-gauge-ring::before{content:'';position:absolute;width:40px;height:40px;border-radius:50%;background:white;}
-.faz-gauge-val{position:relative;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.72rem;color:var(--ve);}
+.faz-gauge-val{position:relative;font-family:var(--font-display);font-weight:800;font-size:.72rem;color:var(--ve);}
 .faz-gauge-lbl{font-size:.6rem;font-weight:700;color:var(--c);text-align:center;max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* RANKING POR FAZENDA (barras horizontais) */
 .rank-bar-row{display:flex;align-items:center;gap:8px;padding:9px 14px;}
 .rank-bar-lbl{font-size:.75rem;font-weight:700;color:var(--ve);width:88px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .rank-bar-track{flex:1;height:16px;background:var(--cl);border-radius:8px;overflow:hidden;}
 .rank-bar-fill{height:100%;background:linear-gradient(90deg,#1a5c1a,#4a9d4a);border-radius:8px;transition:width .4s;}
-.rank-bar-val{font-family:'DM Mono',monospace;font-size:.72rem;font-weight:700;color:var(--v);width:56px;text-align:right;flex-shrink:0;}
+.rank-bar-val{font-family:var(--font-mono);font-size:.72rem;font-weight:700;color:var(--v);width:56px;text-align:right;flex-shrink:0;}
 /* HEATMAP ADUBAÇÃO (fazenda x mês) */
 .heatmap-scroll{overflow-x:auto;padding:14px;-webkit-overflow-scrolling:touch;}
 .heatmap-tbl{border-collapse:separate;border-spacing:5px;width:100%;}
 .heatmap-tbl th{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding-bottom:2px;}
 .heatmap-faz{font-size:.76rem;font-weight:700;color:var(--ve);white-space:nowrap;padding-right:8px;text-align:left;}
-.heatmap-cel{display:flex;align-items:center;justify-content:center;min-width:42px;height:32px;border-radius:6px;font-family:'DM Mono',monospace;font-size:.68rem;font-weight:700;}
+.heatmap-cel{display:flex;align-items:center;justify-content:center;min-width:42px;height:32px;border-radius:6px;font-family:var(--font-mono);font-size:.68rem;font-weight:700;}
 /* PRODUÇÃO / GRÁFICO ÁREA */
 .prod-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
 .prod-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-.prod-hdr-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
+.prod-hdr-tit{font-family:var(--font-display);font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
 .prod-kpis{display:flex;gap:18px;margin-bottom:10px;flex-wrap:wrap;}
-.prod-kpi-val{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;}
+.prod-kpi-val{font-family:var(--font-display);font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;}
 .prod-kpi-lbl{font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
 .trend-badge{display:none;align-items:center;font-size:.7rem;font-weight:700;border-radius:20px;padding:3px 9px;}
 .trend-up{background:#dcfce7;color:#16a34a;}
@@ -757,7 +757,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
           <span class="trend-badge" id="prodTrend"></span>
         </div>
         <div id="safraBarDash" style="margin-bottom:10px;align-items:center;gap:8px;display:flex;">
-          <select id="selSafra" onchange="atualizarProducaoSafra()" style="flex:1;border:1.5px solid var(--cb);border-radius:7px;padding:6px 9px;font-size:.82rem;font-family:'Barlow',sans-serif;outline:none;background:white;color:var(--ve);font-weight:600;"></select>
+          <select id="selSafra" onchange="atualizarProducaoSafra()" style="flex:1;border:1.5px solid var(--cb);border-radius:7px;padding:6px 9px;font-size:.82rem;font-family:var(--font-body);outline:none;background:white;color:var(--ve);font-weight:600;"></select>
         </div>
         <div class="prod-kpis">
           <div><div class="prod-kpi-val" id="kpiProdTotal">—</div><div class="prod-kpi-lbl">Sacas totais <span id="lblSafraSel"></span></div></div>
