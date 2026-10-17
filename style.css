@@ -99,7 +99,12 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
   border-radius: 999px;
   padding: 5px 12px;
 }
+.hdr-user, .header-user { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px; flex-shrink: 1; }
 .hdr-user:empty { display: none; }
+.hdr-sub, .header-title-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hdr-logo, .header-left { min-width: 0; }
+.hdr-logo > div, .header-titles { min-width: 0; overflow: hidden; }
+@media (max-width: 420px) { .hdr-user, .header-user { max-width: 104px; } }
 .btn-menu {
   background: transparent !important;
   color: var(--t) !important;
