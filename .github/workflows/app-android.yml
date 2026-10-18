@@ -39,15 +39,23 @@ jobs:
       - name: Chave de assinatura (se configurada)
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         if: env.KS != ''
         run: |
-          echo "$KS" | base64 -d > "$RUNNER_TEMP/conilon.jks"
+          printf '%s' "$KS" | tr -d ' \r\n' | base64 -d > "$RUNNER_TEMP/conilon.jks"
+          # Tira espaços/quebras (inclusive o espaço invisível U+00A0) que vêm junto ao colar o secret
+          SENHA=$(printf '%s' "$PW" | sed -e 's/\xc2\xa0//g' | tr -d ' \t\r\n')
+          echo "::add-mask::$SENHA"
+          if ! keytool -list -keystore "$RUNNER_TEMP/conilon.jks" -storepass "$SENHA" -alias conilon >/dev/null 2>&1; then
+            NAOASCII=$(printf '%s' "$SENHA" | LC_ALL=C grep -c '[^ -~]' || true)
+            echo "::error::A senha do secret ANDROID_KEYSTORE_PASSWORD não abre a chave (${#SENHA} caracteres; com caractere fora do padrão: $([ "$NAOASCII" != 0 ] && echo sim || echo não)). Cole de novo só a senha do LEIA-ME.txt."
+            exit 1
+          fi
           echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/conilon.jks" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE_PASSWORD=$SENHA" >> "$GITHUB_ENV"
 
       - name: Compilar APK
         working-directory: app/android
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           ./gradlew assembleRelease --no-daemon --stacktrace
           cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/conilon-tech.apk"
