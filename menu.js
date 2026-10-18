@@ -40,4 +40,24 @@ export function gerarMenu(perfil) {
     ).join('');
     return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
   }).join('');
+  itemInstalar();
 }
+
+// "Instalar aplicativo": o Chrome/Android avisa (beforeinstallprompt) quando o app pode ser
+// instalado; guardamos o pedido e mostramos o item no fim do menu. Some depois de instalar.
+let pedidoInstalar = null;
+function itemInstalar() {
+  const cont = document.getElementById('menuModulos');
+  if (!cont || !pedidoInstalar || document.getElementById('menuInstalar')) return;
+  cont.insertAdjacentHTML('beforeend',
+    `<a class="menu-item" id="menuInstalar" data-ico="instalar" href="#" onclick="instalarApp();return false;"><span class="menu-ico">📲</span><span>Instalar aplicativo</span></a>`);
+}
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); pedidoInstalar = e; itemInstalar(); });
+window.addEventListener('appinstalled', () => { pedidoInstalar = null; document.getElementById('menuInstalar')?.remove(); });
+window.instalarApp = async function() {
+  if (!pedidoInstalar) return;
+  pedidoInstalar.prompt();
+  await pedidoInstalar.userChoice.catch(() => {});
+  pedidoInstalar = null;
+  document.getElementById('menuInstalar')?.remove();
+};

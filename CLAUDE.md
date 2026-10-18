@@ -12,6 +12,8 @@ Conilon Tech — a farm-management PWA for coffee (conilon/robusta) production: 
 
 Deployment is GitHub Pages, serving these files as-is from the repo root. There is no staging environment; merging to `main` is the deploy.
 
+**Installable PWA**: `manifest.webmanifest` + `icones/` + `sw.js`. Every page's `<head>` carries the manifest/theme-color/apple-touch-icon tags and a one-line `serviceWorker.register('sw.js')`, just before the `style.css` link — copy them into any new page. `sw.js` is network-first (4 s timeout → cached copy) for the site's own files, so a deploy shows up on the next load; cache-first for pinned CDN libraries (`www.gstatic.com/firebasejs/`, unpkg, jsdelivr, cdnjs, sheetjs, Google Fonts); it never touches Firestore/Auth (offline data is Firestore's IndexedDB persistence). Bump `VERSAO` in `sw.js` when you change its precache list or strategy. The "📲 Instalar aplicativo" menu item comes from `beforeinstallprompt` in `menu.js` (Chrome/Android only; iPhone installs via Compartilhar → Adicionar à Tela de Início).
+
 ### Page inventory (21 pages, one Firestore-backed app each)
 **Pages marked → have a detailed section in [`docs/paginas.md`](docs/paginas.md) (collections, formulas, UX decisions): read it before changing that page, and update it when you change its behaviour.**
 

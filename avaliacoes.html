@@ -775,6 +775,11 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .toast{position:fixed;bottom:88px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--ve);color:#fff;padding:12px 20px;border-radius:24px;font-size:.85rem;font-weight:600;z-index:6000;opacity:0;transition:.3s;box-shadow:var(--sf);max-width:88vw;text-align:center;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

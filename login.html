@@ -115,6 +115,11 @@ body{font-family:var(--font-body);background:linear-gradient(135deg,#0d1f0d,var(
 .auth-error{background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#dc2626;margin-bottom:13px;display:none;}
 .auth-info{background:var(--vb);border:1px solid #a7d7a7;border-radius:8px;padding:10px 14px;font-size:.75rem;color:var(--ve);margin-bottom:13px;line-height:1.6;}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
