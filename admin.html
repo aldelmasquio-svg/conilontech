@@ -10,6 +10,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, deleteDoc, updateDoc, collection, getDocs, onSnapshot, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema } from './acesso.js';
+import { gerarMenu } from './menu.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -65,16 +67,16 @@ onAuthStateChanged(auth, async (user) => {
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = {agenda:'admin',mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',irrigacao:'admin',herbicida:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',irrigacao:'admin',herbicida:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
   }
-  const isAdmin = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil === 'admin';
-  if (!isAdmin) { window.location.href = 'index.html'; return; }
+  // Só o dono/admin do sistema (mesma regra do firestore.rules): admin de um módulo não administra usuários
+  if (!adminDoSistema(perfilAtual)) { window.location.href = 'index.html'; return; }
   document.getElementById('userNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserNome').textContent = perfilAtual.nome || user.email;
   document.getElementById('menuUserEmail').textContent = user.email;
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appContent').style.display = 'flex';
-  gerarMenu();
+  gerarMenu(perfilAtual);
   carregarUsuarios();
   carregarLogs();
   carregarConfig();
@@ -88,45 +90,6 @@ onAuthStateChanged(auth, async (user) => {
   });
 });
 
-function gerarMenu() {
-  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
-  const pg = (window.location.pathname.split('/').pop() || 'index.html');
-  const secoes = [
-    { label: 'Principal', items: [
-      { href:'index.html',         ico:'📊', label:'Dashboard' },
-      { href:'agenda.html',        ico:'📅', label:'Agenda' },
-      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
-      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
-      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
-      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
-      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
-      { href:'clima.html',         ico:'🌦️', label:'Clima' },
-      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
-      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
-      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
-      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
-      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
-      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
-      { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
-      { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
-      { href:'amostragem.html',   ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
-    ]},
-    { label: 'Análise', items: [
-      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
-      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
-      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
-      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
-      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
-    ]},
-  ];
-  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
-    const html = s.items.map(m => {
-      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
-      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
-    }).filter(Boolean).join('');
-    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
-  }).join('');
-}
 
 // ─── USUÁRIOS ───
 let usuarios = [];
@@ -143,9 +106,7 @@ function renderizarUsuarios() {
   const filtrados = busca ? usuarios.filter(u => (u.nome+u.email).toLowerCase().includes(busca)) : usuarios;
 
   const MODS = [
-    {id:'agenda',label:'Agenda'},
     {id:'mapa',label:'Mapa'},
-    {id:'atividades',label:'Atividades'},
     {id:'equipe',label:'Equipe'},
     {id:'adubacao',label:'Adubação'},
     {id:'pulverizacao',label:'Pulverização'},
@@ -167,7 +128,7 @@ function renderizarUsuarios() {
   const NIVEIS = ['nenhum','encarregado','operador','gerente','admin'];
   const modLabel = id => (MODS.find(m=>m.id===id)?.label||id);
   const GRUPOS = [
-    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','clima','herbicida','calibracao','avaliacoes','amostragem','atividades','equipe']},
+    {titulo:'Operação de campo', ids:['mapa','adubacao','pulverizacao','drench','irrigacao','clima','herbicida','calibracao','avaliacoes','amostragem','equipe']},
     {titulo:'Compras e estoque', ids:['estoque','pedidos','cotacoes']},
     {titulo:'Análise e gestão', ids:['gestao','analises','recomendacoes','planejamento']},
   ];
@@ -258,9 +219,7 @@ window.abrirFazendasUsuario = function(uid) {
     return;
   }
   const MODS_LOCAL = [
-    {id:'agenda',label:'Agenda',ico:'📅'},
     {id:'mapa',label:'Mapa',ico:'🗺️'},
-    {id:'atividades',label:'Atividades',ico:'🌾'},
     {id:'equipe',label:'Equipe',ico:'👥'},
     {id:'adubacao',label:'Adubação',ico:'🧪'},
     {id:'pulverizacao',label:'Pulverização',ico:'💧'},
@@ -788,6 +747,11 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

@@ -1,63 +1,164 @@
 rules_version = '2';
 
-// Regras de segurança do Firestore — Conilon Tech
-// Objetivo desta 1ª versão: exigir login para tudo e impedir que um usuário
-// comum se auto-promova a admin (o furo mais grave hoje). O controle fino por
-// módulo/fazenda continua no app (client-side); dá para endurecê-lo aqui depois.
+// Regras de segurança do Firestore — Conilon Tech (v2)
+//
+// Leitura: qualquer usuário ATIVO com cadastro em `usuarios` lê os dados operacionais
+//   (as páginas cruzam módulos: o Dashboard lê adubação/pulverização/estoque, quase
+//   todas leem talhões, a Gestão lê tudo). Conta sem cadastro ou desativada não lê nada.
+// Escrita: só quem pode abrir um dos módulos donos daquela coleção (tabela abaixo),
+//   com a mesma regra do app — `podeAbrir()` em acesso.js. O dono do sistema escreve tudo.
+// O controle por fazenda continua no app (as páginas leem a coleção inteira e filtram).
+// Admin SDK (coletor do clima, assistente do Telegram) ignora estas regras.
+//
+// Ao criar uma página/coleção nova: acrescente a coleção em `modulosDe()` com o(s)
+// módulo(s) que gravam nela, senão só o dono consegue gravar.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
-    function meExists() {
-      return signedIn()
-        && exists(/databases/$(database)/documents/usuarios/$(request.auth.uid));
-    }
-    function meData() {
-      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data;
-    }
-    function isAdmin() {
-      return meExists() && (
-        meData().perfil == 'admin'
-        || ('admin' in meData().modulos && meData().modulos.admin == 'admin')
-      );
+    function logado() { return request.auth != null; }
+    function caminhoEu() { return /databases/$(database)/documents/usuarios/$(request.auth.uid); }
+    function eu() { return get(caminhoEu()).data; }
+    // Cadastrado e não desativado no Admin (ativo:false bloqueia tudo)
+    function ativo() { return logado() && exists(caminhoEu()) && eu().get('ativo', true) != false; }
+    // Dono/admin do sistema — mesma regra de adminDoSistema() em acesso.js
+    function dono() {
+      return ativo() && (eu().get('perfil', '') == 'admin' || eu().get('modulos', {}).get('admin', '') == 'admin');
     }
 
-    // Perfis de usuário.
-    // - Qualquer logado lê perfis (o app lista usuários no Admin e lê o próprio).
-    // - Cada um só CRIA o seu próprio doc (auto-cadastro no login).
-    // - UPDATE/DELETE só admin  ← fecha a auto-promoção: um operador NÃO pode
-    //   editar o próprio `modulos`/`perfil`/`fazendasModulo`/`ativo`.
+    // ── espelho de acesso.js ──────────────────────────────────────────────
+    // Ferramentas derivadas herdam do módulo-pai quando não definidas (HERANCA)
+    function pai(m) { return m == 'drench' ? 'pulverizacao' : (m == 'cotacoes' ? 'pedidos' : m); }
+    // Abertos por padrão: só bloqueiam com 'nenhum' explícito (ABERTOS)
+    function aberto(m) {
+      return m in ['adubacao', 'pulverizacao', 'equipe', 'estoque', 'pedidos', 'gestao', 'clima'];
+    }
+    function nivel(m) {
+      let mods = eu().get('modulos', {});
+      return mods.get(m, mods.get(pai(m), ''));
+    }
+    // podeAbrir(perfil, m)
+    function pode(m) {
+      return dono() || (ativo() && (
+        aberto(m) ? nivel(m) != 'nenhum'
+                  : !(nivel(m) in ['', 'nenhum'])));
+    }
+
+    // Quem grava em cada coleção (página → módulo). Levantado das chamadas
+    // addDoc/setDoc/updateDoc/deleteDoc/writeBatch de cada página.
+    function modulosDe(col) {
+      return {
+        'talhoes':               ['mapa'],
+        'planosAdubacao':        ['adubacao', 'planejamento'],
+        'configAdubacao':        ['adubacao'],
+        'irrigacaoSetores':      ['irrigacao', 'adubacao'],
+        'irrigacaoRegistros':    ['irrigacao'],
+        'pluviometria':          ['irrigacao'],
+        'vazaoConfig':           ['irrigacao'],
+        'vazaoMedidores':        ['irrigacao'],
+        'pulverizacoes':         ['pulverizacao'],
+        'drenchPrevencao':       ['drench'],
+        'configDrench':          ['drench'],
+        'herbicidaRegistros':    ['herbicida'],
+        'herbicidaConclusoes':   ['herbicida'],
+        'configHerbicida':       ['herbicida'],
+        'equipeEmpregados':      ['equipe'],
+        'equipeMaquinas':        ['equipe'],
+        'equipeRegistros':       ['equipe'],
+        'estoque_produtos':      ['estoque', 'pulverizacao', 'equipe'],
+        'estoque_movimentacoes': ['estoque', 'pulverizacao', 'equipe'],
+        'pedidos':               ['pedidos', 'estoque'],
+        'cotacoes':              ['cotacoes'],
+        'garantiasProdutos':     ['cotacoes'],
+        'calibracoes':           ['calibracao'],
+        'avaliacaoPlantas':      ['avaliacoes'],
+        'avaliacaoRegistros':    ['avaliacoes'],
+        'avaliacaoFotos':        ['avaliacoes'],
+        'amostragemPontos':      ['amostragem'],
+        'amostragemColetas':     ['amostragem'],
+        'amostragemConfig':      ['amostragem'],
+        'analises':              ['analises'],
+        'amostras':              ['analises'],
+        'analises_faixas':       ['analises'],
+        'recomendacoes':         ['recomendacoes'],
+        'planejamentos_safra':   ['planejamento'],
+      }.get(col, []);
+    }
+    function podeGravar(col) {
+      let ms = modulosDe(col);
+      return dono()
+        || (ms.size() > 0 && pode(ms[0]))
+        || (ms.size() > 1 && pode(ms[1]))
+        || (ms.size() > 2 && pode(ms[2]));
+    }
+
+    // ── usuários ─────────────────────────────────────────────────────────
+    // - Cada um lê o próprio doc (as páginas carregam o perfil); ativos leem todos (Admin lista).
+    // - Auto-cadastro: só o próprio doc, já DESATIVADO e sem nenhum nível 'admin'/'gerente' —
+    //   o dono aprova (ativa e dá os módulos) no Admin. Fecha o "cadastrar-se como admin".
+    // - Alterar/excluir: só o dono (bloqueia auto-promoção).
     match /usuarios/{uid} {
-      allow read:   if signedIn();
-      allow create: if signedIn() && request.auth.uid == uid;
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      allow get:    if logado() && request.auth.uid == uid;
+      allow list:   if ativo();
+      allow create: if logado() && request.auth.uid == uid
+                    && !exists(caminhoEu())
+                    && request.resource.data.get('ativo', true) == false
+                    && request.resource.data.get('perfil', '') != 'admin'
+                    && !request.resource.data.get('modulos', {}).values().hasAny(['admin', 'gerente']);
+      allow update, delete: if dono();
     }
 
-    // Configuração global (código de cadastro, atividades, fazendas).
-    // Leitura por qualquer logado; escrita só admin (o 1º cadastro já vira admin).
+    // Configuração global e catálogo de adubos: leitura por ativos, escrita só do dono (Admin)
     match /config/{doc} {
-      allow read:  if signedIn();
-      allow write: if isAdmin();
+      allow read:  if ativo();
+      allow write: if dono();
+    }
+    match /catalogo_adubos/{doc=**} {
+      allow read:  if ativo();
+      allow write: if dono();
     }
 
-    // Demais dados operacionais (talhões, planos, estoque, pedidos, etc.):
-    // exige apenas estar logado. A condição `col != ...` impede que esta regra
-    // genérica reabra `usuarios`/`config`, porque regras do Firestore são OR
-    // (se qualquer match permite, o acesso é concedido). Coleções novas ficam
-    // automaticamente cobertas por esta regra.
-    match /{col}/{doc=**} {
-      allow read, write: if signedIn() && col != 'usuarios' && col != 'config' && col != 'clima';
+    // Log de auditoria: qualquer ativo registra; ninguém reescreve o passado (só o dono limpa)
+    match /logs/{doc} {
+      allow read:   if ativo();
+      allow create: if ativo();
+      allow update, delete: if dono();
     }
 
-    // Estação meteorológica (coletor no GitHub Actions via Admin SDK, que
-    // ignora estas regras). Leitura para logados; escrita pelo app bloqueada.
+    // Estação meteorológica: só o coletor (Admin SDK) grava
     match /clima/{doc=**} {
-      allow read:  if signedIn();
+      allow read:  if ativo();
       allow write: if false;
+    }
+
+    // Medidores de vazão: o ESP32 entra com uma conta própria SEM doc em `usuarios`
+    // (vazao/README.md), então aqui basta estar logado. Pelo app, quem grava é Irrigação.
+    match /vazaoMedidores/{doc=**} {
+      allow read, write: if logado();
+    }
+    match /vazaoAlertas/{doc} {
+      allow read:   if logado();
+      allow create: if logado();
+      allow update, delete: if dono();
+    }
+    match /vazaoConfig/{doc} {
+      allow read:  if logado();
+      allow write: if pode('irrigacao');
+    }
+
+    // Exclusivas do assistente do Telegram (Admin SDK); as páginas não usam
+    match /assistenteConversas/{doc=**} { allow read, write: if false; }
+    match /assistentePropostas/{doc=**} { allow read, write: if false; }
+
+    // Demais coleções operacionais (inclui subcoleções): ler = ativo; gravar = módulo dono.
+    // As exclusões evitam reabrir as coleções acima (regras do Firestore são OR).
+    function comRegraPropria() {
+      return ['usuarios', 'config', 'catalogo_adubos', 'logs', 'clima', 'vazaoMedidores', 'vazaoAlertas',
+              'vazaoConfig', 'assistenteConversas', 'assistentePropostas'];
+    }
+    match /{col}/{doc=**} {
+      allow read:  if ativo() && !(col in comRegraPropria());
+      allow write: if podeGravar(col) && !(col in comRegraPropria());
     }
   }
 }

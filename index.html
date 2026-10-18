@@ -10,7 +10,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { nivelDoPerfil, adminDoSistema } from './acesso.js';
+import { adminDoSistema, podeAbrir } from './acesso.js';
+import { gerarMenu } from './menu.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -65,51 +66,13 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('menuUserEmail').textContent = user.email;
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appContent').style.display = 'flex';
-  gerarMenu();
+  gerarMenu(perfilAtual);
+  // Atalhos: só os que o usuário consegue abrir (mesma regra do menu)
+  document.querySelectorAll('.atalho-btn[data-mod]').forEach(a => { if (!podeAbrir(perfilAtual, a.dataset.mod)) a.remove(); });
   iniciarListeners();
 });
 
-function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
 
-function gerarMenu() {
-  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
-  const pg = (window.location.pathname.split('/').pop() || 'index.html');
-  const secoes = [
-    { label: 'Principal', items: [
-      { href:'index.html',         ico:'📊', label:'Dashboard' },
-      { href:'agenda.html',        ico:'📅', label:'Agenda' },
-      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
-      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
-      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
-      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
-      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
-      { href:'clima.html',         ico:'🌦️', label:'Clima' },
-      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
-      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
-      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
-      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
-      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
-      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
-      { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
-      { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
-      { href:'amostragem.html',   ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
-    ]},
-    { label: 'Análise', items: [
-      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
-      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
-      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
-      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
-      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
-    ]},
-  ];
-  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
-    const html = s.items.map(m => {
-      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
-      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
-    }).filter(Boolean).join('');
-    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
-  }).join('');
-}
 
 function iniciarListeners() {
   onSnapshot(collection(db,'talhoes'), snap => {
@@ -142,7 +105,7 @@ function atualizarDashboard() {
 
 // ── GAUGE — % da adubação confirmada NESTE mês (não a safra toda, pra refletir o ritmo atual) ──
 function pctPlanosMes(mesIdx, ano) {
-  const planos = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano);
+  const planos = planosAdubacao.filter(p => { const ma = planoMesAno(p); return ma && ma.mesIdx === mesIdx && ma.ano === ano; });
   const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
   const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
   return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
@@ -150,7 +113,7 @@ function pctPlanosMes(mesIdx, ano) {
 
 // % concluído do mês, filtrado por fazenda (ou geral quando fazenda é null)
 function pctPlanosMesFazenda(mesIdx, ano, fazenda) {
-  const planos = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano && (!fazenda || p.fazenda === fazenda));
+  const planos = planosAdubacao.filter(p => { const ma = planoMesAno(p); return ma && ma.mesIdx === mesIdx && ma.ano === ano && (!fazenda || p.fazenda === fazenda); });
   const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
   const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
   return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
@@ -223,7 +186,7 @@ function fmtN(n, d = 1) { if (n == null || isNaN(n) || !isFinite(n)) return '—
 function setorVento(g) { if (g == null) return ''; const S = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']; return S[Math.round(g / 22.5) % 16]; }
 
 function ouvirClima() {
-  if (nivelAcesso('clima') === 'nenhum') return;
+  if (!podeAbrir(perfilAtual, 'clima')) return;
   onSnapshot(collection(db, 'clima'), snap => {
     estacoes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(e => climaFazPermitida(e.fazenda))
@@ -297,13 +260,14 @@ function pendFazPermitida(mod, faz) {
   return !p || !p.length || p.includes(faz);
 }
 // Mês/ano do plano: mesIdx/ano quando existem, senão "Julho/2026" ou "2026-07" (os dois formatos do mesAno)
+// mesAno primeiro (inequívoco); mesIdx só na falta — planos antigos do Planejamento têm mesIdx 1-12
 function planoMesAno(p) {
-  if (Number.isInteger(p.mesIdx) && p.ano) return { mesIdx: p.mesIdx, ano: Number(p.ano) };
   const s = String(p.mesAno || '');
   let m = s.match(/^(\d{4})-(\d{2})/);
   if (m) return { mesIdx: Number(m[2]) - 1, ano: Number(m[1]) };
   m = s.match(/^([^/]+)\/(\d{4})$/);
   if (m) { const i = MESES_NOME.findIndex(n => semAcento(n) === semAcento(m[1])); if (i >= 0) return { mesIdx: i, ano: Number(m[2]) }; }
+  if (Number.isInteger(p.mesIdx) && p.mesIdx >= 0 && p.mesIdx <= 11 && p.ano) return { mesIdx: p.mesIdx, ano: Number(p.ano) };
   return null;
 }
 function diasEntre(isoA, isoB) { return Math.round((new Date(isoB + 'T12:00:00') - new Date(isoA + 'T12:00:00')) / 86400000); }
@@ -312,7 +276,7 @@ function isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padSt
 function calcPendencias() {
   const hoje = isoLocal(new Date());
   const itens = [];
-  const visivel = k => nivelAcesso(TIPOS_PEND[k].mod) !== 'nenhum';
+  const visivel = k => podeAbrir(perfilAtual, TIPOS_PEND[k].mod);
   const add = (tipo, faz, o) => { if (pendFazPermitida(TIPOS_PEND[tipo].mod, faz)) itens.push({ tipo, faz: faz || 'Sem fazenda', ...o }); };
 
   // Adubação: um item por talhão (não por mês), senão o mesmo talhão aparece repetido a cada mês vencido
@@ -530,6 +494,11 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 ::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-thumb{background:var(--cb);border-radius:3px;}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -570,14 +539,14 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 
     <!-- Atalhos rápidos -->
     <div class="atalhos-grid">
-      <a href="mapa.html" class="atalho-btn"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
-      <a href="adubacoes.html" class="atalho-btn"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
-      <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulveriz.</span></a>
-      <a href="drench.html" class="atalho-btn"><span class="atalho-ico">🌱</span><span class="atalho-label">Drench</span></a>
-      <a href="clima.html" class="atalho-btn"><span class="atalho-ico">🌦️</span><span class="atalho-label">Clima</span></a>
-      <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
-      <a href="irrigacao.html" class="atalho-btn"><span class="atalho-ico">💦</span><span class="atalho-label">Irrigação</span></a>
-      <a href="avaliacoes.html" class="atalho-btn"><span class="atalho-ico">📍</span><span class="atalho-label">Avaliações</span></a>
+      <a href="mapa.html" class="atalho-btn" data-mod="mapa"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
+      <a href="adubacoes.html" class="atalho-btn" data-mod="adubacao"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
+      <a href="pulverizacoes.html" class="atalho-btn" data-mod="pulverizacao"><span class="atalho-ico">💧</span><span class="atalho-label">Pulveriz.</span></a>
+      <a href="drench.html" class="atalho-btn" data-mod="drench"><span class="atalho-ico">🌱</span><span class="atalho-label">Drench</span></a>
+      <a href="clima.html" class="atalho-btn" data-mod="clima"><span class="atalho-ico">🌦️</span><span class="atalho-label">Clima</span></a>
+      <a href="pedidos.html" class="atalho-btn" data-mod="pedidos"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
+      <a href="irrigacao.html" class="atalho-btn" data-mod="irrigacao"><span class="atalho-ico">💦</span><span class="atalho-label">Irrigação</span></a>
+      <a href="avaliacoes.html" class="atalho-btn" data-mod="avaliacoes"><span class="atalho-ico">📍</span><span class="atalho-label">Avaliações</span></a>
     </div>
     <!-- Clima agora — uma ficha por estação de clima.html (some se não houver estação) -->
     <div id="secClima" style="display:none;">

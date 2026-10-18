@@ -8,8 +8,8 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableMultiTabIndexedDbPersistence, doc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -27,9 +27,20 @@ const db = getFirestore(app);
 enableMultiTabIndexedDbPersistence(db).catch(() => {});
 
 let _cadastrando = false;
-onAuthStateChanged(auth, user => {
+const MSG_AGUARDANDO = 'Seu cadastro está aguardando liberação do administrador. Assim que ele ativar sua conta, é só entrar.';
+onAuthStateChanged(auth, async user => {
   if (user) {
     if (_cadastrando) return;
+    // Conta sem cadastro ou desativada no Admin não entra (o firestore.rules também bloqueia os dados)
+    let perfil = null;
+    try { const s = await getDoc(doc(db, 'usuarios', user.uid)); perfil = s.exists() ? s.data() : null; } catch (e) {}
+    if (!perfil || perfil.ativo === false) {
+      await signOut(auth);
+      document.getElementById('loadingScreen').style.display = 'none';
+      document.getElementById('telaLogin').style.display = 'flex';
+      erroLogin(perfil ? MSG_AGUARDANDO : 'Conta sem cadastro no sistema. Fale com o administrador.');
+      return;
+    }
     window.location.href = 'index.html';
   } else {
     document.getElementById('loadingScreen').style.display = 'none';
@@ -67,14 +78,14 @@ window.fazerCadastro = async function() {
   _cadastrando = true;
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, senha);
-    const snap = await getDocs(collection(db,'usuarios'));
-    const primeiro = snap.empty;
-    const modulos = primeiro
-      ? {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',pedidos:'admin',admin:'admin'}
-      : {mapa:'nenhum',atividades:'encarregado',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
-    await setDoc(doc(db,'usuarios',cred.user.uid), {nome,email,modulos,criadoEm:new Date().toISOString(),ativo:true});
-    if (primeiro) await setDoc(doc(db,'config','geral'),{codigoCadastro:'',atividades:['Colheita','Desbrota','Poda','Roçada'],fazendas:[]});
-    window.location.href = 'index.html';
+    // Nasce desativado e sem módulos: o dono libera no Admin (o firestore.rules exige isso)
+    const modulos = {mapa:'nenhum',adubacao:'nenhum',config:'nenhum',pulverizacao:'nenhum',pedidos:'nenhum',admin:'nenhum'};
+    await setDoc(doc(db,'usuarios',cred.user.uid), {nome,email,modulos,criadoEm:new Date().toISOString(),ativo:false});
+    await signOut(auth);
+    _cadastrando = false;
+    voltarLogin();
+    erroLogin('✅ Cadastro enviado! ' + MSG_AGUARDANDO);
+    btn.disabled=false; btn.textContent='Criar Conta';
   } catch(e) {
     _cadastrando = false;
     erroCad(e.code==='auth/email-already-in-use'?'E-mail já em uso.':`Erro ao criar conta: ${e.message}`);
@@ -115,6 +126,11 @@ body{font-family:var(--font-body);background:linear-gradient(135deg,#0d1f0d,var(
 .auth-error{background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:.78rem;color:#dc2626;margin-bottom:13px;display:none;}
 .auth-info{background:var(--vb);border:1px solid #a7d7a7;border-radius:8px;padding:10px 14px;font-size:.75rem;color:var(--ve);margin-bottom:13px;line-height:1.6;}
 </style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
