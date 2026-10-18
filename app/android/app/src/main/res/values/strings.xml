@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Conilon Tech</string>
+    <string name="title_activity_main">Conilon Tech</string>
+    <string name="package_name">com.conilontech.app</string>
+    <string name="custom_url_scheme">com.conilontech.app</string>
+</resources>

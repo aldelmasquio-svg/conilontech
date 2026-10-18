@@ -1,0 +1,13 @@
+{
+  "appId": "com.conilontech.app",
+  "appName": "Conilon Tech",
+  "webDir": "www",
+  "server": {
+    "url": "https://aldelmasquio-svg.github.io/conilontech/",
+    "allowNavigation": ["aldelmasquio-svg.github.io"],
+    "errorPath": "offline.html"
+  },
+  "android": {
+    "backgroundColor": "#f4f6f3"
+  }
+}
