@@ -251,13 +251,13 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
 }
 
 /* ── CARDS / SEÇÕES (componentes comuns) ─────────────── */
-.sec-card, .kpi-card, .gauge-card, .prod-card, .stats-strip, .atalho-btn {
+.sec-card, .kpi-card, .gauge-card, .atalho-btn {
   background: var(--surface) !important;
   border: 1px solid var(--bd) !important;
   border-radius: var(--rad) !important;
   box-shadow: var(--s) !important;
 }
-.sec-title, .gauge-hdr, .prod-hdr-tit {
+.sec-title, .gauge-hdr {
   font-family: var(--font-display) !important;
   font-weight: 700 !important;
   text-transform: none !important;
@@ -325,11 +325,6 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
   font-size: .7rem !important;
   color: var(--ts) !important;
 }
-.stat-mini-val { font-family: var(--font-display) !important; font-weight: 700 !important; color: var(--t) !important; }
-.stat-mini.alerta .stat-mini-val { color: var(--accent) !important; }
-.stat-mini-lbl { font-weight: 500; letter-spacing: .04em !important; color: var(--t4) !important; }
-.stat-sep { background: var(--bd-l) !important; }
-.stat-mini { padding: 12px 4px !important; min-width: 0 !important; }
 
 /* ── ÍCONES POR DESTINO (menu e atalhos) ─────────────── */
 [href="index.html"]{--ico:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='9' rx='1'/%3E%3Crect x='14' y='3' width='7' height='5' rx='1'/%3E%3Crect x='14' y='12' width='7' height='9' rx='1'/%3E%3Crect x='3' y='16' width='7' height='5' rx='1'/%3E%3C/svg%3E");}

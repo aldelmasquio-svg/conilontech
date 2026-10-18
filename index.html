@@ -5,13 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ConilonTech · Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { nivelDoPerfil } from './acesso.js';
+import { nivelDoPerfil, adminDoSistema } from './acesso.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -46,9 +45,12 @@ setTimeout(() => {
 }, 8000);
 
 let perfilAtual = {};
-let talhoes = [], planosAdubacao = [], pulverizacoes = [], drenchPrevencao = [], estoqueProdutos = [], pedidos = [];
-let equipeEmpregados = [], equipeRegistros = [];
-let chartStatus = null, chartProducao = null;
+let talhoes = [], planosAdubacao = [], pulverizacoes = [], drenchPrevencao = [], estoqueProdutos = [];
+let estacoes = [];               // clima/{id} — estações meteorológicas
+const climaDia = {};             // estacaoId → doc de clima/{id}/dias/{hoje}
+const climaUnsub = {};
+let pendTipo = 'todos';          // filtro da seção Pendências
+const pendAbertas = new Set();   // fazendas expandidas (sobrevive aos re-renders do onSnapshot)
 const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 onAuthStateChanged(auth, async (user) => {
@@ -111,7 +113,6 @@ function gerarMenu() {
 }
 
 function iniciarListeners() {
-  document.querySelectorAll('.stat-mini-val').forEach(el => el.classList.add('loading'));
   onSnapshot(collection(db,'talhoes'), snap => {
     talhoes = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
@@ -132,65 +133,13 @@ function iniciarListeners() {
     estoqueProdutos = snap.docs.map(d => ({_docId:d.id,...d.data()}));
     atualizarDashboard();
   });
-  onSnapshot(collection(db,'pedidos'), snap => {
-    pedidos = snap.docs.map(d => ({_docId:d.id,...d.data()}));
-    atualizarDashboard();
-  });
-  onSnapshot(collection(db,'equipeEmpregados'), snap => {
-    equipeEmpregados = snap.docs.map(d => ({_docId:d.id,...d.data()}));
-    atualizarDashboard();
-  });
-  onSnapshot(collection(db,'equipeRegistros'), snap => {
-    equipeRegistros = snap.docs.map(d => ({_docId:d.id,...d.data()}));
-    atualizarDashboard();
-  });
+  ouvirClima();
 }
 
 function atualizarDashboard() {
-  atualizarKPIs();
-  atualizarEquipeKPI();
   atualizarGaugeAdubacao();
-  atualizarProducaoSafra();
-  atualizarBarraFazendas();
-  atualizarGraficoStatus();
   atualizarHeatmapAdub();
-  atualizarFazendaStatus();
-  atualizarProximasOps();
-}
-
-function atualizarKPIs() {
-  document.querySelectorAll('.stat-mini-val').forEach(el => el.classList.remove('loading'));
-  document.getElementById('kpiTalhoes').textContent = talhoes.length;
-  document.getElementById('kpiAtivos').textContent = talhoes.filter(t => t.status === 'ativo').length;
-  const pendPedidos = pedidos.filter(p => ['solicitado','em_andamento'].includes(p.status||'solicitado')).length;
-  document.getElementById('kpiPedidos').textContent = pendPedidos;
-  const kpiPedidosCard = document.getElementById('kpiPedidosCard');
-  if (kpiPedidosCard) kpiPedidosCard.classList.toggle('alerta', pendPedidos > 0);
-  const baixoEstoque = estoqueProdutos.filter(p => (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).length;
-  document.getElementById('kpiEstoque').textContent = baixoEstoque;
-  const kpiEstoqueCard = document.getElementById('kpiEstoqueCard');
-  if (kpiEstoqueCard) kpiEstoqueCard.classList.toggle('alerta', baixoEstoque > 0);
-  const areaPulvEl = document.getElementById('kpiAreaPulv');
-  if (areaPulvEl) areaPulvEl.textContent = Math.round(calcAreaPulverizadaMes()).toLocaleString('pt-BR');
-}
-
-// Soma a área dos talhões cujas pulverizações foram concluídas dentro do mês atual
-function calcAreaPulverizadaMes() {
-  const hojeYM = new Date().toISOString().slice(0,7);
-  let total = 0;
-  pulverizacoes.filter(p => p.realizada && (p.dataRealizada||p.data||'').slice(0,7) === hojeYM).forEach(p => {
-    const t = talhoes.find(x => x.id === p.talhaoId);
-    total += parseFloat(t?.area) || 0;
-  });
-  return total;
-}
-
-function atualizarEquipeKPI() {
-  const el = document.getElementById('kpiEquipe'); if (!el) return;
-  const hj = new Date().toISOString().slice(0,10);
-  const ativos = equipeEmpregados.filter(e => e.ativo !== false).length;
-  const hoje = equipeRegistros.filter(r => r.data === hj && r.entrada).length;
-  el.textContent = ativos ? `${hoje}/${ativos}` : '—';
+  atualizarPendencias();
 }
 
 // ── GAUGE — % da adubação confirmada NESTE mês (não a safra toda, pra refletir o ritmo atual) ──
@@ -247,159 +196,6 @@ function atualizarGaugeAdubacao() {
   }).join('');
 }
 
-// ── PRODUÇÃO POR SAFRA — gráfico de área com gradiente + variação vs safra anterior ──
-function calcProducaoPorSafra() {
-  const safrasAll = [...new Set(talhoes.flatMap(t => (t.historico||[]).map(h => h.safra)).filter(Boolean))].sort();
-  return safrasAll.map(safra => {
-    let totalSacas = 0, totalArea = 0;
-    talhoes.forEach(t => {
-      const area = parseFloat(t.area) || 0;
-      if (area <= 0 || !t.historico || !t.historico.length) return;
-      const hist = t.historico.find(h => h.safra === safra);
-      if (!hist) return;
-      const m = String(hist.valor||'').replace(',','.').match(/([\d.]+)/);
-      const scHa = m ? parseFloat(m[1]) : 0;
-      if (scHa <= 0) return;
-      totalSacas += scHa * area;
-      totalArea += area;
-    });
-    return { safra, totalSacas, mediaScHa: totalArea > 0 ? totalSacas/totalArea : 0 };
-  });
-}
-
-function atualizarProducaoSafra() {
-  const dados = calcProducaoPorSafra();
-  const safraBar = document.getElementById('safraBarDash');
-  const secProd = document.getElementById('secProdSafra');
-  if (!dados.length) {
-    if (safraBar) safraBar.style.display = 'none';
-    if (secProd) secProd.style.display = 'none';
-    return;
-  }
-  if (safraBar) safraBar.style.display = 'flex';
-  if (secProd) secProd.style.display = 'block';
-
-  const sel = document.getElementById('selSafra');
-  const currentVal = sel ? sel.value : '';
-  const safrasDesc = [...dados].reverse();
-  if (sel) {
-    sel.innerHTML = '<option value="">Última cadastrada</option>' + safrasDesc.map(d => `<option value="${d.safra}">${d.safra}</option>`).join('');
-    if (currentVal && safrasDesc.some(d => d.safra === currentVal)) sel.value = currentVal;
-  }
-  const safraEscolhida = sel ? sel.value : '';
-  const atual = safraEscolhida ? dados.find(d => d.safra === safraEscolhida) : dados[dados.length-1];
-  if (!atual) return;
-  const idxAtual = dados.findIndex(d => d.safra === atual.safra);
-  const anterior = idxAtual > 0 ? dados[idxAtual-1] : null;
-
-  const kpiTotal = document.getElementById('kpiProdTotal');
-  const kpiMedia = document.getElementById('kpiProdMedia');
-  const lblSafra = document.getElementById('lblSafraSel');
-  const trendEl = document.getElementById('prodTrend');
-  if (kpiTotal) kpiTotal.textContent = atual.totalSacas > 0 ? Math.round(atual.totalSacas).toLocaleString('pt-BR') : '—';
-  if (kpiMedia) kpiMedia.textContent = atual.mediaScHa > 0 ? atual.mediaScHa.toFixed(1).replace('.',',') : '—';
-  if (lblSafra) lblSafra.textContent = atual.safra ? '· '+atual.safra : '';
-  if (trendEl) {
-    if (anterior && anterior.totalSacas > 0 && atual.totalSacas > 0) {
-      const variacao = ((atual.totalSacas - anterior.totalSacas) / anterior.totalSacas) * 100;
-      const sinal = variacao >= 0 ? '+' : '';
-      trendEl.textContent = `${sinal}${variacao.toFixed(1)}% vs ${anterior.safra}`;
-      trendEl.className = 'trend-badge ' + (variacao >= 0 ? 'trend-up' : 'trend-down');
-      trendEl.style.display = 'inline-flex';
-    } else {
-      trendEl.style.display = 'none';
-    }
-  }
-
-  const ctxEl = document.getElementById('chartProducao');
-  if (!ctxEl) return;
-  const ctx = ctxEl.getContext('2d');
-  const gradient = ctx.createLinearGradient(0,0,0,200);
-  gradient.addColorStop(0, 'rgba(26,92,26,.35)');
-  gradient.addColorStop(1, 'rgba(26,92,26,0)');
-  if (chartProducao) chartProducao.destroy();
-  chartProducao = new Chart(ctxEl, {
-    type: 'line',
-    data: {
-      labels: dados.map(d => d.safra),
-      datasets: [{
-        data: dados.map(d => Math.round(d.totalSacas)),
-        borderColor: '#1a5c1a', backgroundColor: gradient, fill: true, tension: .35,
-        pointRadius: 3, pointBackgroundColor: '#1a5c1a', pointBorderColor: 'white', pointBorderWidth: 1.5,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { display:false }, tooltip: { callbacks: { label: c => c.parsed.y.toLocaleString('pt-BR')+' sacas' } } },
-      scales: {
-        y: { beginAtZero:true, ticks:{ font:{size:10, family:'Inter'}, color:'#5a6b48' }, grid:{ color:'#f0ece3' } },
-        x: { ticks:{ font:{size:10, family:'Inter'}, color:'#5a6b48' }, grid:{ display:false } }
-      }
-    }
-  });
-}
-
-// ── PRODUÇÃO POR FAZENDA — ranking em barras horizontais (última safra cadastrada de cada talhão) ──
-function calcProducaoPorFazenda() {
-  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))];
-  return fazendas.map(faz => {
-    let totalSacas = 0;
-    talhoes.filter(t => t.fazenda === faz).forEach(t => {
-      const area = parseFloat(t.area) || 0;
-      if (area <= 0 || !t.historico || !t.historico.length) return;
-      const hist = [...t.historico].sort((a,b) => (b.safra||'').localeCompare(a.safra||''))[0];
-      if (!hist) return;
-      const m = String(hist.valor||'').replace(',','.').match(/([\d.]+)/);
-      const scHa = m ? parseFloat(m[1]) : 0;
-      if (scHa > 0) totalSacas += scHa * area;
-    });
-    return { faz, totalSacas };
-  }).filter(d => d.totalSacas > 0).sort((a,b) => b.totalSacas - a.totalSacas);
-}
-
-function atualizarBarraFazendas() {
-  const cont = document.getElementById('barraFazendas');
-  const sec = document.getElementById('secBarraFazendas');
-  if (!cont) return;
-  const dados = calcProducaoPorFazenda();
-  if (!dados.length) { if (sec) sec.style.display = 'none'; return; }
-  if (sec) sec.style.display = 'block';
-  const max = Math.max(...dados.map(d => d.totalSacas));
-  cont.innerHTML = dados.map(d => {
-    const pct = max > 0 ? Math.round(d.totalSacas/max*100) : 0;
-    return `<div class="rank-bar-row">
-      <div class="rank-bar-lbl">${d.faz}</div>
-      <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%;"></div></div>
-      <div class="rank-bar-val">${Math.round(d.totalSacas).toLocaleString('pt-BR')}</div>
-    </div>`;
-  }).join('');
-}
-
-function atualizarGraficoStatus() {
-  const ativo = talhoes.filter(t => t.status === 'ativo').length;
-  const reforma = talhoes.filter(t => t.status === 'reforma').length;
-  const colhido = talhoes.filter(t => t.status === 'colhido').length;
-  const ctx = document.getElementById('chartStatus');
-  if (!ctx) return;
-  if (chartStatus) chartStatus.destroy();
-  chartStatus = new Chart(ctx, {
-    type: 'doughnut',
-    data: {
-      labels: ['Ativo', 'Em Reforma', 'Colhido'],
-      datasets: [{
-        data: [ativo, reforma, colhido],
-        backgroundColor: ['#1a5c1a', '#f59e0b', '#5a6b48'],
-        borderWidth: 0,
-      }]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { font: { family: 'Inter', size: 11 }, padding: 12, boxWidth: 10 } } },
-      cutout: '65%'
-    }
-  });
-}
-
 // ── HEATMAP — % de adubação concluída, fazenda × mês (últimos 4 meses) ──
 function calcHeatmapAdub() {
   const hoje = new Date();
@@ -450,86 +246,216 @@ function atualizarHeatmapAdub() {
     </div>`;
 }
 
-// ── PENDÊNCIAS POR FAZENDA (heatmap compacto) ──
-// Pendência = algo programado para data JÁ VENCIDA e não realizado (atrasado). O que está
-// programado para o futuro não conta como pendência (não vira alerta vermelho).
-function calcFazendaStatus() {
-  const hoje = new Date();
-  const mesIdx = hoje.getMonth(), ano = hoje.getFullYear();
-  const hojeISO = hoje.toISOString().slice(0,10);
-  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+// ── CLIMA AGORA — última leitura de cada estação (mesmos docs que clima.html lê) ──
+function climaFazPermitida(faz) {
+  if (adminDoSistema(perfilAtual) || !faz) return true;
+  const p = perfilAtual.fazendasModulo?.clima;
+  return !p || !p.length || p.includes(faz);
+}
+// Dia de hoje no fuso da estação — os docs de dias/ usam o dia local dela.
+function hojeNoFuso(fuso) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: fuso || 'America/Sao_Paulo', year:'numeric', month:'2-digit', day:'2-digit' }).format(new Date());
+}
+function minutosAgoraNoFuso(fuso) {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', { timeZone: fuso || 'America/Sao_Paulo', hour:'2-digit', minute:'2-digit', hourCycle:'h23' }).format(new Date()).split(':').map(Number);
+  return h * 60 + m;
+}
+// pontos {"HH:MM": "v1,v2,..."} na ordem de `campos` → última leitura como {campo: valor}
+function ultimaLeitura(diaDoc) {
+  const campos = (diaDoc?.campos || []).map(c => typeof c === 'string' ? c : c.nome);
+  const chaves = Object.keys(diaDoc?.pontos || {}).sort();
+  if (!chaves.length) return null;
+  const k = chaves[chaves.length - 1];
+  const partes = String(diaDoc.pontos[k]).split(',');
+  const o = { hora: k };
+  campos.forEach((c, i) => { const v = partes[i]; o[c] = (v === undefined || v === '') ? null : parseFloat(v); });
+  return o;
+}
+function fmtN(n, d = 1) { if (n == null || isNaN(n) || !isFinite(n)) return '—'; return Number(n).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d }); }
+function setorVento(g) { if (g == null) return ''; const S = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']; return S[Math.round(g / 22.5) % 16]; }
 
-  return fazendas.map(faz => {
-    // Pendência = programada para data já vencida e não feita. Futuro = programado, não conta.
-    let adubAtrasada = 0, adubProgramada = 0;
-    planosAdubacao.filter(p => p.fazenda === faz).forEach(p => {
-      const pend = (p.aplicacoes||[]).filter(a => !a.feito).length;
-      if (!pend) return;
-      const passado = (p.ano < ano) || (p.ano === ano && p.mesIdx < mesIdx);
-      if (passado) adubAtrasada += pend; else adubProgramada += pend;
+function ouvirClima() {
+  if (nivelAcesso('clima') === 'nenhum') return;
+  onSnapshot(collection(db, 'clima'), snap => {
+    estacoes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .filter(e => climaFazPermitida(e.fazenda))
+      .sort((a, b) => String(a.nome || a.id).localeCompare(String(b.nome || b.id), 'pt-BR'));
+    const ids = new Set(estacoes.map(e => e.id));
+    Object.keys(climaUnsub).forEach(id => { if (!ids.has(id)) { climaUnsub[id](); delete climaUnsub[id]; delete climaDia[id]; } });
+    estacoes.forEach(e => {
+      if (climaUnsub[e.id]) return;
+      climaUnsub[e.id] = onSnapshot(doc(db, 'clima', e.id, 'dias', hojeNoFuso(e.fuso)), s => {
+        climaDia[e.id] = s.exists() ? s.data() : { vazio: true };
+        renderClima();
+      }, () => { climaDia[e.id] = { vazio: true }; renderClima(); });
     });
-    const adubStatus = adubAtrasada > 0 ? 'red' : 'green';
-
-    const pulvAtras = pulverizacoes.filter(p => p.fazenda === faz && !p.realizada && p.data && p.data < hojeISO).length;
-    const pulvStatus = pulvAtras > 0 ? 'red' : 'green';
-
-    const drenchAtras = drenchPrevencao.filter(d => d.fazenda === faz && (d.status||'pendente') !== 'realizado' && d.data && d.data < hojeISO).length;
-    const drenchStatus = drenchAtras > 0 ? 'red' : 'green';
-
-    const estBaixo = estoqueProdutos.filter(p => p.fazenda === faz && (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).length;
-    const estStatus = estBaixo > 0 ? 'red' : 'green';
-
-    return { faz, adubStatus, adubAtrasada, adubProgramada, pulvStatus, pulvAtras, drenchStatus, drenchAtras, estStatus, estBaixo };
-  });
+    renderClima();
+  }, () => {});
 }
 
-function atualizarFazendaStatus() {
-  const cont = document.getElementById('listaFazendaStatus');
-  if (!cont) return;
-  const dados = calcFazendaStatus();
-  if (!dados.length) { cont.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma fazenda cadastrada.</div>`; return; }
-  const chip = (status, href, ico, titulo, detalhe) =>
-    `<a href="${href}" class="fs-chip fs-${status}" title="${titulo}${detalhe?' — '+detalhe:''}">${ico}</a>`;
-  cont.innerHTML = dados.map(d => `
-    <div class="faz-status-row">
-      <div class="faz-status-nome">🏡 ${d.faz}</div>
-      <div class="faz-status-chips">
-        ${chip(d.adubStatus, 'adubacoes.html', '🧪', 'Adubação', d.adubAtrasada?`${d.adubAtrasada} atrasada(s)`:(d.adubProgramada?`${d.adubProgramada} programada(s)`:'em dia'))}
-        ${chip(d.pulvStatus, 'pulverizacoes.html', '💧', 'Pulverização', d.pulvAtras?`${d.pulvAtras} atrasada(s)`:'em dia')}
-        ${chip(d.drenchStatus, 'drench.html', '🌱', 'Drench', d.drenchAtras?`${d.drenchAtras} atrasado(s)`:'em dia')}
-        ${chip(d.estStatus, 'estoque.html', '🏬', 'Estoque', d.estBaixo?`${d.estBaixo} abaixo do mínimo`:'em dia')}
+function renderClima() {
+  const sec = document.getElementById('secClima'), cont = document.getElementById('climaWidget');
+  if (!sec || !cont) return;
+  if (!estacoes.length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+  cont.innerHTML = estacoes.map(e => {
+    const dia = climaDia[e.id];
+    const nome = esc(e.nome || e.id);
+    const abrir = `onclick="abrirEstacao(${estacoes.indexOf(e)})"`;
+    if (!dia) return `<a class="clima-card" ${abrir}><div class="clima-topo"><span class="clima-nome">📡 ${nome}</span></div><div class="clima-vazio">Carregando…</div></a>`;
+    const p = ultimaLeitura(dia);
+    if (dia.vazio || !p) return `<a class="clima-card" ${abrir}><div class="clima-topo"><span class="clima-nome">📡 ${nome}</span></div><div class="clima-vazio">Sem leituras hoje.</div></a>`;
+    const r = dia.resumo || {};
+    const [hh, mm] = p.hora.split(':').map(Number);
+    const atraso = minutosAgoraNoFuso(e.fuso) - (hh * 60 + mm);
+    const quando = atraso <= 1 ? 'agora' : atraso < 60 ? `há ${atraso} min` : `às ${p.hora}`;
+    return `<a class="clima-card" ${abrir}>
+      <div class="clima-topo"><span class="clima-nome">📡 ${nome}</span><span class="clima-quando${atraso > 30 ? ' velho' : ''}">${quando}</span></div>
+      <div class="clima-meio">
+        <div class="clima-temp">${fmtN(p.t, 1)}<small>°C</small></div>
+        <div class="clima-minmax">${r.Tmax != null ? '↑ ' + fmtN(r.Tmax, 1) + '°' : ''}<br>${r.Tmin != null ? '↓ ' + fmtN(r.Tmin, 1) + '°' : ''}</div>
       </div>
-    </div>`).join('');
+      <div class="clima-dados">
+        <div class="clima-dado"><div class="clima-dado-val">${fmtN(p.ur, 0)}<small>%</small></div><div class="clima-dado-lbl">Umidade</div></div>
+        <div class="clima-dado"><div class="clima-dado-val">${fmtN(p.u != null ? p.u * 3.6 : null, 1)}<small>km/h</small></div><div class="clima-dado-lbl">Vento ${setorVento(p.dir)}</div></div>
+        <div class="clima-dado"><div class="clima-dado-val">${fmtN(r.chuvaMm ?? p.c24h, 1)}<small>mm</small></div><div class="clima-dado-lbl">Chuva hoje</div></div>
+      </div>
+    </a>`;
+  }).join('');
 }
+// Abre clima.html já na estação tocada (mesma chave de localStorage que clima.html usa)
+window.abrirEstacao = function(i) {
+  const e = estacoes[i];
+  try { if (e) localStorage.setItem('climaEstacao', e.id); } catch (_) {}
+  window.location.href = 'clima.html';
+};
 
-function atualizarProximasOps() {
-  const lista = document.getElementById('listaProximasOps');
-  const ops = [];
-  const hojeYM = new Date().toISOString().slice(0,7);
+// ── PENDÊNCIAS — só o que está ATRASADO (data planejada < hoje e não feito), agrupado por fazenda ──
+// Programado para o futuro não é pendência (regra do sistema, ver CLAUDE.md). Estoque abaixo do
+// mínimo entra como alerta da fazenda dona do produto.
+const TIPOS_PEND = {
+  adub:   { ico:'🧪', label:'Adubação',     mod:'adubacao',     href:'adubacoes.html' },
+  pulv:   { ico:'💧', label:'Pulverização', mod:'pulverizacao', href:'pulverizacoes.html' },
+  drench: { ico:'🌱', label:'Drench',       mod:'drench',       href:'drench.html' },
+  est:    { ico:'📦', label:'Estoque',      mod:'estoque',      href:'estoque.html' },
+};
+const MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const semAcento = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
 
-  planosAdubacao.forEach(p => {
-    (p.aplicacoes||[]).filter(a => !a.feito).forEach(a => {
-      ops.push({ tipo: '🧪', label: `Adubação · ${p.talhaoNome}`, sub: a.semana || p.mesAno, link: 'adubacoes.html' });
+function pendFazPermitida(mod, faz) {
+  if (adminDoSistema(perfilAtual) || !faz) return true;
+  const p = perfilAtual.fazendasModulo?.[mod];
+  return !p || !p.length || p.includes(faz);
+}
+// Mês/ano do plano: mesIdx/ano quando existem, senão "Julho/2026" ou "2026-07" (os dois formatos do mesAno)
+function planoMesAno(p) {
+  if (Number.isInteger(p.mesIdx) && p.ano) return { mesIdx: p.mesIdx, ano: Number(p.ano) };
+  const s = String(p.mesAno || '');
+  let m = s.match(/^(\d{4})-(\d{2})/);
+  if (m) return { mesIdx: Number(m[2]) - 1, ano: Number(m[1]) };
+  m = s.match(/^([^/]+)\/(\d{4})$/);
+  if (m) { const i = MESES_NOME.findIndex(n => semAcento(n) === semAcento(m[1])); if (i >= 0) return { mesIdx: i, ano: Number(m[2]) }; }
+  return null;
+}
+function diasEntre(isoA, isoB) { return Math.round((new Date(isoB + 'T12:00:00') - new Date(isoA + 'T12:00:00')) / 86400000); }
+function isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
+function calcPendencias() {
+  const hoje = isoLocal(new Date());
+  const itens = [];
+  const visivel = k => nivelAcesso(TIPOS_PEND[k].mod) !== 'nenhum';
+  const add = (tipo, faz, o) => { if (pendFazPermitida(TIPOS_PEND[tipo].mod, faz)) itens.push({ tipo, faz: faz || 'Sem fazenda', ...o }); };
+
+  // Adubação: um item por talhão (não por mês), senão o mesmo talhão aparece repetido a cada mês vencido
+  if (visivel('adub')) {
+    const porTalhao = {};
+    planosAdubacao.forEach(p => {
+      const n = (p.aplicacoes || []).filter(a => !a.feito).length;
+      const ma = planoMesAno(p);
+      if (!n || !ma) return;
+      const ultimoDia = isoLocal(new Date(ma.ano, ma.mesIdx + 1, 0));
+      if (ultimoDia >= hoje) return;   // mês ainda não acabou → programado
+      const chave = (p.fazenda || '') + '|' + (p.talhaoId || p.talhaoNome || '');
+      const g = porTalhao[chave] = porTalhao[chave] || { faz: p.fazenda, nome: p.talhaoNome || 'Talhão', meses: [], aplic: 0, maisAntigo: ultimoDia };
+      g.meses.push(ma); g.aplic += n;
+      if (ultimoDia < g.maisAntigo) g.maisAntigo = ultimoDia;
     });
+    Object.values(porTalhao).forEach(g => {
+      g.meses.sort((a, b) => a.ano - b.ano || a.mesIdx - b.mesIdx);
+      const rot = m => `${MESES_NOME[m.mesIdx].slice(0, 3)}/${String(m.ano).slice(2)}`;
+      const periodo = g.meses.length === 1 ? `${MESES_NOME[g.meses[0].mesIdx]}/${g.meses[0].ano}` : `${g.meses.length} meses (${rot(g.meses[0])} → ${rot(g.meses[g.meses.length - 1])})`;
+      add('adub', g.faz, { nome: g.nome, sub: `${periodo} · ${g.aplic} aplicaç${g.aplic > 1 ? 'ões' : 'ão'} sem confirmar`, dias: diasEntre(g.maisAntigo, hoje) });
+    });
+  }
+  if (visivel('pulv')) pulverizacoes.filter(p => !p.realizada && p.data && p.data < hoje).forEach(p => {
+    add('pulv', p.fazenda, { nome: p.talhaoNome || 'Talhão', sub: `Programada p/ ${formatarData(p.data)}`, dias: diasEntre(p.data, hoje) });
   });
-  pulverizacoes.filter(p => !p.realizada).forEach(p => {
-    ops.push({ tipo: '💧', label: `Pulverização · ${p.talhaoNome||''}`, sub: p.dataFormatada || p.data, link: 'pulverizacoes.html' });
+  if (visivel('drench')) drenchPrevencao.filter(d => (d.status || 'pendente') !== 'realizado' && d.data && d.data < hoje).forEach(d => {
+    add('drench', d.fazenda, { nome: d.talhaoNome || 'Talhão', sub: `Programado p/ ${formatarData(d.data)}`, dias: diasEntre(d.data, hoje) });
   });
-  drenchPrevencao.filter(d => (d.status||'pendente') === 'pendente' && (d.data||'').slice(0,7) === hojeYM).forEach(d => {
-    ops.push({ tipo: '🌱', label: `Drench · ${d.talhaoNome||''}`, sub: formatarData(d.data), link: 'drench.html' });
+  if (visivel('est')) estoqueProdutos.filter(p => (p.estoqueMinimo || 0) > 0 && (Number(p.saldo) || 0) < Number(p.estoqueMinimo)).forEach(p => {
+    add('est', p.fazenda, { nome: p.nome || 'Produto', sub: `Saldo ${fmtN(Number(p.saldo) || 0, 0)} ${p.unidade || ''} · mínimo ${fmtN(Number(p.estoqueMinimo), 0)}`, dias: null });
   });
-  estoqueProdutos.filter(p => (p.estoqueMinimo||0) > 0 && (Number(p.saldo)||0) < Number(p.estoqueMinimo)).forEach(p => {
-    ops.push({ tipo: '🏬', label: `Estoque baixo · ${p.nome||''}`, sub: `${p.saldo||0} ${p.unidade||''} (mín. ${p.estoqueMinimo})`, link: 'estoque.html' });
-  });
-
-  if (!ops.length) { lista.innerHTML = `<div style="padding:16px;text-align:center;font-size:.82rem;color:var(--c);">Nenhuma operação pendente.</div>`; return; }
-  lista.innerHTML = ops.slice(0, 8).map(op => `
-    <a href="${op.link}" class="op-item">
-      <span class="op-ico">${op.tipo}</span>
-      <div class="op-info"><div class="op-nome">${op.label}</div><div class="op-sub">${op.sub||'—'}</div></div>
-      <span class="op-seta">›</span>
-    </a>`).join('');
+  return { itens, tiposVisiveis: Object.keys(TIPOS_PEND).filter(visivel) };
 }
+
+let pendFazOrdem = [];
+function atualizarPendencias() {
+  const lista = document.getElementById('pendLista'), resumo = document.getElementById('pendResumo'), filtros = document.getElementById('pendFiltros');
+  if (!lista) return;
+  const { itens, tiposVisiveis } = calcPendencias();
+  if (pendTipo !== 'todos' && !tiposVisiveis.includes(pendTipo)) pendTipo = 'todos';
+
+  const contTipo = k => itens.filter(i => i.tipo === k).length;
+  filtros.innerHTML = itens.length ? [
+    `<button class="pend-filtro${pendTipo === 'todos' ? ' ativo' : ''}" onclick="setPendTipo('todos')">Todas <span class="n">${itens.length}</span></button>`,
+    ...tiposVisiveis.filter(k => contTipo(k)).map(k => `<button class="pend-filtro${pendTipo === k ? ' ativo' : ''}" onclick="setPendTipo('${k}')">${TIPOS_PEND[k].ico} ${TIPOS_PEND[k].label} <span class="n">${contTipo(k)}</span></button>`)
+  ].join('') : '';
+
+  const filtrados = pendTipo === 'todos' ? itens : itens.filter(i => i.tipo === pendTipo);
+  const porFaz = {};
+  filtrados.forEach(i => (porFaz[i.faz] = porFaz[i.faz] || []).push(i));
+  pendFazOrdem = Object.keys(porFaz).sort((a, b) => porFaz[b].length - porFaz[a].length || a.localeCompare(b, 'pt-BR'));
+
+  const nFaz = pendFazOrdem.length;
+  resumo.textContent = !itens.length ? 'Nada atrasado. Tudo em dia ✓'
+    : `${filtrados.length} atrasada${filtrados.length > 1 ? 's' : ''} em ${nFaz} fazenda${nFaz > 1 ? 's' : ''} · toque numa fazenda para ver`;
+
+  const fazendasTodas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))];
+  const emDia = fazendasTodas.filter(f => !porFaz[f]).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const LIMITE = 5;
+
+  lista.innerHTML = pendFazOrdem.map((faz, idx) => {
+    const its = porFaz[faz];
+    const aberta = pendAbertas.has(faz);
+    const chips = tiposVisiveis.map(k => { const n = its.filter(i => i.tipo === k).length; return n ? `<span class="pend-tipo">${TIPOS_PEND[k].ico} ${n}</span>` : ''; }).join('');
+    const corpo = !aberta ? '' : tiposVisiveis.map(k => {
+      const g = its.filter(i => i.tipo === k).sort((a, b) => (b.dias ?? -1) - (a.dias ?? -1));
+      if (!g.length) return '';
+      const t = TIPOS_PEND[k];
+      return `<div class="pend-grupo-tit">${t.ico} ${t.label}</div>` + g.slice(0, LIMITE).map(i => `
+        <a href="${t.href}" class="pend-item">
+          <div class="pend-item-info"><div class="pend-item-nome">${esc(i.nome)}</div><div class="pend-item-sub">${esc(i.sub)}</div></div>
+          ${i.dias != null ? `<span class="pend-atraso${i.dias <= 7 ? ' leve' : ''}">${i.dias} dia${i.dias !== 1 ? 's' : ''}</span>` : '<span class="pend-atraso leve">abaixo do mín.</span>'}
+        </a>`).join('') + (g.length > LIMITE ? `<a href="${t.href}" class="pend-mais">+ ${g.length - LIMITE} em ${t.label} →</a>` : '');
+    }).join('');
+    return `<div class="pend-faz${aberta ? ' aberta' : ''}">
+      <div class="pend-faz-hdr" onclick="togglePendFaz(${idx})">
+        <span class="pend-faz-nome">🏡 ${esc(faz)}</span>
+        <span class="pend-faz-tipos">${chips}</span>
+        <span class="pend-seta">▶</span>
+      </div>
+      <div class="pend-corpo">${corpo}</div>
+    </div>`;
+  }).join('') + (emDia.length ? `<div class="pend-ok"><b>✓ Em dia:</b> ${emDia.map(esc).join(' · ')}</div>` : '');
+}
+window.setPendTipo = function(t) { pendTipo = t; atualizarPendencias(); };
+window.togglePendFaz = function(i) {
+  const faz = pendFazOrdem[i]; if (!faz) return;
+  if (pendAbertas.has(faz)) pendAbertas.delete(faz); else pendAbertas.add(faz);
+  atualizarPendencias();
+};
 
 function formatarData(d) { if(!d)return'—'; const[a,m,dd]=d.split('-'); return`${dd}/${m}/${a}`; }
 
@@ -581,13 +507,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .atalho-btn:active{transform:scale(.97);}
 .atalho-ico{font-size:20px;}
 .atalho-label{font-size:.62rem;font-weight:700;text-align:center;color:var(--ve);font-family:var(--font-display);text-transform:uppercase;letter-spacing:.03em;}
-/* KPIs — faixa única e compacta */
-.stats-strip{background:white;border-radius:var(--rad);box-shadow:var(--s);display:flex;align-items:stretch;margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.stat-mini{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 10px;gap:2px;min-width:58px;cursor:pointer;}
-.stat-mini-val{font-family:var(--font-display);font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;letter-spacing:-.01em;}
-.stat-mini.alerta .stat-mini-val{color:#d97706;}
-.stat-mini-lbl{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.02em;text-align:center;white-space:nowrap;margin-top:2px;}
-.stat-sep{width:1px;flex-shrink:0;background:var(--cl);margin:10px 0;}
 /* SEÇÕES */
 .sec-title{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;}
 .sec-link{font-size:.72rem;color:var(--v);font-weight:600;text-decoration:none;}
@@ -605,52 +524,65 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .faz-gauge-ring::before{content:'';position:absolute;width:40px;height:40px;border-radius:50%;background:white;}
 .faz-gauge-val{position:relative;font-family:var(--font-display);font-weight:800;font-size:.72rem;color:var(--ve);}
 .faz-gauge-lbl{font-size:.6rem;font-weight:700;color:var(--c);text-align:center;max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-/* RANKING POR FAZENDA (barras horizontais) */
-.rank-bar-row{display:flex;align-items:center;gap:8px;padding:9px 14px;}
-.rank-bar-lbl{font-size:.75rem;font-weight:700;color:var(--ve);width:88px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.rank-bar-track{flex:1;height:16px;background:var(--cl);border-radius:8px;overflow:hidden;}
-.rank-bar-fill{height:100%;background:linear-gradient(90deg,#1a5c1a,#4a9d4a);border-radius:8px;transition:width .4s;}
-.rank-bar-val{font-family:var(--font-mono);font-size:.72rem;font-weight:700;color:var(--v);width:56px;text-align:right;flex-shrink:0;}
 /* HEATMAP ADUBAÇÃO (fazenda x mês) */
 .heatmap-scroll{overflow-x:auto;padding:14px;-webkit-overflow-scrolling:touch;}
 .heatmap-tbl{border-collapse:separate;border-spacing:5px;width:100%;}
 .heatmap-tbl th{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding-bottom:2px;}
 .heatmap-faz{font-size:.76rem;font-weight:700;color:var(--ve);white-space:nowrap;padding-right:8px;text-align:left;}
 .heatmap-cel{display:flex;align-items:center;justify-content:center;min-width:42px;height:32px;border-radius:6px;font-family:var(--font-mono);font-size:.68rem;font-weight:700;}
-/* PRODUÇÃO / GRÁFICO ÁREA */
-.prod-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:16px;margin-bottom:16px;}
-.prod-hdr{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
-.prod-hdr-tit{font-family:var(--font-display);font-weight:800;font-size:.85rem;color:var(--ve);text-transform:uppercase;letter-spacing:.06em;}
-.prod-kpis{display:flex;gap:18px;margin-bottom:10px;flex-wrap:wrap;}
-.prod-kpi-val{font-family:var(--font-display);font-weight:800;font-size:1.5rem;color:var(--ve);line-height:1;}
-.prod-kpi-lbl{font-size:.66rem;color:var(--c);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
 .trend-badge{display:none;align-items:center;font-size:.7rem;font-weight:700;border-radius:20px;padding:3px 9px;}
 .trend-up{background:#dcfce7;color:#16a34a;}
 .trend-down{background:#fee2e2;color:#dc2626;}
-.chart-area-wrap{height:170px;}
-/* GRÁFICO DONUT STATUS */
-.chart-wrap{padding:16px;height:200px;display:flex;align-items:center;justify-content:center;}
-/* FAZENDA STATUS (heatmap compacto) */
-.faz-status-row{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--cl);gap:10px;}
-.faz-status-row:last-child{border:none;}
-.faz-status-nome{font-size:.85rem;font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.faz-status-chips{display:flex;gap:5px;flex-shrink:0;}
-.fs-chip{width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:.85rem;text-decoration:none;}
-.fs-green{background:#dcfce7;color:#16a34a;}
-.fs-yellow{background:#fef3c7;color:#d97706;}
-.fs-red{background:#fee2e2;color:#dc2626;}
-/* PRÓXIMAS OPS */
-.op-item{display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--cl);cursor:pointer;text-decoration:none;color:var(--t);}
-.op-item:last-child{border:none;}
-.op-item:active{background:var(--cl);}
-.op-ico{font-size:1.2rem;flex-shrink:0;}
-.op-info{flex:1;min-width:0;}
-.op-nome{font-size:.85rem;font-weight:600;}
-.op-sub{font-size:.72rem;color:var(--c);margin-top:1px;}
-.op-seta{font-size:1.4rem;color:var(--cb);}
+/* CLIMA AGORA */
+.clima-scroll{display:flex;gap:10px;overflow-x:auto;margin-bottom:16px;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.clima-scroll::-webkit-scrollbar{display:none;}
+.clima-card{cursor:pointer;flex:1 0 260px;max-width:100%;background:linear-gradient(135deg,#1d6b3f,#2f8f58);color:white;border-radius:var(--rad);padding:14px 16px;text-decoration:none;box-shadow:var(--s);display:flex;flex-direction:column;gap:10px;}
+.clima-scroll .clima-card:only-child{flex-basis:100%;}
+.clima-topo{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:.78rem;}
+.clima-nome{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.clima-quando{font-size:.68rem;opacity:.75;white-space:nowrap;}
+.clima-quando.velho{opacity:1;color:#fde68a;}
+.clima-meio{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;}
+.clima-temp{font-family:var(--font-display);font-weight:700;font-size:2.4rem;line-height:1;letter-spacing:-.02em;}
+.clima-temp small{font-size:1rem;font-weight:600;opacity:.8;margin-left:2px;}
+.clima-minmax{font-size:.72rem;opacity:.85;text-align:right;line-height:1.5;}
+.clima-dados{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.clima-dado{background:rgba(255,255,255,.13);border-radius:8px;padding:6px 8px;}
+.clima-dado-val{font-weight:700;font-size:.9rem;}
+.clima-dado-val small{font-weight:500;font-size:.66rem;opacity:.8;margin-left:1px;}
+.clima-dado-lbl{font-size:.62rem;opacity:.78;margin-top:1px;}
+.clima-vazio{font-size:.8rem;opacity:.85;}
+/* PENDÊNCIAS */
+.pend-filtros{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px;padding-bottom:2px;scrollbar-width:none;}
+.pend-filtros::-webkit-scrollbar{display:none;}
+.pend-filtro{flex-shrink:0;border:1px solid var(--bd);background:var(--surface);color:var(--ts);border-radius:999px;padding:6px 12px;font-size:.76rem;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.pend-filtro.ativo{background:var(--v);border-color:var(--v);color:white;}
+.pend-filtro .n{background:rgba(0,0,0,.07);border-radius:999px;padding:0 7px;font-size:.7rem;}
+.pend-filtro.ativo .n{background:rgba(255,255,255,.22);}
+.pend-faz{background:var(--surface);border:1px solid var(--bd);border-radius:var(--rad);box-shadow:var(--s);margin-bottom:8px;overflow:hidden;}
+.pend-faz-hdr{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none;}
+.pend-faz-hdr:active{background:var(--surface-2);}
+.pend-faz-nome{flex:1;min-width:0;font-weight:600;font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pend-faz-tipos{display:flex;gap:4px;flex-shrink:0;}
+.pend-tipo{font-size:.7rem;font-weight:600;background:var(--surface-2);border:1px solid var(--bd-l);border-radius:999px;padding:2px 7px;white-space:nowrap;}
+.pend-total{min-width:26px;height:24px;border-radius:999px;background:#fee2e2;color:#b42318;font-weight:700;font-size:.78rem;display:flex;align-items:center;justify-content:center;padding:0 7px;flex-shrink:0;}
+.pend-seta{color:var(--t4);font-size:.8rem;transition:transform .2s;flex-shrink:0;}
+.pend-faz.aberta .pend-seta{transform:rotate(90deg);}
+.pend-corpo{display:none;border-top:1px solid var(--bd-l);}
+.pend-faz.aberta .pend-corpo{display:block;}
+.pend-grupo-tit{font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t4);padding:10px 14px 4px;}
+.pend-item{display:flex;align-items:center;gap:10px;padding:9px 14px;text-decoration:none;color:var(--t);}
+.pend-item:active{background:var(--surface-2);}
+.pend-item-info{flex:1;min-width:0;}
+.pend-item-nome{font-size:.84rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pend-item-sub{font-size:.72rem;color:var(--c);margin-top:1px;}
+.pend-atraso{font-size:.7rem;font-weight:700;color:#b42318;background:#fef2f2;border-radius:6px;padding:3px 7px;white-space:nowrap;flex-shrink:0;}
+.pend-atraso.leve{color:#92400e;background:#fffbeb;}
+.pend-mais{display:block;padding:8px 14px 12px;font-size:.76rem;font-weight:600;color:var(--v);text-decoration:none;}
+.pend-ok{background:var(--surface);border:1px dashed var(--bd);border-radius:var(--rad);padding:11px 14px;font-size:.78rem;color:var(--c);margin-bottom:8px;}
+.pend-ok b{color:#15803d;}
 /* OFFLINE BADGE */
 .offline-badge{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#f59e0b;color:white;border-radius:20px;padding:5px 14px;font-size:.72rem;font-weight:700;z-index:500;display:none;}
-.stat-mini-val.loading{color:transparent!important;background:linear-gradient(90deg,var(--cl) 25%,var(--cb) 50%,var(--cl) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:4px;display:inline-block;min-width:34px;}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
@@ -700,45 +632,16 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       <a href="adubacoes.html" class="atalho-btn"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
       <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulveriz.</span></a>
       <a href="drench.html" class="atalho-btn"><span class="atalho-ico">🌱</span><span class="atalho-label">Drench</span></a>
-      <a href="equipe.html" class="atalho-btn"><span class="atalho-ico">👥</span><span class="atalho-label">Equipe</span></a>
-      <a href="estoque.html" class="atalho-btn"><span class="atalho-ico">🏬</span><span class="atalho-label">Estoque</span></a>
+      <a href="clima.html" class="atalho-btn"><span class="atalho-ico">🌦️</span><span class="atalho-label">Clima</span></a>
       <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
-      <a href="gestao.html" class="atalho-btn"><span class="atalho-ico">📈</span><span class="atalho-label">Gestão</span></a>
+      <a href="irrigacao.html" class="atalho-btn"><span class="atalho-ico">💦</span><span class="atalho-label">Irrigação</span></a>
+      <a href="avaliacoes.html" class="atalho-btn"><span class="atalho-ico">📍</span><span class="atalho-label">Avaliações</span></a>
     </div>
-
-    <!-- KPIs — faixa única e compacta (5 números, 1 linha) -->
-    <div class="stats-strip">
-      <div class="stat-mini">
-        <span class="stat-mini-val" id="kpiTalhoes">—</span>
-        <span class="stat-mini-lbl">Talhões</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-mini">
-        <span class="stat-mini-val" id="kpiAtivos">—</span>
-        <span class="stat-mini-lbl">Ativos</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-mini" id="kpiPedidosCard" onclick="window.location.href='pedidos.html'">
-        <span class="stat-mini-val" id="kpiPedidos">—</span>
-        <span class="stat-mini-lbl">Pedidos</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-mini" id="kpiEstoqueCard" onclick="window.location.href='estoque.html'">
-        <span class="stat-mini-val" id="kpiEstoque">—</span>
-        <span class="stat-mini-lbl">Estoque</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-mini" onclick="window.location.href='equipe.html'">
-        <span class="stat-mini-val loading" id="kpiEquipe">—</span>
-        <span class="stat-mini-lbl">Equipe</span>
-      </div>
-      <div class="stat-sep"></div>
-      <div class="stat-mini" onclick="window.location.href='pulverizacoes.html'" title="Área com pulverização concluída este mês">
-        <span class="stat-mini-val" id="kpiAreaPulv">—</span>
-        <span class="stat-mini-lbl">ha/mês</span>
-      </div>
+    <!-- Clima agora — uma ficha por estação de clima.html (some se não houver estação) -->
+    <div id="secClima" style="display:none;">
+      <div class="sec-title">🌦️ Clima agora<a href="clima.html" class="sec-link">Abrir clima →</a></div>
+      <div class="clima-scroll" id="climaWidget"></div>
     </div>
-
     <!-- Adubação do mês, por fazenda -->
     <div class="gauge-card">
       <div class="gauge-hdr-row">
@@ -748,33 +651,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       <div class="gauge-sub" id="gaugeSub">Carregando...</div>
       <div class="faz-gauge-scroll" id="gaugeFazendas"></div>
     </div>
-
-    <!-- Produção por safra -->
-    <div id="secProdSafra" style="display:none;">
-      <div class="prod-card">
-        <div class="prod-hdr">
-          <span class="prod-hdr-tit">📈 Produção por Safra</span>
-          <span class="trend-badge" id="prodTrend"></span>
-        </div>
-        <div id="safraBarDash" style="margin-bottom:10px;align-items:center;gap:8px;display:flex;">
-          <select id="selSafra" onchange="atualizarProducaoSafra()" style="flex:1;border:1.5px solid var(--cb);border-radius:7px;padding:6px 9px;font-size:.82rem;font-family:var(--font-body);outline:none;background:white;color:var(--ve);font-weight:600;"></select>
-        </div>
-        <div class="prod-kpis">
-          <div><div class="prod-kpi-val" id="kpiProdTotal">—</div><div class="prod-kpi-lbl">Sacas totais <span id="lblSafraSel"></span></div></div>
-          <div><div class="prod-kpi-val" id="kpiProdMedia">—</div><div class="prod-kpi-lbl">sc/ha média</div></div>
-        </div>
-        <div class="chart-area-wrap"><canvas id="chartProducao"></canvas></div>
-      </div>
-    </div>
-
-    <!-- Produção por fazenda (ranking) -->
-    <div id="secBarraFazendas" style="display:none;">
-      <div class="sec-title">🌾 Produção por Fazenda<span style="font-size:.68rem;font-weight:500;color:var(--c);text-transform:none;letter-spacing:0;">última safra · sacas</span></div>
-      <div class="sec-card" style="margin-bottom:16px;">
-        <div id="barraFazendas" style="padding:6px 0;"></div>
-      </div>
-    </div>
-
     <!-- Heatmap: adubação por fazenda x mês -->
     <div id="secHeatmapAdub" style="display:none;">
       <div class="sec-title">🗓️ Adubação — Últimos 4 Meses</div>
@@ -783,26 +659,11 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
         <div id="heatmapAdub"></div>
       </div>
     </div>
-
-    <!-- Pendências por fazenda -->
-    <div class="sec-title">🚦 Pendências por Fazenda</div>
-    <div class="sec-sub">🧪 Adubação · 💧 Pulverização · 🌱 Drench (mês) · 🏬 Estoque</div>
-    <div class="sec-card" style="margin-bottom:16px;">
-      <div id="listaFazendaStatus"></div>
-    </div>
-
-    <!-- Gráfico status talhões -->
-    <div class="sec-title">📊 Status dos Talhões<a href="mapa.html" class="sec-link">Ver mapa →</a></div>
-    <div class="sec-card" style="margin-bottom:16px;">
-      <div class="chart-wrap"><canvas id="chartStatus"></canvas></div>
-    </div>
-
-    <!-- Próximas operações -->
-    <div class="sec-title">📅 Operações Pendentes<a href="adubacoes.html" class="sec-link">Ver todas →</a></div>
-    <div class="sec-card" style="margin-bottom:80px;">
-      <div id="listaProximasOps"></div>
-    </div>
-
+    <!-- Pendências (= atrasadas), agrupadas por fazenda -->
+    <div class="sec-title">🚦 Pendências</div>
+    <div class="sec-sub" id="pendResumo">Carregando...</div>
+    <div class="pend-filtros" id="pendFiltros"></div>
+    <div id="pendLista" style="margin-bottom:80px;"></div>
   </main>
 </div>
 
