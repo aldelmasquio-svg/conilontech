@@ -350,6 +350,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { gerarMenu } from './menu.js';
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -463,7 +464,7 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('appHeader').style.display = 'flex';
   document.getElementById('appContent').style.display = 'flex';
   abrirTab('novo');
-  gerarMenu();
+  gerarMenu(perfilAtual);
   // Safra default: jan-set → ano corrente; out-dez → já planeja próxima (pós-florada)
   const hoje = new Date();
   const ano = hoje.getMonth() >= 9 ? hoje.getFullYear() + 1 : hoje.getFullYear();
@@ -514,44 +515,6 @@ function isAdmin() {
   return m.planejamento === 'admin' || m.admin === 'admin';
 }
 
-function gerarMenu() {
-  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
-  const pg = (window.location.pathname.split('/').pop() || 'index.html');
-  const secoes = [
-    { label: 'Principal', items: [
-      { href:'index.html',         ico:'📊', label:'Dashboard' },
-      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
-      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
-      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
-      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
-      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
-      { href:'clima.html',         ico:'🌦️', label:'Clima' },
-      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
-      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
-      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
-      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
-      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
-      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
-      { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
-      { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
-      { href:'amostragem.html',   ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
-    ]},
-    { label: 'Análise', items: [
-      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
-      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
-      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
-      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
-      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
-    ]},
-  ];
-  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
-    const html = s.items.map(m => {
-      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
-      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
-    }).filter(Boolean).join('');
-    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
-  }).join('');
-}
 
 // ━━━━━━━━━━ UTILS ━━━━━━━━━━
 

@@ -10,7 +10,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { nivelDoPerfil, adminDoSistema } from './acesso.js';
+import { adminDoSistema, podeAbrir } from './acesso.js';
+import { gerarMenu } from './menu.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -65,50 +66,13 @@ onAuthStateChanged(auth, async (user) => {
   document.getElementById('menuUserEmail').textContent = user.email;
   document.getElementById('loadingScreen').style.display = 'none';
   document.getElementById('appContent').style.display = 'flex';
-  gerarMenu();
+  gerarMenu(perfilAtual);
+  // Atalhos: só os que o usuário consegue abrir (mesma regra do menu)
+  document.querySelectorAll('.atalho-btn[data-mod]').forEach(a => { if (!podeAbrir(perfilAtual, a.dataset.mod)) a.remove(); });
   iniciarListeners();
 });
 
-function nivelAcesso(mod) { return nivelDoPerfil(perfilAtual, mod); }
 
-function gerarMenu() {
-  const isAdm = Object.values(perfilAtual.modulos || {}).includes('admin') || perfilAtual.perfil === 'admin';
-  const pg = (window.location.pathname.split('/').pop() || 'index.html');
-  const secoes = [
-    { label: 'Principal', items: [
-      { href:'index.html',         ico:'📊', label:'Dashboard' },
-      { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
-      { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
-      { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
-      { href:'drench.html',        ico:'🌱', label:'Drench Preventivo', acesso:'drench' },
-      { href:'irrigacao.html',     ico:'💦', label:'Irrigação',         acesso:'irrigacao' },
-      { href:'clima.html',         ico:'🌦️', label:'Clima' },
-      { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
-      { href:'atividades.html',    ico:'🌾', label:'Atividades',        acesso:'atividades' },
-      { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
-      { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
-      { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
-      { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
-      { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
-      { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
-      { href:'amostragem.html',   ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
-    ]},
-    { label: 'Análise', items: [
-      { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
-      { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
-      { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
-      { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
-      ...(isAdm ? [{ href:'admin.html', ico:'⚙️', label:'Administração' }] : []),
-    ]},
-  ];
-  document.getElementById('menuModulos').innerHTML = secoes.map(s => {
-    const html = s.items.map(m => {
-      if (typeof nivelAcesso === 'function' && m.acesso && nivelAcesso(m.acesso) === 'nenhum') return '';
-      return `<a class="menu-item${pg===m.href?' ativo':''}" href="${m.href}"><span class="menu-ico">${m.ico}</span><span>${m.label}</span></a>`;
-    }).filter(Boolean).join('');
-    return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
-  }).join('');
-}
 
 function iniciarListeners() {
   onSnapshot(collection(db,'talhoes'), snap => {
@@ -222,7 +186,7 @@ function fmtN(n, d = 1) { if (n == null || isNaN(n) || !isFinite(n)) return '—
 function setorVento(g) { if (g == null) return ''; const S = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']; return S[Math.round(g / 22.5) % 16]; }
 
 function ouvirClima() {
-  if (nivelAcesso('clima') === 'nenhum') return;
+  if (!podeAbrir(perfilAtual, 'clima')) return;
   onSnapshot(collection(db, 'clima'), snap => {
     estacoes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
       .filter(e => climaFazPermitida(e.fazenda))
@@ -311,7 +275,7 @@ function isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padSt
 function calcPendencias() {
   const hoje = isoLocal(new Date());
   const itens = [];
-  const visivel = k => nivelAcesso(TIPOS_PEND[k].mod) !== 'nenhum';
+  const visivel = k => podeAbrir(perfilAtual, TIPOS_PEND[k].mod);
   const add = (tipo, faz, o) => { if (pendFazPermitida(TIPOS_PEND[tipo].mod, faz)) itens.push({ tipo, faz: faz || 'Sem fazenda', ...o }); };
 
   // Adubação: um item por talhão (não por mês), senão o mesmo talhão aparece repetido a cada mês vencido
@@ -569,14 +533,14 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 
     <!-- Atalhos rápidos -->
     <div class="atalhos-grid">
-      <a href="mapa.html" class="atalho-btn"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
-      <a href="adubacoes.html" class="atalho-btn"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
-      <a href="pulverizacoes.html" class="atalho-btn"><span class="atalho-ico">💧</span><span class="atalho-label">Pulveriz.</span></a>
-      <a href="drench.html" class="atalho-btn"><span class="atalho-ico">🌱</span><span class="atalho-label">Drench</span></a>
-      <a href="clima.html" class="atalho-btn"><span class="atalho-ico">🌦️</span><span class="atalho-label">Clima</span></a>
-      <a href="pedidos.html" class="atalho-btn"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
-      <a href="irrigacao.html" class="atalho-btn"><span class="atalho-ico">💦</span><span class="atalho-label">Irrigação</span></a>
-      <a href="avaliacoes.html" class="atalho-btn"><span class="atalho-ico">📍</span><span class="atalho-label">Avaliações</span></a>
+      <a href="mapa.html" class="atalho-btn" data-mod="mapa"><span class="atalho-ico">🗺️</span><span class="atalho-label">Mapa</span></a>
+      <a href="adubacoes.html" class="atalho-btn" data-mod="adubacao"><span class="atalho-ico">🧪</span><span class="atalho-label">Adubações</span></a>
+      <a href="pulverizacoes.html" class="atalho-btn" data-mod="pulverizacao"><span class="atalho-ico">💧</span><span class="atalho-label">Pulveriz.</span></a>
+      <a href="drench.html" class="atalho-btn" data-mod="drench"><span class="atalho-ico">🌱</span><span class="atalho-label">Drench</span></a>
+      <a href="clima.html" class="atalho-btn" data-mod="clima"><span class="atalho-ico">🌦️</span><span class="atalho-label">Clima</span></a>
+      <a href="pedidos.html" class="atalho-btn" data-mod="pedidos"><span class="atalho-ico">📦</span><span class="atalho-label">Pedidos</span></a>
+      <a href="irrigacao.html" class="atalho-btn" data-mod="irrigacao"><span class="atalho-ico">💦</span><span class="atalho-label">Irrigação</span></a>
+      <a href="avaliacoes.html" class="atalho-btn" data-mod="avaliacoes"><span class="atalho-ico">📍</span><span class="atalho-label">Avaliações</span></a>
     </div>
     <!-- Clima agora — uma ficha por estação de clima.html (some se não houver estação) -->
     <div id="secClima" style="display:none;">
