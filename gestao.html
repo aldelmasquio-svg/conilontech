@@ -2706,13 +2706,15 @@ window.setNutrNutriente = function(v) { nutrNutrienteSel = v; renderTab(); };
 // "Julho/2026" (nome/ano) e "2026-07" (ISO). Usa os campos mesIdx/ano quando presentes.
 function _planoMesAno(plano) {
   if (!plano) return null;
+  // mesAno primeiro: é inequívoco. Planos antigos do Planejamento têm mesAno "2026-07" com
+  // mesIdx 1-12 (7 = julho), enquanto o resto usa 0-11 — confiar no mesIdx deslocava 1 mês.
+  const s = String(plano.mesAno || '').trim();
+  if (s.includes('/')) { const [mn, as] = s.split('/'); const mi = MESES.indexOf(mn.trim()); const a = parseInt(as); if (mi >= 0 && a) return { mesIdx: mi, ano: a }; }
+  const m = s.match(/^(\d{4})-(\d{2})/); if (m) return { mesIdx: parseInt(m[2]) - 1, ano: parseInt(m[1]) };
   if (plano.mesIdx != null && plano.mesIdx !== '' && plano.ano) {
     const mi = Number(plano.mesIdx), a = Number(plano.ano);
     if (mi >= 0 && mi <= 11 && a) return { mesIdx: mi, ano: a };
   }
-  const s = String(plano.mesAno || '').trim();
-  if (s.includes('/')) { const [mn, as] = s.split('/'); const mi = MESES.indexOf(mn.trim()); const a = parseInt(as); if (mi >= 0 && a) return { mesIdx: mi, ano: a }; }
-  const m = s.match(/^(\d{4})-(\d{2})/); if (m) return { mesIdx: parseInt(m[2]) - 1, ano: parseInt(m[1]) };
   return null;
 }
 function _dataPlanejadaAp(plano, ap) {

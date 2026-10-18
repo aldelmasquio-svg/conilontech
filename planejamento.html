@@ -354,7 +354,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { podeAbrir } from './acesso.js';
 import { gerarMenu } from './menu.js';
 
@@ -1427,6 +1427,8 @@ function renderCardObs() {
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Mesmos nomes que adubacoes.html usa em mesAno ("Julho/2026")
+const MESES_NOME_ADUB = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 // APROVAR PLANO — gera planosAdubacao (integração)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1455,8 +1457,11 @@ window.aprovarPlanoSafra = async function() {
     let criados = 0, atualizados = 0;
     for (const m of meses) {
       if (!m.adubos || !m.adubos.length) continue;
-      const [ano, mesIdx] = m.mes.split('-').map(Number);
-      const mesAno = `${ano}-${String(mesIdx).padStart(2,'0')}`;
+      // m.mes é "AAAA-MM" (mês 1-12). Adubações procura o plano por mesAno "Julho/2026" e o resto do
+      // app lê mesIdx 0-11 — antes gravava "2026-07" e mesIdx 7, e Adubações nunca via esses planos.
+      const [ano, mes1a12] = m.mes.split('-').map(Number);
+      const mesIdx = mes1a12 - 1;
+      const mesAno = `${MESES_NOME_ADUB[mesIdx]}/${ano}`;
       // Aplicação: cada mês vira UMA aplicação com todos os adubos como produtos
       const aplicacao = {
         id: 'pl' + Date.now() + Math.random().toString(36).slice(2,5),
@@ -1478,20 +1483,29 @@ window.aprovarPlanoSafra = async function() {
       // Query inline — usa planejamentos_safra mas queremos planosAdubacao
       // Como não temos snapshot ao vivo aqui, faz query manual
       try {
-        // Tenta criar — se há um existente do mesmo talhão+mes, vamos updateDoc
-        // Como não temos cache local de planosAdubacao, sempre vamos criar um doc novo
-        // O módulo de adubações vai fazer merge na visualização
-        await addDoc(collection(db,'planosAdubacao'), {
-          talhaoId: talhaoIdInterno,
-          talhaoNome: talhao?.nome || talhao?.id || '',
-          fazenda: talhao?.fazenda || '',
-          mesAno,
-          mesIdx,
-          ano,
-          aplicacoes: [aplicacao],
-          origemPlanejamentoId: window.editandoPlanId
-        });
-        criados++;
+        // Já existe plano desse talhão no mês (criado em Adubações ou numa aprovação anterior)?
+        // Entra como mais uma aplicação dele; reaprovar troca a aplicação deste planejamento
+        // (se ainda não foi feita) em vez de duplicar o plano.
+        const existentes = await getDocs(query(collection(db,'planosAdubacao'),
+          where('talhaoId','==',talhaoIdInterno), where('mesAno','==',mesAno)));
+        if (!existentes.empty) {
+          const ref = existentes.docs[0];
+          const aps = (ref.data().aplicacoes || []).filter(a => a.feito || a.origemPlanejamentoId !== window.editandoPlanId);
+          await updateDoc(doc(db,'planosAdubacao',ref.id), { aplicacoes: [...aps, aplicacao] });
+          atualizados++;
+        } else {
+          await addDoc(collection(db,'planosAdubacao'), {
+            talhaoId: talhaoIdInterno,
+            talhaoNome: talhao?.nome || talhao?.id || '',
+            fazenda: talhao?.fazenda || '',
+            mesAno,
+            mesIdx,
+            ano,
+            aplicacoes: [aplicacao],
+            origemPlanejamentoId: window.editandoPlanId
+          });
+          criados++;
+        }
       } catch(e) {
         console.error('Erro ao criar plano', e);
       }
@@ -1500,11 +1514,11 @@ window.aprovarPlanoSafra = async function() {
     try {
       await addDoc(collection(db,'logs'), {
         tipo:'planejamento_aprovado',
-        mensagem:`${usuarioAtual.email} aprovou planejamento ${w.safra} (${talhao?.fazenda} · ${talhao?.nome}) → ${criados} plano(s) gerado(s)`,
+        mensagem:`${usuarioAtual.email} aprovou planejamento ${w.safra} (${talhao?.fazenda} · ${talhao?.nome}) → ${criados} plano(s) criado(s), ${atualizados} atualizado(s)`,
         criadoEm: new Date().toISOString(), uid: usuarioAtual.uid
       });
     } catch(e) {}
-    toast(`✅ Planejamento aprovado! ${criados} mês(es) enviado(s) para Adubações.`);
+    toast(`✅ Planejamento aprovado! ${criados + atualizados} mês(es) enviado(s) para Adubações.`);
   } catch(e) {
     console.error(e);
     toast('❌ Erro: '+e.message);

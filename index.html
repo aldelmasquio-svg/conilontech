@@ -105,7 +105,7 @@ function atualizarDashboard() {
 
 // ── GAUGE — % da adubação confirmada NESTE mês (não a safra toda, pra refletir o ritmo atual) ──
 function pctPlanosMes(mesIdx, ano) {
-  const planos = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano);
+  const planos = planosAdubacao.filter(p => { const ma = planoMesAno(p); return ma && ma.mesIdx === mesIdx && ma.ano === ano; });
   const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
   const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
   return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
@@ -113,7 +113,7 @@ function pctPlanosMes(mesIdx, ano) {
 
 // % concluído do mês, filtrado por fazenda (ou geral quando fazenda é null)
 function pctPlanosMesFazenda(mesIdx, ano, fazenda) {
-  const planos = planosAdubacao.filter(p => p.mesIdx === mesIdx && p.ano === ano && (!fazenda || p.fazenda === fazenda));
+  const planos = planosAdubacao.filter(p => { const ma = planoMesAno(p); return ma && ma.mesIdx === mesIdx && ma.ano === ano && (!fazenda || p.fazenda === fazenda); });
   const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
   const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
   return { total, feitas, pct: total ? Math.round(feitas/total*100) : 0 };
@@ -260,13 +260,14 @@ function pendFazPermitida(mod, faz) {
   return !p || !p.length || p.includes(faz);
 }
 // Mês/ano do plano: mesIdx/ano quando existem, senão "Julho/2026" ou "2026-07" (os dois formatos do mesAno)
+// mesAno primeiro (inequívoco); mesIdx só na falta — planos antigos do Planejamento têm mesIdx 1-12
 function planoMesAno(p) {
-  if (Number.isInteger(p.mesIdx) && p.ano) return { mesIdx: p.mesIdx, ano: Number(p.ano) };
   const s = String(p.mesAno || '');
   let m = s.match(/^(\d{4})-(\d{2})/);
   if (m) return { mesIdx: Number(m[2]) - 1, ano: Number(m[1]) };
   m = s.match(/^([^/]+)\/(\d{4})$/);
   if (m) { const i = MESES_NOME.findIndex(n => semAcento(n) === semAcento(m[1])); if (i >= 0) return { mesIdx: i, ano: Number(m[2]) }; }
+  if (Number.isInteger(p.mesIdx) && p.mesIdx >= 0 && p.mesIdx <= 11 && p.ano) return { mesIdx: p.mesIdx, ano: Number(p.ano) };
   return null;
 }
 function diasEntre(isoA, isoB) { return Math.round((new Date(isoB + 'T12:00:00') - new Date(isoA + 'T12:00:00')) / 86400000); }
