@@ -1,0 +1,15 @@
+{
+  "name": "conilon-tech-app",
+  "private": true,
+  "description": "Casca nativa (Capacitor) do Conilon Tech: abre o site publicado no GitHub Pages dentro de um app Android/iOS.",
+  "scripts": {
+    "sync": "cap sync"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/core": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}
