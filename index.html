@@ -51,7 +51,6 @@ const climaDia = {};             // estacaoId → doc de clima/{id}/dias/{hoje}
 const climaUnsub = {};
 let pendTipo = 'todos';          // filtro da seção Pendências
 const pendAbertas = new Set();   // fazendas expandidas (sobrevive aos re-renders do onSnapshot)
-const MESES_ABREV = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href = 'login.html'; return; }
@@ -138,7 +137,6 @@ function iniciarListeners() {
 
 function atualizarDashboard() {
   atualizarGaugeAdubacao();
-  atualizarHeatmapAdub();
   atualizarPendencias();
 }
 
@@ -194,56 +192,6 @@ function atualizarGaugeAdubacao() {
       <div class="faz-gauge-lbl">${faz}</div>
     </a>`;
   }).join('');
-}
-
-// ── HEATMAP — % de adubação concluída, fazenda × mês (últimos 4 meses) ──
-function calcHeatmapAdub() {
-  const hoje = new Date();
-  const meses = [];
-  for (let i = 3; i >= 0; i--) {
-    let m = hoje.getMonth() - i, a = hoje.getFullYear();
-    while (m < 0) { m += 12; a -= 1; }
-    meses.push({ mesIdx: m, ano: a, label: MESES_ABREV[m] });
-  }
-  const fazendas = [...new Set(talhoes.map(t => t.fazenda).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
-  const linhas = fazendas.map(faz => {
-    const planosFaz = planosAdubacao.filter(p => p.fazenda === faz);
-    const celulas = meses.map(({mesIdx,ano}) => {
-      const planos = planosFaz.filter(p => p.mesIdx === mesIdx && p.ano === ano);
-      const total = planos.reduce((s,p) => s + (p.aplicacoes||[]).length, 0);
-      const feitas = planos.reduce((s,p) => s + (p.aplicacoes||[]).filter(a => a.feito).length, 0);
-      return { total, feitas, pct: total ? Math.round(feitas/total*100) : null };
-    });
-    return { faz, celulas };
-  });
-  return { meses, linhas };
-}
-
-function atualizarHeatmapAdub() {
-  const cont = document.getElementById('heatmapAdub');
-  const sec = document.getElementById('secHeatmapAdub');
-  if (!cont) return;
-  const { meses, linhas } = calcHeatmapAdub();
-  if (!linhas.length) { if (sec) sec.style.display = 'none'; return; }
-  if (sec) sec.style.display = 'block';
-  const corCel = (c) => {
-    if (c.pct === null) return { bg:'#f3f0e8', fg:'var(--c)', txt:'—' };
-    if (c.pct >= 80) return { bg:'#16a34a', fg:'white', txt:c.pct+'%' };
-    if (c.pct >= 40) return { bg:'#f59e0b', fg:'white', txt:c.pct+'%' };
-    return { bg:'#dc2626', fg:'white', txt:c.pct+'%' };
-  };
-  cont.innerHTML = `
-    <div class="heatmap-scroll">
-      <table class="heatmap-tbl">
-        <thead><tr><th></th>${meses.map(m => `<th>${m.label}</th>`).join('')}</tr></thead>
-        <tbody>
-          ${linhas.map(l => `<tr>
-            <td class="heatmap-faz">${l.faz}</td>
-            ${l.celulas.map(c => { const cor = corCel(c); return `<td><span class="heatmap-cel" style="background:${cor.bg};color:${cor.fg};" title="${c.total?c.feitas+'/'+c.total+' confirmadas':'sem plano'}">${cor.txt}</span></td>`; }).join('')}
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>`;
 }
 
 // ── CLIMA AGORA — última leitura de cada estação (mesmos docs que clima.html lê) ──
@@ -524,12 +472,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .faz-gauge-ring::before{content:'';position:absolute;width:40px;height:40px;border-radius:50%;background:white;}
 .faz-gauge-val{position:relative;font-family:var(--font-display);font-weight:800;font-size:.72rem;color:var(--ve);}
 .faz-gauge-lbl{font-size:.6rem;font-weight:700;color:var(--c);text-align:center;max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-/* HEATMAP ADUBAÇÃO (fazenda x mês) */
-.heatmap-scroll{overflow-x:auto;padding:14px;-webkit-overflow-scrolling:touch;}
-.heatmap-tbl{border-collapse:separate;border-spacing:5px;width:100%;}
-.heatmap-tbl th{font-size:.6rem;color:var(--c);text-transform:uppercase;letter-spacing:.05em;font-weight:700;padding-bottom:2px;}
-.heatmap-faz{font-size:.76rem;font-weight:700;color:var(--ve);white-space:nowrap;padding-right:8px;text-align:left;}
-.heatmap-cel{display:flex;align-items:center;justify-content:center;min-width:42px;height:32px;border-radius:6px;font-family:var(--font-mono);font-size:.68rem;font-weight:700;}
 .trend-badge{display:none;align-items:center;font-size:.7rem;font-weight:700;border-radius:20px;padding:3px 9px;}
 .trend-up{background:#dcfce7;color:#16a34a;}
 .trend-down{background:#fee2e2;color:#dc2626;}
@@ -650,14 +592,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       </div>
       <div class="gauge-sub" id="gaugeSub">Carregando...</div>
       <div class="faz-gauge-scroll" id="gaugeFazendas"></div>
-    </div>
-    <!-- Heatmap: adubação por fazenda x mês -->
-    <div id="secHeatmapAdub" style="display:none;">
-      <div class="sec-title">🗓️ Adubação — Últimos 4 Meses</div>
-      <div class="sec-sub">% de aplicações confirmadas por fazenda em cada mês</div>
-      <div class="sec-card" style="margin-bottom:16px;">
-        <div id="heatmapAdub"></div>
-      </div>
     </div>
     <!-- Pendências (= atrasadas), agrupadas por fazenda -->
     <div class="sec-title">🚦 Pendências</div>
