@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>ConilonTech · Administração</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800&family=Barlow:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
@@ -653,12 +653,12 @@ window.excluirAduboCat = async function() {
 <style>
 :root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--ts:#4b5563;--danger:#ef4444;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
+body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100vh;height:100dvh;overflow:hidden;display:flex;flex-direction:column;}
 .loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
 .spinner{width:36px;height:36px;border:3px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin .8s linear infinite;}
 @keyframes spin{to{transform:rotate(360deg);}}
 .app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);}
-.hdr-logo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
+.hdr-logo{font-family:var(--font-display);font-weight:800;font-size:1.1rem;display:flex;align-items:center;gap:8px;}
 .hdr-sub{font-size:.55rem;opacity:.6;letter-spacing:.15em;text-transform:uppercase;display:block;}
 .btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .hdr-user{font-size:.68rem;opacity:.7;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -667,33 +667,33 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
 .menu-lateral.aberto{transform:translateX(0);}
 .menu-topo{padding:20px 16px 14px;border-bottom:1px solid rgba(255,255,255,.1);}
-.menu-app-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:white;}
+.menu-app-nome{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:white;}
 .menu-user-nome{font-size:.8rem;color:rgba(255,255,255,.7);margin-top:2px;}
 .menu-user-email{font-size:.65rem;color:rgba(255,255,255,.45);margin-top:1px;}
 #menuModulos{flex:1;padding:10px 8px;overflow-y:auto;}
-.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:'Barlow',sans-serif;font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:var(--font-body);font-size:.9rem;font-weight:500;transition:all .2s;margin-bottom:2px;text-decoration:none;}
 .menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
 .menu-ico{font-size:18px;width:24px;text-align:center;flex-shrink:0;}
 .menu-rodape{padding:12px 16px;border-top:1px solid rgba(255,255,255,.1);}
-.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:var(--font-display);font-weight:700;font-size:.9rem;cursor:pointer;}
 /* CONTEÚDO */
 .app-main{flex:1;overflow:hidden;display:flex;flex-direction:column;min-height:0;}
 .tabs{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;}
-.tab{flex:1;padding:11px 6px;border:none;background:none;cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+.tab{flex:1;padding:11px 6px;border:none;background:none;cursor:pointer;font-family:var(--font-display);font-weight:700;font-size:.82rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
 .tab.ativo{color:var(--v);border-bottom-color:var(--v);}
 .tab-content{display:none;flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch;}
 .tab-content.ativo{display:block;}
 /* SEÇÃO */
-.sec-tit{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--v);margin-bottom:10px;margin-top:16px;}
+.sec-tit{font-family:var(--font-display);font-weight:800;font-size:.85rem;text-transform:uppercase;letter-spacing:.08em;color:var(--v);margin-bottom:10px;margin-top:16px;}
 .sec-tit:first-child{margin-top:0;}
 /* USUÁRIOS */
 .busca-row{display:flex;gap:8px;margin-bottom:12px;}
-.busca-inp{flex:1;border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.88rem;font-family:'Barlow',sans-serif;outline:none;}
+.busca-inp{flex:1;border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.88rem;font-family:var(--font-body);outline:none;}
 .busca-inp:focus{border-color:var(--v);}
 .usuario-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;margin-bottom:10px;overflow:hidden;}
 .usuario-card.inativo{opacity:.6;border:1.5px dashed var(--cb);}
 .usuario-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
-.usuario-avatar{width:40px;height:40px;border-radius:50%;background:var(--v);color:white;display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.9rem;flex-shrink:0;}
+.usuario-avatar{width:40px;height:40px;border-radius:50%;background:var(--v);color:white;display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:800;font-size:.9rem;flex-shrink:0;}
 .usuario-info{flex:1;}
 .usuario-nome{font-weight:700;font-size:.95rem;}
 .usuario-email{font-size:.72rem;color:var(--c);margin-top:1px;}
@@ -710,17 +710,17 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .modal-box{background:white;border-radius:16px 16px 0 0;width:100%;max-width:600px;padding:8px 16px 18px;transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.2,.64,1);max-height:92vh;max-height:92dvh;overflow-y:auto;display:flex;flex-direction:column;}
 .modal-overlay.aberto .modal-box{transform:translateY(0);}
 .modal-handle{width:42px;height:4px;background:var(--cb);border-radius:99px;margin:6px auto 12px;flex-shrink:0;}
-.modal-titulo{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:1.2rem;color:var(--t);line-height:1.2;margin-bottom:4px;}
+.modal-titulo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--t);line-height:1.2;margin-bottom:4px;}
 .modal-sub{font-size:.82rem;color:var(--c);margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--cl);line-height:1.5;}
 .modal-acoes{display:flex;flex-direction:column;gap:8px;margin-top:12px;flex-shrink:0;}
 .btn-full{width:100%;}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 14px;border-radius:8px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.95rem;cursor:pointer;border:1.5px solid transparent;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 14px;border-radius:8px;font-family:var(--font-display);font-weight:700;font-size:.95rem;cursor:pointer;border:1.5px solid transparent;}
 .btn-v{background:var(--v);color:white;border-color:var(--v);}
 .btn-c{background:white;color:var(--c);border-color:var(--cb);}
 /* FAZENDAS MOD */
 .faz-mod-bloco{border:1px solid var(--cl);border-radius:10px;padding:10px 12px;margin-bottom:10px;}
 .faz-mod-cab{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px;gap:10px;flex-wrap:wrap;}
-.faz-mod-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--t);font-size:.95rem;}
+.faz-mod-tit{font-family:var(--font-display);font-weight:700;color:var(--t);font-size:.95rem;}
 .faz-mod-todas{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:var(--c);cursor:pointer;user-select:none;}
 .faz-mod-chips{display:flex;flex-wrap:wrap;gap:6px;}
 .faz-chip{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;border:1.5px solid var(--cb);border-radius:99px;font-size:.8rem;color:var(--c);background:var(--cl);cursor:pointer;user-select:none;}
@@ -742,7 +742,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .mod-grupo-tit{font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;margin:11px 0 6px;}
 .mod-grid{display:grid;grid-template-columns:1fr;gap:6px 14px;}
 .mod-cell{display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--cl);padding:4px 0;}
-.sel-nivel{border:1.5px solid var(--cb);border-radius:7px;padding:5px 10px;font-size:.74rem;font-weight:700;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;background:var(--cl);cursor:pointer;text-align:center;flex-shrink:0;min-width:112px;text-transform:capitalize;}
+.sel-nivel{border:1.5px solid var(--cb);border-radius:7px;padding:5px 10px;font-size:.74rem;font-weight:700;font-family:var(--font-body);outline:none;-webkit-appearance:none;background:var(--cl);cursor:pointer;text-align:center;flex-shrink:0;min-width:112px;text-transform:capitalize;}
 /* Cores por nível de acesso */
 .niv-nenhum{background:#f3f4f6;color:#9ca3af;border-color:#e5e7eb;}
 .niv-operador{background:#dbeafe;color:#1e40af;border-color:#93c5fd;}
@@ -751,37 +751,37 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
 .niv-admin{background:#dcfce7;color:#166534;border-color:#86efac;}
 @media(min-width:560px){.mod-grid{grid-template-columns:1fr 1fr;}}
 /* LOGS */
-.filtro-log{border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 12px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;-webkit-appearance:none;width:100%;margin-bottom:10px;}
+.filtro-log{border:1.5px solid var(--cb);border-radius:var(--rs);padding:9px 12px;font-size:.85rem;font-family:var(--font-body);outline:none;-webkit-appearance:none;width:100%;margin-bottom:10px;}
 .log-item{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--cl);}
 .log-item:last-child{border:none;}
 .log-ico{font-size:1.1rem;flex-shrink:0;margin-top:1px;}
 .log-info{flex:1;}
 .log-msg{font-size:.82rem;color:var(--t);line-height:1.4;}
-.log-data{font-size:.68rem;color:var(--c);margin-top:3px;font-family:'DM Mono',monospace;}
+.log-data{font-size:.68rem;color:var(--c);margin-top:3px;font-family:var(--font-mono);}
 /* CONFIG */
 .config-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:14px;margin-bottom:12px;}
-.config-tit{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--v);margin-bottom:10px;}
-.inp-base{border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;font-family:'Barlow',sans-serif;outline:none;width:100%;margin-bottom:8px;}
+.config-tit{font-family:var(--font-display);font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--v);margin-bottom:10px;}
+.inp-base{border:1.5px solid var(--cb);border-radius:var(--rs);padding:10px 12px;font-size:.9rem;font-family:var(--font-body);outline:none;width:100%;margin-bottom:8px;}
 .inp-base:focus{border-color:var(--v);}
-.btn-v{background:var(--v);border:none;color:white;border-radius:var(--rs);padding:10px 16px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.9rem;cursor:pointer;width:100%;}
-.btn-c{background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:9px 14px;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;margin-bottom:6px;width:100%;}
+.btn-v{background:var(--v);border:none;color:white;border-radius:var(--rs);padding:10px 16px;font-family:var(--font-display);font-weight:700;font-size:.9rem;cursor:pointer;width:100%;}
+.btn-c{background:var(--cl);border:1.5px solid var(--cb);color:var(--t);border-radius:var(--rs);padding:9px 14px;font-family:var(--font-display);font-weight:700;font-size:.85rem;cursor:pointer;margin-bottom:6px;width:100%;}
 .atv-config-row{display:flex;gap:8px;margin-bottom:7px;}
-.atv-input{flex:1;border:1.5px solid var(--cb);border-radius:6px;padding:8px 10px;font-size:.85rem;font-family:'Barlow',sans-serif;outline:none;}
+.atv-input{flex:1;border:1.5px solid var(--cb);border-radius:6px;padding:8px 10px;font-size:.85rem;font-family:var(--font-body);outline:none;}
 .btn-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:1.1rem;padding:4px;}
 
 /* CATÁLOGO DE ADUBOS */
 .cat-row{background:#fafafa;border:1px solid var(--cl);border-radius:8px;padding:9px 11px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer;}
 .cat-row:hover{background:var(--vb);border-color:var(--v);}
 .cat-row-info{flex:1;min-width:0;}
-.cat-row-nome{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.92rem;color:var(--ve);}
-.cat-row-formula{font-family:'DM Mono',monospace;font-size:.7rem;color:var(--c);margin-top:2px;}
-.cat-row-chip{font-family:'DM Mono',monospace;font-size:.66rem;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;}
+.cat-row-nome{font-family:var(--font-display);font-weight:800;font-size:.92rem;color:var(--ve);}
+.cat-row-formula{font-family:var(--font-mono);font-size:.7rem;color:var(--c);margin-top:2px;}
+.cat-row-chip{font-family:var(--font-mono);font-size:.66rem;background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:99px;font-weight:700;border:1px solid #93c5fd;}
 .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:6px;margin:8px 0;}
 .cat-inp{display:flex;align-items:center;gap:3px;background:#fafafa;border:1.5px solid var(--cb);border-radius:6px;padding:5px 7px;}
-.cat-inp label{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:.74rem;color:var(--ve);min-width:30px;}
-.cat-inp input{width:100%;border:none;background:transparent;outline:none;font-family:'DM Mono',monospace;font-weight:700;font-size:.88rem;text-align:right;color:var(--ve);min-width:0;}
+.cat-inp label{font-family:var(--font-display);font-weight:800;font-size:.74rem;color:var(--ve);min-width:30px;}
+.cat-inp input{width:100%;border:none;background:transparent;outline:none;font-family:var(--font-mono);font-weight:700;font-size:.88rem;text-align:right;color:var(--ve);min-width:0;}
 .cat-inp span{font-size:.68rem;color:var(--c);}
-.btn-link-danger{background:none;border:none;color:var(--danger);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;padding:6px;text-decoration:underline;}
+.btn-link-danger{background:none;border:none;color:var(--danger);font-family:var(--font-display);font-weight:700;font-size:.82rem;cursor:pointer;padding:6px;text-decoration:underline;}
 .cat-vazio{text-align:center;padding:30px 15px;color:var(--c);font-size:.85rem;}
 
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
@@ -888,7 +888,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
       <label class="campo-label">Nome</label>
       <input type="text" class="campo-inp" id="aduboCatNome" placeholder="Ex: Ureia, MAP, NPK 20-05-20">
     </div>
-    <div id="aduboCatPreview" style="text-align:center;font-family:'DM Mono',monospace;font-weight:700;color:var(--ve);background:var(--vb);padding:6px;border-radius:6px;margin:7px 0;display:none;font-size:1rem;"></div>
+    <div id="aduboCatPreview" style="text-align:center;font-family:var(--font-mono);font-weight:700;color:var(--ve);background:var(--vb);padding:6px;border-radius:6px;margin:7px 0;display:none;font-size:1rem;"></div>
     <div class="cat-grid">
       <div class="cat-inp"><label>N</label><input type="text" inputmode="decimal" id="catN" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
       <div class="cat-inp"><label>P₂O₅</label><input type="text" inputmode="decimal" id="catP2o5" placeholder="0" oninput="atualizarPreviewCat()"><span>%</span></div>
@@ -903,7 +903,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     </div>
     <!-- Unidade padrão de aplicação -->
     <div style="display:flex;align-items:center;gap:10px;margin-top:8px;padding:8px 10px;background:var(--bg);border-radius:7px;">
-      <span style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;">Unidade de dose</span>
+      <span style="font-family:var(--font-display);font-weight:700;font-size:.74rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;flex-shrink:0;">Unidade de dose</span>
       <select id="catUnidade" style="flex:1;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-size:.85rem;background:white;outline:none;">
         <option value="kg/ha">kg/ha — sólido / granulado</option>
         <option value="L/ha">L/ha — líquido (matéria orgânica, foliar...)</option>
@@ -911,11 +911,11 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--t);height:
     </div>
     <!-- Campos especiais pra corretivos de acidez -->
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:7px;padding:9px 10px;margin-top:8px;">
-      <div style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.74rem;color:#92400e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;">🪨 Só p/ calcários (acidez)</div>
+      <div style="font-family:var(--font-display);font-weight:700;font-size:.74rem;color:#92400e;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;">🪨 Só p/ calcários (acidez)</div>
       <div style="display:flex;gap:8px;align-items:flex-end;">
         <div class="cat-inp" style="flex:1;"><label>PRNT</label><input type="text" inputmode="decimal" id="catPRNT" placeholder="80"><span>%</span></div>
         <div style="flex:2;">
-          <label style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Tipo de corretivo</label>
+          <label style="font-family:var(--font-display);font-weight:700;font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px;">Tipo de corretivo</label>
           <select id="catTipoCorretivo" style="width:100%;border:1.5px solid var(--cb);border-radius:6px;padding:6px 8px;font-size:.82rem;background:white;outline:none;">
             <option value="">— não é corretivo —</option>
             <option value="calcario_calcitico">Calcário calcítico</option>
