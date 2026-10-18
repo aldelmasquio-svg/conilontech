@@ -65,7 +65,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!snap.exists()) { await signOut(auth); return; }
   perfilAtual = snap.data();
   if (!perfilAtual.modulos && perfilAtual.perfil === 'admin') {
-    perfilAtual.modulos = {agenda:'admin',mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',irrigacao:'admin',herbicida:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
+    perfilAtual.modulos = {mapa:'admin',atividades:'admin',adubacao:'admin',config:'admin',pulverizacao:'admin',drench:'admin',irrigacao:'admin',herbicida:'admin',pedidos:'admin',cotacoes:'admin',estoque:'admin',gestao:'admin',analises:'admin',recomendacoes:'admin',planejamento:'admin',admin:'admin',equipe:'admin'};
   }
   const isAdmin = Object.values(perfilAtual.modulos||{}).includes('admin') || perfilAtual.perfil === 'admin';
   if (!isAdmin) { window.location.href = 'index.html'; return; }
@@ -94,7 +94,6 @@ function gerarMenu() {
   const secoes = [
     { label: 'Principal', items: [
       { href:'index.html',         ico:'📊', label:'Dashboard' },
-      { href:'agenda.html',        ico:'📅', label:'Agenda' },
       { href:'mapa.html',          ico:'🗺️', label:'Mapa de Talhões',   acesso:'mapa' },
       { href:'adubacoes.html',     ico:'🧪', label:'Adubações',         acesso:'adubacao' },
       { href:'pulverizacoes.html', ico:'💧', label:'Pulverizações',     acesso:'pulverizacao' },
@@ -143,7 +142,6 @@ function renderizarUsuarios() {
   const filtrados = busca ? usuarios.filter(u => (u.nome+u.email).toLowerCase().includes(busca)) : usuarios;
 
   const MODS = [
-    {id:'agenda',label:'Agenda'},
     {id:'mapa',label:'Mapa'},
     {id:'atividades',label:'Atividades'},
     {id:'equipe',label:'Equipe'},
@@ -167,7 +165,7 @@ function renderizarUsuarios() {
   const NIVEIS = ['nenhum','encarregado','operador','gerente','admin'];
   const modLabel = id => (MODS.find(m=>m.id===id)?.label||id);
   const GRUPOS = [
-    {titulo:'Operação de campo', ids:['agenda','mapa','adubacao','pulverizacao','drench','irrigacao','clima','herbicida','calibracao','avaliacoes','amostragem','atividades','equipe']},
+    {titulo:'Operação de campo', ids:['mapa','adubacao','pulverizacao','drench','irrigacao','clima','herbicida','calibracao','avaliacoes','amostragem','atividades','equipe']},
     {titulo:'Compras e estoque', ids:['estoque','pedidos','cotacoes']},
     {titulo:'Análise e gestão', ids:['gestao','analises','recomendacoes','planejamento']},
   ];
@@ -258,7 +256,6 @@ window.abrirFazendasUsuario = function(uid) {
     return;
   }
   const MODS_LOCAL = [
-    {id:'agenda',label:'Agenda',ico:'📅'},
     {id:'mapa',label:'Mapa',ico:'🗺️'},
     {id:'atividades',label:'Atividades',ico:'🌾'},
     {id:'equipe',label:'Equipe',ico:'👥'},

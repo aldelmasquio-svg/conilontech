@@ -2,8 +2,8 @@
 
 // ── Permissões (mesma lógica de nivelAcesso/fazendaPermitida das páginas) ──
 const HERANCA = { drench: 'pulverizacao', cotacoes: 'pedidos' };
-// Módulos abertos por padrão (como agenda/clima no app): só bloqueiam se o admin marcar 'nenhum'.
-const ABERTOS = new Set(['clima', 'agenda']);
+// Módulos abertos por padrão (como clima no app): só bloqueiam se o admin marcar 'nenhum'.
+const ABERTOS = new Set(['clima']);
 
 export function nivelAcesso(perfil, mod) {
   const mods = perfil.modulos || {};
