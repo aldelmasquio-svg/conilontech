@@ -29,5 +29,7 @@ assert.equal(podeAbrir(operador, 'clima'), true);
 assert.equal(podeAbrir({ modulos: { pulverizacao: 'operador' } }, 'drench'), true, 'drench herda de pulverização');
 assert.equal(podeAbrir({ modulos: { admin: 'admin', mapa: 'nenhum' } }, 'mapa'), true, 'dono abre tudo');
 assert.equal(podeAbrir(operador, undefined), true, 'item sem módulo (Dashboard) sempre aparece');
+assert.equal(podeAbrir({ modulos: { pedidos: 'nenhum' } }, 'cotacoes'), false, 'cotações herda o nenhum de pedidos');
+assert.equal(podeAbrir({ modulos: { pedidos: 'nenhum', cotacoes: 'operador' } }, 'cotacoes'), true, 'cotações explícito vence o pai');
 console.log('podeAbrir: ok');
 console.log('acesso.js: ok');

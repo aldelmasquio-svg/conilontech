@@ -25,14 +25,17 @@ export function semAcessoAoModulo(perfil, mod) {
 }
 
 // Módulos "abertos por padrão": a página só trava quando o admin marcou 'nenhum' explicitamente
-// (páginas anteriores à trava, ou sem trava nenhuma). Os demais exigem nível definido no perfil.
-const ABERTOS = new Set(['adubacao', 'pulverizacao', 'equipe', 'estoque', 'pedidos', 'cotacoes',
-  'gestao', 'clima', 'analises', 'recomendacoes', 'planejamento']);
+// (páginas anteriores à trava). Os demais exigem nível definido no perfil.
+const ABERTOS = new Set(['adubacao', 'pulverizacao', 'equipe', 'estoque', 'pedidos', 'gestao', 'clima']);
 
 // O usuário consegue abrir a ferramenta? Espelha a trava do bootstrap de cada página —
 // usado pelo menu, pelos atalhos e pelos blocos do Dashboard para não oferecer o que a página recusa.
 export function podeAbrir(perfil, mod) {
   if (!mod || adminDoSistema(perfil)) return true;
-  if (ABERTOS.has(mod)) return !semAcessoAoModulo(perfil, mod);
+  if (ABERTOS.has(mod)) {
+    // Ausente não bloqueia; 'nenhum' explícito no módulo (ou no pai, se o derivado não foi definido) sim
+    const mods = perfil?.modulos || {};
+    return (mods[mod] ?? mods[HERANCA[mod]]) !== 'nenhum';
+  }
   return nivelDoPerfil(perfil, mod) !== 'nenhum';
 }

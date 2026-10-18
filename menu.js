@@ -30,6 +30,8 @@ const SECOES = [
 ];
 
 export function gerarMenu(perfil) {
+  // Usuário desativado no Admin: volta ao login, que explica e encerra a sessão
+  if (perfil?.ativo === false) { window.location.replace('login.html'); return; }
   const cont = document.getElementById('menuModulos');
   if (!cont) return;
   const pg = window.location.pathname.split('/').pop() || 'index.html';
