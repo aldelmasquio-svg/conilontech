@@ -64,13 +64,11 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
 
 /* ── TOPBAR (as duas variantes: hdr-* e header-*) ───── */
 .app-header {
-  background: rgba(255,255,255,.92) !important;
-  -webkit-backdrop-filter: saturate(180%) blur(10px);
-  backdrop-filter: saturate(180%) blur(10px);
-  color: var(--t) !important;
+  background: var(--v) !important;  /* verde da marca */
+  color: #fff !important;
   height: 54px !important;  /* barras sticky das páginas usam top:54px */
-  box-shadow: none !important;
-  border-bottom: 1px solid var(--bd);
+  box-shadow: 0 1px 3px rgba(0,0,0,.18) !important;
+  border-bottom: none;
   z-index: 200;
 }
 .hdr-logo, .header-title-main {
@@ -78,11 +76,11 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
   font-weight: 700 !important;
   font-size: 1rem !important;
   letter-spacing: -.01em !important;
-  color: var(--t) !important;
+  color: #fff !important;
 }
 .hdr-sub, .header-title-sub {
   font-family: var(--font-body) !important;
-  color: var(--v) !important;
+  color: rgba(255,255,255,.72) !important;
   opacity: 1 !important;
   font-size: .62rem !important;
   font-weight: 600 !important;
@@ -92,10 +90,10 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
 .hdr-user, .header-user {
   font-size: .75rem !important;
   font-weight: 500;
-  color: var(--c) !important;
+  color: rgba(255,255,255,.9) !important;
   opacity: 1 !important;
-  background: var(--surface-2);
-  border: 1px solid var(--bd);
+  background: rgba(255,255,255,.12);
+  border: 1px solid rgba(255,255,255,.16);
   border-radius: 999px;
   padding: 5px 12px;
 }
@@ -106,9 +104,9 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
 .hdr-logo > div, .header-titles { min-width: 0; overflow: hidden; }
 @media (max-width: 420px) { .hdr-user, .header-user { max-width: 104px; } }
 .btn-menu {
-  background: transparent !important;
-  color: var(--t) !important;
-  border: 1px solid var(--bd) !important;
+  background: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
   border-radius: 10px !important;
   width: 38px !important;
   height: 38px !important;
@@ -124,12 +122,12 @@ input:focus, select:focus, textarea:focus { box-shadow: var(--focus); border-col
 }
 .btn-menu { display: flex !important; align-items: center; justify-content: center; }
 .btn-menu::before { display: block; }
-.btn-menu:hover { background: var(--surface-2) !important; }
-/* Botões extras no topo (⚙️ Valores, 🌧️ Pluviometria, …) eram brancos sobre verde */
+.btn-menu:hover { background: rgba(255,255,255,.2) !important; }
+/* Botões extras no topo (⚙️ Valores, 💧 Vazão, …) */
 .app-header button:not(.btn-menu) {
-  background: var(--surface-2) !important;
-  border: 1px solid var(--bd) !important;
-  color: var(--ts) !important;
+  background: rgba(255,255,255,.12) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  color: #fff !important;
   border-radius: 8px !important;
 }
 
