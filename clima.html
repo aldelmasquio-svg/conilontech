@@ -353,6 +353,10 @@ const faixaDeltaT={id:'faixaDeltaT', beforeDatasetsDraw(ch){
   if(bot>top) ctx.fillRect(a.left,top,a.right-a.left,bot-top);
   ctx.restore();
 }};
+// Interação consistente dos gráficos: tocar/passar em qualquer ponto do eixo X mostra
+// o tooltip de todas as séries daquele instante — bem mais fácil no celular.
+const CHART_INTERACAO={mode:'index',intersect:false,axis:'x'};
+const CHART_TOOLTIP={mode:'index',intersect:false,padding:10,cornerRadius:6,titleFont:{size:12},bodyFont:{size:12},caretSize:6};
 function renderGrafico(){
   if(_chartDia){ _chartDia.destroy(); _chartDia=null; }
   const cv=document.getElementById('grafDia');
@@ -368,12 +372,12 @@ function renderGrafico(){
     label:s.l, borderColor:s.cor, backgroundColor:s.fill?s.cor+'33':s.cor, fill:!!s.fill,
     data:labels.map(k=>{ if(s.fn){ const x=pts[k]?s.fn(pts[k]):null; return x==null?null:+x.toFixed(2); } const v=pts[k]?.[s.c]; return v==null?null:(s.f?s.f(v):v); }),
     yAxisID:s.eixo||'y',
-    borderWidth:1.6, pointRadius:0, tension:.2, spanGaps:false,
+    borderWidth:1.6, pointRadius:0, pointHoverRadius:4, pointHitRadius:14, tension:.2, spanGaps:false,
   }));
   _chartDia=new Chart(cv,{type:'line',data:{labels,datasets},options:{
     responsive:true, maintainAspectRatio:false, animation:false,
-    interaction:{mode:'index',intersect:false},
-    plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+    interaction:CHART_INTERACAO,
+    plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}, tooltip:CHART_TOOLTIP},
     scales:{x:{ticks:{maxTicksLimit:8,maxRotation:0,font:{size:10}}}, y:{ticks:{font:{size:10}}, beginAtZero:grafSel!=='t', ...(grafSel==='janela'?{title:{display:true,text:'Delta T (°C)',font:{size:10}}}:{})},
       ...(grafSel==='janela'?{y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},ticks:{font:{size:10}},title:{display:true,text:'vento (km/h)',font:{size:10}}}}:{})},
   }, plugins: grafSel==='janela' ? [faixaDeltaT] : []});
@@ -461,8 +465,9 @@ function renderChuva(){
   }
   const cv=document.getElementById('grafChuva');
   if(cv && typeof Chart!=='undefined'){
-    _chartChuva=new Chart(cv,{type:'bar',data:{labels,datasets:[{label:'Chuva (mm)',data,backgroundColor:'#3b82f6'}]},
-      options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},
+    _chartChuva=new Chart(cv,{type:'bar',data:{labels,datasets:[{label:'Chuva (mm)',data,backgroundColor:'#3b82f6',hoverBackgroundColor:'#2563eb'}]},
+      options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:CHART_INTERACAO,
+        plugins:{legend:{display:false},tooltip:CHART_TOOLTIP},
         scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{beginAtZero:true,suggestedMax:5,ticks:{font:{size:10}}}}}});
   }
   document.getElementById('chuvaNota').innerHTML=`Soma da chuva de cada dia registrado; dias sem dados não entram.${estMes!=null?` Acumulado do mês informado pela própria estação: <b>${fmt(estMes,1)} mm</b>.`:''}`;
@@ -505,8 +510,8 @@ function renderHistorico(){
       datasets:[
         {label:'ETo (mm)', data:ord.map(r=>r.ETo??null), backgroundColor:ord.map(r=>r.completo?'#f59e0b':'#fcd9a0')},
         {label:'Chuva (mm)', data:ord.map(r=>r.chuvaMm??null), backgroundColor:'#3b82f6'},
-      ]},options:{responsive:true,maintainAspectRatio:false,animation:false,
-        plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+      ]},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:CHART_INTERACAO,
+        plugins:{legend:{labels:{boxWidth:12,font:{size:11}}},tooltip:CHART_TOOLTIP},
         scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{beginAtZero:true,ticks:{font:{size:10}}}}}});
   }
   const campoApto=modoPulv==='trator'?'horasAptoTrator':'horasAptoDrone';
@@ -573,7 +578,8 @@ function renderHistVar(){
   }
   if(cv && typeof Chart!=='undefined'){
     _chartHistVar=new Chart(cv,{type:tipo,data:{labels,datasets},options:{responsive:true,maintainAspectRatio:false,animation:false,
-      plugins:{legend:{labels:{boxWidth:12,font:{size:11}}}},
+      interaction:CHART_INTERACAO, elements:{point:{hoverRadius:5,hitRadius:14}},
+      plugins:{legend:{labels:{boxWidth:12,font:{size:11}}},tooltip:CHART_TOOLTIP},
       scales:{x:{ticks:{font:{size:10},maxRotation:0,autoSkip:true}},y:{ticks:{font:{size:10}},title:{display:true,text:yTitle,font:{size:10}}}}}});
   }
   const incompletos=ord.filter(r=>!r.completo).length;
@@ -663,6 +669,8 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .gchip.on{background:var(--acc);border-color:var(--acc);color:white;}
 .graf-box{position:relative;height:240px;}
 .graf-box.hist{height:180px;margin:10px 0;}
+/* Toque: arrastar na horizontal move o tooltip; na vertical ainda rola a página */
+.graf-box canvas{touch-action:pan-y;}
 .bal-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
 .bal{background:var(--cl);border-radius:10px;padding:9px 11px;}
 .bal-tit{font-family:var(--font-display);font-weight:800;font-size:.9rem;color:var(--ve);margin-bottom:4px;}
