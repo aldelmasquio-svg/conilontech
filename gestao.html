@@ -170,7 +170,8 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 
 /* BARRAS HORIZONTAIS (gráfico simples) */
 .bar-row{display:flex;align-items:center;gap:8px;padding:6px 0;}
-.bar-label{font-size:.78rem;color:var(--t);min-width:80px;font-weight:600;}
+.bar-label{font-size:.78rem;color:var(--t);flex:0 0 150px;width:150px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+@media(max-width:600px){.bar-label{flex-basis:108px;width:108px;}}
 .bar-track{flex:1;background:var(--cl);border-radius:4px;height:18px;position:relative;overflow:hidden;}
 .bar-fill{height:100%;background:linear-gradient(to right,var(--v),#5a9c5a);border-radius:4px;display:flex;align-items:center;justify-content:flex-end;padding-right:6px;color:white;font-family:var(--font-mono);font-size:.7rem;font-weight:700;min-width:30px;}
 .bar-value{font-family:var(--font-mono);font-size:.74rem;color:var(--c);min-width:60px;text-align:right;}
@@ -1499,7 +1500,7 @@ function renderProdutividade() {
         ${fazRank.map(f => {
           const cor = corFazenda(f.fazenda);
           return `<div class="bar-row">
-            <div class="bar-label"><span class="faz-bullet" style="background:${cor};"></span>${escHtml(f.fazenda)}</div>
+            <div class="bar-label" title="${escHtml(f.fazenda)}"><span class="faz-bullet" style="background:${cor};"></span>${escHtml(f.fazenda)}</div>
             <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8, f.prodHa/maxProdHa*100)}%;background:${cor};">${fmt(f.prodHa,1)}</div></div>
             <div class="bar-value">${fmt(f.producao,0)} sc</div>
           </div>`;
@@ -2080,7 +2081,7 @@ function renderEstoque() {
     html += `<div class="secao">
       <div class="secao-tit">💼 Valor parado por categoria</div>
       ${arrCat.map(c => `<div class="bar-row">
-        <div class="bar-label">${escHtml(c.label)}</div>
+        <div class="bar-label" title="${escHtml(c.label)}">${escHtml(c.label)}</div>
         <div class="bar-track"><div class="bar-fill" style="width:${Math.max(8, c.valorTotal/maxV*100)}%;">${fmtRS(c.valorTotal)}</div></div>
         <div class="bar-value">${c.qtdProds} prods</div>
       </div>`).join('')}
