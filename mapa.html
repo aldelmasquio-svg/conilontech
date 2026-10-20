@@ -37,8 +37,11 @@ let map, drawnItems, drawControl, mapaIniciado=false, modoDesenho=false, talhaoD
 let filtroAtual='todos', sidebarAberta=true;
 let locWatchId=null, locMarker=null, locAccCircle=null;
 
-const COR={ativo:{fill:'rgba(74,140,63,.35)',border:'rgba(123,198,126,.85)'},reforma:{fill:'rgba(201,168,76,.35)',border:'rgba(220,190,90,.85)'},colhido:{fill:'rgba(139,94,60,.35)',border:'rgba(196,133,90,.85)'}};
-const STATUS_LABEL={ativo:'Ativo',reforma:'Em Reforma',colhido:'Colhido'};
+const COR={formacao:{fill:'rgba(37,99,235,.28)',border:'rgba(96,165,250,.9)'},producao:{fill:'rgba(74,140,63,.35)',border:'rgba(123,198,126,.85)'},reforma:{fill:'rgba(201,168,76,.35)',border:'rgba(220,190,90,.85)'}};
+const STATUS_LABEL={formacao:'Formação',producao:'Produção',reforma:'Em Reforma'};
+// Status do talhão passou a ser formacao/producao/reforma. Normaliza valores antigos
+// (ativo→produção, colhido→produção, plantio→formação) sem reescrever os documentos.
+function normStatus(s){ return ({ativo:'producao',colhido:'producao',plantio:'formacao',novo:'formacao'})[s] || s || 'producao'; }
 
 onAuthStateChanged(auth, async (user) => {
   if (!user) { window.location.href='login.html'; return; }
@@ -107,7 +110,7 @@ function renderizarPoligonos(){
   Object.values(polMap).forEach(p=>map.removeLayer(p)); polMap={};
   talhoes.forEach(t=>{
     if(!t.coordenadas||t.coordenadas.length<3)return;
-    const cor=COR[t.status]||COR.ativo;
+    const cor=COR[normStatus(t.status)]||COR.producao;
     // Aceitar múltiplos formatos: [lat,lng], {lat,lng}, {latitude,longitude}
     const latlngs=t.coordenadas.map(c=>{
       if(Array.isArray(c)) return [c[0],c[1]];
@@ -119,14 +122,14 @@ function renderizarPoligonos(){
     poly.bindTooltip(`<b>${t.id}</b> · ${t.area||'?'} ha`,{sticky:true,direction:'top'});
     poly.on('click',e=>{L.DomEvent.stopPropagation(e);selecionarTalhao(t.id);});
     poly.on('mouseover',()=>{if(talhaoSel!==t.id)poly.setStyle({weight:3,fillOpacity:.55});});
-    poly.on('mouseout',()=>{const c=COR[t.status]||COR.ativo;poly.setStyle({weight:talhaoSel===t.id?3:2,fillOpacity:1,color:talhaoSel===t.id?'#fff':c.border});});
+    poly.on('mouseout',()=>{const c=COR[normStatus(t.status)]||COR.producao;poly.setStyle({weight:talhaoSel===t.id?3:2,fillOpacity:1,color:talhaoSel===t.id?'#fff':c.border});});
     polMap[t.id]=poly;
   });
 }
 
 function renderizarSidebar(){
   const lista=document.getElementById('sidebarList');
-  const filtrados=filtroAtual==='todos'?talhoes:talhoes.filter(t=>t.status===filtroAtual);
+  const filtrados=filtroAtual==='todos'?talhoes:talhoes.filter(t=>normStatus(t.status)===filtroAtual);
   document.getElementById('sidebarCount').textContent=talhoes.length+' talhões';
   if(!filtrados.length){lista.innerHTML=`<div style="padding:16px;font-size:.78rem;color:var(--c);text-align:center;">Nenhum talhão</div>`;return;}
   const fazendas={};
@@ -134,7 +137,7 @@ function renderizarSidebar(){
   lista.innerHTML=Object.entries(fazendas).sort().map(([faz,ts])=>`
     <div class="sb-fazenda">${faz}</div>
     ${ts.map(t=>`<div class="msb-item ${talhaoSel===t.id?'active':''}" onclick="selecionarTalhaoSidebar('${t.id}')">
-      <div class="msb-dot ${t.status||'ativo'}"></div>
+      <div class="msb-dot ${normStatus(t.status)}"></div>
       <div class="msb-info"><div class="msb-id">${t.id}</div><div class="msb-nome">${t.nome||t.id}</div><div class="msb-sub">${t.area?t.area+' ha':''}</div></div>
       ${(!t.coordenadas||t.coordenadas.length<3)?'<span class="no-map">sem mapa</span>':''}
     </div>`).join('')}`).join('');
@@ -143,13 +146,13 @@ function renderizarSidebar(){
 function selecionarTalhao(id){
   talhaoSel=id;
   const t=talhoes.find(x=>x.id===id);if(!t)return;
-  Object.entries(polMap).forEach(([tid,poly])=>{const c=COR[(talhoes.find(x=>x.id===tid)||{}).status]||COR.ativo;poly.setStyle({weight:tid===id?3:2,color:tid===id?'#fff':c.border});if(tid===id)poly.bringToFront();});
+  Object.entries(polMap).forEach(([tid,poly])=>{const c=COR[normStatus((talhoes.find(x=>x.id===tid)||{}).status)]||COR.producao;poly.setStyle({weight:tid===id?3:2,color:tid===id?'#fff':c.border});if(tid===id)poly.bringToFront();});
   document.getElementById('pId').textContent=t.id;
   document.getElementById('pNome').textContent=t.nome||t.id;
   document.getElementById('pArea').textContent=(t.area||'—')+' hectares';
   const stEl=document.getElementById('pStatus');
-  stEl.className='status-tag '+(t.status||'ativo');
-  stEl.textContent=STATUS_LABEL[t.status]||t.status;
+  stEl.className='status-tag '+normStatus(t.status);
+  stEl.textContent=STATUS_LABEL[normStatus(t.status)]||t.status;
   const podeEd=podeEditar(), temPoly=t.coordenadas&&t.coordenadas.length>=3;
   let histHtml='';
   if(t.historico&&t.historico.length){
@@ -179,7 +182,7 @@ function selecionarTalhaoSidebar(id){selecionarTalhao(id);setTimeout(()=>focarMa
 window.selecionarTalhaoSidebar=selecionarTalhaoSidebar;
 window.selecionarTalhao=selecionarTalhao;
 window.focarMapa=focarMapa;
-function fecharPainel(){document.getElementById('infoPanel').classList.remove('visible');Object.entries(polMap).forEach(([tid,poly])=>{const c=COR[(talhoes.find(x=>x.id===tid)||{}).status]||COR.ativo;poly.setStyle({weight:2,color:c.border});});talhaoSel=null;document.getElementById('hintBar').style.display='block';renderizarSidebar();}
+function fecharPainel(){document.getElementById('infoPanel').classList.remove('visible');Object.entries(polMap).forEach(([tid,poly])=>{const c=COR[normStatus((talhoes.find(x=>x.id===tid)||{}).status)]||COR.producao;poly.setStyle({weight:2,color:c.border});});talhaoSel=null;document.getElementById('hintBar').style.display='block';renderizarSidebar();}
 function editarTalhao(){if(!talhaoSel)return;abrirModal(talhoes.find(x=>x.id===talhaoSel));}
 function iniciarDesenho(id){if(!podeEditar())return;talhaoDesenhando=id;fecharPainel();if(polMap[id]){map.removeLayer(polMap[id]);delete polMap[id];}map.addControl(drawControl);new L.Draw.Polygon(map,drawControl.options.draw.polygon).enable();modoDesenho=true;toast('Clique nos cantos do talhão. Duplo-clique para fechar.',5000);}
 
@@ -206,7 +209,7 @@ async function abrirModal(t){
   document.getElementById('fId').value=t?.id||'';document.getElementById('fId').disabled=!!t;
   document.getElementById('fNome').value=t?.nome||'';
   document.getElementById('fArea').value=t?.area||'';
-  document.getElementById('fStatus').value=t?.status||'ativo';
+  document.getElementById('fStatus').value=t?.status?normStatus(t.status):'producao';
   document.getElementById('fClone').value=t?.clone||'';
   document.getElementById('fDataPlantio').value=t?.dataPlantio||'';
   document.getElementById('fEspacamento').value=t?.espacamento||'';
@@ -334,7 +337,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .msb-item:hover{background:var(--cl);}
 .msb-item.active{background:var(--vb);border-left:3px solid var(--v);}
 .msb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.msb-dot.ativo{background:#22c55e;}.msb-dot.reforma{background:#eab308;}.msb-dot.colhido{background:#ef4444;}
+.msb-dot.producao{background:#22c55e;}.msb-dot.formacao{background:#3b82f6;}.msb-dot.reforma{background:#eab308;}
 .msb-info{flex:1;min-width:0;}
 .msb-id{font-size:.6rem;color:var(--v);font-weight:700;font-family:var(--font-mono);}
 .msb-nome{font-size:.75rem;overflow:hidden;text-overflow:ellipsis;line-height:1.3;}
@@ -350,7 +353,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .panel-close{position:absolute;top:12px;right:12px;background:var(--cl);border:none;border-radius:6px;width:26px;height:26px;cursor:pointer;font-size:14px;color:var(--c);}
 .status-bar{padding:8px 14px;border-bottom:1px solid var(--cl);}
 .status-tag{display:inline-flex;align-items:center;border-radius:20px;padding:3px 10px;font-size:.68rem;font-weight:700;text-transform:uppercase;}
-.status-tag.ativo{background:#d1fae5;color:#065f46;}.status-tag.reforma{background:#fef9c3;color:#854d0e;}.status-tag.colhido{background:#fee2e2;color:#991b1b;}
+.status-tag.producao{background:#d1fae5;color:#065f46;}.status-tag.formacao{background:#dbeafe;color:#1e40af;}.status-tag.reforma{background:#fef9c3;color:#854d0e;}
 .panel-body{padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
 .info-row{display:flex;align-items:flex-start;gap:9px;}
 .info-icon{width:26px;height:26px;background:var(--cl);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;}
@@ -440,9 +443,9 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       </div>
       <div class="msb-filter">
         <button class="filter-btn active" onclick="setFiltro('todos',this)">Todos</button>
-        <button class="filter-btn" onclick="setFiltro('ativo',this)">Ativos</button>
+        <button class="filter-btn" onclick="setFiltro('formacao',this)">Formação</button>
+        <button class="filter-btn" onclick="setFiltro('producao',this)">Produção</button>
         <button class="filter-btn" onclick="setFiltro('reforma',this)">Reforma</button>
-        <button class="filter-btn" onclick="setFiltro('colhido',this)">Colhido</button>
       </div>
       <div id="sidebarList"></div>
     </div>
@@ -479,7 +482,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
         <div class="form-group"><label>Área (ha)</label><input type="number" id="fArea" step="0.1" placeholder="18.5"></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Status</label><select id="fStatus"><option value="ativo">Ativo</option><option value="reforma">Em Reforma</option><option value="colhido">Colhido</option></select></div>
+        <div class="form-group"><label>Status</label><select id="fStatus"><option value="formacao">Formação</option><option value="producao">Produção</option><option value="reforma">Em Reforma</option></select></div>
         <div class="form-group"><label>Clone / Variedade</label><input type="text" id="fClone" placeholder="Ex: LB1"></div>
       </div>
       <div class="form-row">

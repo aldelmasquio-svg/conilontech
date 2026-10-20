@@ -22,7 +22,8 @@ enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 let usuarioAtual=null,perfilAtual={},talhoes=[],pedidos=[],pedidoWIP=null,pedItemAtivo=null,pedMapIniciado=false,pedMap,pedPolMap={},pedSidebarAberta=true,tabAtual='mapa';
 let cotacaoAberta=null, fornecedoresWIP=[]; // estado da aba Cotação (execução)
 let garantias=[], garantiasWIP={}; // aba Comparar: garantias/composição por produto (coleção garantiasProdutos)
-const PED_CORES={ativo:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'},colhido:{border:'rgba(196,133,90,.9)',fill:'rgba(139,94,60,.4)'}};
+const PED_CORES={formacao:{border:'rgba(96,165,250,.9)',fill:'rgba(37,99,235,.28)'},producao:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'}};
+function normStatus(s){ return ({ativo:'producao',colhido:'producao',plantio:'formacao',novo:'formacao'})[s] || s || 'producao'; }
 onAuthStateChanged(auth,async(user)=>{
   if(!user){window.location.href='login.html';return;}
   usuarioAtual=user;
@@ -57,7 +58,7 @@ function iniciarMapaPedidos(){
   renderizarPedPoligonos();
 }
 function pedCorPoly(id){
-  const t=talhoes.find(x=>x.id===id),cor=PED_CORES[t?.status||'ativo']||PED_CORES.ativo;
+  const t=talhoes.find(x=>x.id===id),cor=PED_CORES[normStatus(t?.status)]||PED_CORES.producao;
   const item=pedidoWIP&&pedItemAtivo!==null?pedidoWIP.itens[pedItemAtivo]:null;
   const sel=item&&item.talhoes.has(id),emOutro=pedidoWIP&&pedidoWIP.itens.some((it,i)=>i!==pedItemAtivo&&it.talhoes.has(id));
   if(sel)return{color:'#f5c842',weight:4,fillColor:'rgba(245,200,66,.55)',fillOpacity:1};
@@ -87,7 +88,7 @@ function renderizarPedSidebar(){
     <div class="sb-faz">${faz}</div>
     ${ts.map(t=>{const item=pedidoWIP&&pedItemAtivo!==null?pedidoWIP.itens[pedItemAtivo]:null,sel=item&&item.talhoes.has(t.id),temMapa=t.coordenadas?.length>=3;
     return `<div class="msb-item ${sel?'active':''}" onclick="${temMapa?`clicarTalhao('${t.id}')`:''}" style="${!temMapa?'opacity:.4;cursor:default;':''}">
-      <div class="msb-dot ${t.status||'ativo'}"></div>
+      <div class="msb-dot ${normStatus(t.status)}"></div>
       <div class="msb-info"><div class="msb-id">${t.id}</div><div class="msb-nome">${t.nome}</div></div>
       ${sel?'<span style="color:var(--v);font-weight:700;">✓</span>':''}
     </div>`;}).join('')}`).join('');
@@ -780,7 +781,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .msb-item:hover{background:var(--cl);}
 .msb-item.active{background:var(--vb);border-left:3px solid var(--v);}
 .msb-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
-.msb-dot.ativo{background:#22c55e;}.msb-dot.reforma{background:#eab308;}.msb-dot.colhido{background:#ef4444;}
+.msb-dot.producao{background:#22c55e;}.msb-dot.formacao{background:#3b82f6;}.msb-dot.reforma{background:#eab308;}
 .msb-info{flex:1;min-width:0;}
 .msb-id{font-size:.6rem;color:var(--v);font-weight:700;font-family:var(--font-mono);}
 .msb-nome{font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1035,9 +1036,9 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       <button id="btnExpandPedSb" onclick="togglePedSidebar()">▶ Talhões</button>
       <div class="ped-legenda">
         <div class="leg-tit">Legenda</div>
-        <div class="leg-item"><div class="leg-cor" style="background:rgba(74,140,63,.4);border:2px solid rgba(123,198,126,.9);"></div>Ativo</div>
+        <div class="leg-item"><div class="leg-cor" style="background:rgba(37,99,235,.28);border:2px solid rgba(96,165,250,.9);"></div>Formação</div>
+        <div class="leg-item"><div class="leg-cor" style="background:rgba(74,140,63,.4);border:2px solid rgba(123,198,126,.9);"></div>Produção</div>
         <div class="leg-item"><div class="leg-cor" style="background:rgba(201,168,76,.4);border:2px solid rgba(220,190,90,.9);"></div>Reforma</div>
-        <div class="leg-item"><div class="leg-cor" style="background:rgba(139,94,60,.4);border:2px solid rgba(196,133,90,.9);"></div>Colhido</div>
         <div class="leg-item"><div class="leg-cor" style="background:rgba(245,200,66,.55);border:2px solid #f5c842;"></div>Selecionado</div>
       </div>
       <div class="painel-pedido" id="painelPedido" style="display:none;">

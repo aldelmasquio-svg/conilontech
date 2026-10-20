@@ -598,12 +598,13 @@ function _safraOpts(sel) {
 function renderCard1() {
   const w = window.planWIP;
   const talhao = w.talhaoId ? talhoes.find(t => t._docId === w.talhaoId) : null;
-  // Lista talhões ativos agrupados
-  const STATUS_SUF = {reforma:' — Reforma', colhido:' — Colhido'};
+  // Lista talhões; sufixo p/ os que não estão em produção (ativo/colhido→produção, plantio→formação)
+  const _nst = s => ({ativo:'producao',colhido:'producao',plantio:'formacao',novo:'formacao'})[s] || s || 'producao';
+  const STATUS_SUF = {formacao:' — Formação', reforma:' — Reforma'};
   const talhoesOrd = [...talhoes]
     .sort((a,b) => (a.fazenda||'').localeCompare(b.fazenda||'') || (a.nome||'').localeCompare(b.nome||''));
   const opcoesT = '<option value="">— selecione —</option>' + talhoesOrd.map(t => {
-    const suf = STATUS_SUF[t.status] || '';
+    const suf = STATUS_SUF[_nst(t.status)] || '';
     return `<option value="${escAttr(t._docId)}" ${t._docId===w.talhaoId?'selected':''}>${escHtml((t.fazenda?t.fazenda+' · ':'') + (t.nome || t.id) + suf)}</option>`;
   }).join('');
   // Recomendações aprovadas para este talhão
