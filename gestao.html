@@ -1440,14 +1440,15 @@ function renderProdutividade() {
   const producaoTotal = dadosProd.reduce((s,d)=>s+d.producao, 0);
   const areaProdutiva = dadosProd.reduce((s,d)=>s+d.area, 0);
   const mediaSchPorHa = areaProdutiva > 0 ? producaoTotal / areaProdutiva : 0;
-  // Talhões em reforma vs ativos
-  const ativos = talhFil.filter(t => t.status === 'ativo');
-  const reforma = talhFil.filter(t => t.status === 'reforma');
-  const colhido = talhFil.filter(t => t.status === 'colhido');
-  const areaAtiva = ativos.reduce((s,t)=>s+parseDose(t.area), 0);
+  // Status da lavoura (normaliza valores antigos: ativo/colhido→produção, plantio→formação)
+  const _nst = s => ({ativo:'producao',colhido:'producao',plantio:'formacao',novo:'formacao'})[s] || s || 'producao';
+  const formacao = talhFil.filter(t => _nst(t.status) === 'formacao');
+  const producaoT = talhFil.filter(t => _nst(t.status) === 'producao');
+  const reforma = talhFil.filter(t => _nst(t.status) === 'reforma');
+  const areaFormacao = formacao.reduce((s,t)=>s+parseDose(t.area), 0);
+  const areaProd = producaoT.reduce((s,t)=>s+parseDose(t.area), 0);
   const areaReforma = reforma.reduce((s,t)=>s+parseDose(t.area), 0);
-  const areaColhido = colhido.reduce((s,t)=>s+parseDose(t.area), 0);
-  const areaTot = areaAtiva + areaReforma + areaColhido;
+  const areaTot = areaFormacao + areaProd + areaReforma;
   html += `<div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-label">Produção total</div><div class="kpi-value">${fmt(producaoTotal,0)}</div><div class="kpi-aux">sacas (safra mais recente)</div></div>
     <div class="kpi-card ok"><div class="kpi-label">Produtividade média</div><div class="kpi-value">${fmt(mediaSchPorHa,1)}</div><div class="kpi-aux">sc/ha · base ${fmt(areaProdutiva,1)} ha</div></div>
@@ -1459,9 +1460,9 @@ function renderProdutividade() {
     html += `<div class="secao">
       <div class="secao-tit">📐 Status da lavoura por área</div>
       <div class="comp-grid" style="grid-template-columns:repeat(3,1fr);">
-        <div class="comp-box alt"><div class="comp-lab">Ativos</div><div class="comp-val">${fmt(areaAtiva,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaAtiva/areaTot*100,1)}%</div></div>
+        <div class="comp-box"><div class="comp-lab">Formação</div><div class="comp-val">${fmt(areaFormacao,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaFormacao/areaTot*100,1)}%</div></div>
+        <div class="comp-box alt"><div class="comp-lab">Produção</div><div class="comp-val">${fmt(areaProd,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaProd/areaTot*100,1)}%</div></div>
         <div class="comp-box"><div class="comp-lab">Em reforma</div><div class="comp-val">${fmt(areaReforma,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaTot>0?areaReforma/areaTot*100:0,1)}%</div></div>
-        <div class="comp-box"><div class="comp-lab">Colhido</div><div class="comp-val">${fmt(areaColhido,1)} ha</div><div style="font-size:.7rem;color:var(--c);">${fmt(areaTot>0?areaColhido/areaTot*100:0,1)}%</div></div>
       </div>
     </div>`;
   }
