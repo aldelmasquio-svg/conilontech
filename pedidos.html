@@ -343,7 +343,7 @@ function renderizarListaPedidos(){
             ? `<span class="ped-qtd-badge">${(it.total||0).toLocaleString('pt-BR')} ${it.unidade||''}</span><span class="ped-qtd-aux">${it.dosePorHa} ${it.unidade||''}/ha</span>${recebidoTxt}`
             : (it.quantidade ? `<span class="ped-qtd-badge">${it.quantidade}</span>` : '');
           const modoBadge = it.modo ? `<span class="ped-modo-badge">${MODO_APLIC[it.modo]||it.modo}</span>` : '';
-          return `<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${it.produto}${modoBadge}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${txtBadge}<span class="ped-tal-ids">${(it.talhoes||[]).map(t=>t.id).join(', ')}</span></span></div>`;
+          return `<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${it.produto}${modoBadge}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${txtBadge}<span class="ped-tal-ids">${(it.talhoes||[]).map(t=>t.nome||t.id).join(', ')}</span></span></div>`;
         }).join('')}
       </div>
     </div>`;
