@@ -1423,6 +1423,8 @@ window.abrirModalMapaPlano = function(dataInicial) {
   document.getElementById('mpObs').value = '';
   window.mpRenderProdutos();
   window.mpRenderSel();
+  const bsp = document.getElementById('btnSalvarMapaPlano');
+  if (bsp) { bsp.disabled = false; bsp.textContent = '💾 Salvar planejamento'; }
   document.getElementById('overlayMapaPlano').classList.add('open');
   requestAnimationFrame(() => initMapaPlano());
 };
@@ -1459,8 +1461,15 @@ function initMapaPlano() {
     latlngs.forEach(ll => bounds.push(ll));
   });
   document.getElementById('mpSemCoord').style.display = semCoord ? 'block' : 'none';
-  if (bounds.length) map.fitBounds(bounds, { padding: [10, 10] });
+  // maxZoom evita o "Map data not yet available" (sem imagem do Esri em zoom muito alto
+  // sobre um talhão pequeno). invalidateSize corrige o tamanho após o modal terminar de abrir.
+  if (bounds.length) map.fitBounds(bounds, { padding: [10, 10], maxZoom: 16 });
   else map.setView([-18.7166, -40.4000], 13);
+  setTimeout(() => {
+    if (!window.mapaPlanoMap) return;
+    window.mapaPlanoMap.invalidateSize();
+    if (bounds.length) window.mapaPlanoMap.fitBounds(bounds, { padding: [10, 10], maxZoom: 16 });
+  }, 250);
 }
 
 window.mpToggleTalhao = function(talhaoId) {
@@ -1600,6 +1609,9 @@ window.salvarMapaPlano = async function() {
     toast(`✅ ${n} pulverização(ões) planejada(s)!`);
   } catch(e) {
     toast('❌ Erro: ' + e.message);
+  } finally {
+    // Sempre reabilita o botão — antes, no sucesso ele fechava sem resetar e o
+    // próximo planejamento abria com o botão travado em "Salvando...".
     btn.disabled = false; btn.textContent = '💾 Salvar planejamento';
   }
 };
