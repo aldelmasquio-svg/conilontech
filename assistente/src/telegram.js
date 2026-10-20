@@ -35,6 +35,18 @@ export class Telegram {
     return ultima;
   }
 
+  // Envia um arquivo (ex.: PDF do pedido) como documento no chat.
+  async enviarDocumento(chatId, bytes, nomeArquivo, legenda = '') {
+    const form = new FormData();
+    form.append('chat_id', String(chatId));
+    form.append('document', new Blob([bytes], { type: 'application/pdf' }), nomeArquivo);
+    if (legenda) form.append('caption', String(legenda).slice(0, 1024));
+    const r = await fetch(`${this.api}/sendDocument`, { method: 'POST', body: form });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) console.log(`Telegram sendDocument falhou: ${j.description || r.status}`);
+    return j.result;
+  }
+
   // Baixa um arquivo enviado ao bot (ex.: mensagem de voz). Limite da Bot API: 20 MB.
   async baixarArquivo(fileId) {
     const f = await this._chamar('getFile', { file_id: fileId });
