@@ -7,7 +7,8 @@
     "logs": "wrangler tail"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0"
+    "@anthropic-ai/sdk": "^0.135.0",
+    "pdf-lib": "^1.17.1"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"

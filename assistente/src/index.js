@@ -6,6 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { Firestore } from './firestore.js';
 import { Telegram } from './telegram.js';
 import { DEFINICOES, Ferramentas, executarProposta } from './ferramentas.js';
+import { gerarPedidoPdf } from './pdf.js';
 import { SISTEMA } from './prompt.js';
 import { transcrever } from './audio.js';
 
@@ -250,6 +251,18 @@ async function tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg) {
     await tg.responderBotao(cb.id, 'Gravado!');
     await tg.editarTexto(chatId, msgId, `${prop.resumo}\n\n✅ Gravado no app.`);
     await fs.set(convRef, { notas: [...notas, `O usuário CONFIRMOU e foi gravado no app: ${prop.resumo.split('\n')[0]}`] });
+    // Pedido confirmado → gera e envia o PDF completo para encaminhar ao comprador.
+    if (prop.tipo === 'pedido') {
+      try {
+        const dadosPed = prop.docs?.[0]?.dados || {};
+        const bytes = await gerarPedidoPdf(dadosPed, { criadoPor: email, dataISO: new Date().toISOString() });
+        const nome = `Pedido-insumos-${new Date().toISOString().slice(0, 10)}.pdf`;
+        await tg.enviarDocumento(chatId, bytes, nome, 'Pedido de insumos — encaminhe ao responsável pela compra.');
+      } catch (e) {
+        console.log('PDF do pedido falhou: ' + (e?.message || e));
+        await tg.enviar(chatId, 'O pedido foi gravado, mas não consegui gerar o PDF agora.');
+      }
+    }
   } catch (e) {
     await fs.set(`assistentePropostas/${id}`, { status: 'erro', erro: e.message });
     await tg.responderBotao(cb.id, 'Erro ao gravar.');
