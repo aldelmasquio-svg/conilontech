@@ -40,6 +40,8 @@ let _sbFazKeys=[], _sbTalKeys=[];                 // chaves por índice p/ os to
 let fotosNovas=[];               // dataURIs pendentes na avaliação sendo criada
 let compA=null, compB=null;      // fotos selecionadas para comparação antes/depois
 let locWatchId=null, locMarker=null, locAccCircle=null; // "minha localização" no mapa
+let guiaWatchId=null, guiaAlvo=null, guiaLinha=null, guiaPosMarker=null, guiaChegou=false; // modo guiamento / bússola de campo
+const MARGEM_M=10;               // raio (m) para considerar que o operador chegou ao ponto
 
 // ─── AUTH ───
 onAuthStateChanged(auth, async (user) => {
@@ -89,6 +91,13 @@ function pontoNoPoligono(lat,lng,coords){
 }
 function talhaoDoPonto(lat,lng){ return talhoes.find(t=>t.coordenadas&&t.coordenadas.length>=3&&pontoNoPoligono(lat,lng,t.coordenadas)); }
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+// Distância em metros entre dois pontos (Haversine)
+function distanciaM(aLat,aLng,bLat,bLng){
+  const R=6371000, toRad=x=>x*Math.PI/180;
+  const dLat=toRad(bLat-aLat), dLng=toRad(bLng-aLng);
+  const s=Math.sin(dLat/2)**2 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(s)));
+}
 // Comprime a imagem no próprio dispositivo → dataURI para salvar no Firestore.
 // Cada foto vira 1 documento; o limite do Firestore é 1 MB/doc, então NÃO dá pra
 // guardar o arquivo 100% original. Buscamos a MAIOR qualidade que ainda cabe:
@@ -249,6 +258,7 @@ function selecionarPlanta(id){
   renderPlantas();
   const gm=`https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
   const _desc=(p.descricao||'').trim(), _cod=(p.codigoPlaqueta||'').trim();
+  const guiando = guiaWatchId!==null && guiaAlvo && guiaAlvo.id===id;
   document.getElementById('pNome').textContent=_desc||_cod||'Ponto sem descrição';
   document.getElementById('pFaz').innerHTML=`${_cod?`🏷️ ${sanitizar(_cod)} · `:''}${sanitizar(p.talhaoNome||p.talhaoId||'—')} · ${sanitizar(p.fazenda||'')}`;
   document.getElementById('pBody').innerHTML=`
@@ -257,8 +267,10 @@ function selecionarPlanta(id){
       <div class="secao-tit">Localização travada</div>
       <div class="loc-row">
         <span class="loc-coord">📍 ${Number(p.lat).toFixed(6)}, ${Number(p.lng).toFixed(6)}${p.precisaoGps!=null?` · 🎯 GPS ±${p.precisaoGps} m`:(p.origem==='mapa'?' · ponto do mapa':'')}</span>
-        <a class="btn-maps" href="${gm}" target="_blank" rel="noopener">🧭 Abrir no Google Maps</a>
+        <button class="btn-guiar ${guiando?'on':''}" onclick="toggleGuiamento('${id}')">${guiando?'🧭 Parar guiamento':'🧭 Guiar até o ponto'}</button>
+        <a class="btn-maps" href="${gm}" target="_blank" rel="noopener">🗺️ Abrir no Google Maps</a>
       </div>
+      <div class="loc-hint">${guiando?'Caminhe seguindo a linha no mapa — o visor avisa quando você chegar.':'Toque em <b>Guiar</b> para seguir a linha no mapa até o ponto, sem sair do app.'}</div>
     </div>
     <div id="cmpBox"></div>
     ${podeRegistrar()?`<div class="secao nova-aval">
@@ -406,6 +418,71 @@ function pararLocalizacao(){
   document.getElementById('btnLocalizacao').classList.remove('ativo');
 }
 window.toggleLocalizacao=function(){ if(locWatchId!==null) pararLocalizacao(); else iniciarLocalizacao(); };
+
+// ─── GUIAMENTO / BÚSSOLA DE CAMPO ───
+// Desenha uma linha tracejada em tempo real do operador até o ponto-alvo e mostra um visor
+// com distância + direção cardeal; fica verde e vibra ao entrar no raio de MARGEM_M.
+const _CARDEAIS=['Norte','Nordeste','Leste','Sudeste','Sul','Sudoeste','Oeste','Noroeste'];
+function direcaoCardeal(aLat,aLng,bLat,bLng){
+  const toRad=x=>x*Math.PI/180, toDeg=x=>x*180/Math.PI;
+  const dLng=toRad(bLng-aLng);
+  const y=Math.sin(dLng)*Math.cos(toRad(bLat));
+  const x=Math.cos(toRad(aLat))*Math.sin(toRad(bLat))-Math.sin(toRad(aLat))*Math.cos(toRad(bLat))*Math.cos(dLng);
+  const deg=(toDeg(Math.atan2(y,x))+360)%360;
+  return _CARDEAIS[Math.round(deg/45)%8];
+}
+window.toggleGuiamento=function(id){
+  if(guiaWatchId!==null && guiaAlvo && guiaAlvo.id===id){ pararGuiamento(); return; }
+  iniciarGuiamento(id);
+};
+function iniciarGuiamento(id){
+  const p=plantas.find(x=>x._docId===id); if(!p||p.lat==null||p.lng==null){ toast('❌ Ponto sem coordenada.'); return; }
+  if(!navigator.geolocation){ toast('❌ GPS não disponível neste aparelho.'); return; }
+  pararGuiamento(true);                                          // limpa guiamento anterior sem re-renderizar o painel
+  const nome=(p.descricao||'').trim()||(p.codigoPlaqueta||'').trim()||'Ponto';
+  guiaAlvo={id, lat:Number(p.lat), lng:Number(p.lng), nome};
+  guiaChegou=false;
+  const hud=document.getElementById('guiaHud');
+  if(hud){ hud.className='guia-hud visible'; hud.innerHTML=`<div class="guia-dist">🎯 Buscando GPS…</div><div class="guia-dir">Caminhe com o celular em punho</div><button class="guia-parar" onclick="pararGuiamento()">✕</button>`; }
+  if(plantaSel===id) selecionarPlanta(id);                       // atualiza o rótulo do botão no painel
+  guiaWatchId=navigator.geolocation.watchPosition(pos=>{
+    if(!guiaAlvo) return;
+    const {latitude:lat,longitude:lng}=pos.coords;
+    const atual=[lat,lng], alvo=[guiaAlvo.lat,guiaAlvo.lng];
+    if(!guiaLinha){ guiaLinha=L.polyline([atual,alvo],{color:'#ef4444',weight:4,dashArray:'10 8',opacity:.9}).addTo(map); }
+    else guiaLinha.setLatLngs([atual,alvo]);
+    if(!guiaPosMarker){
+      const icon=L.divIcon({className:'',html:'<div class="loc-pulse"><div class="loc-dot"></div></div>',iconSize:[20,20],iconAnchor:[10,10]});
+      guiaPosMarker=L.marker(atual,{icon,zIndexOffset:1200}).addTo(map);
+      try{ map.fitBounds(L.latLngBounds([atual,alvo]).pad(0.35),{maxZoom:18}); }catch(e){}
+    } else guiaPosMarker.setLatLng(atual);
+    atualizarHudGuia(distanciaM(lat,lng,guiaAlvo.lat,guiaAlvo.lng), direcaoCardeal(lat,lng,guiaAlvo.lat,guiaAlvo.lng));
+  },err=>{ toast(err.code===1?'❌ Permissão de localização negada.':'❌ Não foi possível obter a localização.'); pararGuiamento(); },
+  {enableHighAccuracy:true,maximumAge:2000,timeout:15000});
+}
+function atualizarHudGuia(dist,cardeal){
+  const hud=document.getElementById('guiaHud'); if(!hud||!guiaAlvo) return;
+  const d=Math.round(dist), alvo=sanitizar(guiaAlvo.nome);
+  if(dist<=MARGEM_M){
+    hud.className='guia-hud visible chegou';
+    hud.innerHTML=`<div class="guia-dist">✅ Você chegou! (${d} m)</div><div class="guia-dir">${alvo} — pode registrar a avaliação</div><button class="guia-parar" onclick="pararGuiamento()">✕</button>`;
+    if(!guiaChegou){ guiaChegou=true; try{ navigator.vibrate && navigator.vibrate(200); }catch(e){} }
+  }else{
+    guiaChegou=false;
+    hud.className='guia-hud visible';
+    hud.innerHTML=`<div class="guia-dist">🎯 ${d} m ao ${cardeal}</div><div class="guia-dir">Continue caminhando → ${alvo}</div><button class="guia-parar" onclick="pararGuiamento()">✕</button>`;
+  }
+}
+window.pararGuiamento=function(silencioso){
+  if(guiaWatchId!==null){ navigator.geolocation.clearWatch(guiaWatchId); guiaWatchId=null; }
+  if(guiaLinha){ map.removeLayer(guiaLinha); guiaLinha=null; }
+  if(guiaPosMarker){ map.removeLayer(guiaPosMarker); guiaPosMarker=null; }
+  const hud=document.getElementById('guiaHud'); if(hud){ hud.className='guia-hud'; hud.innerHTML=''; }
+  const alvoId=guiaAlvo?guiaAlvo.id:null;
+  guiaAlvo=null; guiaChegou=false;
+  if(silencioso!==true && alvoId && plantaSel===alvoId) selecionarPlanta(alvoId);   // restaura o rótulo do botão
+}
+function pararGuiamento(s){ window.pararGuiamento(s); }
 
 // ─── AÇÕES (window bridges) ───
 window.selPlanta=function(id){ selecionarPlanta(id); };
@@ -666,6 +743,17 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .loc-coord{font-family:var(--font-mono);font-size:.74rem;color:var(--c);}
 .btn-maps{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:#eef2ff;border:1.5px solid #c7d2fe;color:#4338ca;border-radius:9px;padding:9px;font-size:.8rem;font-weight:700;text-decoration:none;font-family:var(--font-display);}
 .btn-maps:active{background:#e0e7ff;}
+.loc-hint{font-size:.66rem;color:var(--c);font-style:italic;}
+.btn-guiar{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--acc);border:1.5px solid var(--acc);color:#fff;border-radius:9px;padding:11px;font-size:.85rem;font-weight:800;cursor:pointer;font-family:var(--font-display);}
+.btn-guiar:active{transform:scale(.98);}
+.btn-guiar.on{background:#fee2e2;border-color:#ef4444;color:#b91c1c;}
+.guia-hud{position:fixed;top:0;left:0;right:0;z-index:1500;display:none;flex-direction:column;align-items:center;gap:2px;padding:14px 48px calc(14px + env(safe-area-inset-top)) 48px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;box-shadow:0 4px 18px rgba(0,0,0,.3);text-align:center;}
+.guia-hud.visible{display:flex;}
+.guia-hud.chegou{background:linear-gradient(135deg,#15803d,#22c55e);animation:guiaPisca .8s ease-in-out 2;}
+.guia-dist{font-family:var(--font-display);font-weight:900;font-size:1.5rem;line-height:1.1;}
+.guia-dir{font-size:.82rem;font-weight:600;opacity:.95;}
+.guia-parar{position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:32px;height:32px;border:none;border-radius:50%;background:rgba(255,255,255,.22);color:#fff;font-size:.9rem;font-weight:800;cursor:pointer;}
+@keyframes guiaPisca{0%,100%{filter:brightness(1);}50%{filter:brightness(1.35);}}
 .nova-aval{background:#faf5ff;border:1px solid #e9d5ff;border-radius:11px;padding:11px;}
 .fg{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
 .fg label{font-size:.56rem;text-transform:uppercase;letter-spacing:.08em;color:var(--c);font-weight:700;}
@@ -834,6 +922,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       <div class="panel-actions" id="panelActions"></div>
     </div>
 
+    <div class="guia-hud" id="guiaHud"></div>
     <button id="btnLocalizacao" onclick="toggleLocalizacao()" title="Minha localização">📍</button>
     <div class="marcar-bar" id="marcarBar" style="display:none;">
       <button id="btnGps" onclick="marcarPorGps()">🎯 Marcar aqui (GPS)</button>
