@@ -14,6 +14,7 @@ const SECOES = [
     { href:'herbicida.html',     ico:'🌿', label:'Herbicida',         acesso:'herbicida' },
     { href:'equipe.html',        ico:'👥', label:'Equipe',            acesso:'equipe' },
     { href:'estoque.html',       ico:'🏬', label:'Estoque',           acesso:'estoque' },
+    { href:'recebimentos.html',  ico:'📥', label:'Recebimentos',      acesso:'recebimentos' },
     { href:'pedidos.html',       ico:'📦', label:'Pedidos',           acesso:'pedidos' },
     { href:'cotacoes.html',      ico:'💰', label:'Cotações',          acesso:'cotacoes' },
     { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
