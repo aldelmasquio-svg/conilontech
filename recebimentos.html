@@ -163,15 +163,19 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
   <div class="modal-box">
     <div class="modal-handle"></div>
     <div class="modal-titulo" id="recModalTit">Registrar recebimento</div>
-    <div class="modal-sub">Registre o que chegou na fazenda: data, nota, fornecedor e as quantidades.</div>
-    <div class="campo"><label class="campo-label">Fazenda</label><select class="campo-sel" id="recFaz"></select></div>
+    <div class="modal-sub">Registre o que chegou na fazenda: tipo, data, nota/origem e as quantidades.</div>
     <div class="campo-row">
-      <div class="campo"><label class="campo-label">Data</label><input type="date" class="campo-inp" id="recData"></div>
-      <div class="campo"><label class="campo-label">Destino</label><select class="campo-sel" id="recDestino"></select></div>
+      <div class="campo"><label class="campo-label">Tipo</label><select class="campo-sel" id="recTipo" onchange="recSetTipo(this.value)"><option value="compra">🛒 Compra</option><option value="transferencia">⇄ Transferência</option></select></div>
+      <div class="campo"><label class="campo-label" id="recFazLab">Fazenda</label><select class="campo-sel" id="recFaz"></select></div>
     </div>
-    <div class="campo-row">
+    <div class="campo"><label class="campo-label">Data</label><input type="date" class="campo-inp" id="recData"></div>
+    <div class="campo-row" id="recBlocoCompra">
       <div class="campo"><label class="campo-label">N° da Nota</label><input type="text" class="campo-inp" id="recNota" placeholder="ex.: 4.393"></div>
       <div class="campo"><label class="campo-label">Fornecedor</label><input type="text" class="campo-inp" id="recForn" placeholder="ex.: Rural Comércio"></div>
+    </div>
+    <div class="campo-row" id="recBlocoTransf" style="display:none;">
+      <div class="campo"><label class="campo-label">Fazenda de origem</label><select class="campo-sel" id="recOrigem"></select></div>
+      <div class="campo"><label class="campo-label">Transportador</label><input type="text" class="campo-inp" id="recTransp" placeholder="ex.: Édio"></div>
     </div>
     <div class="sec-tit">Produtos recebidos</div>
     <div id="recItensBox"></div>
@@ -207,7 +211,6 @@ let filtroFazReg='todas';
 let confPeriodo='tudo', confFaz='todas';
 
 const UNIDADES=['kg','g','t','L','mL','sc','un'];
-const DESTINOS=['Compra','Transferência recebida','Bonificação','Devolução','Outro'];
 
 // ─── HELPERS ───
 function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
@@ -313,7 +316,12 @@ function renderRegistrar(box){
 
 function cardRecebimento(r){
   const itens=(r.itens||[]).map(it=>`<span class="rc-chip">${sanitizar(it.produto)}: ${fmt(it.quantidade)} ${sanitizar(it.unidade||'')}</span>`).join('');
-  const meta=[r.nota?`NF ${sanitizar(r.nota)}`:'', r.fornecedor?`🏭 ${sanitizar(r.fornecedor)}`:''].filter(Boolean).join(' · ');
+  const ehTransf=r.tipo==='transferencia';
+  const meta=(ehTransf
+    ? [r.origemFazenda?`⇄ de ${sanitizar(r.origemFazenda)}`:'', r.transportador?`🚚 ${sanitizar(r.transportador)}`:'']
+    : [r.nota?`NF ${sanitizar(r.nota)}`:'', r.fornecedor?`🏭 ${sanitizar(r.fornecedor)}`:'']
+  ).filter(Boolean).join(' · ');
+  const badge=ehTransf?'⇄ Transferência':'🛒 Compra';
   return `<div class="rc-card">
     <div class="rc-card-top">
       <div>
@@ -321,7 +329,7 @@ function cardRecebimento(r){
         <div class="rc-meta"><span>📅 ${formatarData(r.data)}</span>${meta?`<span>${meta}</span>`:''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:7px;">
-        ${r.destino?`<span class="rc-dest">${sanitizar(r.destino)}</span>`:''}
+        <span class="rc-dest">${badge}</span>
         ${podeEditar(r)?`<div class="rc-acoes"><button class="rc-btn edit" onclick="editarRec('${r._docId}')">✏️</button><button class="rc-btn del" onclick="excluirRec('${r._docId}')">🗑</button></div>`:''}
       </div>
     </div>
@@ -334,20 +342,30 @@ function cardRecebimento(r){
 window.setFiltroReg=function(v){ filtroFazReg=v; renderTab(); };
 
 // ─── MODAL REGISTRAR ───
+// Compra: nota + fornecedor. Transferência: fazenda de origem + transportador (não conta como compra na conferência).
+window.recSetTipo=function(v){
+  const t=v==='transferencia';
+  document.getElementById('recBlocoCompra').style.display=t?'none':'flex';
+  document.getElementById('recBlocoTransf').style.display=t?'flex':'none';
+  document.getElementById('recFazLab').textContent=t?'Fazenda (destino)':'Fazenda';
+};
 window.abrirNovoRec=function(){
   const fazs=fazendasPermitidas();
   if(!fazs.length){ toast('⛔ Você não tem fazenda liberada para registrar.'); return; }
   recEditId=null;
   document.getElementById('recModalTit').textContent='Registrar recebimento';
+  document.getElementById('recTipo').value='compra';
   document.getElementById('recFaz').innerHTML=fazs.map(f=>`<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
   if(filtroFazReg!=='todas' && fazs.includes(filtroFazReg)) document.getElementById('recFaz').value=filtroFazReg;
-  document.getElementById('recDestino').innerHTML=DESTINOS.map(d=>`<option value="${d}">${d}</option>`).join('');
+  document.getElementById('recOrigem').innerHTML=fazendas.map(f=>`<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
   document.getElementById('recData').value=hojeISO();
   document.getElementById('recNota').value='';
   document.getElementById('recForn').value='';
+  document.getElementById('recTransp').value='';
   document.getElementById('recObs').value='';
   document.getElementById('recItensBox').innerHTML='';
   recAddItem();
+  recSetTipo('compra');
   document.getElementById('modalRec').classList.add('aberto');
 };
 window.editarRec=function(id){
@@ -356,13 +374,18 @@ window.editarRec=function(id){
   recEditId=id;
   const fazs=fazendasPermitidas();
   const opts=[...new Set([r.fazenda,...fazs])].filter(Boolean);
+  const tipo=r.tipo==='transferencia'?'transferencia':'compra';
   document.getElementById('recModalTit').textContent='Editar recebimento';
+  document.getElementById('recTipo').value=tipo;
   document.getElementById('recFaz').innerHTML=opts.map(f=>`<option value="${sanitizar(f)}" ${f===r.fazenda?'selected':''}>${sanitizar(f)}</option>`).join('');
-  document.getElementById('recDestino').innerHTML=DESTINOS.map(d=>`<option value="${d}" ${d===(r.destino||'Compra')?'selected':''}>${d}</option>`).join('');
+  const origemOpts=[...new Set([r.origemFazenda,...fazendas])].filter(Boolean);
+  document.getElementById('recOrigem').innerHTML=origemOpts.map(f=>`<option value="${sanitizar(f)}" ${f===r.origemFazenda?'selected':''}>${sanitizar(f)}</option>`).join('');
+  document.getElementById('recTransp').value=r.transportador||'';
   document.getElementById('recData').value=r.data||hojeISO();
   document.getElementById('recNota').value=r.nota||'';
   document.getElementById('recForn').value=r.fornecedor||'';
   document.getElementById('recObs').value=r.obs||'';
+  recSetTipo(tipo);
   document.getElementById('recItensBox').innerHTML='';
   (r.itens||[]).forEach(it=>recAddItem(it));
   if(!(r.itens||[]).length) recAddItem();
@@ -390,12 +413,16 @@ window.recAddItem=function(it){
 window.salvarRecebimento=async function(){
   const fazenda=document.getElementById('recFaz').value;
   if(!fazenda){ toast('⚠️ Selecione a fazenda.'); return; }
-  if(!podeFazenda(fazenda) && !ehAdmin()){ toast('⛔ Sem permissão nesta fazenda.'); return; }
+  const tipo=document.getElementById('recTipo').value==='transferencia'?'transferencia':'compra';
+  const origemFazenda = tipo==='transferencia' ? (document.getElementById('recOrigem').value||'') : '';
+  // Transferência pode ser lançada por quem tem acesso à origem OU ao destino.
+  const podeReg = ehAdmin() || podeFazenda(fazenda) || (tipo==='transferencia' && origemFazenda && podeFazenda(origemFazenda));
+  if(!podeReg){ toast('⛔ Sem permissão nesta fazenda.'); return; }
   const data=document.getElementById('recData').value||hojeISO();
-  const nota=document.getElementById('recNota').value.trim();
-  const fornecedor=document.getElementById('recForn').value.trim();
-  const destino=document.getElementById('recDestino').value||'Compra';
   const obs=document.getElementById('recObs').value.trim();
+  const campos = tipo==='transferencia'
+    ? { tipo, origemFazenda, transportador:document.getElementById('recTransp').value.trim(), nota:'', fornecedor:'' }
+    : { tipo, nota:document.getElementById('recNota').value.trim(), fornecedor:document.getElementById('recForn').value.trim(), origemFazenda:'', transportador:'' };
   const itens=[];
   document.querySelectorAll('#recItensBox .ri-row').forEach(div=>{
     const produto=div.querySelector('.ri-prod').value.trim();
@@ -407,10 +434,10 @@ window.salvarRecebimento=async function(){
   const btn=document.getElementById('btnSalvarRec'); btn.disabled=true; btn.textContent='Salvando...';
   try{
     if(recEditId){
-      await updateDoc(doc(db,'recebimentos',recEditId), { fazenda, data, nota, fornecedor, destino, obs, itens, editadoEm:new Date().toISOString(), editadoPor:usuarioAtual.email });
+      await updateDoc(doc(db,'recebimentos',recEditId), { fazenda, data, ...campos, obs, itens, editadoEm:new Date().toISOString(), editadoPor:usuarioAtual.email });
       toast('✅ Recebimento atualizado!');
     }else{
-      await addDoc(collection(db,'recebimentos'), { fazenda, data, nota, fornecedor, destino, obs, itens, criadoPor:usuarioAtual.email, criadoEm:new Date().toISOString() });
+      await addDoc(collection(db,'recebimentos'), { fazenda, data, ...campos, obs, itens, criadoPor:usuarioAtual.email, criadoEm:new Date().toISOString() });
       toast('✅ Recebimento registrado!');
     }
     fecharModalRec();
@@ -465,6 +492,7 @@ function mapaPedido(){
 function mapaRecebido(){
   const map={};
   recebimentos.forEach(r=>{
+    if(r.tipo==='transferencia') return;   // transferência entre fazendas não é compra; não entra no recebido × pedido
     if(confPeriodo!=='tudo' && !(r.data||'').startsWith(confPeriodo)) return;
     (r.itens||[]).forEach(it=>_acc(map,r.fazenda,it.produto,it.unidade,it.quantidade));
   });
@@ -522,7 +550,7 @@ function renderConferencia(box){
         ${fazsVis.map(f=>`<option value="${sanitizar(f)}" ${confFaz===f?'selected':''}>${sanitizar(f)}</option>`).join('')}
       </select>
     </div>
-    <div class="conf-nota">Compara o total <b>recebido</b> (lançado pelas fazendas) com o total <b>pedido</b> (rateado por área do talhão em cada fazenda). O período filtra pela data do recebimento e pela data do pedido.</div>
+    <div class="conf-nota">Compara o total <b>recebido</b> (lançado pelas fazendas) com o total <b>pedido</b> (rateado por área do talhão em cada fazenda). Transferências entre fazendas não entram aqui (não são compra). O período filtra pela data do recebimento e pela data do pedido.</div>
     ${corpo}
   `;
 }
