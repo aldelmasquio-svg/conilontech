@@ -64,6 +64,9 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 .rc-itens{padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px;}
 .rc-chip{font-family:var(--font-mono);font-size:.76rem;background:var(--cl);border-radius:12px;padding:3px 10px;color:var(--ve);font-weight:600;}
 .rc-obs{padding:0 14px 10px;font-size:.76rem;color:var(--c);font-style:italic;}
+.rc-estoque-btn{margin:0 14px 10px;background:#eff6ff;border:1.5px solid #93c5fd;color:#1e40af;border-radius:8px;padding:9px 12px;font-family:var(--font-display);font-weight:700;font-size:.78rem;cursor:pointer;width:calc(100% - 28px);}
+.rc-estoque-btn:active{transform:scale(.98);}
+.rc-estoque{margin:0 14px 10px;font-size:.72rem;font-weight:700;color:var(--ok);}
 .rc-por{padding:0 14px 11px;font-size:.64rem;color:var(--c);text-align:right;}
 
 /* FORM / MODAL */
@@ -204,7 +207,7 @@ enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 
 // ─── ESTADO ───
 let usuarioAtual=null, perfilAtual={};
-let talhoes=[], fazendas=[], recebimentos=[], pedidos=[];
+let talhoes=[], fazendas=[], recebimentos=[], pedidos=[], estoqueProdutos=[];
 let tabAtual='registrar';
 let recEditId=null;
 let filtroFazReg='todas';
@@ -222,6 +225,8 @@ function fmt(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDi
 const hojeISO=()=>new Date().toISOString().slice(0,10);
 
 function ehAdmin(){ return adminDoSistema(perfilAtual) || nivelDoPerfil(perfilAtual,'recebimentos')==='admin'; }
+// Pode mover estoque? Mesmo critério do estoque.html (nível explícito ou dono).
+function podeEstoque(){ return adminDoSistema(perfilAtual) || ['admin','gerente','encarregado','operador'].includes(perfilAtual.modulos?.estoque); }
 // Fazendas que o usuário pode ver/registrar no módulo recebimentos
 function fazendasPermitidas(){
   if(adminDoSistema(perfilAtual)) return fazendas;
@@ -270,6 +275,10 @@ onAuthStateChanged(auth, async (user)=>{
       atualizarDatalist();
       if(tabAtual==='conferencia') renderTab();
     });
+  }
+  // Produtos do estoque: só p/ quem pode lançar transferência no estoque (botão no card).
+  if(podeEstoque()){
+    onSnapshot(collection(db,'estoque_produtos'), s=>{ estoqueProdutos=s.docs.map(d=>({_docId:d.id,...d.data()})); });
   }
 });
 
@@ -335,6 +344,10 @@ function cardRecebimento(r){
     </div>
     <div class="rc-itens">${itens||'<span class="rc-chip">sem itens</span>'}</div>
     ${r.obs?`<div class="rc-obs">💬 ${sanitizar(r.obs)}</div>`:''}
+    ${ehTransf ? (r.estoqueLancado
+        ? `<div class="rc-estoque ok">✓ Lançado no estoque</div>`
+        : (podeEstoque() ? `<button class="rc-estoque-btn" onclick="lancarTransfEstoque('${r._docId}')">📦 Lançar no estoque (baixa origem + entrada destino)</button>` : ''))
+      : ''}
     <div class="rc-por">${sanitizar(r.criadoPor||'')}</div>
   </div>`;
 }
@@ -447,9 +460,53 @@ window.salvarRecebimento=async function(){
 window.excluirRec=async function(id){
   const r=recebimentos.find(x=>x._docId===id); if(!r) return;
   if(!podeEditar(r)){ toast('⛔ Sem permissão.'); return; }
-  if(!confirm('Excluir este recebimento?')) return;
+  const aviso = r.estoqueLancado ? '\n\n⚠️ O lançamento no Estoque (saldo) NÃO é desfeito; ajuste pelo Estoque se precisar.' : '';
+  if(!confirm('Excluir este recebimento?'+aviso)) return;
   try{ await deleteDoc(doc(db,'recebimentos',id)); toast('🗑 Excluído.'); }
   catch(e){ toast('❌ Erro: '+(e&&e.message||e)); }
+};
+
+// ─── TRANSFERÊNCIA → ESTOQUE (saída na origem + entrada no destino) ───
+// Espelha a transferência do estoque.html. Idempotente: marca estoqueLancado e some o botão.
+function acharProdEstoque(fazenda, nome){
+  const n=normalizar(nome);
+  return estoqueProdutos.find(p=>p.fazenda===fazenda && normalizar(p.nome)===n);
+}
+async function criarProdEstoque(fazenda, nome, unidade){
+  const novo={ fazenda, nome, nomeNormalizado:normalizar(nome), unidade:unidade||'un', saldo:0, criadoPor:usuarioAtual.email, criadoEm:new Date().toISOString() };
+  const ref=await addDoc(collection(db,'estoque_produtos'), novo);
+  const p={ _docId:ref.id, ...novo };
+  estoqueProdutos.push(p);                 // mantém o cache local coerente dentro do laço
+  return p;
+}
+window.lancarTransfEstoque=async function(id){
+  const r=recebimentos.find(x=>x._docId===id); if(!r) return;
+  if(r.tipo!=='transferencia'){ toast('Só transferências vão ao estoque por aqui.'); return; }
+  if(!podeEstoque()){ toast('⛔ Sem acesso ao Estoque.'); return; }
+  if(r.estoqueLancado){ toast('Já lançado no estoque.'); return; }
+  const origem=r.origemFazenda, destino=r.fazenda;
+  if(!origem || !destino){ toast('⚠️ Transferência sem origem/destino.'); return; }
+  if(normalizar(origem)===normalizar(destino)){ toast('⚠️ Origem e destino são a mesma fazenda.'); return; }
+  const itens=(r.itens||[]).filter(it=>it.produto && (Number(it.quantidade)||0)>0);
+  if(!itens.length){ toast('⚠️ Sem itens para lançar.'); return; }
+  if(!confirm(`Lançar no estoque?\nSaída em ${origem} e entrada em ${destino} (${itens.length} produto(s)).`)) return;
+  try{
+    const movIds=[];
+    for(const it of itens){
+      const qty=Number(it.quantidade)||0;
+      const pOrig = acharProdEstoque(origem, it.produto) || await criarProdEstoque(origem, it.produto, it.unidade);
+      const pDest = acharProdEstoque(destino, it.produto) || await criarProdEstoque(destino, it.produto, it.unidade||pOrig.unidade);
+      const base={ unidade:pOrig.unidade||it.unidade||'un', quantidade:qty, data:r.data, observacao:`Transferência via Recebimentos${r.transportador?` · transp.: ${r.transportador}`:''}`, origem:'recebimento', recebimentoId:id, criadoPor:usuarioAtual.email, criadoEm:new Date().toISOString() };
+      const saida=await addDoc(collection(db,'estoque_movimentacoes'), {...base, fazenda:origem, produtoId:pOrig._docId, produtoNome:pOrig.nome, tipo:'transferencia_saida', motivo:`Transferência para ${destino}`, fazendaDestino:destino});
+      const entrada=await addDoc(collection(db,'estoque_movimentacoes'), {...base, fazenda:destino, produtoId:pDest._docId, produtoNome:pDest.nome, unidade:pDest.unidade||base.unidade, tipo:'transferencia_entrada', motivo:`Transferência recebida de ${origem}`, fazendaOrigem:origem, movimentacaoPar:saida.id});
+      await updateDoc(doc(db,'estoque_movimentacoes',saida.id), {movimentacaoPar:entrada.id});
+      await updateDoc(doc(db,'estoque_produtos',pOrig._docId), {saldo:(pOrig.saldo||0)-qty}); pOrig.saldo=(pOrig.saldo||0)-qty;
+      await updateDoc(doc(db,'estoque_produtos',pDest._docId), {saldo:(pDest.saldo||0)+qty}); pDest.saldo=(pDest.saldo||0)+qty;
+      movIds.push(saida.id, entrada.id);
+    }
+    await updateDoc(doc(db,'recebimentos',id), {estoqueLancado:true, estoqueMovIds:movIds, estoqueLancadoPor:usuarioAtual.email, estoqueLancadoEm:new Date().toISOString()});
+    toast('✅ Lançado no estoque.');
+  }catch(e){ toast('❌ Erro ao lançar no estoque: '+(e&&e.message||e)); }
 };
 
 // ─── CONFERÊNCIA (recebido × pedido, por fazenda) ───
