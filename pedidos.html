@@ -17,7 +17,6 @@ const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomai
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
 enableMultiTabIndexedDbPersistence(db).catch(()=>{});
 let usuarioAtual=null,perfilAtual={},talhoes=[],pedidos=[],pedidoWIP=null,pedItemAtivo=null,pedMapIniciado=false,pedMap,pedPolMap={},pedSidebarAberta=true,tabAtual='mapa',pedidoEditandoId=null;
-let pedidoRecebimento=null;   // pedido cujo recebimento está sendo registrado no modal
 const PED_CORES={formacao:{border:'rgba(96,165,250,.9)',fill:'rgba(37,99,235,.28)'},producao:{border:'rgba(123,198,126,.9)',fill:'rgba(74,140,63,.4)'},reforma:{border:'rgba(220,190,90,.9)',fill:'rgba(201,168,76,.4)'}};
 function normStatus(s){ return ({ativo:'producao',colhido:'producao',plantio:'formacao',novo:'formacao'})[s] || s || 'producao'; }
 onAuthStateChanged(auth,async(user)=>{
@@ -301,58 +300,6 @@ window.salvarPedidoWIP=async function(){
   }
   btn.disabled=false;btn.textContent=pedidoEditandoId?'💾 Salvar Alterações':'💾 Salvar Pedido';
 };
-// ─── RECEBIMENTO (quantidade real que chegou na fazenda) ───
-// Soma o que já foi recebido por produto (um pedido pode ter várias entregas/notas).
-function recebidoPorProduto(p){
-  const m={};
-  (p.recebimentos||[]).forEach(r=>(r.itens||[]).forEach(it=>{
-    const k=(it.produto||'').trim().toLowerCase(); if(!k) return;
-    if(!m[k]) m[k]={produto:it.produto, quantidade:0, unidade:it.unidade||''};
-    m[k].quantidade += Number(it.quantidade)||0;
-    if(!m[k].unidade && it.unidade) m[k].unidade=it.unidade;
-  }));
-  return m;
-}
-// Quantidade total pedida de um item (novos têm .total; antigos só a string .quantidade).
-function qtdPedidaItem(it){
-  if(it.total!=null) return Number(it.total)||0;
-  const m=String(it.quantidade||'').replace(/\./g,'').replace(',','.').match(/[\d.]+/);
-  return m?(parseFloat(m[0])||0):0;
-}
-// Deriva o status do pedido a partir do que já foi recebido (não mexe em cancelado).
-function statusPorRecebimento(p, recebimentos){
-  if(p.status==='cancelado') return p.status;
-  const itens=p.itens||[]; if(!itens.length) return p.status||'recebido';
-  const m={};
-  recebimentos.forEach(r=>(r.itens||[]).forEach(it=>{const k=(it.produto||'').trim().toLowerCase();m[k]=(m[k]||0)+(Number(it.quantidade)||0);}));
-  let completos=0, algum=false;
-  itens.forEach(it=>{
-    const ped=qtdPedidaItem(it), rec=m[(it.produto||'').trim().toLowerCase()]||0;
-    if(rec>0) algum=true;
-    if((ped>0 && rec+0.001>=ped) || (ped===0 && rec>0)) completos++;
-  });
-  if(completos>=itens.length) return 'recebido';
-  if(algum) return 'recebido_parcial';
-  return p.status||'solicitado';
-}
-function histRecebimentos(p){
-  return (p.recebimentos||[]).slice().sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(r=>`
-    <div class="rec-hist">
-      <div class="rec-hist-top">
-        <span class="rec-hist-data">📅 ${formatarData(r.data)}</span>
-        ${r.nota?`<span class="rec-hist-nota">NF ${sanitizar(r.nota)}</span>`:''}
-        ${isAdmin()?`<button class="rec-hist-del" onclick="excluirRecebimento('${p._docId}','${r.id}')">🗑</button>`:''}
-      </div>
-      ${r.fornecedor?`<div class="rec-hist-forn">🏭 ${sanitizar(r.fornecedor)}</div>`:''}
-      ${r.fazenda?`<div class="rec-hist-forn">🏡 ${sanitizar(r.fazenda)}</div>`:''}
-      <div class="rec-hist-itens">${(r.itens||[]).map(it=>`<span class="rec-hist-chip">${sanitizar(it.produto)}: ${(Number(it.quantidade)||0).toLocaleString('pt-BR')} ${sanitizar(it.unidade||'')}</span>`).join('')}</div>
-      ${r.obs?`<div class="rec-hist-obs">💬 ${sanitizar(r.obs)}</div>`:''}
-      <div class="rec-hist-por">${sanitizar(r.registradoPor||'')}</div>
-    </div>`).join('');
-}
-// sanitização básica p/ atributos/textos do modal de recebimento
-function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
-
 function renderizarListaPedidos(){
   const lista=document.getElementById('listaPedidosApp');if(!lista)return;
   document.getElementById('totalPedidos').textContent=pedidos.length+' pedido(s)';
@@ -369,7 +316,6 @@ function renderizarListaPedidos(){
     const fazendas=[...new Set((p.itens||[]).flatMap(it=>(it.talhoes||[]).map(t=>t.fazenda||'Sem fazenda')))].join(' · ');
     const stAtual = p.status || 'solicitado';
     const stInfo = STATUS_OPS.find(s => s.id===stAtual) || STATUS_OPS[0];
-    const recMap = recebidoPorProduto(p);
     const podeAlterar = isAdmin() || (perfilAtual.modulos?.pedidos === 'encarregado');
     const selStatus = podeAlterar
       ? `<select class="ped-status-sel" onchange="alterarStatusPedido('${p._docId}',this.value)" style="border-color:${stInfo.cor};color:${stInfo.cor};">
@@ -380,7 +326,6 @@ function renderizarListaPedidos(){
       <div class="ped-card-hdr">
         <div><div class="ped-card-tit">📦 Pedido de Insumos</div><div class="ped-card-meta">📅 ${dataF} · 🏡 ${fazendas}</div><div class="ped-card-meta">👤 ${p.criadoPor||'—'}</div></div>
         <div style="display:flex;gap:6px;flex-shrink:0;align-items:flex-start;">
-          ${podeAlterar?`<button onclick="abrirRecebimento('${p._docId}')" class="btn-receb">📥 Receber</button>`:''}
           <button onclick="gerarRelatorioPedido('${p._docId}')" class="btn-pdf">📄 PDF</button>
           ${isAdmin()?`<button onclick="editarPedido('${p._docId}')" class="btn-editar-ped">✏️ Editar</button>`:''}
           ${isAdmin()?`<button class="btn-del-ped" data-doc="${p._docId}" onclick="excluirPedido(this)">🗑</button>`:''}
@@ -391,21 +336,12 @@ function renderizarListaPedidos(){
         ${(p.itens||[]).map(it=>{
           // Retrocompat: pedidos novos têm dosePorHa+total; antigos só têm quantidade (string)
           const temNovo = it.dosePorHa != null && it.total != null;
-          const recItem = recMap[(it.produto||'').trim().toLowerCase()];
-          let recebidoTxt = '';
-          if(recItem && recItem.quantidade>0){
-            const rec=recItem.quantidade, und=it.unidade||recItem.unidade||'', ped=qtdPedidaItem(it);
-            const diff=Math.round((rec-ped)*100)/100;
-            if(ped>0 && Math.abs(diff)<0.01){
-              recebidoTxt=`<span class="ped-recebido-aux ok">✓ recebido ${rec.toLocaleString('pt-BR')} ${und}</span>`;
-            }else{
-              const sinal = diff>0 ? `+${diff.toLocaleString('pt-BR')}` : diff.toLocaleString('pt-BR');
-              recebidoTxt=`<span class="ped-recebido-aux div">⚠️ recebido ${rec.toLocaleString('pt-BR')} ${und}${ped>0?` (${sinal})`:''}</span>`;
-            }
-          }
+          const recebidoTxt = it.totalRecebido != null && it.totalRecebido > 0
+            ? `<span class="ped-recebido-aux">✓ ${(it.totalRecebido||0).toLocaleString('pt-BR')} ${it.unidade||''} recebido</span>`
+            : '';
           const txtBadge = temNovo
             ? `<span class="ped-qtd-badge">${(it.total||0).toLocaleString('pt-BR')} ${it.unidade||''}</span><span class="ped-qtd-aux">${it.dosePorHa} ${it.unidade||''}/ha</span>${recebidoTxt}`
-            : (it.quantidade ? `<span class="ped-qtd-badge">${it.quantidade}</span>${recebidoTxt}` : recebidoTxt);
+            : (it.quantidade ? `<span class="ped-qtd-badge">${it.quantidade}</span>` : '');
           const modoBadge = it.modo ? `<span class="ped-modo-badge">${MODO_APLIC[it.modo]||it.modo}</span>` : '';
           return `<div class="ped-item-lista"><span class="ped-item-prod">🧪 ${it.produto}${modoBadge}</span><span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">${txtBadge}<span class="ped-tal-ids">${(it.talhoes||[]).map(t=>t.nome||t.id).join(', ')}</span></span></div>`;
         }).join('')}
@@ -421,105 +357,6 @@ window.alterarStatusPedido = async function(docId, novoStatus) {
   } catch(e) { toast('❌ Erro: '+e.message); }
 };
 window.excluirPedido=async function(btn){const docId=btn.dataset.doc;if(!confirm('Excluir?'))return;btn.disabled=true;await deleteDoc(doc(db,'pedidos',docId));toast('🗑 Excluído.');};
-
-// ─── MODAL DE RECEBIMENTO ───
-window.abrirRecebimento=function(docId){
-  const p=pedidos.find(x=>x._docId===docId); if(!p) return;
-  pedidoRecebimento=docId;
-  const hoje=new Date().toISOString().slice(0,10);
-  const recMap=recebidoPorProduto(p);
-  const itensHtml=(p.itens||[]).map(it=>{
-    const ped=qtdPedidaItem(it), und=it.unidade||'';
-    const ja=recMap[(it.produto||'').trim().toLowerCase()]?.quantidade||0;
-    const falta=Math.round((ped-ja)*100)/100;
-    return `<div class="rec-item">
-      <div class="rec-item-nome">🧪 ${sanitizar(it.produto)}</div>
-      <div class="rec-item-sub">Pedido: <b>${ped.toLocaleString('pt-BR')} ${sanitizar(und)}</b>${ja>0?` · já recebido: ${ja.toLocaleString('pt-BR')} ${sanitizar(und)}`:''}</div>
-      <div class="rec-item-inp">
-        <input type="number" inputmode="decimal" step="any" min="0" class="ped-inp rec-qtd" data-produto="${sanitizar(it.produto)}" data-und="${sanitizar(und)}" value="${falta>0?falta:''}" placeholder="0">
-        <span class="rec-und">${sanitizar(und)||'un'}</span>
-      </div>
-    </div>`;
-  }).join('');
-  document.getElementById('recModalBody').innerHTML=`
-    <div class="rec-pedinfo">Pedido de ${p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—'} · ${(p.itens||[]).length} insumo(s)</div>
-    <div class="rec-campos">
-      <label class="rec-lab">Data do recebimento</label>
-      <input type="date" id="recData" class="ped-inp" value="${hoje}">
-      <label class="rec-lab">N° da Nota</label>
-      <input type="text" id="recNota" class="ped-inp" placeholder="ex.: 4.393">
-      <label class="rec-lab">Fornecedor</label>
-      <input type="text" id="recForn" class="ped-inp" placeholder="ex.: Rural Comércio de Irrigações">
-      <label class="rec-lab">Fazenda / destino (opcional)</label>
-      <input type="text" id="recFaz" class="ped-inp" placeholder="ex.: Fazenda Alvorada I">
-    </div>
-    <div class="rec-sec-tit">Quantidades que chegaram</div>
-    <div id="recItens">${itensHtml||'<div class="rec-vazio">Este pedido não tem itens.</div>'}</div>
-    <div id="recExtra"></div>
-    <button class="btn-add-item" onclick="recAddLinha()">＋ Adicionar produto fora do pedido</button>
-    <label class="rec-lab" style="margin-top:12px;">Observação</label>
-    <textarea id="recObs" class="ped-inp" rows="2" placeholder="Divergência, avaria, entrega parcial..."></textarea>
-    <button class="btn-salvar-ped" style="margin-top:12px;" onclick="salvarRecebimento()">💾 Salvar recebimento</button>
-    ${(p.recebimentos||[]).length?`<div class="rec-sec-tit" style="margin-top:20px;">Recebimentos registrados</div>${histRecebimentos(p)}`:''}
-  `;
-  document.getElementById('recOverlay').style.display='flex';
-};
-window.fecharRecebimento=function(){ pedidoRecebimento=null; document.getElementById('recOverlay').style.display='none'; };
-window.recAddLinha=function(){
-  const box=document.getElementById('recExtra'); if(!box) return;
-  const div=document.createElement('div');
-  div.className='rec-item rec-item-extra';
-  div.innerHTML=`
-    <div class="rec-extra-row">
-      <input type="text" class="ped-inp rec-ex-prod" placeholder="Produto recebido">
-      <button class="btn-rm-item" onclick="this.closest('.rec-item-extra').remove()">✕</button>
-    </div>
-    <div class="rec-item-inp">
-      <input type="number" inputmode="decimal" step="any" min="0" class="ped-inp rec-ex-qtd" placeholder="0">
-      <input type="text" class="ped-inp rec-ex-und" placeholder="un" style="width:72px;flex:none;">
-    </div>`;
-  box.appendChild(div);
-};
-window.salvarRecebimento=async function(){
-  const docId=pedidoRecebimento; if(!docId) return;
-  const p=pedidos.find(x=>x._docId===docId); if(!p){ toast('❌ Pedido não encontrado.'); return; }
-  const data=document.getElementById('recData').value||new Date().toISOString().slice(0,10);
-  const nota=document.getElementById('recNota').value.trim();
-  const fornecedor=document.getElementById('recForn').value.trim();
-  const fazenda=document.getElementById('recFaz').value.trim();
-  const obs=document.getElementById('recObs').value.trim();
-  const itens=[];
-  document.querySelectorAll('#recItens .rec-qtd').forEach(inp=>{
-    const q=parseDose(inp.value);
-    if(q>0) itens.push({produto:inp.dataset.produto, quantidade:q, unidade:inp.dataset.und||''});
-  });
-  document.querySelectorAll('#recExtra .rec-item-extra').forEach(div=>{
-    const prod=div.querySelector('.rec-ex-prod').value.trim();
-    const q=parseDose(div.querySelector('.rec-ex-qtd').value);
-    const und=div.querySelector('.rec-ex-und').value.trim();
-    if(prod && q>0) itens.push({produto:prod, quantidade:q, unidade:und});
-  });
-  if(!itens.length){ toast('⚠️ Informe ao menos uma quantidade recebida.'); return; }
-  const btn=document.querySelector('#recModalBody .btn-salvar-ped'); if(btn){ btn.disabled=true; btn.textContent='Salvando...'; }
-  const novo={ id:'r'+Date.now(), data, nota, fornecedor, fazenda, obs, itens, registradoPor:usuarioAtual.email, registradoEm:new Date().toISOString() };
-  const recebimentos=[...(p.recebimentos||[]), novo];
-  try{
-    await updateDoc(doc(db,'pedidos',docId), { recebimentos, status:statusPorRecebimento(p,recebimentos), statusAtualizadoEm:new Date().toISOString(), statusAtualizadoPor:usuarioAtual.email });
-    toast('✅ Recebimento registrado!');
-    window.fecharRecebimento();
-  }catch(e){ toast('❌ Erro: '+(e&&e.message||e)); if(btn){ btn.disabled=false; btn.textContent='💾 Salvar recebimento'; } }
-};
-window.excluirRecebimento=async function(docId, recId){
-  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
-  const p=pedidos.find(x=>x._docId===docId); if(!p) return;
-  if(!confirm('Excluir este recebimento?')) return;
-  const recebimentos=(p.recebimentos||[]).filter(r=>r.id!==recId);
-  try{
-    await updateDoc(doc(db,'pedidos',docId), { recebimentos, status:statusPorRecebimento(p,recebimentos) });
-    toast('🗑 Recebimento excluído.');
-    window.fecharRecebimento();
-  }catch(e){ toast('❌ Erro: '+(e&&e.message||e)); }
-};
 window.gerarRelatorioPedido=function(docId){
   const p=pedidos.find(x=>x._docId===docId);if(!p)return;
   const dataF=p.criadoEm?formatarData(p.criadoEm.slice(0,10)):'—';
@@ -707,39 +544,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .ped-status-sel{border:2px solid;background:white;border-radius:99px;padding:5px 12px;font-family:var(--font-display);font-weight:700;font-size:.78rem;cursor:pointer;outline:none;-webkit-appearance:none;text-align:center;text-align-last:center;}
 .ped-status-badge{display:inline-block;color:white;border-radius:99px;padding:5px 12px;font-family:var(--font-display);font-weight:700;font-size:.78rem;}
 .ped-recebido-aux{display:block;font-size:.7rem;color:#22c55e;font-family:var(--font-mono);font-weight:700;}
-.ped-recebido-aux.ok{color:#22c55e;}
-.ped-recebido-aux.div{color:#c2410c;}
-.btn-receb{background:#eff6ff;border:1px solid #93c5fd;color:#1e40af;border-radius:6px;padding:7px 10px;font-size:.72rem;font-family:var(--font-display);font-weight:700;cursor:pointer;}
-.rec-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:none;align-items:flex-end;justify-content:center;}
-.rec-modal{background:#fff;width:100%;max-width:520px;max-height:92dvh;border-radius:16px 16px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -4px 24px rgba(0,0,0,.3);}
-@media(min-width:600px){.rec-overlay{align-items:center;}.rec-modal{border-radius:16px;}}
-.rec-modal-hdr{background:var(--ve);color:#fff;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
-.rec-modal-tit{font-family:var(--font-display);font-weight:800;font-size:1.05rem;}
-.rec-close{background:rgba(255,255,255,.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:.9rem;cursor:pointer;flex-shrink:0;}
-.rec-modal-body{padding:16px;overflow-y:auto;}
-.rec-pedinfo{font-size:.72rem;color:var(--c);margin-bottom:12px;}
-.rec-campos{display:flex;flex-direction:column;gap:5px;margin-bottom:14px;}
-.rec-lab{font-size:.68rem;font-weight:700;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-top:5px;}
-.rec-sec-tit{font-size:.72rem;font-weight:800;color:var(--v);text-transform:uppercase;letter-spacing:.06em;margin:6px 0 9px;padding-bottom:4px;border-bottom:1px solid var(--cl);}
-.rec-item{background:var(--cl);border-radius:9px;padding:10px 11px;margin-bottom:8px;}
-.rec-item-nome{font-weight:700;font-size:.85rem;}
-.rec-item-sub{font-size:.7rem;color:var(--c);font-family:var(--font-mono);margin:2px 0 7px;}
-.rec-item-inp{display:flex;align-items:center;gap:7px;}
-.rec-item-inp .ped-inp{flex:1;}
-.rec-und{font-size:.8rem;font-weight:700;color:var(--c);min-width:28px;}
-.rec-extra-row{display:flex;gap:7px;align-items:center;margin-bottom:6px;}
-.rec-extra-row .ped-inp{flex:1;}
-.rec-vazio{font-size:.8rem;color:var(--c);padding:8px;}
-.rec-hist{border:1px solid var(--cl);border-radius:9px;padding:9px 11px;margin-bottom:7px;}
-.rec-hist-top{display:flex;align-items:center;gap:8px;}
-.rec-hist-data{font-family:var(--font-mono);font-size:.76rem;font-weight:700;color:var(--ve);flex:1;}
-.rec-hist-nota{font-size:.68rem;background:var(--vb);color:var(--v);border-radius:6px;padding:1px 7px;font-weight:700;}
-.rec-hist-del{background:#fee2e2;border:none;color:var(--danger);border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:.72rem;flex-shrink:0;}
-.rec-hist-forn{font-size:.72rem;color:var(--c);margin-top:3px;}
-.rec-hist-itens{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;}
-.rec-hist-chip{font-size:.7rem;background:var(--cl);border-radius:12px;padding:2px 9px;font-family:var(--font-mono);}
-.rec-hist-obs{font-size:.72rem;color:var(--c);margin-top:5px;font-style:italic;}
-.rec-hist-por{font-size:.65rem;color:var(--c);margin-top:4px;text-align:right;}
 .ped-item-lista{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--cl);font-size:.82rem;}
 .ped-item-lista:last-child{border:none;}
 .ped-item-prod{font-weight:600;flex:1;}
@@ -817,15 +621,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
       <div class="lista-hdr"><span class="lista-hdr-tit">📋 Pedidos de Insumos</span><span style="font-size:.72rem;color:var(--c);" id="totalPedidos"></span></div>
       <div class="lista-scroll" id="listaPedidosApp"></div>
     </div>
-  </div>
-</div>
-<div class="rec-overlay" id="recOverlay">
-  <div class="rec-modal">
-    <div class="rec-modal-hdr">
-      <div class="rec-modal-tit">📥 Registrar recebimento</div>
-      <button class="rec-close" onclick="fecharRecebimento()">✕</button>
-    </div>
-    <div class="rec-modal-body" id="recModalBody"></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>

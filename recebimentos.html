@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Conilon Tech · Recebimentos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:var(--font-display);font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+
+/* HEADER & MENU */
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-titles{line-height:1;}
+.header-title-main{font-family:var(--font-display);font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
+.menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
+.menu-body{flex:1;padding:10px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:var(--font-body);font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:1.1rem;}
+.menu-footer{padding:14px;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:var(--font-display);font-weight:700;font-size:.9rem;cursor:pointer;}
+
+/* TABS */
+.tabs-bar{display:flex;background:white;border-bottom:2px solid var(--cb);flex-shrink:0;position:sticky;top:54px;z-index:199;}
+.tab{flex:1;padding:12px 6px;border:none;background:none;cursor:pointer;font-family:var(--font-display);font-weight:700;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;color:var(--c);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+.tab.ativa{color:var(--v);border-bottom-color:var(--v);}
+.tab-content{padding:12px 14px 90px;display:flex;flex-direction:column;gap:10px;max-width:640px;margin:0 auto;width:100%;}
+
+/* BARRA DE FILTROS DO TOPO DA ABA */
+.filtros{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.filtros .campo-sel{flex:1;min-width:120px;}
+.btn-novo{background:var(--v);border:none;color:#fff;border-radius:var(--rs);padding:11px 16px;font-family:var(--font-display);font-weight:800;font-size:.9rem;cursor:pointer;white-space:nowrap;}
+.btn-novo:active{transform:scale(.97);}
+
+/* CARD DE RECEBIMENTO */
+.rc-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
+.rc-faz-group-tit{font-family:var(--font-display);font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--v);margin:6px 2px 0;}
+.rc-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--cl);}
+.rc-faz{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);}
+.rc-meta{font-size:.72rem;color:var(--c);margin-top:3px;display:flex;flex-wrap:wrap;gap:3px 10px;}
+.rc-dest{font-size:.66rem;font-weight:700;background:var(--vb);color:var(--v);border-radius:99px;padding:2px 9px;white-space:nowrap;}
+.rc-acoes{display:flex;gap:6px;flex-shrink:0;}
+.rc-btn{border:none;border-radius:6px;padding:6px 9px;font-size:.72rem;font-family:var(--font-display);font-weight:700;cursor:pointer;}
+.rc-btn.edit{background:#fff7ed;border:1px solid #fed7aa;color:#c2410c;}
+.rc-btn.del{background:#fee2e2;border:1px solid #fca5a5;color:var(--danger);}
+.rc-itens{padding:10px 14px;display:flex;flex-wrap:wrap;gap:6px;}
+.rc-chip{font-family:var(--font-mono);font-size:.76rem;background:var(--cl);border-radius:12px;padding:3px 10px;color:var(--ve);font-weight:600;}
+.rc-obs{padding:0 14px 10px;font-size:.76rem;color:var(--c);font-style:italic;}
+.rc-por{padding:0 14px 11px;font-size:.64rem;color:var(--c);text-align:right;}
+
+/* FORM / MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2500;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
+.modal-overlay.aberto{opacity:1;pointer-events:auto;}
+.modal-box{background:white;border-radius:16px 16px 0 0;width:100%;max-width:600px;padding:8px 16px 18px;transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.2,.64,1);max-height:92dvh;overflow-y:auto;display:flex;flex-direction:column;}
+.modal-overlay.aberto .modal-box{transform:translateY(0);}
+@media(min-width:600px){.modal-overlay{align-items:center;}.modal-box{border-radius:16px;}}
+.modal-handle{width:42px;height:4px;background:var(--cb);border-radius:99px;margin:6px auto 12px;flex-shrink:0;}
+.modal-titulo{font-family:var(--font-display);font-weight:800;font-size:1.2rem;color:var(--t);line-height:1.2;margin-bottom:4px;}
+.modal-sub{font-size:.8rem;color:var(--c);margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--cl);}
+.campo{margin-bottom:12px;}
+.campo-label{font-family:var(--font-display);font-weight:700;font-size:.72rem;text-transform:uppercase;color:var(--c);letter-spacing:.05em;margin-bottom:6px;display:block;}
+.campo-inp,.campo-sel,.campo-area{width:100%;border:1.5px solid var(--cb);border-radius:8px;padding:11px 12px;font-size:.95rem;font-family:var(--font-body);outline:none;background:white;}
+.campo-inp:focus,.campo-sel:focus,.campo-area:focus{border-color:var(--v);}
+.campo-area{resize:vertical;min-height:50px;}
+.campo-row{display:flex;gap:8px;}
+.campo-row > *{flex:1;}
+.sec-tit{font-family:var(--font-display);font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--v);margin:4px 0 9px;padding-bottom:4px;border-bottom:1px solid var(--cl);}
+.ri-row{background:var(--cl);border-radius:9px;padding:9px 10px;margin-bottom:8px;}
+.ri-top{display:flex;gap:7px;align-items:center;margin-bottom:7px;}
+.ri-top .campo-inp{flex:1;}
+.ri-qtd{display:flex;gap:7px;}
+.ri-qtd .campo-inp{flex:1;}
+.ri-qtd .campo-sel{width:88px;flex:none;}
+.btn-rm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:1.1rem;padding:2px 4px;flex-shrink:0;}
+.btn-add-item{width:100%;background:var(--cl);border:1.5px dashed var(--cb);color:var(--c);border-radius:var(--rs);padding:10px;font-size:.85rem;font-family:var(--font-body);cursor:pointer;margin-top:2px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 14px;border-radius:8px;font-family:var(--font-display);font-weight:700;font-size:.95rem;cursor:pointer;border:1.5px solid transparent;transition:.15s;}
+.btn:active{transform:scale(.97);}
+.btn-v{background:var(--v);color:white;border-color:var(--v);}
+.btn-c{background:white;color:var(--c);border-color:var(--cb);}
+.btn-full{width:100%;}
+.btn:disabled{opacity:.5;}
+.modal-acoes{display:flex;flex-direction:column;gap:8px;margin-top:8px;flex-shrink:0;}
+
+/* CONFERÊNCIA */
+.conf-faz{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;}
+.conf-faz-hdr{background:var(--vb);color:var(--ve);font-family:var(--font-display);font-weight:800;font-size:.95rem;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.conf-faz-badge{font-size:.64rem;font-weight:700;border-radius:99px;padding:2px 9px;}
+.conf-faz-badge.ok{background:#dcfce7;color:#166534;}
+.conf-faz-badge.div{background:#ffedd5;color:#9a3412;}
+.conf-tbl{width:100%;border-collapse:collapse;font-size:.82rem;}
+.conf-tbl th{background:var(--cl);color:var(--c);font-size:.64rem;text-transform:uppercase;letter-spacing:.04em;padding:6px 10px;text-align:right;font-weight:700;}
+.conf-tbl th.l{text-align:left;}
+.conf-tbl td{padding:8px 10px;border-bottom:1px solid var(--cl);text-align:right;font-family:var(--font-mono);}
+.conf-tbl td.l{text-align:left;font-family:var(--font-body);font-weight:600;color:var(--t);}
+.conf-tbl tr:last-child td{border-bottom:none;}
+.conf-dif.ok{color:var(--ok);font-weight:700;}
+.conf-dif.falta{color:var(--danger);font-weight:700;}
+.conf-dif.sobra{color:#c2410c;font-weight:700;}
+.conf-row-pend{background:#fffdf5;}
+.conf-nota{font-size:.7rem;color:var(--c);padding:4px 2px 0;line-height:1.4;}
+
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:var(--c);}
+.vazio .ico{font-size:3rem;margin-bottom:10px;opacity:.5;}
+.vazio p{font-size:.92rem;line-height:1.5;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="loading-spinner"></div><div class="loading-text">Carregando...</div></div>
+
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="header-left">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="header-titles"><div class="header-title-main">Conilon Tech</div><div class="header-title-sub">Recebimentos</div></div>
+  </div>
+  <div class="header-user" id="userNome">—</div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<aside class="menu-lateral" id="menuLateral">
+  <div class="menu-header"><div class="menu-user-nome" id="menuUserNome">—</div><div class="menu-user-email" id="menuUserEmail">—</div></div>
+  <div class="menu-body" id="menuModulos"></div>
+  <div class="menu-footer"><button class="btn-logout" onclick="fazerLogout()">↩ Sair</button></div>
+</aside>
+
+<div id="appContent" style="display:none;">
+  <div class="tabs-bar">
+    <button class="tab ativa" id="tabRegistrar" onclick="abrirTab('registrar')">📥 Registrar</button>
+    <button class="tab" id="tabConferencia" onclick="abrirTab('conferencia')" style="display:none;">📊 Conferência</button>
+  </div>
+  <div class="tab-content" id="tabContent"></div>
+</div>
+
+<!-- MODAL: NOVO/EDITAR RECEBIMENTO -->
+<div class="modal-overlay" id="modalRec" onclick="if(event.target===this)fecharModalRec()">
+  <div class="modal-box">
+    <div class="modal-handle"></div>
+    <div class="modal-titulo" id="recModalTit">Registrar recebimento</div>
+    <div class="modal-sub">Registre o que chegou na fazenda: data, nota, fornecedor e as quantidades.</div>
+    <div class="campo"><label class="campo-label">Fazenda</label><select class="campo-sel" id="recFaz"></select></div>
+    <div class="campo-row">
+      <div class="campo"><label class="campo-label">Data</label><input type="date" class="campo-inp" id="recData"></div>
+      <div class="campo"><label class="campo-label">Destino</label><select class="campo-sel" id="recDestino"></select></div>
+    </div>
+    <div class="campo-row">
+      <div class="campo"><label class="campo-label">N° da Nota</label><input type="text" class="campo-inp" id="recNota" placeholder="ex.: 4.393"></div>
+      <div class="campo"><label class="campo-label">Fornecedor</label><input type="text" class="campo-inp" id="recForn" placeholder="ex.: Rural Comércio"></div>
+    </div>
+    <div class="sec-tit">Produtos recebidos</div>
+    <div id="recItensBox"></div>
+    <button class="btn-add-item" onclick="recAddItem()">＋ Adicionar produto</button>
+    <div class="campo" style="margin-top:12px;"><label class="campo-label">Observação</label><textarea class="campo-area" id="recObs" placeholder="Divergência, avaria, entrega parcial..."></textarea></div>
+    <div class="modal-acoes">
+      <button class="btn btn-v btn-full" id="btnSalvarRec" onclick="salvarRecebimento()">💾 Salvar recebimento</button>
+      <button class="btn btn-c btn-full" onclick="fecharModalRec()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="dlProdutos"></datalist>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema, nivelDoPerfil } from './acesso.js';
+import { gerarMenu } from './menu.js';
+
+const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+enableMultiTabIndexedDbPersistence(db).catch(()=>{});
+
+// ─── ESTADO ───
+let usuarioAtual=null, perfilAtual={};
+let talhoes=[], fazendas=[], recebimentos=[], pedidos=[];
+let tabAtual='registrar';
+let recEditId=null;
+let filtroFazReg='todas';
+let confPeriodo='tudo', confFaz='todas';
+
+const UNIDADES=['kg','g','t','L','mL','sc','un'];
+const DESTINOS=['Compra','Transferência recebida','Bonificação','Devolução','Outro'];
+
+// ─── HELPERS ───
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2800); }
+function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, ch => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[ch])); }
+function formatarData(d){ if(!d) return '—'; const [a,m,dd]=String(d).split('-'); return (dd&&m&&a)?`${dd}/${m}/${a}`:d; }
+function parseDose(s){ if(s==null||s==='')return 0; const n=parseFloat(String(s).replace(/\s/g,'').replace(',','.')); return isNaN(n)?0:n; }
+function normalizar(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
+function fmt(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:2}); }
+const hojeISO=()=>new Date().toISOString().slice(0,10);
+
+function ehAdmin(){ return adminDoSistema(perfilAtual) || nivelDoPerfil(perfilAtual,'recebimentos')==='admin'; }
+// Fazendas que o usuário pode ver/registrar no módulo recebimentos
+function fazendasPermitidas(){
+  if(adminDoSistema(perfilAtual)) return fazendas;
+  const map=perfilAtual.fazendasModulo;
+  if(!map) return fazendas;
+  const lista=map['recebimentos'];
+  if(lista===undefined) return fazendas;
+  return fazendas.filter(f=>lista.includes(f));
+}
+function podeFazenda(f){ return fazendasPermitidas().includes(f); }
+function podeEditar(r){ return ehAdmin() || r.criadoPor===usuarioAtual?.email; }
+
+// ─── AUTH / BOOTSTRAP ───
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ window.location.href='login.html'; return; }
+  usuarioAtual=user;
+  const snap=await getDoc(doc(db,'usuarios',user.uid));
+  if(!snap.exists()){ await signOut(auth); return; }
+  perfilAtual=snap.data();
+  // Página nova e controlada: só entra quem tem o módulo liberado (ou é dono do sistema).
+  if(nivelDoPerfil(perfilAtual,'recebimentos')==='nenhum'){ window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserEmail').textContent=user.email;
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appHeader').style.display='flex';
+  document.getElementById('appContent').style.display='block';
+  gerarMenu(perfilAtual);
+  if(ehAdmin()) document.getElementById('tabConferencia').style.display='block';
+
+  onSnapshot(collection(db,'talhoes'), s=>{
+    talhoes=s.docs.map(d=>({_docId:d.id,...d.data()}));
+    const set=new Set(); talhoes.forEach(t=>{ if(t.fazenda) set.add(t.fazenda); });
+    fazendas=[...set].sort();
+    renderTab();
+  });
+  onSnapshot(collection(db,'recebimentos'), s=>{
+    recebimentos=s.docs.map(d=>({_docId:d.id,...d.data()})).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||(b.criadoEm||'').localeCompare(a.criadoEm||''));
+    atualizarDatalist();
+    renderTab();
+  });
+  // Pedidos só interessam à conferência (dono). Leitura é liberada para conta ativa.
+  if(ehAdmin()){
+    onSnapshot(collection(db,'pedidos'), s=>{
+      pedidos=s.docs.map(d=>({_docId:d.id,...d.data()}));
+      atualizarDatalist();
+      if(tabAtual==='conferencia') renderTab();
+    });
+  }
+});
+
+// ─── MENU / SHELL ───
+window.toggleMenu=()=>{ document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu=()=>{ document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout=async()=>{ await signOut(auth); window.location.href='login.html'; };
+window.abrirTab=function(t){
+  tabAtual=t;
+  document.getElementById('tabRegistrar').classList.toggle('ativa', t==='registrar');
+  document.getElementById('tabConferencia').classList.toggle('ativa', t==='conferencia');
+  renderTab();
+};
+
+function atualizarDatalist(){
+  const set=new Set();
+  recebimentos.forEach(r=>(r.itens||[]).forEach(it=>{ if(it.produto) set.add(it.produto.trim()); }));
+  pedidos.forEach(p=>(p.itens||[]).forEach(it=>{ if(it.produto) set.add(it.produto.trim()); }));
+  const dl=document.getElementById('dlProdutos');
+  dl.innerHTML=[...set].sort((a,b)=>a.localeCompare(b)).map(n=>`<option value="${sanitizar(n)}">`).join('');
+}
+
+// ─── RENDER ───
+function renderTab(){
+  const box=document.getElementById('tabContent'); if(!box) return;
+  if(tabAtual==='conferencia' && ehAdmin()) renderConferencia(box);
+  else renderRegistrar(box);
+}
+
+function renderRegistrar(box){
+  const fazs=fazendasPermitidas();
+  const filtroOpts=['todas',...fazs];
+  const lista=recebimentos.filter(r=>podeFazenda(r.fazenda) && (filtroFazReg==='todas'||r.fazenda===filtroFazReg));
+  box.innerHTML=`
+    <div class="filtros">
+      <select class="campo-sel" id="fReg" onchange="setFiltroReg(this.value)">
+        ${filtroOpts.map(f=>`<option value="${sanitizar(f)}" ${filtroFazReg===f?'selected':''}>${f==='todas'?'Todas as fazendas':sanitizar(f)}</option>`).join('')}
+      </select>
+      <button class="btn-novo" onclick="abrirNovoRec()">➕ Novo</button>
+    </div>
+    ${lista.length? lista.map(cardRecebimento).join('') : `<div class="vazio"><div class="ico">📥</div><p>Nenhum recebimento registrado ainda.<br>Toque em <strong>➕ Novo</strong> para registrar o que chegou.</p></div>`}
+  `;
+}
+
+function cardRecebimento(r){
+  const itens=(r.itens||[]).map(it=>`<span class="rc-chip">${sanitizar(it.produto)}: ${fmt(it.quantidade)} ${sanitizar(it.unidade||'')}</span>`).join('');
+  const meta=[r.nota?`NF ${sanitizar(r.nota)}`:'', r.fornecedor?`🏭 ${sanitizar(r.fornecedor)}`:''].filter(Boolean).join(' · ');
+  return `<div class="rc-card">
+    <div class="rc-card-top">
+      <div>
+        <div class="rc-faz">🏡 ${sanitizar(r.fazenda||'—')}</div>
+        <div class="rc-meta"><span>📅 ${formatarData(r.data)}</span>${meta?`<span>${meta}</span>`:''}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:7px;">
+        ${r.destino?`<span class="rc-dest">${sanitizar(r.destino)}</span>`:''}
+        ${podeEditar(r)?`<div class="rc-acoes"><button class="rc-btn edit" onclick="editarRec('${r._docId}')">✏️</button><button class="rc-btn del" onclick="excluirRec('${r._docId}')">🗑</button></div>`:''}
+      </div>
+    </div>
+    <div class="rc-itens">${itens||'<span class="rc-chip">sem itens</span>'}</div>
+    ${r.obs?`<div class="rc-obs">💬 ${sanitizar(r.obs)}</div>`:''}
+    <div class="rc-por">${sanitizar(r.criadoPor||'')}</div>
+  </div>`;
+}
+
+window.setFiltroReg=function(v){ filtroFazReg=v; renderTab(); };
+
+// ─── MODAL REGISTRAR ───
+window.abrirNovoRec=function(){
+  const fazs=fazendasPermitidas();
+  if(!fazs.length){ toast('⛔ Você não tem fazenda liberada para registrar.'); return; }
+  recEditId=null;
+  document.getElementById('recModalTit').textContent='Registrar recebimento';
+  document.getElementById('recFaz').innerHTML=fazs.map(f=>`<option value="${sanitizar(f)}">${sanitizar(f)}</option>`).join('');
+  if(filtroFazReg!=='todas' && fazs.includes(filtroFazReg)) document.getElementById('recFaz').value=filtroFazReg;
+  document.getElementById('recDestino').innerHTML=DESTINOS.map(d=>`<option value="${d}">${d}</option>`).join('');
+  document.getElementById('recData').value=hojeISO();
+  document.getElementById('recNota').value='';
+  document.getElementById('recForn').value='';
+  document.getElementById('recObs').value='';
+  document.getElementById('recItensBox').innerHTML='';
+  recAddItem();
+  document.getElementById('modalRec').classList.add('aberto');
+};
+window.editarRec=function(id){
+  const r=recebimentos.find(x=>x._docId===id); if(!r) return;
+  if(!podeEditar(r)){ toast('⛔ Sem permissão.'); return; }
+  recEditId=id;
+  const fazs=fazendasPermitidas();
+  const opts=[...new Set([r.fazenda,...fazs])].filter(Boolean);
+  document.getElementById('recModalTit').textContent='Editar recebimento';
+  document.getElementById('recFaz').innerHTML=opts.map(f=>`<option value="${sanitizar(f)}" ${f===r.fazenda?'selected':''}>${sanitizar(f)}</option>`).join('');
+  document.getElementById('recDestino').innerHTML=DESTINOS.map(d=>`<option value="${d}" ${d===(r.destino||'Compra')?'selected':''}>${d}</option>`).join('');
+  document.getElementById('recData').value=r.data||hojeISO();
+  document.getElementById('recNota').value=r.nota||'';
+  document.getElementById('recForn').value=r.fornecedor||'';
+  document.getElementById('recObs').value=r.obs||'';
+  document.getElementById('recItensBox').innerHTML='';
+  (r.itens||[]).forEach(it=>recAddItem(it));
+  if(!(r.itens||[]).length) recAddItem();
+  document.getElementById('modalRec').classList.add('aberto');
+};
+window.fecharModalRec=function(){ document.getElementById('modalRec').classList.remove('aberto'); recEditId=null; };
+window.recAddItem=function(it){
+  const box=document.getElementById('recItensBox');
+  const div=document.createElement('div');
+  div.className='ri-row';
+  const prod=it&&it.produto?sanitizar(it.produto):'';
+  const qtd=it&&it.quantidade!=null?it.quantidade:'';
+  const und=it&&it.unidade?it.unidade:'kg';
+  div.innerHTML=`
+    <div class="ri-top">
+      <input type="text" class="campo-inp ri-prod" list="dlProdutos" placeholder="Produto" value="${prod}">
+      <button class="btn-rm" onclick="this.closest('.ri-row').remove()">✕</button>
+    </div>
+    <div class="ri-qtd">
+      <input type="number" inputmode="decimal" step="any" min="0" class="campo-inp ri-qtd-val" placeholder="Quantidade" value="${qtd}">
+      <select class="campo-sel ri-und">${UNIDADES.map(u=>`<option value="${u}" ${u===und?'selected':''}>${u}</option>`).join('')}</select>
+    </div>`;
+  box.appendChild(div);
+};
+window.salvarRecebimento=async function(){
+  const fazenda=document.getElementById('recFaz').value;
+  if(!fazenda){ toast('⚠️ Selecione a fazenda.'); return; }
+  if(!podeFazenda(fazenda) && !ehAdmin()){ toast('⛔ Sem permissão nesta fazenda.'); return; }
+  const data=document.getElementById('recData').value||hojeISO();
+  const nota=document.getElementById('recNota').value.trim();
+  const fornecedor=document.getElementById('recForn').value.trim();
+  const destino=document.getElementById('recDestino').value||'Compra';
+  const obs=document.getElementById('recObs').value.trim();
+  const itens=[];
+  document.querySelectorAll('#recItensBox .ri-row').forEach(div=>{
+    const produto=div.querySelector('.ri-prod').value.trim();
+    const q=parseDose(div.querySelector('.ri-qtd-val').value);
+    const unidade=div.querySelector('.ri-und').value;
+    if(produto && q>0) itens.push({produto, quantidade:q, unidade});
+  });
+  if(!itens.length){ toast('⚠️ Informe ao menos um produto com quantidade.'); return; }
+  const btn=document.getElementById('btnSalvarRec'); btn.disabled=true; btn.textContent='Salvando...';
+  try{
+    if(recEditId){
+      await updateDoc(doc(db,'recebimentos',recEditId), { fazenda, data, nota, fornecedor, destino, obs, itens, editadoEm:new Date().toISOString(), editadoPor:usuarioAtual.email });
+      toast('✅ Recebimento atualizado!');
+    }else{
+      await addDoc(collection(db,'recebimentos'), { fazenda, data, nota, fornecedor, destino, obs, itens, criadoPor:usuarioAtual.email, criadoEm:new Date().toISOString() });
+      toast('✅ Recebimento registrado!');
+    }
+    fecharModalRec();
+  }catch(e){ toast('❌ Erro: '+(e&&e.message||e)); }
+  btn.disabled=false; btn.textContent='💾 Salvar recebimento';
+};
+window.excluirRec=async function(id){
+  const r=recebimentos.find(x=>x._docId===id); if(!r) return;
+  if(!podeEditar(r)){ toast('⛔ Sem permissão.'); return; }
+  if(!confirm('Excluir este recebimento?')) return;
+  try{ await deleteDoc(doc(db,'recebimentos',id)); toast('🗑 Excluído.'); }
+  catch(e){ toast('❌ Erro: '+(e&&e.message||e)); }
+};
+
+// ─── CONFERÊNCIA (recebido × pedido, por fazenda) ───
+function qtdPedidaItem(it){
+  if(it.total!=null) return Number(it.total)||0;
+  const m=String(it.quantidade||'').replace(/\./g,'').replace(',','.').match(/[\d.]+/);
+  return m?(parseFloat(m[0])||0):0;
+}
+function _acc(map,faz,produto,unidade,q){
+  const f=faz||'Sem fazenda', k=normalizar(produto); if(!k) return;
+  if(!map[f]) map[f]={};
+  if(!map[f][k]) map[f][k]={produto, unidade:unidade||'', qtd:0};
+  map[f][k].qtd += Number(q)||0;
+  if(!map[f][k].unidade && unidade) map[f][k].unidade=unidade;
+}
+function mapaPedido(){
+  const map={};
+  pedidos.forEach(p=>{
+    if(p.status==='cancelado') return;
+    if(confPeriodo!=='tudo' && !(p.criadoEm||'').startsWith(confPeriodo)) return;
+    (p.itens||[]).forEach(it=>{
+      const dose=Number(it.dosePorHa)||0, tals=it.talhoes||[];
+      if(dose>0 && tals.length){
+        const porFaz={}; tals.forEach(t=>{ const f=t.fazenda||'Sem fazenda'; porFaz[f]=(porFaz[f]||0)+(Number(t.area)||0); });
+        Object.entries(porFaz).forEach(([f,area])=>_acc(map,f,it.produto,it.unidade,dose*area));
+      }else{
+        const tot=qtdPedidaItem(it);
+        const fset=[...new Set(tals.map(t=>t.fazenda||'Sem fazenda'))];
+        if(fset.length<=1){ _acc(map,fset[0]||'Sem fazenda',it.produto,it.unidade,tot); }
+        else{
+          const areaTot=tals.reduce((s,t)=>s+(Number(t.area)||0),0);
+          if(areaTot>0) tals.forEach(t=>_acc(map,t.fazenda||'Sem fazenda',it.produto,it.unidade,tot*(Number(t.area)||0)/areaTot));
+          else fset.forEach(f=>_acc(map,f,it.produto,it.unidade,tot/fset.length));
+        }
+      }
+    });
+  });
+  return map;
+}
+function mapaRecebido(){
+  const map={};
+  recebimentos.forEach(r=>{
+    if(confPeriodo!=='tudo' && !(r.data||'').startsWith(confPeriodo)) return;
+    (r.itens||[]).forEach(it=>_acc(map,r.fazenda,it.produto,it.unidade,it.quantidade));
+  });
+  return map;
+}
+function opcoesPeriodo(){
+  const out=[{v:'tudo',l:'Tudo'}];
+  const meses=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const d=new Date();
+  for(let i=0;i<12;i++){
+    const dt=new Date(d.getFullYear(), d.getMonth()-i, 1);
+    const v=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+    out.push({v, l:`${meses[dt.getMonth()]}/${dt.getFullYear()}`});
+  }
+  return out;
+}
+function renderConferencia(box){
+  const ped=mapaPedido(), rec=mapaRecebido();
+  const fazsVis=fazendasPermitidas();
+  const todasFaz=[...new Set([...Object.keys(ped),...Object.keys(rec)])].filter(f=>fazsVis.includes(f)||f==='Sem fazenda').sort();
+  const alvo = confFaz==='todas' ? todasFaz : todasFaz.filter(f=>f===confFaz);
+  const perOpts=opcoesPeriodo();
+
+  let corpo='';
+  if(!alvo.length){
+    corpo=`<div class="vazio"><div class="ico">📊</div><p>Sem dados para comparar neste período.</p></div>`;
+  }else{
+    corpo=alvo.map(faz=>{
+      const pm=ped[faz]||{}, rm=rec[faz]||{};
+      const keys=[...new Set([...Object.keys(pm),...Object.keys(rm)])].sort((a,b)=>(pm[a]||rm[a]).produto.localeCompare((pm[b]||rm[b]).produto));
+      let diverge=false;
+      const linhas=keys.map(k=>{
+        const nome=(pm[k]||rm[k]).produto, und=(pm[k]?.unidade)||(rm[k]?.unidade)||'';
+        const qp=pm[k]?.qtd||0, qr=rm[k]?.qtd||0;
+        const dif=Math.round((qr-qp)*100)/100;
+        let cls, txt, rowCls='';
+        if(qp>0 && qr===0){ cls='falta'; txt='falta receber'; rowCls='conf-row-pend'; diverge=true; }
+        else if(Math.abs(dif)<0.01){ cls='ok'; txt='✓'; }
+        else if(dif<0){ cls='falta'; txt=fmt(dif); diverge=true; }
+        else{ cls='sobra'; txt='+'+fmt(dif); diverge=true; }
+        return `<tr class="${rowCls}"><td class="l">${sanitizar(nome)}</td><td>${qp?fmt(qp)+' '+sanitizar(und):'—'}</td><td>${qr?fmt(qr)+' '+sanitizar(und):'—'}</td><td class="conf-dif ${cls}">${txt}</td></tr>`;
+      }).join('');
+      return `<div class="conf-faz">
+        <div class="conf-faz-hdr">🏡 ${sanitizar(faz)}<span class="conf-faz-badge ${diverge?'div':'ok'}">${diverge?'⚠️ divergência':'✓ em dia'}</span></div>
+        <table class="conf-tbl"><thead><tr><th class="l">Produto</th><th>Pedido</th><th>Recebido</th><th>Dif.</th></tr></thead><tbody>${linhas||'<tr><td class="l" colspan="4" style="text-align:center;color:var(--c);">sem itens</td></tr>'}</tbody></table>
+      </div>`;
+    }).join('');
+  }
+
+  box.innerHTML=`
+    <div class="filtros">
+      <select class="campo-sel" id="cPer" onchange="setConfPeriodo(this.value)">${perOpts.map(o=>`<option value="${o.v}" ${confPeriodo===o.v?'selected':''}>${o.l}</option>`).join('')}</select>
+      <select class="campo-sel" id="cFaz" onchange="setConfFaz(this.value)">
+        <option value="todas" ${confFaz==='todas'?'selected':''}>Todas as fazendas</option>
+        ${fazsVis.map(f=>`<option value="${sanitizar(f)}" ${confFaz===f?'selected':''}>${sanitizar(f)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="conf-nota">Compara o total <b>recebido</b> (lançado pelas fazendas) com o total <b>pedido</b> (rateado por área do talhão em cada fazenda). O período filtra pela data do recebimento e pela data do pedido.</div>
+    ${corpo}
+  `;
+}
+window.setConfPeriodo=function(v){ confPeriodo=v; renderTab(); };
+window.setConfFaz=function(v){ confFaz=v; renderTab(); };
+</script>
+</body>
+</html>

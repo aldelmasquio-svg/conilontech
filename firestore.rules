@@ -68,6 +68,7 @@ service cloud.firestore {
         'estoque_produtos':      ['estoque', 'pulverizacao', 'equipe'],
         'estoque_movimentacoes': ['estoque', 'pulverizacao', 'equipe'],
         'pedidos':               ['pedidos', 'estoque'],
+        'recebimentos':          ['recebimentos'],
         'cotacoes':              ['cotacoes'],
         'garantiasProdutos':     ['cotacoes'],
         'calibracoes':           ['calibracao'],
