@@ -2,11 +2,9 @@ name: Assistente Telegram — diagnóstico
 
 # Verifica, sem expor segredos no log: o webhook do Telegram (fila e último erro)
 # e se a chave da API do Claude está aceitando chamadas (créditos/limite).
+# Rodar em Actions → "Assistente Telegram — diagnóstico" → Run workflow.
 on:
   workflow_dispatch:
-  push:
-    branches: ['claude/whatsapp-scheduling-assistant-*']
-    paths: ['.github/workflows/assistente-diagnostico.yml']
 
 permissions:
   contents: read

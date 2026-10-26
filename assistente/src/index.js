@@ -32,7 +32,10 @@ export default {
       const update = await req.json().catch(() => null);
       if (update) {
         try { await processarUpdate(update, env); }
-        catch (e) { console.log('Erro ao processar update', e?.stack || e); }
+        catch (e) {
+          console.log('Erro ao processar update', e?.stack || e);
+          await avisarErro(update, env, e);
+        }
       }
       // Sempre 200: um erro aqui não deve fazer o Telegram reenviar a mesma mensagem.
       return new Response('ok');
@@ -41,6 +44,29 @@ export default {
     return new Response('Assistente Conilon Tech ativo.');
   },
 };
+
+// Um erro nunca pode virar silêncio: avisa no chat o que houve (sem detalhes internos).
+function mensagemErro(e) {
+  const status = e?.status;
+  const msg = String(e?.error?.error?.message || e?.message || '');
+  if (/usage limits|spend limit|credit balance/i.test(msg)) {
+    return '⚠️ O limite de gasto da API do Claude foi atingido, então não consigo responder agora. Aumente o limite em console.anthropic.com → Settings → Limits (ou coloque créditos em Billing) e tente de novo.';
+  }
+  if (status === 401 || status === 403) return '⚠️ A chave da API do Claude foi recusada (inválida ou revogada). Confira o segredo ANTHROPIC_API_KEY no GitHub e publique de novo.';
+  if (status === 429) return '⚠️ Muitas mensagens em pouco tempo. Espere um minuto e tente de novo.';
+  if (status === 529 || status >= 500) return '⚠️ O serviço do Claude está instável agora. Tente de novo em alguns minutos.';
+  return `⚠️ Tive um erro e não consegui responder (${msg.slice(0, 150) || 'erro desconhecido'}). Tente de novo; se continuar, mande /limpar.`;
+}
+
+async function avisarErro(update, env, e) {
+  const chatId = update.message?.chat?.id ?? update.callback_query?.message?.chat?.id;
+  if (!chatId || !usuariosAutorizados(env)[String(chatId)]) return;
+  try {
+    const tg = new Telegram(env.TELEGRAM_TOKEN);
+    if (update.callback_query) await tg.responderBotao(update.callback_query.id, 'Erro — veja a mensagem.');
+    await tg.enviar(chatId, mensagemErro(e));
+  } catch (e2) { console.log('Falha ao avisar o erro', e2?.message || e2); }
+}
 
 function usuariosAutorizados(env) {
   try { return JSON.parse(env.TELEGRAM_USUARIOS || '{}'); } catch { return {}; }
