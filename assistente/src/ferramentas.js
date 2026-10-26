@@ -12,8 +12,22 @@ export function nivelAcesso(perfil, mod) {
   if (perfil.perfil === 'admin') return 'admin';
   return 'nenhum';
 }
+// Dono/administrador do sistema — mesma regra de adminDoSistema() em acesso.js do app.
 export function ehAdminSistema(perfil) {
-  return Object.values(perfil.modulos || {}).includes('admin') || perfil.perfil === 'admin';
+  return perfil.perfil === 'admin' || perfil.modulos?.admin === 'admin';
+}
+// Criar pedido: mesma regra do isAdmin() de pedidos.html.
+function podeCriarPedido(perfil) {
+  return ehAdminSistema(perfil) || nivelAcesso(perfil, 'pedidos') === 'admin';
+}
+// Recebimentos: espelha a trava e fazendasPermitidas()/podeFazenda() de recebimentos.html.
+function podeRecebimentos(perfil) {
+  return ehAdminSistema(perfil) || nivelAcesso(perfil, 'recebimentos') !== 'nenhum';
+}
+function recebimentoFazendaOk(perfil, fazenda) {
+  if (ehAdminSistema(perfil) || nivelAcesso(perfil, 'recebimentos') === 'admin') return true;
+  const lista = perfil.fazendasModulo?.recebimentos;
+  return lista === undefined || lista.includes(fazenda);
 }
 function podeLer(perfil, mod) {
   if (mod === 'base') return true;
@@ -38,6 +52,7 @@ const COLECOES = {
   equipeEmpregados: 'equipe', equipeMaquinas: 'equipe', equipeRegistros: 'equipe',
   estoque_produtos: 'estoque', estoque_movimentacoes: 'estoque',
   pedidos: 'pedidos',
+  recebimentos: 'recebimentos',
   cotacoes: 'cotacoes', garantiasProdutos: 'cotacoes',
   analises: 'analises', amostras: 'analises',
   recomendacoes: 'recomendacoes',
@@ -223,6 +238,36 @@ export const DEFINICOES = [
     },
   },
   {
+    name: 'propor_recebimento',
+    description: 'Prepara o lançamento de um recebimento (o que chegou na fazenda) na página Recebimentos: compra (com nota e fornecedor) ou transferência entre fazendas (com fazenda de origem e transportador). NÃO grava nada: o usuário recebe um resumo com botões Confirmar/Cancelar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        fazenda: { type: 'string', description: 'Fazenda que recebeu (destino). Nome como aparece nos talhões.' },
+        data: { type: 'string', description: 'Data do recebimento, AAAA-MM-DD (padrão: hoje).' },
+        tipo: { type: 'string', enum: ['compra', 'transferencia'] },
+        nota: { type: 'string', description: 'Compra: número da nota fiscal (se o usuário souber).' },
+        fornecedor: { type: 'string', description: 'Compra: fornecedor (se o usuário souber).' },
+        origem_fazenda: { type: 'string', description: 'Transferência: fazenda de onde veio (obrigatório).' },
+        transportador: { type: 'string', description: 'Transferência: quem levou (se o usuário souber).' },
+        itens: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              produto: { type: 'string' },
+              quantidade: { type: 'number' },
+              unidade: { type: 'string', enum: ['kg', 'g', 't', 'L', 'mL', 'sc', 'un'] },
+            },
+            required: ['produto', 'quantidade', 'unidade'],
+          },
+        },
+        obs: { type: 'string' },
+      },
+      required: ['fazenda', 'tipo', 'itens'],
+    },
+  },
+  {
     name: 'propor_pedido',
     description: 'Prepara um pedido de compra de produtos. Cada item pode ser (a) por dose/ha × talhões — o total é calculado pela área — ou (b) só a quantidade total, sem talhões. NÃO grava nada: o usuário recebe um resumo com botões Confirmar/Cancelar.',
     input_schema: {
@@ -271,6 +316,7 @@ export class Ferramentas {
       case 'ler_documento': return this.lerDocumento(entrada);
       case 'propor_pulverizacao': return this.proporPulverizacao(entrada);
       case 'propor_pedido': return this.proporPedido(entrada);
+      case 'propor_recebimento': return this.proporRecebimento(entrada);
       default: throw new Error(`Ferramenta desconhecida: ${nome}`);
     }
   }
@@ -424,7 +470,7 @@ export class Ferramentas {
   }
 
   async proporPedido({ itens, observacoes = '' }) {
-    if (!ehAdminSistema(this.perfil)) throw new Error('Só administradores podem criar pedidos.');
+    if (!podeCriarPedido(this.perfil)) throw new Error('Só administradores de Pedidos podem criar pedidos.');
     if (!Array.isArray(itens) || !itens.length) throw new Error('Informe ao menos um item.');
     const MODOS = ['terrestre', 'aerea', 'fertirrigacao', 'drench'];
     const itensFS = [];
@@ -463,6 +509,51 @@ export class Ferramentas {
     return this._registrarProposta('pedido', [{ colecao: 'pedidos', dados }], resumo, `criou pedido (${itensFS.map(i => i.produto).join(', ')})`);
   }
 
+  async proporRecebimento({ fazenda, data, tipo, nota = '', fornecedor = '', origem_fazenda = '', transportador = '', itens, obs = '' }) {
+    if (!podeRecebimentos(this.perfil)) throw new Error('Seu usuário não tem acesso a Recebimentos.');
+    // Fazendas = as dos talhões, igual à página.
+    const fazendas = [...new Set((await this.talhoes()).map(t => t.fazenda).filter(Boolean))];
+    const acharFazenda = nome => fazendas.find(f => normalizar(f) === normalizar(nome));
+    const destino = acharFazenda(fazenda);
+    if (!destino) throw new Error(`Fazenda não encontrada: ${fazenda}. Fazendas: ${fazendas.join(', ')}.`);
+    tipo = tipo === 'transferencia' ? 'transferencia' : 'compra';
+    let origem = '';
+    if (tipo === 'transferencia') {
+      if (!String(origem_fazenda || '').trim()) throw new Error('Transferência: pergunte de qual fazenda veio (origem_fazenda).');
+      origem = acharFazenda(origem_fazenda);
+      if (!origem) throw new Error(`Fazenda de origem não encontrada: ${origem_fazenda}. Fazendas: ${fazendas.join(', ')}.`);
+      if (origem === destino) throw new Error('A fazenda de origem é a mesma do destino.');
+    }
+    const permitido = recebimentoFazendaOk(this.perfil, destino) || (tipo === 'transferencia' && recebimentoFazendaOk(this.perfil, origem));
+    if (!permitido) throw new Error(`Seu usuário não pode lançar recebimentos na fazenda ${destino}.`);
+    if (!data) data = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Data inválida — use AAAA-MM-DD.');
+    const UNIDADES = ['kg', 'g', 't', 'L', 'mL', 'sc', 'un'];
+    const itensFS = (itens || []).filter(it => String(it.produto || '').trim()).map(it => {
+      const q = Number(it.quantidade);
+      if (!(q > 0)) throw new Error(`Quantidade inválida para ${it.produto}.`);
+      if (!UNIDADES.includes(it.unidade)) throw new Error(`Unidade inválida para ${it.produto} (${UNIDADES.join(', ')}).`);
+      return { produto: String(it.produto).trim(), quantidade: q, unidade: it.unidade };
+    });
+    if (!itensFS.length) throw new Error('Informe ao menos um produto com quantidade.');
+    // Mesmos campos que salvarRecebimento() de recebimentos.html grava.
+    const campos = tipo === 'transferencia'
+      ? { tipo, origemFazenda: origem, transportador: String(transportador || '').trim(), nota: '', fornecedor: '' }
+      : { tipo, nota: String(nota || '').trim(), fornecedor: String(fornecedor || '').trim(), origemFazenda: '', transportador: '' };
+    const dados = { fazenda: destino, data, ...campos, obs: String(obs || '').trim(), itens: itensFS };
+    const resumo = [
+      tipo === 'transferencia' ? '📥 Lançar recebimento — transferência' : '📥 Lançar recebimento — compra',
+      `Fazenda: ${destino} · ${fmtData(data)}`,
+      tipo === 'transferencia'
+        ? `De: ${origem}${campos.transportador ? ` · 🚚 ${campos.transportador}` : ''}`
+        : [campos.fornecedor && `Fornecedor: ${campos.fornecedor}`, campos.nota && `NF ${campos.nota}`].filter(Boolean).join(' · '),
+      'Itens:',
+      ...itensFS.map(it => `  • ${it.produto} — ${fmtNum(it.quantidade)} ${it.unidade}`),
+      dados.obs ? `Obs.: ${dados.obs}` : '',
+    ].filter(Boolean).join('\n');
+    return this._registrarProposta('recebimento', [{ colecao: 'recebimentos', dados }], resumo, `registrou recebimento em ${destino} (${itensFS.map(i => i.produto).join(', ')})`);
+  }
+
   _registrarProposta(tipo, docs, resumo, log) {
     this.propostas.push({ tipo, docs, resumo, log });
     return `Proposta preparada (ainda NÃO gravada). Logo após a sua resposta o usuário recebe este resumo com botões ✅ Confirmar / ❌ Cancelar:\n${resumo}\nNão repita o resumo; diga em uma frase que ele deve conferir e confirmar.`;
@@ -472,15 +563,21 @@ export class Ferramentas {
 // Grava uma proposta confirmada. Revalida a permissão no momento da confirmação.
 export async function executarProposta(fs, perfil, email, uid, prop) {
   if (prop.tipo === 'pulverizacao' && nivelAcesso(perfil, 'pulverizacao') !== 'admin') throw new Error('Sem permissão para agendar pulverizações.');
-  if (prop.tipo === 'pedido' && !ehAdminSistema(perfil)) throw new Error('Sem permissão para criar pedidos.');
+  if (prop.tipo === 'pedido' && !podeCriarPedido(perfil)) throw new Error('Sem permissão para criar pedidos.');
+  if (prop.tipo === 'recebimento') {
+    const d = prop.docs[0]?.dados || {};
+    if (!podeRecebimentos(perfil)) throw new Error('Sem acesso a Recebimentos.');
+    const ok = recebimentoFazendaOk(perfil, d.fazenda) || (d.tipo === 'transferencia' && d.origemFazenda && recebimentoFazendaOk(perfil, d.origemFazenda));
+    if (!ok) throw new Error(`Sem permissão de Recebimentos na fazenda ${d.fazenda}.`);
+  }
   const agora = new Date().toISOString();
   const ids = [];
   for (const d of prop.docs) {
-    if (!['pulverizacoes', 'pedidos'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
+    if (!['pulverizacoes', 'pedidos', 'recebimentos'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
     ids.push(await fs.add(d.colecao, { ...d.dados, criadoEm: agora, criadoPor: email, origem: 'telegram' }));
   }
   try {
-    await fs.add('logs', { tipo: prop.tipo === 'pedido' ? 'pedido' : 'pulverizacao', mensagem: `${email} ${prop.log} (via Telegram)`, criadoEm: agora, uid });
+    await fs.add('logs', { tipo: prop.tipo, mensagem: `${email} ${prop.log} (via Telegram)`, criadoEm: agora, uid });
   } catch (e) { /* log é opcional, como no app */ }
   return ids;
 }
