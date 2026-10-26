@@ -1,0 +1,45 @@
+name: Assistente Telegram — diagnóstico
+
+# Verifica, sem expor segredos no log: o webhook do Telegram (fila e último erro)
+# e se a chave da API do Claude está aceitando chamadas (créditos/limite).
+on:
+  workflow_dispatch:
+  push:
+    branches: ['claude/whatsapp-scheduling-assistant-*']
+    paths: ['.github/workflows/assistente-diagnostico.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Webhook do Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: |
+          curl -s "https://api.telegram.org/bot${TELEGRAM_TOKEN}/getWebhookInfo" | python3 -c "
+          import sys, json, datetime
+          r = json.load(sys.stdin).get('result', {})
+          print('webhook configurado:', bool(r.get('url')))
+          print('mensagens na fila (pending_update_count):', r.get('pending_update_count'))
+          d = r.get('last_error_date')
+          print('último erro em:', datetime.datetime.utcfromtimestamp(d).isoformat() + 'Z' if d else '—')
+          print('último erro:', r.get('last_error_message') or '—')
+          "
+      - name: API do Claude
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          code=$(curl -s -o resp.json -w '%{http_code}' https://api.anthropic.com/v1/messages \
+            -H "x-api-key: ${ANTHROPIC_API_KEY}" -H 'anthropic-version: 2023-06-01' -H 'content-type: application/json' \
+            -d '{"model":"claude-opus-5-5","max_tokens":64,"output_config":{"effort":"low"},"messages":[{"role":"user","content":"Responda só: ok"}]}')
+          echo "HTTP $code"
+          python3 -c "
+          import json
+          j = json.load(open('resp.json'))
+          e = j.get('error')
+          print('erro:', (e.get('type'), e.get('message', '')[:300]) if e else '— (chave e créditos OK)')
+          "
