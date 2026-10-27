@@ -186,10 +186,16 @@ async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, en
   if (messages.length && messages[messages.length - 1].role === 'user') messages.pop();
   messages.push({ role: 'user', content: msgUsuario });
 
+  const modelo = env.MODELO || 'claude-haiku-5-5';
+  // Fallback automático em caso de recusa só existe para Opus/Fable 5.x e Sonnet 5.5; o Haiku não tem.
+  const fallback = /^claude-(opus-5|fable-5|sonnet-5-5)/.test(modelo)
+    ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }
+    : {};
+
   let resposta = '';
   for (let i = 0; i < MAX_ITERACOES; i++) {
     const r = await client.beta.messages.create({
-      model: env.MODELO || 'claude-opus-5-5',
+      model: modelo,
       max_tokens: 16000,
       system: SISTEMA,
       tools: DEFINICOES,
@@ -197,8 +203,7 @@ async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, en
       thinking: { type: 'adaptive' },
       output_config: { effort: env.ESFORCO || 'medium' },
       cache_control: { type: 'ephemeral' },
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      ...fallback,
     });
 
     if (r.stop_reason === 'refusal') {

@@ -5,7 +5,9 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 # Modelo e esforço do Claude (pode trocar sem mexer no código).
-MODELO = "claude-opus-5-5"
+# claude-haiku-5-5 é o mais barato (~40x menos que o Opus 5.5). Se ele errar muito,
+# troque por claude-sonnet-5-5 (meio-termo) ou claude-opus-5-5 (o melhor e mais caro).
+MODELO = "claude-haiku-5-5"
 ESFORCO = "medium"
 
 # Segredos (NÃO coloque aqui — use `npx wrangler secret put NOME`):
