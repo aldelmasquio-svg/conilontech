@@ -85,9 +85,10 @@ A partir daí, cada pessoa vê pelo bot o mesmo que vê no app.
   - Se o log do Worker mostrar `Exceeded CPU limit` (veja em **Workers → conilontech-assistente → Logs**), mude para o plano **Workers Paid** (US$ 5/mês).
 - **Áudio (Workers AI):** o plano gratuito inclui 10.000 "neurons" por dia, o que dá cerca de 200 minutos de áudio por dia. Acima disso, custa cerca de US$ 0,0005 por minuto.
 - **Claude:** cobrado por uso na conta da Anthropic.
-  - Com o modelo padrão (`claude-opus-5-5`), uma pergunta típica com 2 ou 3 consultas custa em torno de **US$ 0,05 a 0,20**.
-  - Perguntas que leem muitos registros custam mais. O gasto real aparece em **console.anthropic.com → Usage**.
-  - Para gastar menos, troque `MODELO` em `wrangler.toml` para `claude-sonnet-5-5` (cerca de metade do preço) ou `claude-haiku-5-5` (bem mais barato, mas entende menos as perguntas complexas). Depois publique de novo.
+  - O modelo padrão é o `claude-haiku-5-5`, o mais barato. Ele custa cerca de 40 vezes menos que o Opus 5.5: com o Opus o bot gastava uns US$ 0,10 a 0,70 por dia, e com o Haiku deve ficar em centavos de real por dia.
+  - O gasto real aparece em **platform.claude.com → Uso → Custo**.
+  - Se o Haiku errar demais, troque `MODELO` em `wrangler.toml` para `claude-sonnet-5-5` (meio-termo, cerca de metade do preço do Opus) ou `claude-opus-5-5` (o melhor e mais caro). Depois publique de novo.
+  - O limite de gasto mensal (**Gerenciar → Limites**) vale para a conta inteira, inclusive para outros projetos que usem a mesma conta. Quando ele é atingido, ou quando os créditos acabam, o bot avisa no chat.
 
 ## Desenvolvimento
 
