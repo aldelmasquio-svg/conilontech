@@ -656,11 +656,19 @@ window.fecharMenu=function(){ document.getElementById('menuLateral').classList.r
 window.fazerLogout=async function(){ await signOut(auth); window.location.href='login.html'; };
 
 // ─── LISTENERS ───
+// Mostra um aviso fixo e visível quando uma leitura do Firestore falha, em vez de ficar
+// "vazio caladinho" (que se confunde com não ter dado). Toque recarrega.
+function avisoErro(oque, err){
+  console.error('Falha ao carregar '+oque, err);
+  let b=document.getElementById('erroBanner');
+  if(!b){ b=document.createElement('div'); b.id='erroBanner'; b.style.cssText='position:fixed;left:0;right:0;top:54px;z-index:3000;background:#b91c1c;color:#fff;padding:9px 14px;font-size:.8rem;font-weight:700;text-align:center;cursor:pointer;'; b.onclick=()=>location.reload(); document.body.appendChild(b); }
+  b.textContent='⚠️ Falha ao carregar '+oque+' ('+((err&&err.code)||err)+') — toque para recarregar';
+}
 function iniciarListeners(){
-  onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); desenharTalhoes(); renderPlantas(); });
-  onSnapshot(collection(db,'avaliacaoPlantas'), snap => { plantas=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderPlantas(); if(plantaSel && !plantas.some(p=>p._docId===plantaSel)) fecharPainel(); });
-  onSnapshot(collection(db,'avaliacaoRegistros'), snap => { registros=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); } renderPlantas(); });
-  onSnapshot(collection(db,'avaliacaoFotos'), snap => { fotos=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); renderComparador(plantaSel); } });
+  onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); desenharTalhoes(); renderPlantas(); }, e=>avisoErro('talhões', e));
+  onSnapshot(collection(db,'avaliacaoPlantas'), snap => { plantas=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderPlantas(); if(plantaSel && !plantas.some(p=>p._docId===plantaSel)) fecharPainel(); }, e=>avisoErro('pontos', e));
+  onSnapshot(collection(db,'avaliacaoRegistros'), snap => { registros=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); } renderPlantas(); }, e=>avisoErro('avaliações', e));
+  onSnapshot(collection(db,'avaliacaoFotos'), snap => { fotos=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); renderComparador(plantaSel); } }, e=>avisoErro('fotos', e));
 }
 </script>
 
