@@ -252,7 +252,8 @@ window.toggleTalAval=function(i){ const k=_sbTalKeys[i]; if(k==null)return; if(t
 
 // ─── PAINEL DA PLANTA ───
 function selecionarPlanta(id){
-  plantaSel=id; compA=null; compB=null; fotosNovas=[];
+  plantaSel=id; compA=null; compB=null; fotosNovas=[]; fotos=[];
+  carregarFotosPonto(id);                 // fotos carregam sob demanda (só deste ponto) — ver nota de performance
   const p=plantas.find(x=>x._docId===id); if(!p) return;
   if(p.lat!=null&&p.lng!=null) map.setView([p.lat,p.lng], Math.max(map.getZoom(),17), {animate:true});
   renderPlantas();
@@ -576,6 +577,7 @@ window.salvarAvaliacao=async function(plantaId){
     fotosNovas=[]; renderPreviewFotos();
     if(document.getElementById('avObs')) document.getElementById('avObs').value='';
     toast('✅ Avaliação salva!');
+    carregarFotosPonto(plantaId);          // recarrega as fotos deste ponto (não há mais snapshot global)
   }catch(e){ toast('❌ Erro ao salvar: '+e.message+' (foto muito grande?)'); }
 };
 // Diálogo de confirmação próprio (o confirm() nativo não aparece em vários navegadores de celular)
@@ -596,9 +598,11 @@ window.excluirAvaliacao=async function(regId){
   if(!podeGerenciar()){ toast('⛔ Sem permissão.'); return; }
   if(!(await confirmar('Excluir esta avaliação e suas fotos? Não dá pra desfazer.'))) return;
   try{
-    for(const f of fotos.filter(x=>x.registroId===regId)) await deleteDoc(doc(db,'avaliacaoFotos',f._docId));
+    const fs=await getDocs(query(collection(db,'avaliacaoFotos'), where('registroId','==',regId)));
+    for(const d of fs.docs) await deleteDoc(doc(db,'avaliacaoFotos',d.id));
     await deleteDoc(doc(db,'avaliacaoRegistros',regId));
     toast('🗑️ Avaliação excluída.');
+    if(plantaSel) carregarFotosPonto(plantaSel);
   }catch(e){ toast('❌ Erro: '+e.message); }
 };
 window.excluirPlanta=async function(id){
@@ -607,7 +611,8 @@ window.excluirPlanta=async function(id){
   const nome=(p?.descricao||'').trim()||(p?.codigoPlaqueta||'').trim()||'este ponto';
   if(!(await confirmar(`Excluir "${nome}" com TODAS as suas avaliações e fotos? Não dá pra desfazer.`, 'Excluir ponto'))) return;
   try{
-    for(const f of fotos.filter(x=>x.plantaId===id)) await deleteDoc(doc(db,'avaliacaoFotos',f._docId));
+    const fs=await getDocs(query(collection(db,'avaliacaoFotos'), where('plantaId','==',id)));
+    for(const d of fs.docs) await deleteDoc(doc(db,'avaliacaoFotos',d.id));
     for(const r of registros.filter(x=>x.plantaId===id)) await deleteDoc(doc(db,'avaliacaoRegistros',r._docId));
     await deleteDoc(doc(db,'avaliacaoPlantas',id));
     fecharPainel();
@@ -668,7 +673,20 @@ function iniciarListeners(){
   onSnapshot(collection(db,'talhoes'), snap => { talhoes=snap.docs.map(d=>({_docId:d.id,...d.data()})); desenharTalhoes(); renderPlantas(); }, e=>avisoErro('talhões', e));
   onSnapshot(collection(db,'avaliacaoPlantas'), snap => { plantas=snap.docs.map(d=>({_docId:d.id,...d.data()})); renderPlantas(); if(plantaSel && !plantas.some(p=>p._docId===plantaSel)) fecharPainel(); }, e=>avisoErro('pontos', e));
   onSnapshot(collection(db,'avaliacaoRegistros'), snap => { registros=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); } renderPlantas(); }, e=>avisoErro('avaliações', e));
-  onSnapshot(collection(db,'avaliacaoFotos'), snap => { fotos=snap.docs.map(d=>({_docId:d.id,...d.data()})); if(plantaSel){ renderAvaliacoesList(plantaSel); renderComparador(plantaSel); } }, e=>avisoErro('fotos', e));
+  // Fotos NÃO são carregadas globalmente: são base64 (~1 MB cada) dentro do doc, e baixar
+  // a coleção toda de todos os pontos trava no celular. Carregamos só as do ponto aberto.
+}
+// Carrega sob demanda as fotos de um ponto (evita baixar megabytes de todos os pontos de uma vez).
+let _fotosReqId=0;
+async function carregarFotosPonto(plantaId){
+  const reqId=++_fotosReqId;
+  try{
+    const snap=await getDocs(query(collection(db,'avaliacaoFotos'), where('plantaId','==',plantaId)));
+    if(reqId!==_fotosReqId) return;                        // outro ponto foi aberto nesse meio-tempo
+    fotos=snap.docs.map(d=>({_docId:d.id,...d.data()}));
+  }catch(e){ if(reqId!==_fotosReqId) return; fotos=[]; avisoErro('fotos', e); }
+  if(plantaSel===plantaId){ renderAvaliacoesList(plantaId); renderComparador(plantaId); }
+  renderSidebar();
 }
 </script>
 
