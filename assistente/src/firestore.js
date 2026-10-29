@@ -126,6 +126,10 @@ export class Firestore {
     return d.name.split('/').pop();
   }
 
+  async delete(caminho) {
+    await this._req(`${this.base}/${this._caminho(caminho)}`, { method: 'DELETE' });
+  }
+
   // Cria/atualiza só os campos informados (merge), como setDoc(..., {merge:true}).
   async set(caminho, dados) {
     const mask = Object.keys(dados).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');

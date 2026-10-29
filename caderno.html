@@ -113,16 +113,37 @@ function jpegQueCabe(img, combos, cap){
 }
 function carregarImagem(src){ return new Promise((res,rej)=>{ const img=new Image(); img.onload=()=>res(img); img.onerror=rej; img.src=src; }); }
 function lerArquivo(file){ return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.onerror=rej; r.readAsDataURL(file); }); }
-// Cada foto vira 1 documento (limite do Firestore: 1 MB/doc) → mesma estratégia de avaliacoes.html.
+// A foto é guardada ORIGINAL, sem compactar. Como o Firestore aceita no máximo 1 MB por documento,
+// o arquivo vai em pedaços (base64) na subcoleção cadernoFotos/{id}/partes/{0..n-1}, e o doc da foto
+// leva só uma prévia leve (dataURI) para a galeria abrir rápido; o original é baixado na tela cheia.
 // A nota guarda também uma miniatura pequena da 1ª foto, para a lista não precisar baixar as fotos.
-async function comprimirFoto(file){
+const BYTES_POR_PARTE=700000; // → ~933 KB em base64, abaixo do limite de 1 MB por documento
+async function prepararFoto(file){
   const img=await carregarImagem(await lerArquivo(file));
   return {
-    uri: jpegQueCabe(img, [[1920,.85],[1600,.82],[1400,.78],[1280,.72],[1024,.6]], 900000),
+    arquivo: file,
+    uri: jpegQueCabe(img, [[1280,.75],[1024,.7],[800,.65]], 400000),
     mini: jpegQueCabe(img, [[220,.6],[160,.5]], 20000),
   };
 }
-async function miniDe(uri){ return jpegQueCabe(await carregarImagem(uri), [[220,.6],[160,.5]], 20000); }
+async function miniDe(f){ return f.miniatura || (f.dataURI ? jpegQueCabe(await carregarImagem(f.dataURI), [[220,.6],[160,.5]], 20000) : null); }
+function b64DeBytes(u8){
+  let s='';
+  for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null, u8.subarray(i,i+0x8000));
+  return btoa(s);
+}
+async function partesDoArquivo(file){
+  const u8=new Uint8Array(await file.arrayBuffer()), partes=[];
+  for(let i=0;i<u8.length;i+=BYTES_POR_PARTE) partes.push(b64DeBytes(u8.subarray(i,i+BYTES_POR_PARTE)));
+  return partes;
+}
+function nPartes(f){ return f?.original?.partes||0; }
+// Apaga a foto e os pedaços do original
+function apagarFoto(f){
+  for(let i=0;i<nPartes(f);i++) gravar(deleteDoc(doc(db,'cadernoFotos',f._id,'partes',String(i))));
+  gravar(deleteDoc(doc(db,'cadernoFotos',f._id)));
+}
+function fmtBytes(n){ return n>=1048576?(n/1048576).toFixed(1).replace('.',',')+' MB':Math.round(n/1024)+' KB'; }
 // Grava sem esperar o servidor: na roça, sem sinal, o Firestore guarda na fila local (IndexedDB)
 // e envia quando a conexão volta. Esperar o `await` deixaria o botão travado até lá.
 function gravar(p){ p.catch(e=>toast('⚠️ Erro ao sincronizar: '+(e.message||e))); }
@@ -243,19 +264,75 @@ function renderVer(n){
 }
 function renderFotosVer(){
   document.getElementById('verFotos').innerHTML=fotosVer.length
-    ? `<div class="galeria">${fotosVer.map((f,i)=>`<img src="${f.dataURI}" alt="" onclick="verFoto(${i})">`).join('')}</div>`
+    ? `<div class="galeria">${fotosVer.map((f,i)=>imgOuIcone(f.dataURI||f.miniatura,`onclick="verFoto(${i})"`)).join('')}</div>`
     : '';
 }
-window.verFoto=function(i){
+function imgOuIcone(src, attrs=''){ return src?`<img src="${src}" alt="" ${attrs}>`:`<div class="sem-previa" ${attrs}>📷</div>`; }
+// Original (blob) já montado por foto, para não baixar de novo ao reabrir; liberado ao fechar a nota
+const originais=new Map();
+let fotoTela=null;
+async function carregarOriginal(f){
+  if(originais.has(f._id)) return originais.get(f._id);
+  const s=await getDocs(collection(db,'cadernoFotos',f._id,'partes'));
+  const partes=s.docs.map(d=>d.data()).sort((a,b)=>a.i-b.i);
+  if(partes.length!==nPartes(f)) throw new Error(`original incompleto (${partes.length}/${nPartes(f)} partes) — ainda sincronizando?`);
+  const blob=new Blob(partes.map(p=>Uint8Array.from(atob(p.b64),c=>c.charCodeAt(0))),{type:f.original.tipo||'image/jpeg'});
+  const o={blob,url:URL.createObjectURL(blob)};
+  originais.set(f._id,o);
+  return o;
+}
+window.verFoto=async function(i){
   const f=fotosVer[i]; if(!f) return;
-  document.getElementById('fotoGrande').src=f.dataURI;
+  fotoTela=f;
+  const img=document.getElementById('fotoGrande'), info=document.getElementById('fotoInfo'), btn=document.getElementById('btnBaixarOriginal');
+  img.onerror=null;
+  img.src=f.dataURI||f.miniatura||'';
+  btn.style.display='none';
   document.getElementById('ovFoto').classList.add('open');
+  if(!nPartes(f)){ info.textContent='Foto (sem original guardado)'; return; }
+  info.textContent=`Carregando original · ${fmtBytes(f.original.tamanho||0)}…`;
+  try{
+    const o=await carregarOriginal(f);
+    if(fotoTela!==f) return;
+    // Formatos que o navegador não exibe (ex.: HEIC) ficam na prévia, mas o original continua baixável
+    img.onerror=()=>{ img.onerror=null; img.src=f.dataURI||f.miniatura||''; info.textContent=`Original · ${fmtBytes(o.blob.size)} (formato sem visualização aqui — baixe para abrir)`; };
+    img.src=o.url;
+    info.textContent=`Original · ${fmtBytes(o.blob.size)}`;
+    btn.style.display='';
+  }catch(e){ if(fotoTela===f) info.textContent='⚠️ Não consegui carregar o original: '+(e.message||e); }
 };
-window.fecharFoto=function(){ document.getElementById('ovFoto').classList.remove('open'); document.getElementById('fotoGrande').src=''; };
+window.fecharFoto=function(){ fotoTela=null; document.getElementById('ovFoto').classList.remove('open'); document.getElementById('fotoGrande').src=''; };
+function capPlugin(nome){
+  const c=window.Capacitor; if(!c) return null;
+  if(c.Plugins && c.Plugins[nome]) return c.Plugins[nome];
+  if(typeof c.registerPlugin==='function'){ try{ return c.registerPlugin(nome); }catch(e){} }
+  return null;
+}
+function foiCancelado(e){ return !!(e && (e.name==='AbortError' || /cancel|abort/i.test(e.message||''))); }
+// Mesmo caminho do PDF de pedidos.html: no app (WebView ignora download de blob) grava no cache e
+// abre o compartilhamento nativo; no navegador baixa o arquivo.
+window.baixarOriginal=async function(ev){
+  ev?.stopPropagation();
+  const f=fotoTela; if(!f) return;
+  const o=originais.get(f._id); if(!o) return;
+  const ext=(f.original.tipo||'image/jpeg').split('/')[1]?.replace('jpeg','jpg')||'jpg';
+  const nome=f.original.nome || `caderno-${(f.criadoEm||'').slice(0,10)}-${f._id.slice(0,6)}.${ext}`;
+  const Fs=capPlugin('Filesystem'), Sh=capPlugin('Share');
+  if(Fs && Sh){
+    try{
+      const b64=b64DeBytes(new Uint8Array(await o.blob.arrayBuffer()));
+      const esc=await Fs.writeFile({ path:nome, data:b64, directory:'CACHE', recursive:true });
+      await Sh.share({ title:'Foto do caderno', url:esc.uri, dialogTitle:'Salvar/enviar foto' });
+      return;
+    }catch(e){ if(foiCancelado(e)) return; }
+  }
+  const a=document.createElement('a'); a.href=o.url; a.download=nome; document.body.appendChild(a); a.click(); a.remove();
+};
 window.fecharVer=function(){
   document.getElementById('ovVer').classList.remove('open');
   notaAberta=null; fotosVer=[];
   if(unsubFotosVer){ unsubFotosVer(); unsubFotosVer=null; }
+  originais.forEach(o=>URL.revokeObjectURL(o.url)); originais.clear();
 };
 
 // ─── NOVA / EDITAR ───
@@ -358,7 +435,7 @@ window.adicionarFotos=async function(input){
   if(!files.length) return;
   const box=document.getElementById('edFotosStatus'); box.textContent=`Processando ${files.length} foto(s)…`;
   for(const f of files){
-    try{ fotosNovas.push(await comprimirFoto(f)); }
+    try{ fotosNovas.push(await prepararFoto(f)); }
     catch(e){ toast('Não consegui ler uma das imagens'); }
   }
   box.textContent='';
@@ -367,7 +444,7 @@ window.adicionarFotos=async function(input){
 window.removerFotoNova=function(i){ fotosNovas.splice(i,1); renderEdFotos(); };
 window.alternarFotoExistente=function(id){ fotosRemover.has(id)?fotosRemover.delete(id):fotosRemover.add(id); renderEdFotos(); };
 function renderEdFotos(){
-  const ex=fotosEd.map(f=>`<div class="ft${fotosRemover.has(f._id)?' ft-rem':''}"><img src="${f.dataURI}" alt=""><button type="button" onclick="alternarFotoExistente('${f._id}')">${fotosRemover.has(f._id)?'↺':'✕'}</button></div>`).join('');
+  const ex=fotosEd.map(f=>`<div class="ft${fotosRemover.has(f._id)?' ft-rem':''}">${imgOuIcone(f.dataURI||f.miniatura)}<button type="button" onclick="alternarFotoExistente('${f._id}')">${fotosRemover.has(f._id)?'↺':'✕'}</button></div>`).join('');
   const nv=fotosNovas.map((f,i)=>`<div class="ft ft-nova"><img src="${f.uri}" alt=""><button type="button" onclick="removerFotoNova(${i})">✕</button></div>`).join('');
   document.getElementById('edFotos').innerHTML=ex+nv;
 }
@@ -399,14 +476,24 @@ window.salvarNota=async function(){
   // Miniatura: mantém a atual se a foto de origem continua; senão usa a próxima foto que fica
   let miniFotoId=original?.miniaturaFotoId||null, mini=original?.miniatura||null;
   if(!fotosFicam.some(f=>f._id===miniFotoId)){ mini=null; miniFotoId=null; }
-  if(!mini && fotosFicam.length){ try{ mini=await miniDe(fotosFicam[0].dataURI); miniFotoId=fotosFicam[0]._id; }catch(e){} }
+  if(!mini && fotosFicam.length){ try{ mini=await miniDe(fotosFicam[0]); miniFotoId=fotosFicam[0]._id; }catch(e){} }
   const novasRefs=fotosNovas.map(()=>doc(collection(db,'cadernoFotos')));
   if(!mini && fotosNovas.length){ mini=fotosNovas[0].mini; miniFotoId=novasRefs[0].id; }
   dados.miniatura=mini; dados.miniaturaFotoId=miniFotoId;
+  // Lê os arquivos antes de fechar o formulário (é local, rápido); a gravação em si não espera a rede
+  let partesNovas;
+  try{ partesNovas=await Promise.all(fotosNovas.map(f=>partesDoArquivo(f.arquivo))); }
+  catch(e){ toast('Não consegui ler uma das fotos: '+(e.message||e)); return; }
   if(editId){ dados.editadoEm=agora; dados.editadoPor=usuarioAtual.email; gravar(updateDoc(ref,dados)); }
   else gravar(setDoc(ref,{...dados, criadoEm:agora, criadoPor:usuarioAtual.email, autorNome:perfilAtual.nome||usuarioAtual.email}));
-  fotosNovas.forEach((f,i)=>gravar(setDoc(novasRefs[i],{ notaId:ref.id, dataURI:f.uri, criadoEm:new Date(Date.now()+i).toISOString(), criadoPor:usuarioAtual.email })));
-  fotosRemover.forEach(id=>gravar(deleteDoc(doc(db,'cadernoFotos',id))));
+  fotosNovas.forEach((f,i)=>{
+    const partes=partesNovas[i], fid=novasRefs[i].id;
+    partes.forEach((b64,j)=>gravar(setDoc(doc(db,'cadernoFotos',fid,'partes',String(j)),{ i:j, b64 })));
+    gravar(setDoc(novasRefs[i],{ notaId:ref.id, dataURI:f.uri, miniatura:f.mini,
+      original:{ partes:partes.length, tipo:f.arquivo.type||'image/jpeg', tamanho:f.arquivo.size, nome:f.arquivo.name||'' },
+      criadoEm:new Date(Date.now()+i).toISOString(), criadoPor:usuarioAtual.email }));
+  });
+  fotosEd.filter(f=>fotosRemover.has(f._id)).forEach(apagarFoto);
   fecharEd();
   toast(navigator.onLine?'✅ Anotação salva':'✅ Salva no aparelho — envia quando tiver sinal');
 };
@@ -424,12 +511,12 @@ window.excluirNota=async function(){
   const n=notas.find(x=>x._id===notaAberta);
   if(!podeEditar(n)) return;
   if(!await confirmar(`Excluir esta anotação${n.nFotos?` e suas ${n.nFotos} foto(s)`:''}? Não dá para desfazer.`)) return;
-  const ids=fotosVer.map(f=>f._id);
+  const fotos=fotosVer.slice();
   fecharVer();
   try{
-    if(n.nFotos && !ids.length){ const s=await getDocs(query(collection(db,'cadernoFotos'), where('notaId','==',n._id))); s.docs.forEach(d=>ids.push(d.id)); }
+    if(n.nFotos && !fotos.length){ const s=await getDocs(query(collection(db,'cadernoFotos'), where('notaId','==',n._id))); s.docs.forEach(d=>fotos.push({_id:d.id,...d.data()})); }
   }catch(e){}
-  ids.forEach(id=>gravar(deleteDoc(doc(db,'cadernoFotos',id))));
+  fotos.forEach(apagarFoto);
   gravar(deleteDoc(doc(db,'cadernoNotas',n._id)));
   toast('🗑️ Anotação excluída');
 };
@@ -539,8 +626,12 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .ver-meta a{color:var(--v);}
 .galeria{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:7px;margin-top:12px;}
 .galeria img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:9px;cursor:zoom-in;display:block;}
-#ovFoto{background:rgba(0,0,0,.92);align-items:center;z-index:5000;}
-#ovFoto img{max-width:100%;max-height:100%;object-fit:contain;}
+#ovFoto{background:#000 !important;align-items:center;z-index:5000;}
+#ovFoto{flex-direction:column;}
+#ovFoto img{max-width:100%;max-height:calc(100% - 64px);object-fit:contain;flex:1;min-height:0;}
+.foto-barra{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:10px 14px calc(10px + env(safe-area-inset-bottom));color:#fff;font-size:.78rem;}
+.foto-barra button{background:#fff;color:var(--ve);border:none;border-radius:9px;padding:9px 13px;font-weight:700;font-size:.82rem;font-family:var(--font-body);cursor:pointer;flex-shrink:0;}
+.sem-previa{width:100%;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:1.6rem;background:var(--cl);border-radius:9px;cursor:pointer;}
 .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--ve);color:#fff;padding:12px 20px;border-radius:24px;font-size:.85rem;font-weight:600;z-index:6000;opacity:0;transition:.3s;box-shadow:var(--sf);max-width:88vw;text-align:center;}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1;}
 </style>
@@ -637,7 +728,9 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 </div>
 
 <!-- FOTO EM TELA CHEIA -->
-<div class="overlay" id="ovFoto" onclick="fecharFoto()"><img id="fotoGrande" alt=""></div>
+<div class="overlay" id="ovFoto" onclick="fecharFoto()"><img id="fotoGrande" alt="">
+  <div class="foto-barra"><span id="fotoInfo"></span><button id="btnBaixarOriginal" onclick="baixarOriginal(event)">⬇️ Baixar original</button></div>
+</div>
 
 <!-- CONFIRMAÇÃO -->
 <div class="overlay" id="ovConfirm" onclick="if(event.target.id==='ovConfirm')_confirmResolve(false)">

@@ -5,7 +5,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { Firestore } from './firestore.js';
 import { Telegram } from './telegram.js';
-import { DEFINICOES, Ferramentas, executarProposta } from './ferramentas.js';
+import { DEFINICOES, Ferramentas, executarProposta, podeCaderno } from './ferramentas.js';
+import { fotoDaMensagem, guardarFotoPendente, fotosPendentes, apagarPendentes, fmtBytes } from './fotos.js';
 import { gerarPedidoPdf } from './pdf.js';
 import { SISTEMA } from './prompt.js';
 import { transcrever } from './audio.js';
@@ -15,6 +16,7 @@ const MAX_ITERACOES = 10;      // chamadas à API por mensagem do usuário
 const VALIDADE_PROPOSTA_MS = 2 * 60 * 60 * 1000;
 const FUSO = 'America/Sao_Paulo';
 const MAX_AUDIO_S = 300;        // mensagens de voz mais longas que isso são recusadas
+const AVISO_FOTO_MS = 90 * 1000; // um álbum chega como várias mensagens: avisa uma vez só
 
 export default {
   async fetch(req, env) {
@@ -104,10 +106,15 @@ async function processarUpdate(update, env) {
   const fs = new Firestore(env);
   const convRef = `assistenteConversas/${chatId}`;
   const conv = (await fs.get(convRef)) || {};
+  // Fotos de um álbum chegam como vários updates quase juntos (e podem chegar fora de ordem):
+  // não passam pelo controle de update_id abaixo; a gravação da foto já é idempotente.
+  const foto = msg ? fotoDaMensagem(msg) : null;
 
   // O Telegram reenvia o update se demorarmos; processa cada um uma única vez.
-  if ((conv.ultimoUpdate || 0) >= update.update_id) return;
-  await fs.set(convRef, { ultimoUpdate: update.update_id, email });
+  if (!foto) {
+    if ((conv.ultimoUpdate || 0) >= update.update_id) return;
+    await fs.set(convRef, { ultimoUpdate: update.update_id, email });
+  }
 
   const perfil = await carregarPerfil(fs, email);
   if (!perfil) {
@@ -117,6 +124,7 @@ async function processarUpdate(update, env) {
   }
 
   if (cb) return tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg);
+  if (foto) return tratarFoto(msg, foto, update, chatId, conv, convRef, perfil, email, fs, tg, env);
 
   const audio = msg.voice || msg.audio || msg.video_note;
   if (audio) {
@@ -148,16 +156,17 @@ async function processarUpdate(update, env) {
 
   const texto = (msg.text || '').trim();
   if (!texto) {
-    await tg.enviar(chatId, 'Eu entendo mensagens de texto e de voz. 🙂');
+    await tg.enviar(chatId, 'Eu entendo mensagens de texto, voz e fotos. 🙂');
     return;
   }
   if (texto === '/start' || texto === '/ajuda') {
-    await tg.enviar(chatId, `Olá, ${perfil.nome || email}! 👋\nPode me mandar texto ou áudio 🎤 e perguntar qualquer coisa do app — programação da semana, estoque, chuva, irrigação, aplicações por talhão… — e pedir agendamentos de pulverização ou pedidos de produto. Antes de gravar eu sempre peço sua confirmação.\n\n/limpar — começa uma conversa nova`);
+    await tg.enviar(chatId, `Olá, ${perfil.nome || email}! 👋\nPode me mandar texto, áudio 🎤 ou fotos 📷 e perguntar qualquer coisa do app — programação da semana, estoque, chuva, irrigação, aplicações por talhão… — e pedir agendamentos de pulverização, pedidos de produto ou anotações no caderno de campo (foto + o que é). Para guardar a foto original, sem a compressão do Telegram, mande como Arquivo (📎 → Arquivo). Antes de gravar eu sempre peço sua confirmação.\n\n/limpar — começa uma conversa nova`);
     return;
   }
   if (texto === '/limpar') {
     await fs.set(convRef, { historico: [], notas: [] });
-    await tg.enviar(chatId, '🧹 Conversa reiniciada.');
+    const n = await apagarPendentes(fs, chatId).catch(() => 0);
+    await tg.enviar(chatId, `🧹 Conversa reiniciada.${n ? ` ${n} foto(s) que não estavam em nenhuma anotação foram descartadas.` : ''}`);
     return;
   }
 
@@ -165,15 +174,53 @@ async function processarUpdate(update, env) {
   await conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, env);
 }
 
+async function tratarFoto(msg, foto, update, chatId, conv, convRef, perfil, email, fs, tg, env) {
+  if (!podeCaderno(perfil)) {
+    await tg.enviar(chatId, 'Fotos vão para o Caderno de Campo, e seu usuário não tem acesso a ele no app.');
+    return;
+  }
+  let r;
+  try {
+    r = await guardarFotoPendente(fs, tg, chatId, email, foto);
+  } catch (e) {
+    await tg.enviar(chatId, `⚠️ Não consegui guardar a foto (${e.message}). Pode mandar de novo?`);
+    return;
+  }
+  const legenda = (msg.caption || '').trim();
+  if (legenda) {
+    // A legenda é uma mensagem como outra qualquer: aqui sim vale o controle de update repetido.
+    const atual = (await fs.get(convRef)) || conv;
+    if ((atual.ultimoUpdate || 0) >= update.update_id) return;
+    await fs.set(convRef, { ultimoUpdate: update.update_id, email });
+    await tg.digitando(chatId);
+    await conversar(`${legenda}\n(legenda de foto que o usuário acabou de mandar)`, chatId, atual, convRef, perfil, email, fs, tg, env);
+    return;
+  }
+  if (!r.nova) return;
+  const agora = Date.now();
+  if (agora - Date.parse(conv.avisoFotoEm || 0) < AVISO_FOTO_MS) return;
+  await fs.set(convRef, { avisoFotoEm: new Date(agora).toISOString() });
+  await tg.enviar(chatId, [
+    `📷 Foto guardada (${fmtBytes(r.tamanho)}). Me diga o que é e de qual talhão, por texto ou áudio, que eu monto a anotação no caderno.`,
+    foto.comprimida ? 'Dica: o Telegram reduz fotos mandadas do jeito normal. Para guardar o original, mande como Arquivo (📎 → Arquivo).' : '',
+  ].filter(Boolean).join('\n'));
+}
+
 async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, env, talhoes = null) {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const ferramentas = new Ferramentas(fs, perfil);
+  ferramentas.chatId = chatId;
   if (talhoes) ferramentas._talhoes = talhoes;
 
   // Histórico guardado só como texto (sem blocos de raciocínio), então pode ser truncado à vontade.
   const historico = Array.isArray(conv.historico) ? conv.historico : [];
   const notas = Array.isArray(conv.notas) ? conv.notas : [];
-  const cabecalho = [`[Agora: ${agoraTexto()} · Usuário: ${perfil.nome || email}]`, ...notas.map(n => `[${n}]`)].join('\n');
+  const nFotos = podeCaderno(perfil) ? (await fotosPendentes(fs, chatId).catch(() => [])).length : 0;
+  const cabecalho = [
+    `[Agora: ${agoraTexto()} · Usuário: ${perfil.nome || email}]`,
+    ...notas.map(n => `[${n}]`),
+    nFotos ? `[${nFotos} foto(s) recebida(s) aguardando anotação no caderno — propor_anotacao as anexa]` : '',
+  ].filter(Boolean).join('\n');
   const msgUsuario = `${cabecalho}\n${texto}`;
 
   const messages = [];
@@ -261,7 +308,8 @@ async function tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg) {
   if (acao === 'no') {
     await fs.set(`assistentePropostas/${id}`, { status: 'cancelada', resolvidoEm: new Date().toISOString() });
     await tg.responderBotao(cb.id, 'Cancelado.');
-    await tg.editarTexto(chatId, msgId, `${prop.resumo}\n\n❌ Cancelado — nada foi gravado.`);
+    const extra = prop.tipo === 'anotacao' ? ' As fotos continuam guardadas para a próxima anotação (/limpar descarta).' : '';
+    await tg.editarTexto(chatId, msgId, `${prop.resumo}\n\n❌ Cancelado — nada foi gravado.${extra}`);
     await fs.set(convRef, { notas: [...notas, `O usuário CANCELOU a proposta: ${prop.resumo.split('\n')[0]}`] });
     return;
   }

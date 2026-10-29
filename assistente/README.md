@@ -12,8 +12,13 @@ Telegram ──webhook──▶ Cloudflare Worker (assistente/src) ──▶ Cla
   - O bot transcreve com o Whisper do **Workers AI**, que roda no próprio Cloudflare (não precisa de outra conta). Ele recebe os nomes dos talhões e fazendas para acertar o vocabulário.
   - Antes de responder, o bot mostra o que entendeu (🎤 «…»), para você conferir na hora se ele errou um nome ou número.
   - Áudios de até 5 minutos.
+- **Fotos → Caderno de Campo:** mande a foto (ou um álbum) com uma legenda, ou a foto e depois um texto/áudio dizendo o que é e de qual talhão. O bot propõe a anotação com as palavras que você usou, sem reescrever, e as fotos anexadas. Grava só no ✅.
+  - A foto é guardada **sem compactar**, no mesmo formato da página `caderno.html`: o arquivo em pedaços em `cadernoFotos/{id}/partes`.
+  - Foto mandada do jeito normal já vem reduzida pelo próprio Telegram. Para guardar o arquivo original da câmera, mande como **Arquivo** (📎 → Arquivo). Limite do Telegram para o bot: 20 MB por arquivo.
+  - Até você confirmar, as fotos ficam "pendentes" do chat. Se você cancelar, elas continuam guardadas para a próxima anotação. O `/limpar` descarta as pendentes, e as esquecidas são apagadas depois de 2 dias.
+  - Precisa de acesso ao módulo Caderno de Campo no Admin (o dono do sistema já tem).
 - **Leitura:** qualquer módulo do app, respeitando as permissões do usuário em `admin.html` (o nível por módulo e as fazendas liberadas). `usuarios`, `logs` e fotos ficam de fora.
-- **Gravação:** só pulverização (`pulverizacoes`, um registro por talhão, como no app), pedido (`pedidos`, status `solicitado`) e recebimento (`recebimentos`, compra ou transferência, como a página Recebimentos). Os registros saem com `origem: 'telegram'` e `criadoPor` igual ao e-mail do usuário. A permissão é a mesma do app: admin de Pulverização para agendar, admin de Pedidos para criar pedido, acesso a Recebimentos na fazenda (ou na origem, se for transferência) para lançar recebimento. Ela é conferida de novo no momento da confirmação. A proposta vale por 2 horas.
+- **Gravação:** só pulverização (`pulverizacoes`, um registro por talhão, como no app), pedido (`pedidos`, status `solicitado`) recebimento (`recebimentos`, compra ou transferência, como a página Recebimentos) e anotação do caderno (`cadernoNotas` + vínculo das fotos em `cadernoFotos`). Os registros saem com `origem: 'telegram'` e `criadoPor` igual ao e-mail do usuário. A permissão é a mesma do app: admin de Pulverização para agendar, admin de Pedidos para criar pedido, acesso a Recebimentos na fazenda (ou na origem, se for transferência) para lançar recebimento. Ela é conferida de novo no momento da confirmação. A proposta vale por 2 horas.
 - **Coleções do próprio assistente:**
   - `assistenteConversas/{chatId}`: as últimas mensagens da conversa (só texto).
   - `assistentePropostas/{id}`: cada proposta e o que aconteceu com ela (pendente, gravada, cancelada, expirada ou erro).
@@ -93,11 +98,12 @@ A partir daí, cada pessoa vê pelo bot o mesmo que vê no app.
 ## Desenvolvimento
 
 - `src/index.js`: webhook do Telegram, a conversa com o Claude e os botões Confirmar/Cancelar.
-- `src/ferramentas.js`: as ferramentas que o Claude pode chamar (`listar_talhoes`, `consultar`, `ler_documento`, `propor_pulverizacao`, `propor_pedido`, `propor_recebimento`) e as regras de permissão (cópia de `nivelAcesso` e `fazendaPermitida` do app).
+- `src/ferramentas.js`: as ferramentas que o Claude pode chamar (`listar_talhoes`, `consultar`, `ler_documento`, `propor_pulverizacao`, `propor_pedido`, `propor_recebimento`, `propor_anotacao`) e as regras de permissão (cópia de `nivelAcesso` e `fazendaPermitida` do app).
 - `src/prompt.js`: instruções e o mapa das coleções.
   - O texto precisa ficar fixo para o cache de prompt funcionar; data e hora vão na mensagem.
   - Quando um módulo novo do app criar uma coleção, registre-a em `COLECOES` (`ferramentas.js`) e descreva os campos aqui.
 - `src/audio.js`: transcrição das mensagens de voz (Whisper `@cf/openai/whisper-large-v3-turbo` via binding `AI`, idioma `pt`, `initial_prompt` com o vocabulário da fazenda).
+- `src/fotos.js`: fotos recebidas → `cadernoFotos` (original em pedaços + prévia + miniatura), pendentes por chat até a anotação ser confirmada.
 - `src/firestore.js`: cliente REST do Firestore. Gera o token da conta de serviço com WebCrypto, porque o Worker não roda o Admin SDK.
 
 O histórico da conversa é guardado só como texto, sem os blocos de raciocínio do modelo, e por isso pode ser cortado sem problema. Dentro de uma mesma pergunta, a lista de mensagens só cresce (nada é editado).

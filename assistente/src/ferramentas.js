@@ -1,5 +1,7 @@
 // Ferramentas que o Claude pode chamar + regras de permissão (espelham as do app).
 
+import { fotosPendentes, vincularPendentes } from './fotos.js';
+
 // ── Permissões (mesma lógica de nivelAcesso/fazendaPermitida das páginas) ──
 const HERANCA = { drench: 'pulverizacao', cotacoes: 'pedidos' };
 // Módulos abertos por padrão (como clima no app): só bloqueiam se o admin marcar 'nenhum'.
@@ -28,6 +30,10 @@ function recebimentoFazendaOk(perfil, fazenda) {
   if (ehAdminSistema(perfil) || nivelAcesso(perfil, 'recebimentos') === 'admin') return true;
   const lista = perfil.fazendasModulo?.recebimentos;
   return lista === undefined || lista.includes(fazenda);
+}
+// Caderno de campo: mesma regra de podeEscrever() de caderno.html.
+export function podeCaderno(perfil) {
+  return ehAdminSistema(perfil) || ['admin', 'gerente', 'encarregado', 'operador'].includes(nivelAcesso(perfil, 'caderno'));
 }
 function podeLer(perfil, mod) {
   if (mod === 'base') return true;
@@ -269,6 +275,22 @@ export const DEFINICOES = [
     },
   },
   {
+    name: 'propor_anotacao',
+    description: 'Prepara uma anotação no Caderno de Campo (avulsa ou de um talhão). As fotos que o usuário mandou e ainda não estão em nenhuma anotação entram nela automaticamente, no tamanho original. NÃO grava nada: o usuário recebe um resumo com botões Confirmar/Cancelar.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        texto: { type: 'string', description: 'As palavras do usuário, exatamente como ele escreveu/falou (sem reescrever nem resumir). Só tire o comando ("anota aí", "salva no caderno") e o nome do talhão se ele estiver só indicando onde é.' },
+        titulo: { type: 'string', description: 'Opcional. Só se o usuário der um título.' },
+        categoria: { type: 'string', enum: ['observacao', 'praga', 'doenca', 'nutricao', 'irrigacao', 'manutencao', 'lembrete'] },
+        talhao_id: { type: 'string', description: 'Código do talhão (de listar_talhoes). Omita para anotação avulsa.' },
+        fazenda: { type: 'string', description: 'Só para anotação avulsa, se o usuário citar a fazenda.' },
+        data: { type: 'string', description: 'AAAA-MM-DD (padrão: hoje).' },
+      },
+      required: ['texto'],
+    },
+  },
+  {
     name: 'propor_pedido',
     description: 'Prepara um pedido de compra de produtos. Cada item pode ser (a) por dose/ha × talhões — o total é calculado pela área — ou (b) só a quantidade total, sem talhões. NÃO grava nada: o usuário recebe um resumo com botões Confirmar/Cancelar.',
     input_schema: {
@@ -318,6 +340,7 @@ export class Ferramentas {
       case 'propor_pulverizacao': return this.proporPulverizacao(entrada);
       case 'propor_pedido': return this.proporPedido(entrada);
       case 'propor_recebimento': return this.proporRecebimento(entrada);
+      case 'propor_anotacao': return this.proporAnotacao(entrada);
       default: throw new Error(`Ferramenta desconhecida: ${nome}`);
     }
   }
@@ -561,6 +584,44 @@ export class Ferramentas {
     return this._registrarProposta('recebimento', [{ colecao: 'recebimentos', dados }], resumo, `registrou recebimento em ${destino} (${itensFS.map(i => i.produto).join(', ')})`);
   }
 
+  async proporAnotacao({ texto, titulo = '', categoria = 'observacao', talhao_id, fazenda, data }) {
+    if (!podeCaderno(this.perfil)) throw new Error('Seu usuário não tem acesso ao Caderno de Campo.');
+    texto = String(texto || '').trim();
+    titulo = String(titulo || '').trim();
+    const nFotos = this.chatId ? (await fotosPendentes(this.fs, this.chatId)).length : 0;
+    if (!texto && !titulo && !nFotos) throw new Error('Anotação vazia: falta o texto.');
+    const CATS = { observacao: '👁️ Observação', praga: '🐛 Praga', doenca: '🍂 Doença', nutricao: '🧪 Nutrição', irrigacao: '💦 Irrigação', manutencao: '🔧 Manutenção', lembrete: '📌 Lembrete' };
+    if (!CATS[categoria]) categoria = 'observacao';
+    if (!data) data = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Data inválida — use AAAA-MM-DD.');
+    let tal = null, faz = '';
+    if (talhao_id) {
+      [tal] = await this._resolverTalhoes([talhao_id], 'caderno');
+      faz = tal.fazenda || '';
+    } else if (fazenda) {
+      const fazendas = [...new Set((await this.talhoes()).map(t => t.fazenda).filter(Boolean))];
+      faz = fazendas.find(f => normalizar(f) === normalizar(fazenda));
+      if (!faz) throw new Error(`Fazenda não encontrada: ${fazenda}. Fazendas: ${fazendas.join(', ')}.`);
+      if (!fazendaPermitida(this.perfil, 'caderno', faz)) throw new Error(`Seu usuário não tem acesso à fazenda ${faz}.`);
+    }
+    // Mesmos campos que salvarNota() de caderno.html grava (fotos/miniatura entram ao confirmar)
+    const dados = {
+      data, titulo, texto, categoria,
+      talhaoId: tal ? codTalhao(tal) : '', talhaoNome: tal?.nome || '', fazenda: faz,
+      privada: false, lat: null, lng: null, precisaoGps: null,
+      nFotos: 0, miniatura: null, miniaturaFotoId: null,
+      autorNome: this.perfil.nome || this.perfil.email || '',
+    };
+    const resumo = [
+      '📒 Nova anotação no caderno',
+      `${tal ? `🌳 ${codTalhao(tal)}${tal.nome ? ' · ' + tal.nome : ''}${faz ? ` (${faz})` : ''}` : `📝 Avulsa${faz ? ` · ${faz}` : ''}`} · ${CATS[categoria]} · ${fmtData(data)}`,
+      titulo ? `Título: ${titulo}` : '',
+      texto ? `«${texto}»` : '',
+      nFotos ? `📷 ${nFotos} foto(s) no tamanho original (as que chegarem até você confirmar também entram)` : '',
+    ].filter(Boolean).join('\n');
+    return this._registrarProposta('anotacao', [{ colecao: 'cadernoNotas', dados }], resumo, `anotou no caderno${tal ? ` (${codTalhao(tal)})` : ''}`);
+  }
+
   _registrarProposta(tipo, docs, resumo, log) {
     this.propostas.push({ tipo, docs, resumo, log });
     return `Proposta preparada (ainda NÃO gravada). Logo após a sua resposta o usuário recebe este resumo com botões ✅ Confirmar / ❌ Cancelar:\n${resumo}\nNão repita o resumo; diga em uma frase que ele deve conferir e confirmar.`;
@@ -577,11 +638,20 @@ export async function executarProposta(fs, perfil, email, uid, prop) {
     const ok = recebimentoFazendaOk(perfil, d.fazenda) || (d.tipo === 'transferencia' && d.origemFazenda && recebimentoFazendaOk(perfil, d.origemFazenda));
     if (!ok) throw new Error(`Sem permissão de Recebimentos na fazenda ${d.fazenda}.`);
   }
+  if (prop.tipo === 'anotacao' && !podeCaderno(perfil)) throw new Error('Sem acesso ao Caderno de Campo.');
   const agora = new Date().toISOString();
   const ids = [];
   for (const d of prop.docs) {
-    if (!['pulverizacoes', 'pedidos', 'recebimentos'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
+    if (!['pulverizacoes', 'pedidos', 'recebimentos', 'cadernoNotas'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
     ids.push(await fs.add(d.colecao, { ...d.dados, criadoEm: agora, criadoPor: email, origem: 'telegram' }));
+  }
+  // Anotação: as fotos pendentes do chat passam a ser da nota (miniatura = 1ª foto, como no app)
+  if (prop.tipo === 'anotacao' && prop.chatId) {
+    const fotos = await vincularPendentes(fs, prop.chatId, ids[0]);
+    if (fotos.length) {
+      const capa = fotos.find(f => f.miniatura) || null;
+      await fs.set(`cadernoNotas/${ids[0]}`, { nFotos: fotos.length, miniatura: capa?.miniatura || null, miniaturaFotoId: capa?._id || null });
+    }
   }
   try {
     await fs.add('logs', { tipo: prop.tipo, mensagem: `${email} ${prop.log} (via Telegram)`, criadoEm: agora, uid });
