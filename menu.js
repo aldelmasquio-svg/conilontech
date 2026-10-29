@@ -20,6 +20,7 @@ const SECOES = [
     { href:'calibracao.html',    ico:'⚙️', label:'Calibração',        acesso:'calibracao' },
     { href:'avaliacoes.html',    ico:'📍', label:'Avaliações',        acesso:'avaliacoes' },
     { href:'amostragem.html',    ico:'🧫', label:'Amostragem',        acesso:'amostragem' },
+    { href:'caderno.html',       ico:'📒', label:'Caderno de Campo',  acesso:'caderno' },
   ]},
   { label: 'Análise', items: [
     { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },

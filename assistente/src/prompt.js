@@ -26,6 +26,7 @@ Coleções principais (campos mais usados; use consultar com limite pequeno para
 • vazaoMedidores/{id} {nome, ultimo{vazao (m³/h), total, ts, ok}} (online se ultimo.ts tem menos de 3 min); vazaoMedidores/{id}/resumos/{AAAA-MM-DD} {volume, minutosFluxo, vazaoMax, vazaoMedia}; vazaoConfig/geral {ref, comp, limitePct}; vazaoAlertas {medidor, tipo, nivel, texto, dia, hora, ts}
 • clima/{estacao} (ex.: estacao-km18): status/ultimo (leitura atual), resumos/{AAAA-MM-DD} (diário: ETo, chuva, Tmax/Tmin, UR, vento, DTmin/DTmax, horasAptoDrone, horasAptoTrator, completo), dias/{AAAA-MM-DD}.resumo. Janela de pulverização: Delta T entre 2 e 8 °C, vento ≤ 5 km/h para drone ou ≤ 7 km/h para trator, sem chuva.
 • herbicidaRegistros {talhaoId, talhaoNome, fazenda, data, metodo (costal=bombas, trator=tanques), pessoas[{…, qtd}]}; herbicidaConclusoes {talhaoId, data, area}
+• cadernoNotas {data, titulo, texto, categoria (observacao/praga/doenca/nutricao/irrigacao/manutencao/lembrete), talhaoId, talhaoNome, fazenda (talhaoId vazio = anotação avulsa), autorNome, criadoPor, privada (bool, só o autor vê), lat, lng, nFotos} — caderno de campo: anotações livres feitas na lavoura.
 • analises, amostras, recomendacoes, planejamentos_safra, calibracoes, avaliacaoPlantas, avaliacaoRegistros, amostragemPontos, amostragemColetas
 • config/geral {fazendas[]}
 
