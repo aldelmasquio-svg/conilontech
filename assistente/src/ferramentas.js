@@ -63,6 +63,7 @@ const COLECOES = {
   calibracoes: 'calibracao',
   avaliacaoPlantas: 'avaliacoes', avaliacaoRegistros: 'avaliacoes',
   amostragemPontos: 'amostragem', amostragemColetas: 'amostragem', amostragemConfig: 'amostragem',
+  cadernoNotas: 'caderno',
   clima: 'clima',
 };
 
@@ -72,7 +73,7 @@ function moduloDoCaminho(caminho) {
 }
 
 // Campos pesados que não ajudam a responder (polígonos, fotos, séries por minuto).
-const CAMPOS_PESADOS = new Set(['coordenadas', 'dataURI', 'pontos', 'poligono', 'geojson']);
+const CAMPOS_PESADOS = new Set(['coordenadas', 'dataURI', 'miniatura', 'pontos', 'poligono', 'geojson']);
 
 function enxugar(x, prof = 0) {
   if (Array.isArray(x)) return x.map(v => enxugar(v, prof + 1));
@@ -337,6 +338,11 @@ export class Ferramentas {
     return serializar(lista, lista.length);
   }
 
+  // Anotação do caderno marcada "só para mim": só o autor vê (mesma regra de caderno.html)
+  _privadaAlheia(d) {
+    return d.privada === true && d.criadoPor !== this.perfil.email;
+  }
+
   _checarLeitura(caminho) {
     const mod = moduloDoCaminho(caminho);
     if (!mod) throw new Error(`Coleção não disponível para o assistente: ${String(caminho).split('/')[0]}`);
@@ -367,7 +373,7 @@ export class Ferramentas {
         });
       }
     }
-    docs = docs.filter(d => fazendaPermitida(this.perfil, mod, d.fazenda));
+    docs = docs.filter(d => fazendaPermitida(this.perfil, mod, d.fazenda) && !this._privadaAlheia(d));
     const haMais = docs.length > limite;
     const total = docs.length;
     docs = docs.slice(0, limite).map(d => {
@@ -386,6 +392,7 @@ export class Ferramentas {
     const d = await this.fs.get(caminho);
     if (!d) return 'Documento não encontrado.';
     if (!fazendaPermitida(this.perfil, mod, d.fazenda)) throw new Error('Documento de uma fazenda que seu usuário não acessa.');
+    if (this._privadaAlheia(d)) return 'Documento não encontrado.';
     return JSON.stringify(enxugar(d)).slice(0, LIMITE_SAIDA);
   }
 

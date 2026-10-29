@@ -78,6 +78,8 @@ service cloud.firestore {
         'amostragemPontos':      ['amostragem'],
         'amostragemColetas':     ['amostragem'],
         'amostragemConfig':      ['amostragem'],
+        'cadernoNotas':          ['caderno'],
+        'cadernoFotos':          ['caderno'],
         'analises':              ['analises'],
         'amostras':              ['analises'],
         'analises_faixas':       ['analises'],
