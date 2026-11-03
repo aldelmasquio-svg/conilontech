@@ -126,6 +126,30 @@ export class Firestore {
     return d.name.split('/').pop();
   }
 
+  // Cria o documento com o id dado só se ele ainda não existir. true = criou; false = já existia.
+  // Serve de trava atômica (ex.: processar cada update do Telegram uma única vez).
+  async criarSeNovo(colecao, id, dados) {
+    try {
+      await this._req(`${this.base}/${this._caminho(colecao)}?documentId=${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify({ fields: paraCampos(dados) }) });
+      return true;
+    } catch (e) {
+      if (e.status === 'ALREADY_EXISTS' || e.status === 409) return false;
+      throw e;
+    }
+  }
+
+  async remove(caminho) {
+    const tk = await tokenAcesso(this.sa);
+    await fetch(`${this.base}/${this._caminho(caminho)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${tk}` } });
+  }
+
+  // Id no mesmo formato dos gerados pelo Firestore (20 caracteres).
+  novoId() {
+    const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    const r = crypto.getRandomValues(new Uint8Array(20));
+    return Array.from(r, b => abc[b % abc.length]).join('');
+  }
+
   // Cria/atualiza só os campos informados (merge), como setDoc(..., {merge:true}).
   async set(caminho, dados) {
     const mask = Object.keys(dados).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');

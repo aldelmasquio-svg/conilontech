@@ -257,6 +257,8 @@ export const DEFINICOES = [
         fazenda: { type: 'string', description: 'Só para anotação avulsa de uma fazenda (opcional). Com talhão, a fazenda vem do talhão.' },
         data: { type: 'string', description: 'AAAA-MM-DD (padrão: hoje).' },
         privada: { type: 'boolean', description: 'true = só o autor vê ("só para mim"). Padrão: false.' },
+        incluir_fotos: { type: 'boolean', description: 'Anexa as fotos que o usuário mandou no chat e ainda não foram usadas (padrão: true quando há fotos).' },
+        incluir_localizacao: { type: 'boolean', description: 'Grava a localização que o usuário mandou no chat (padrão: true quando há).' },
       },
       required: ['texto', 'categoria'],
     },
@@ -326,6 +328,9 @@ export class Ferramentas {
     this.perfil = perfil;
     this.propostas = []; // propostas criadas neste turno, enviadas com botões no fim
     this._talhoes = null;
+    this.fotos = [];      // fotos mandadas no chat e ainda livres (assistenteAnexos)
+    this.local = null;    // última localização mandada no chat {lat,lng,precisao,em}
+    this.reservadas = []; // ids de fotos que uma proposta deste turno levou
   }
 
   async talhoes() {
@@ -585,11 +590,13 @@ export class Ferramentas {
     return this._registrarProposta('recebimento', [{ colecao: 'recebimentos', dados }], resumo, `registrou recebimento em ${destino} (${itensFS.map(i => i.produto).join(', ')})`);
   }
 
-  async proporNotaCaderno({ texto, titulo = '', categoria, talhao_id, fazenda, data, privada = false }) {
+  async proporNotaCaderno({ texto, titulo = '', categoria, talhao_id, fazenda, data, privada = false, incluir_fotos = true, incluir_localizacao = true }) {
     if (!podeEscreverCaderno(this.perfil)) throw new Error('Seu usuário não pode escrever no Caderno de Campo.');
     texto = String(texto || '').trim();
     titulo = String(titulo || '').trim();
-    if (!texto && !titulo) throw new Error('A anotação está vazia.');
+    const fotos = incluir_fotos === false ? [] : this.fotos.filter(f => !this.reservadas.includes(f._id));
+    const local = incluir_localizacao === false ? null : this.local;
+    if (!texto && !titulo && !fotos.length) throw new Error('A anotação está vazia.');
     if (!CATEGORIAS_CADERNO.includes(categoria)) categoria = 'observacao';
     if (!data) data = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Data inválida — use AAAA-MM-DD.');
@@ -603,22 +610,28 @@ export class Ferramentas {
       if (!faz) throw new Error(`Fazenda não encontrada: ${fazenda}. Fazendas: ${fazendas.join(', ')}.`);
       if (!fazendaPermitida(this.perfil, 'caderno', faz)) throw new Error(`Seu usuário não tem acesso ao caderno da fazenda ${faz}.`);
     }
-    // Mesmos campos que salvarNota() de caderno.html grava (sem GPS e sem fotos).
+    // Mesmos campos que salvarNota() de caderno.html grava. Os ids são gerados aqui porque
+    // cada foto (cadernoFotos) aponta para a nota e a nota aponta para a foto da miniatura.
+    const notaId = this.fs.novoId();
+    const fotosDoc = fotos.map(f => ({ id: this.fs.novoId(), anexoId: f._id }));
     const dados = {
       data, titulo, texto, categoria,
       talhaoId: tal ? codTalhao(tal) : '', talhaoNome: tal ? (tal.nome || codTalhao(tal)) : '', fazenda: faz,
       privada: privada === true,
-      lat: null, lng: null, precisaoGps: null,
-      nFotos: 0, miniatura: null, miniaturaFotoId: null,
+      lat: local ? local.lat : null, lng: local ? local.lng : null, precisaoGps: local?.precisao ?? null,
+      nFotos: fotosDoc.length, miniatura: null, miniaturaFotoId: fotosDoc[0]?.id || null,
     };
+    this.reservadas.push(...fotos.map(f => f._id));
     const onde = tal ? `${tal.nome} (${faz || '—'})` : (faz ? `${faz} · avulsa` : 'avulsa');
+    const extras = [fotosDoc.length && `📷 ${fotosDoc.length} foto${fotosDoc.length > 1 ? 's' : ''}`, local && '📍 com localização'].filter(Boolean).join(' · ');
     const resumo = [
       '📓 Anotar no Caderno de Campo',
       `${ROTULO_CATEGORIA[categoria]} · ${fmtData(data)} · ${onde}${dados.privada ? ' · 🔒 só para mim' : ''}`,
+      extras,
       titulo ? `Título: ${titulo}` : '',
       texto,
     ].filter(Boolean).join('\n');
-    return this._registrarProposta('caderno', [{ colecao: 'cadernoNotas', dados }], resumo, `anotou no caderno de campo (${onde})`);
+    return this._registrarProposta('caderno', [{ colecao: 'cadernoNotas', id: notaId, dados, fotos: fotosDoc }], resumo, `anotou no caderno de campo (${onde})`);
   }
 
   _registrarProposta(tipo, docs, resumo, log) {
@@ -644,13 +657,37 @@ export async function executarProposta(fs, perfil, email, uid, prop) {
   }
   const agora = new Date().toISOString();
   const ids = [];
+  if (prop.tipo === 'caderno') {
+    ids.push(await gravarNotaCaderno(fs, perfil, email, prop.docs[0], agora));
+    prop = { ...prop, docs: [] };
+  }
   for (const d of prop.docs) {
-    if (!['pulverizacoes', 'pedidos', 'recebimentos', 'cadernoNotas'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
-    const extra = d.colecao === 'cadernoNotas' ? { autorNome: perfil.nome || email } : {};
-    ids.push(await fs.add(d.colecao, { ...d.dados, criadoEm: agora, criadoPor: email, ...extra, origem: 'telegram' }));
+    if (!['pulverizacoes', 'pedidos', 'recebimentos'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
+    ids.push(await fs.add(d.colecao, { ...d.dados, criadoEm: agora, criadoPor: email, origem: 'telegram' }));
   }
   try {
     await fs.add('logs', { tipo: prop.tipo, mensagem: `${email} ${prop.log} (via Telegram)`, criadoEm: agora, uid });
   } catch (e) { /* log é opcional, como no app */ }
   return ids;
+}
+
+// Fotos primeiro (cadernoFotos), depois a nota: assim ela nunca aparece apontando para foto inexistente.
+// Foto que expirou antes da confirmação fica de fora (nFotos acompanha).
+async function gravarNotaCaderno(fs, perfil, email, d, agora) {
+  const gravadas = [];
+  let miniatura = null;
+  for (const [i, f] of (d.fotos || []).entries()) {
+    const anexo = await fs.get(`assistenteAnexos/${f.anexoId}`);
+    if (!anexo?.dataURI) continue;
+    await fs.set(`cadernoFotos/${f.id}`, { notaId: d.id, dataURI: anexo.dataURI, criadoEm: new Date(Date.parse(agora) + i).toISOString(), criadoPor: email });
+    if (!gravadas.length) miniatura = anexo.miniatura || (anexo.dataURI.length <= 27000 ? anexo.dataURI : null);
+    gravadas.push(f);
+  }
+  await fs.set(`cadernoNotas/${d.id}`, {
+    ...d.dados,
+    nFotos: gravadas.length, miniatura, miniaturaFotoId: gravadas[0]?.id || null,
+    criadoEm: agora, criadoPor: email, autorNome: perfil.nome || email, origem: 'telegram',
+  });
+  for (const f of d.fotos || []) await fs.remove(`assistenteAnexos/${f.anexoId}`).catch(() => {});
+  return d.id;
 }

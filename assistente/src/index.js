@@ -9,6 +9,7 @@ import { DEFINICOES, Ferramentas, executarProposta } from './ferramentas.js';
 import { gerarPedidoPdf } from './pdf.js';
 import { SISTEMA } from './prompt.js';
 import { transcrever } from './audio.js';
+import { guardarFoto, fotosPendentes, talhaoDoPonto, localValida } from './anexos.js';
 
 const MAX_HISTORICO = 16;      // mensagens (texto) guardadas por conversa
 const MAX_ITERACOES = 10;      // chamadas à API por mensagem do usuário
@@ -105,9 +106,9 @@ async function processarUpdate(update, env) {
   const convRef = `assistenteConversas/${chatId}`;
   const conv = (await fs.get(convRef)) || {};
 
-  // O Telegram reenvia o update se demorarmos; processa cada um uma única vez.
-  if ((conv.ultimoUpdate || 0) >= update.update_id) return;
-  await fs.set(convRef, { ultimoUpdate: update.update_id, email });
+  // O Telegram reenvia o update se demorarmos, e manda fotos de um álbum em paralelo:
+  // uma trava atômica por update garante que cada um seja processado uma única vez.
+  if (!(await fs.criarSeNovo('assistenteUpdates', String(update.update_id), { chatId, em: new Date().toISOString() }))) return;
 
   const perfil = await carregarPerfil(fs, email);
   if (!perfil) {
@@ -117,6 +118,40 @@ async function processarUpdate(update, env) {
   }
 
   if (cb) return tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg);
+
+  // Localização: vale para a próxima anotação do caderno (2 h) e diz em que talhão a pessoa está.
+  const loc = msg.location || msg.venue?.location;
+  if (loc) {
+    const talhoes = await fs.query('talhoes', { limite: 2000 });
+    const t = talhaoDoPonto(talhoes, loc.latitude, loc.longitude);
+    await fs.set(convRef, { local: { lat: loc.latitude, lng: loc.longitude, precisao: loc.horizontal_accuracy ?? null, em: new Date().toISOString() } });
+    await tg.enviar(chatId, t
+      ? `📍 Localização recebida: você está no talhão ${t.nome} (${t.fazenda || '—'}). Ela vai junto na próxima anotação do caderno.`
+      : '📍 Localização recebida (fora dos talhões cadastrados). Ela vai junto na próxima anotação do caderno.');
+    return;
+  }
+
+  // Foto: fica guardada para a próxima anotação do caderno (2 h). Com legenda, a legenda é a mensagem.
+  if (msg.photo?.length) {
+    try { await guardarFoto(fs, tg, chatId, msg.photo); }
+    catch (e) { await tg.enviar(chatId, `⚠️ Não consegui guardar a foto (${e.message}). Pode mandar de novo?`); return; }
+    const legenda = (msg.caption || '').trim();
+    if (!legenda) {
+      // Álbum: o Telegram manda uma mensagem por foto — responde só uma vez por álbum.
+      const primeira = !msg.media_group_id || await fs.criarSeNovo('assistenteUpdates', `grupo-${msg.media_group_id}`, { chatId, em: new Date().toISOString() });
+      if (primeira) await tg.enviar(chatId, '📷 Foto recebida. Diga (por texto ou áudio) o que anotar no caderno de campo — ou pergunte algo sobre ela.');
+      return;
+    }
+    // Espera as outras fotos do álbum chegarem antes de montar a anotação.
+    if (msg.media_group_id) await new Promise(r => setTimeout(r, 3000));
+    await tg.digitando(chatId);
+    await conversar(legenda, chatId, conv, convRef, perfil, email, fs, tg, env);
+    return;
+  }
+  if (msg.document?.mime_type?.startsWith('image/')) {
+    await tg.enviar(chatId, 'Mande a imagem como foto (não como arquivo), por favor. 🙂');
+    return;
+  }
 
   const audio = msg.voice || msg.audio || msg.video_note;
   if (audio) {
@@ -148,11 +183,11 @@ async function processarUpdate(update, env) {
 
   const texto = (msg.text || '').trim();
   if (!texto) {
-    await tg.enviar(chatId, 'Eu entendo mensagens de texto e de voz. 🙂');
+    await tg.enviar(chatId, 'Eu entendo texto, áudio, fotos e localização. 🙂');
     return;
   }
   if (texto === '/start' || texto === '/ajuda') {
-    await tg.enviar(chatId, `Olá, ${perfil.nome || email}! 👋\nPode me mandar texto ou áudio 🎤 e perguntar qualquer coisa do app — programação da semana, estoque, chuva, irrigação, aplicações por talhão… — e pedir agendamentos de pulverização ou pedidos de produto. Antes de gravar eu sempre peço sua confirmação.\n\n/limpar — começa uma conversa nova`);
+    await tg.enviar(chatId, `Olá, ${perfil.nome || email}! 👋\nPode me mandar texto, áudio 🎤, fotos 📷 ou a localização 📍 e perguntar qualquer coisa do app — programação da semana, estoque, chuva, irrigação, aplicações por talhão… — e pedir agendamentos de pulverização ou pedidos de produto. Antes de gravar eu sempre peço sua confirmação.\n\n/limpar — começa uma conversa nova`);
     return;
   }
   if (texto === '/limpar') {
@@ -169,11 +204,19 @@ async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, en
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY });
   const ferramentas = new Ferramentas(fs, perfil);
   if (talhoes) ferramentas._talhoes = talhoes;
+  ferramentas.fotos = await fotosPendentes(fs, chatId);
+  ferramentas.local = localValida(conv);
 
   // Histórico guardado só como texto (sem blocos de raciocínio), então pode ser truncado à vontade.
   const historico = Array.isArray(conv.historico) ? conv.historico : [];
   const notas = Array.isArray(conv.notas) ? conv.notas : [];
-  const cabecalho = [`[Agora: ${agoraTexto()} · Usuário: ${perfil.nome || email}]`, ...notas.map(n => `[${n}]`)].join('\n');
+  const anexosInfo = [];
+  if (ferramentas.fotos.length) anexosInfo.push(`[O usuário mandou ${ferramentas.fotos.length} foto(s), ainda não usadas — vão junto na próxima propor_nota_caderno]`);
+  if (ferramentas.local) {
+    const t = talhaoDoPonto(await ferramentas.talhoes(), ferramentas.local.lat, ferramentas.local.lng);
+    anexosInfo.push(`[O usuário mandou a localização${t ? `: está no talhão ${t.nome} (id ${t.id || t._id}, ${t.fazenda || '—'})` : ', fora dos talhões cadastrados'} — vai junto na próxima propor_nota_caderno]`);
+  }
+  const cabecalho = [`[Agora: ${agoraTexto()} · Usuário: ${perfil.nome || email}]`, ...notas.map(n => `[${n}]`), ...anexosInfo].join('\n');
   const msgUsuario = `${cabecalho}\n${texto}`;
 
   const messages = [];
@@ -184,7 +227,11 @@ async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, en
   }
   if (messages.length && messages[0].role !== 'user') messages.shift();
   if (messages.length && messages[messages.length - 1].role === 'user') messages.pop();
-  messages.push({ role: 'user', content: msgUsuario });
+  // As fotos novas vão como imagem só nesta mensagem (o histórico guarda só texto).
+  const imagens = ferramentas.fotos.slice(-4).map(f => ({
+    type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: String(f.dataURI).replace(/^data:[^,]+,/, '') },
+  }));
+  messages.push({ role: 'user', content: imagens.length ? [...imagens, { type: 'text', text: msgUsuario }] : msgUsuario });
 
   const modelo = env.MODELO || 'claude-haiku-5-5';
   // Fallback automático em caso de recusa só existe para Opus/Fable 5.x e Sonnet 5.5; o Haiku não tem.
@@ -235,13 +282,16 @@ async function conversar(texto, chatId, conv, convRef, perfil, email, fs, tg, en
 
   for (const p of ferramentas.propostas) {
     const id = await fs.add('assistentePropostas', { ...p, chatId, email, status: 'pendente', criadoEm: new Date().toISOString() });
+    // Fotos usadas nesta proposta não vão para a próxima anotação.
+    for (const f of (p.docs[0]?.fotos || [])) await fs.set(`assistenteAnexos/${f.anexoId}`, { reservadoPor: id });
     await tg.enviar(chatId, p.resumo, {
       reply_markup: { inline_keyboard: [[{ text: '✅ Confirmar', callback_data: `ok:${id}` }, { text: '❌ Cancelar', callback_data: `no:${id}` }]] },
     });
   }
 
   const novo = [...historico, { role: 'user', texto: msgUsuario }, { role: 'assistant', texto: resposta }].slice(-MAX_HISTORICO);
-  await fs.set(convRef, { historico: novo, notas: [], atualizadoEm: new Date().toISOString() });
+  const usouLocal = ferramentas.propostas.some(p => p.tipo === 'caderno' && p.docs[0]?.dados?.lat != null);
+  await fs.set(convRef, { historico: novo, notas: [], atualizadoEm: new Date().toISOString(), ...(usouLocal ? { local: null } : {}) });
 }
 
 async function tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg) {
@@ -263,6 +313,8 @@ async function tratarBotao(cb, chatId, conv, convRef, perfil, email, fs, tg) {
     await tg.responderBotao(cb.id, 'Cancelado.');
     await tg.editarTexto(chatId, msgId, `${prop.resumo}\n\n❌ Cancelado — nada foi gravado.`);
     await fs.set(convRef, { notas: [...notas, `O usuário CANCELOU a proposta: ${prop.resumo.split('\n')[0]}`] });
+    // Fotos de uma anotação cancelada voltam a ficar livres para a próxima.
+    for (const f of (prop.docs?.[0]?.fotos || [])) await fs.set(`assistenteAnexos/${f.anexoId}`, { reservadoPor: null }).catch(() => {});
     return;
   }
   if (acao !== 'ok') return;
