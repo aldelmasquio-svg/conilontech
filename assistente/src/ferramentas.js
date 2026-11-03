@@ -24,6 +24,12 @@ function podeCriarPedido(perfil) {
 function podeRecebimentos(perfil) {
   return ehAdminSistema(perfil) || nivelAcesso(perfil, 'recebimentos') !== 'nenhum';
 }
+// Caderno de campo: espelha podeEscrever() de caderno.html.
+function podeEscreverCaderno(perfil) {
+  return ehAdminSistema(perfil) || ['admin', 'gerente', 'encarregado', 'operador'].includes(nivelAcesso(perfil, 'caderno'));
+}
+const CATEGORIAS_CADERNO = ['observacao', 'praga', 'doenca', 'nutricao', 'irrigacao', 'manutencao', 'lembrete'];
+const ROTULO_CATEGORIA = { observacao: '👁️ Observação', praga: '🐛 Praga', doenca: '🍂 Doença', nutricao: '🧪 Nutrição', irrigacao: '💦 Irrigação', manutencao: '🔧 Manutenção', lembrete: '📌 Lembrete' };
 function recebimentoFazendaOk(perfil, fazenda) {
   if (ehAdminSistema(perfil) || nivelAcesso(perfil, 'recebimentos') === 'admin') return true;
   const lista = perfil.fazendasModulo?.recebimentos;
@@ -239,6 +245,23 @@ export const DEFINICOES = [
     },
   },
   {
+    name: 'propor_nota_caderno',
+    description: 'Prepara uma anotação no Caderno de Campo (caderno.html): avulsa (sem talhão, opcionalmente de uma fazenda) ou ligada a um talhão. NÃO grava nada: o usuário recebe um resumo com botões Confirmar/Cancelar. Para ligar a um talhão, obtenha o id com listar_talhoes.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        texto: { type: 'string', description: 'O conteúdo da anotação, com as palavras do usuário (pode organizar e corrigir a transcrição, sem inventar nada).' },
+        titulo: { type: 'string', description: 'Título curto (opcional).' },
+        categoria: { type: 'string', enum: CATEGORIAS_CADERNO },
+        talhao_id: { type: 'string', description: 'Código do talhão (opcional). Sem talhão = anotação avulsa.' },
+        fazenda: { type: 'string', description: 'Só para anotação avulsa de uma fazenda (opcional). Com talhão, a fazenda vem do talhão.' },
+        data: { type: 'string', description: 'AAAA-MM-DD (padrão: hoje).' },
+        privada: { type: 'boolean', description: 'true = só o autor vê ("só para mim"). Padrão: false.' },
+      },
+      required: ['texto', 'categoria'],
+    },
+  },
+  {
     name: 'propor_recebimento',
     description: 'Prepara o lançamento de um recebimento (o que chegou na fazenda) na página Recebimentos: compra (com nota e fornecedor) ou transferência entre fazendas (com fazenda de origem e transportador). NÃO grava nada: o usuário recebe um resumo com botões Confirmar/Cancelar.',
     input_schema: {
@@ -318,6 +341,7 @@ export class Ferramentas {
       case 'propor_pulverizacao': return this.proporPulverizacao(entrada);
       case 'propor_pedido': return this.proporPedido(entrada);
       case 'propor_recebimento': return this.proporRecebimento(entrada);
+      case 'propor_nota_caderno': return this.proporNotaCaderno(entrada);
       default: throw new Error(`Ferramenta desconhecida: ${nome}`);
     }
   }
@@ -561,6 +585,42 @@ export class Ferramentas {
     return this._registrarProposta('recebimento', [{ colecao: 'recebimentos', dados }], resumo, `registrou recebimento em ${destino} (${itensFS.map(i => i.produto).join(', ')})`);
   }
 
+  async proporNotaCaderno({ texto, titulo = '', categoria, talhao_id, fazenda, data, privada = false }) {
+    if (!podeEscreverCaderno(this.perfil)) throw new Error('Seu usuário não pode escrever no Caderno de Campo.');
+    texto = String(texto || '').trim();
+    titulo = String(titulo || '').trim();
+    if (!texto && !titulo) throw new Error('A anotação está vazia.');
+    if (!CATEGORIAS_CADERNO.includes(categoria)) categoria = 'observacao';
+    if (!data) data = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new Error('Data inválida — use AAAA-MM-DD.');
+    let tal = null, faz = '';
+    if (talhao_id) {
+      [tal] = await this._resolverTalhoes([talhao_id], 'caderno');
+      faz = tal.fazenda || '';
+    } else if (String(fazenda || '').trim()) {
+      const fazendas = [...new Set((await this.talhoes()).map(t => t.fazenda).filter(Boolean))];
+      faz = fazendas.find(f => normalizar(f) === normalizar(fazenda));
+      if (!faz) throw new Error(`Fazenda não encontrada: ${fazenda}. Fazendas: ${fazendas.join(', ')}.`);
+      if (!fazendaPermitida(this.perfil, 'caderno', faz)) throw new Error(`Seu usuário não tem acesso ao caderno da fazenda ${faz}.`);
+    }
+    // Mesmos campos que salvarNota() de caderno.html grava (sem GPS e sem fotos).
+    const dados = {
+      data, titulo, texto, categoria,
+      talhaoId: tal ? codTalhao(tal) : '', talhaoNome: tal ? (tal.nome || codTalhao(tal)) : '', fazenda: faz,
+      privada: privada === true,
+      lat: null, lng: null, precisaoGps: null,
+      nFotos: 0, miniatura: null, miniaturaFotoId: null,
+    };
+    const onde = tal ? `${tal.nome} (${faz || '—'})` : (faz ? `${faz} · avulsa` : 'avulsa');
+    const resumo = [
+      '📓 Anotar no Caderno de Campo',
+      `${ROTULO_CATEGORIA[categoria]} · ${fmtData(data)} · ${onde}${dados.privada ? ' · 🔒 só para mim' : ''}`,
+      titulo ? `Título: ${titulo}` : '',
+      texto,
+    ].filter(Boolean).join('\n');
+    return this._registrarProposta('caderno', [{ colecao: 'cadernoNotas', dados }], resumo, `anotou no caderno de campo (${onde})`);
+  }
+
   _registrarProposta(tipo, docs, resumo, log) {
     this.propostas.push({ tipo, docs, resumo, log });
     return `Proposta preparada (ainda NÃO gravada). Logo após a sua resposta o usuário recebe este resumo com botões ✅ Confirmar / ❌ Cancelar:\n${resumo}\nNão repita o resumo; diga em uma frase que ele deve conferir e confirmar.`;
@@ -577,11 +637,17 @@ export async function executarProposta(fs, perfil, email, uid, prop) {
     const ok = recebimentoFazendaOk(perfil, d.fazenda) || (d.tipo === 'transferencia' && d.origemFazenda && recebimentoFazendaOk(perfil, d.origemFazenda));
     if (!ok) throw new Error(`Sem permissão de Recebimentos na fazenda ${d.fazenda}.`);
   }
+  if (prop.tipo === 'caderno') {
+    const d = prop.docs[0]?.dados || {};
+    if (!podeEscreverCaderno(perfil)) throw new Error('Sem permissão para escrever no Caderno de Campo.');
+    if (!fazendaPermitida(perfil, 'caderno', d.fazenda)) throw new Error(`Sem acesso ao caderno da fazenda ${d.fazenda}.`);
+  }
   const agora = new Date().toISOString();
   const ids = [];
   for (const d of prop.docs) {
-    if (!['pulverizacoes', 'pedidos', 'recebimentos'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
-    ids.push(await fs.add(d.colecao, { ...d.dados, criadoEm: agora, criadoPor: email, origem: 'telegram' }));
+    if (!['pulverizacoes', 'pedidos', 'recebimentos', 'cadernoNotas'].includes(d.colecao)) throw new Error(`Gravação não permitida em ${d.colecao}.`);
+    const extra = d.colecao === 'cadernoNotas' ? { autorNome: perfil.nome || email } : {};
+    ids.push(await fs.add(d.colecao, { ...d.dados, criadoEm: agora, criadoPor: email, ...extra, origem: 'telegram' }));
   }
   try {
     await fs.add('logs', { tipo: prop.tipo, mensagem: `${email} ${prop.log} (via Telegram)`, criadoEm: agora, uid });
