@@ -13,7 +13,7 @@ Telegram ──webhook──▶ Cloudflare Worker (assistente/src) ──▶ Cla
   - Antes de responder, o bot mostra o que entendeu (🎤 «…»), para você conferir na hora se ele errou um nome ou número.
   - Áudios de até 5 minutos.
 - **Leitura:** qualquer módulo do app, respeitando as permissões do usuário em `admin.html` (o nível por módulo e as fazendas liberadas). `usuarios`, `logs` e fotos ficam de fora.
-- **Gravação:** só pulverização (`pulverizacoes`, um registro por talhão, como no app), pedido (`pedidos`, status `solicitado`) e recebimento (`recebimentos`, compra ou transferência, como a página Recebimentos). Os registros saem com `origem: 'telegram'` e `criadoPor` igual ao e-mail do usuário. A permissão é a mesma do app: admin de Pulverização para agendar, admin de Pedidos para criar pedido, acesso a Recebimentos na fazenda (ou na origem, se for transferência) para lançar recebimento. Ela é conferida de novo no momento da confirmação. A proposta vale por 2 horas.
+- **Gravação:** só pulverização (`pulverizacoes`, um registro por talhão, como no app), pedido (`pedidos`, status `solicitado`) recebimento (`recebimentos`, compra ou transferência, como a página Recebimentos) e anotação no Caderno de Campo (`cadernoNotas` + `cadernoFotos`, com as fotos e a localização mandadas no chat). Os registros saem com `origem: 'telegram'` e `criadoPor` igual ao e-mail do usuário. A permissão é a mesma do app: admin de Pulverização para agendar, admin de Pedidos para criar pedido, acesso a Recebimentos na fazenda (ou na origem, se for transferência) para lançar recebimento. Ela é conferida de novo no momento da confirmação. A proposta vale por 2 horas.
 - **Coleções do próprio assistente:**
   - `assistenteConversas/{chatId}`: as últimas mensagens da conversa (só texto).
   - `assistentePropostas/{id}`: cada proposta e o que aconteceu com ela (pendente, gravada, cancelada, expirada ou erro).
@@ -93,7 +93,7 @@ A partir daí, cada pessoa vê pelo bot o mesmo que vê no app.
 ## Desenvolvimento
 
 - `src/index.js`: webhook do Telegram, a conversa com o Claude e os botões Confirmar/Cancelar.
-- `src/ferramentas.js`: as ferramentas que o Claude pode chamar (`listar_talhoes`, `consultar`, `ler_documento`, `propor_pulverizacao`, `propor_pedido`, `propor_recebimento`) e as regras de permissão (cópia de `nivelAcesso` e `fazendaPermitida` do app).
+- `src/ferramentas.js`: as ferramentas que o Claude pode chamar (`listar_talhoes`, `consultar`, `ler_documento`, `propor_pulverizacao`, `propor_pedido`, `propor_recebimento`, `propor_nota_caderno`) e as regras de permissão (cópia de `nivelAcesso` e `fazendaPermitida` do app).
 - `src/prompt.js`: instruções e o mapa das coleções.
   - O texto precisa ficar fixo para o cache de prompt funcionar; data e hora vão na mensagem.
   - Quando um módulo novo do app criar uma coleção, registre-a em `COLECOES` (`ferramentas.js`) e descreva os campos aqui.
