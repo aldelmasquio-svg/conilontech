@@ -88,6 +88,17 @@ await caso('ESP32 cria alerta', assertSucceeds(addDoc(collection(db('esp32'), 'v
 await caso('ESP32 lê config de vazão', assertSucceeds(getDoc(doc(db('esp32'), 'vazaoConfig', 'geral'))));
 await caso('vazaoConfig: operador sem irrigação não grava', assertFails(setDoc(doc(db('operador'), 'vazaoConfig', 'geral'), { x: 1 })));
 await caso('climaSegredos: nem o dono lê', assertFails(getDoc(doc(db('dono'), 'climaSegredos', 'smartlife'))));
+// Notificações
+await caso('pushTokens: usuário ativo registra o próprio aparelho', assertSucceeds(setDoc(doc(db('rafael'), 'pushTokens', 'tk1'), { uid: 'rafael', token: 'abc' })));
+await caso('pushTokens: não registra aparelho em nome de outro', assertFails(setDoc(doc(db('rafael'), 'pushTokens', 'tk2'), { uid: 'lemoa', token: 'abc' })));
+await caso('pushTokens: inativo não registra', assertFails(setDoc(doc(db('inativo'), 'pushTokens', 'tk3'), { uid: 'inativo', token: 'abc' })));
+await caso('pushTokens: outro usuário não lê', assertFails(getDoc(doc(db('lemoa'), 'pushTokens', 'tk1'))));
+await caso('pushTokens: dono lê todos', assertSucceeds(getDocs(collection(db('dono'), 'pushTokens'))));
+await caso('pushTokens: outro login no aparelho assume o doc', assertSucceeds(setDoc(doc(db('lemoa'), 'pushTokens', 'tk1'), { uid: 'lemoa', token: 'abc' })));
+await caso('notificacoesTeste: pede teste para si', assertSucceeds(addDoc(collection(db('lemoa'), 'notificacoesTeste'), { uid: 'lemoa' })));
+await caso('notificacoesTeste: não pede para outro', assertFails(addDoc(collection(db('lemoa'), 'notificacoesTeste'), { uid: 'rafael' })));
+await caso('notificacoesEstado: nem o dono grava', assertFails(setDoc(doc(db('dono'), 'notificacoesEstado', 'diario'), { x: 1 })));
+await caso('usuários: ninguém liga as próprias notificações', assertFails(updateDoc(doc(db('rafael'), 'usuarios', 'rafael'), { notificacoes: { chuva: true } })));
 await caso('assistente: app não lê conversas', assertFails(getDoc(doc(db('dono'), 'assistenteConversas', 'c'))));
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);

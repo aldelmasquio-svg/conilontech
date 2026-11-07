@@ -10,6 +10,7 @@ import { gerarPedidoPdf } from './pdf.js';
 import { SISTEMA } from './prompt.js';
 import { transcrever } from './audio.js';
 import { guardarFoto, fotosPendentes, talhaoDoPonto, localValida } from './anexos.js';
+import { verificarNotificacoes } from './notificacoes.js';
 
 const MAX_HISTORICO = 16;      // mensagens (texto) guardadas por conversa
 const MAX_ITERACOES = 10;      // chamadas à API por mensagem do usuário
@@ -18,6 +19,14 @@ const FUSO = 'America/Sao_Paulo';
 const MAX_AUDIO_S = 300;        // mensagens de voz mais longas que isso são recusadas
 
 export default {
+  // Cron (wrangler.toml): notificações push dos eventos da fazenda (src/notificacoes.js).
+  async scheduled(evento, env, ctx) {
+    try {
+      const r = await verificarNotificacoes(new Firestore(env));
+      if (r.eventos) console.log('Notificações', JSON.stringify(r));
+    } catch (e) { console.log('Erro nas notificações', e?.stack || e); }
+  },
+
   async fetch(req, env) {
     const url = new URL(req.url);
 

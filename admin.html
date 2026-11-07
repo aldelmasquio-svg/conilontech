@@ -10,7 +10,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getAuth, onAuthStateChanged, signOut, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, deleteDoc, updateDoc, collection, getDocs, onSnapshot, addDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { adminDoSistema } from './acesso.js';
+import { adminDoSistema, podeAbrir } from './acesso.js';
 import { gerarMenu } from './menu.js';
 
 const firebaseConfig = {
@@ -97,8 +97,42 @@ let usuarios = [];
 async function carregarUsuarios() {
   const snap = await getDocs(collection(db,'usuarios'));
   usuarios = snap.docs.map(d => ({uid:d.id,...d.data()}));
+  // Aparelhos com notificação ativada (só para mostrar a contagem por usuário)
+  try { aparelhosPorUid = {}; (await getDocs(collection(db,'pushTokens'))).docs.forEach(d => { const id = d.data().uid; aparelhosPorUid[id] = (aparelhosPorUid[id]||0) + 1; }); } catch(e) {}
   renderizarUsuarios();
 }
+
+// ─── NOTIFICAÇÕES (quem recebe cada aviso; o envio é do cron do Worker — assistente/src/notificacoes.js) ───
+// Mesmo mapa tipo→módulo do Worker (MODULO_DO_TIPO): o aviso respeita o acesso e as fazendas desse módulo.
+const TIPOS_NOTIF = [
+  {id:'adubacao',     ico:'🧪', label:'Adubação atrasada',        mod:'adubacao'},
+  {id:'pulverizacao', ico:'💧', label:'Pulverização atrasada',    mod:'pulverizacao'},
+  {id:'irrigacao',    ico:'💦', label:'Irrigação passou da hora', mod:'irrigacao'},
+  {id:'chuva',        ico:'🌧️', label:'Chuva (pluviômetro)',      mod:'irrigacao'},
+];
+let aparelhosPorUid = {};
+function notifBarHtml(u) {
+  const n = u.notificacoes || {};
+  const chips = TIPOS_NOTIF.map(t => {
+    const on = !!n[t.id], semMod = on && !podeAbrir(u, t.mod);
+    return `<button class="notif-chip${on?' on':''}" onclick="toggleNotif('${u.uid}','${t.id}')" title="${semMod?'Sem acesso ao módulo — não vai receber':''}">${t.ico} ${t.label}${semMod?' ⚠️':''}</button>`;
+  }).join('');
+  const ap = aparelhosPorUid[u.uid] || 0;
+  const algum = TIPOS_NOTIF.some(t => n[t.id]);
+  const estado = !algum ? '' : ap ? `📱 ativado em ${ap} aparelho${ap>1?'s':''}` : '📱 ainda não ativou no celular (menu → 🔔 Notificações)';
+  return `<div class="usuario-notif"><div class="uf-resumo" style="margin-bottom:6px;">🔔 Notificações <span style="opacity:.8;">${estado}</span></div><div class="notif-chips">${chips}</div></div>`;
+}
+window.toggleNotif = async function(uid, tipo) {
+  if (!adminDoSistema(perfilAtual)) return;
+  const u = usuarios.find(x=>x.uid===uid); if(!u) return;
+  const notificacoes = {...(u.notificacoes||{}), [tipo]: !(u.notificacoes||{})[tipo]};
+  try {
+    await updateDoc(doc(db,'usuarios',uid), {notificacoes});
+    u.notificacoes = notificacoes;
+    renderizarUsuarios();
+    registrarLog('notificacao_alterada', `${usuarioAtual.email} ${notificacoes[tipo]?'ligou':'desligou'} aviso ${tipo} de ${u.email}`);
+  } catch(e) { toast('❌ Erro: '+e.message); }
+};
 
 function renderizarUsuarios() {
   const lista = document.getElementById('listaUsuarios');
@@ -184,6 +218,7 @@ function renderizarUsuarios() {
         <span class="uf-resumo">🏡 ${resumoFaz}</span>
         <button onclick="abrirFazendasUsuario('${u.uid}')" class="btn-sm-ico" title="Definir fazendas">🏡</button>
       </div>
+      ${notifBarHtml(u)}
     </div>`;
   }).join('');
 }
@@ -667,6 +702,10 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);height:100
 .usuario-modulos{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--cl);padding-top:10px;}
 .usuario-fazendas-bar{display:flex;align-items:center;gap:8px;border-top:1px solid var(--cl);padding-top:10px;margin-top:10px;}
 .uf-resumo{flex:1;font-size:.78rem;color:var(--c);}
+.usuario-notif{border-top:1px solid var(--cl);padding-top:10px;margin-top:10px;}
+.notif-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.notif-chip{border:1px solid var(--cb);background:transparent;color:var(--c);border-radius:99px;padding:5px 10px;font-size:.74rem;font-family:inherit;cursor:pointer;}
+.notif-chip.on{background:var(--vb);border-color:var(--v);color:var(--ve);font-weight:600;}
 /* MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2500;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .25s;}
 .modal-overlay.aberto{opacity:1;pointer-events:auto;}

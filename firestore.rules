@@ -156,11 +156,32 @@ service cloud.firestore {
     // Token do login Smart Life do coletor do clima (clima/README.md): só o Admin SDK
     match /climaSegredos/{doc=**} { allow read, write: if false; }
 
+    // Notificações push (notificacoes.js grava; o cron do Worker lê/envia com Admin SDK).
+    // pushTokens/{id}: um aparelho. Cada um só vê/grava/apaga o seu; o dono lê todos (Admin
+    // mostra quantos aparelhos cada usuário ativou). Outro login no mesmo aparelho assume o doc.
+    match /pushTokens/{id} {
+      allow read:   if dono() || (logado() && resource.data.uid == request.auth.uid);
+      allow create, update: if ativo() && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.token is string;
+      allow delete: if dono() || (logado() && resource.data.uid == request.auth.uid);
+    }
+    // Pedido de notificação de teste: só para si mesmo; o Worker consome e apaga.
+    match /notificacoesTeste/{id} {
+      allow create: if ativo() && request.resource.data.uid == request.auth.uid;
+      allow read, update, delete: if false;
+    }
+    // Estado do cron (último dia checado, último envio): só o Worker grava.
+    match /notificacoesEstado/{id} {
+      allow read:  if dono();
+      allow write: if false;
+    }
+
     // Demais coleções operacionais (inclui subcoleções): ler = ativo; gravar = módulo dono.
     // As exclusões evitam reabrir as coleções acima (regras do Firestore são OR).
     function comRegraPropria() {
       return ['usuarios', 'config', 'catalogo_adubos', 'logs', 'clima', 'vazaoMedidores', 'vazaoAlertas',
-              'vazaoConfig', 'assistenteConversas', 'assistentePropostas', 'climaSegredos'];
+              'vazaoConfig', 'assistenteConversas', 'assistentePropostas', 'climaSegredos',
+              'pushTokens', 'notificacoesTeste', 'notificacoesEstado'];
     }
     match /{col}/{doc=**} {
       allow read:  if ativo() && !(col in comRegraPropria());
