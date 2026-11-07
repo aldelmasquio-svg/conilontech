@@ -105,6 +105,8 @@ function iniciarListeners() {
   });
   onSnapshot(collection(db,'planosAdubacao'), snap => {
     planosAdubacao = snap.docs.map(d => ({_docId:d.id,...d.data()}));
+    atualizarSugestoesProdutos();
+    if(document.getElementById('ovPadronizar')?.classList.contains('open')) renderPadronizar();
     renderizarTela();
   });
   onSnapshot(collection(db,'planejamentos_safra'), snap => {
@@ -143,6 +145,63 @@ window.irTalhao = (id) => {
   talhaoSel = t; telaAtual='talhao'; renderizarTela();
 };
 window.irSafra = () => { telaAtual='safra'; renderizarTela(); };
+
+// ─── Sugestões e padronização de nomes de produto ───
+// Evita duplicados por nome divergente: o autocomplete passa a sugerir os nomes já usados,
+// e a ferramenta Padronizar (admin) renomeia/une variantes em todos os planos.
+const _SEEDS_PROD = ['Ureia','MAP','KCl','Superfosfato Simples','Sulfato de Amônio','Nitrato de Cálcio','Boro','Zinco','Cobre'];
+function normProd(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
+function nomesProdutosUsados(){
+  const set=new Set();
+  planosAdubacao.forEach(pl=>(pl.aplicacoes||[]).forEach(a=>(a.produtos||[]).forEach(p=>{ const n=(p.produto||'').trim(); if(n) set.add(n); })));
+  return set;
+}
+function atualizarSugestoesProdutos(){
+  const dl=document.getElementById('prodSug'); if(!dl) return;
+  const set=new Set(_SEEDS_PROD); nomesProdutosUsados().forEach(n=>set.add(n));
+  dl.innerHTML=[...set].sort((a,b)=>a.localeCompare(b,'pt')).map(n=>`<option value="${sanitizar(n)}">`).join('');
+}
+window.abrirPadronizar = function(){
+  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
+  renderPadronizar();
+  document.getElementById('ovPadronizar').classList.add('open');
+};
+window.fecharPadronizar = function(){ document.getElementById('ovPadronizar').classList.remove('open'); };
+function renderPadronizar(){
+  const cont=document.getElementById('padLista'); if(!cont) return;
+  const mapa={};   // nome exato -> Set de planos (_docId)
+  planosAdubacao.forEach(pl=>(pl.aplicacoes||[]).forEach(a=>(a.produtos||[]).forEach(p=>{
+    const n=(p.produto||'').trim(); if(!n) return; (mapa[n]=mapa[n]||new Set()).add(pl._docId);
+  })));
+  const nomes=Object.keys(mapa).sort((a,b)=> normProd(a).localeCompare(normProd(b),'pt') || a.localeCompare(b,'pt'));
+  if(!nomes.length){ cont.innerHTML='<div class="vazio-sm">Nenhum produto lançado ainda.</div>'; return; }
+  cont.innerHTML = nomes.map(n=>`
+    <div class="pad-row" data-orig="${sanitizar(n)}">
+      <input type="text" value="${sanitizar(n)}" list="prodSug" oninput="padDesarmar(this)">
+      <span class="pad-cont" title="em quantos planos aparece">${mapa[n].size}×</span>
+      <button class="pad-aplicar" onclick="aplicarRenomear(this)">Renomear</button>
+    </div>`).join('');
+}
+window.padDesarmar = function(inp){ const b=inp.closest('.pad-row').querySelector('.pad-aplicar'); b.textContent='Renomear'; b.classList.remove('armado'); };
+window.aplicarRenomear = async function(btn){
+  if(!isAdmin()){ toast('⛔ Sem permissão.'); return; }
+  const row=btn.closest('.pad-row'); const orig=row.dataset.orig;
+  const novo=row.querySelector('input').value.trim();
+  if(!novo){ toast('⚠️ Nome vazio.'); return; }
+  if(novo===orig){ toast('Nada a alterar.'); return; }
+  const alvos=planosAdubacao.filter(pl=>(pl.aplicacoes||[]).some(a=>(a.produtos||[]).some(p=>(p.produto||'').trim()===orig)));
+  // Confirmação em dois toques (o confirm() nativo não aparece em vários WebViews de celular)
+  if(!btn.classList.contains('armado')){ btn.classList.add('armado'); btn.textContent=`Confirmar · ${alvos.length} plano(s)`; return; }
+  btn.disabled=true; btn.textContent='Salvando...';
+  try{
+    for(const pl of alvos){
+      const aplic=(pl.aplicacoes||[]).map(a=>({...a, produtos:(a.produtos||[]).map(p=> (p.produto||'').trim()===orig ? {...p, produto:novo} : p)}));
+      await updateDoc(doc(db,'planosAdubacao',pl._docId), {aplicacoes:aplic});
+    }
+    toast(`✅ "${orig}" → "${novo}" em ${alvos.length} plano(s).`);
+    // o snapshot re-renderiza a lista; nada mais a fazer
+  }catch(e){ toast('❌ Erro: '+(e&&e.message||e)); btn.disabled=false; btn.classList.remove('armado'); btn.textContent='Renomear'; }
+};
 window.voltarParaTalhao = () => { telaAtual='talhao'; mesSel=null; renderizarTela(); };
 window.voltarParaMes = () => { telaAtual='mes'; renderizarTela(); };
 window.irMes = (mesAno) => {
@@ -182,6 +241,7 @@ function renderizarLista() {
   let headerHtml = `<div class="lista-header">
     <div class="lista-title">Plano de Adubação</div>
     <div style="display:flex;gap:7px;flex-wrap:wrap;">
+      ${adm?`<button onclick="abrirPadronizar()" class="btn-safra">🏷️ Padronizar</button>`:''}
       ${adm?`<button onclick="abrirSetoresConfig()" class="btn-safra">📐 Setores</button>`:''}
       ${adm?`<button onclick="irSafra()" class="btn-safra">⚙️ Safra</button>`:''}
     </div>
@@ -1071,7 +1131,7 @@ window.abrirEdicaoAp=function(pid,aid){
 function renderizarEProds(){
   document.getElementById('eProds').innerHTML=_eProds.map((p,i)=>`
     <div class="ep-row">
-      <input class="ep-nome" value="${sanitizar(p.produto)}" onchange="setEProdNome(${i},this.value)" placeholder="Produto">
+      <input class="ep-nome" value="${sanitizar(p.produto)}" list="prodSug" onchange="setEProdNome(${i},this.value)" placeholder="Produto">
       <input class="ep-dose" type="number" value="${sanitizar(p.dose)}" step="0.01" onchange="setEProdDose(${i},this.value)">
       <select class="ep-und" onchange="setEProdUnd(${i},this.value)">
         ${['kg','g','L','mL','t','sc'].map(u=>`<option ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
@@ -1479,6 +1539,13 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 .overlay.open{opacity:1;pointer-events:all;}
 .modal-sheet{background:white;border-radius:16px 16px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding-bottom:env(safe-area-inset-bottom,20px);transform:translateY(100%);transition:transform .3s cubic-bezier(.34,1.1,.64,1);}
 .overlay.open .modal-sheet{transform:translateY(0);}
+.pad-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--cl);}
+.pad-row input{flex:1;min-width:0;border:1.5px solid var(--cb);border-radius:7px;padding:8px 10px;font-size:.88rem;font-family:var(--font-body);outline:none;}
+.pad-row input:focus{border-color:var(--v);}
+.pad-cont{font-family:var(--font-mono);font-size:.72rem;color:var(--c);flex-shrink:0;}
+.pad-aplicar{flex-shrink:0;background:var(--vb);border:1.5px solid var(--v);color:var(--ve);border-radius:7px;padding:8px 10px;font-family:var(--font-display);font-weight:700;font-size:.74rem;cursor:pointer;white-space:nowrap;}
+.pad-aplicar.armado{background:#fef3c7;border-color:#f59e0b;color:#92400e;}
+.pad-aplicar:disabled{opacity:.6;}
 .modal-handle{width:40px;height:4px;background:var(--cb);border-radius:2px;margin:12px auto 0;}
 .modal-tit{padding:12px 20px;border-bottom:1px solid var(--cb);font-family:var(--font-display);font-weight:800;font-size:1.2rem;}
 .modal-body{padding:14px 20px;}
@@ -1743,6 +1810,21 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
     <div class="modal-footer">
       <button class="btn-cancel" onclick="fecharSetoresConfig()">Cancelar</button>
       <button class="btn-save" onclick="salvarSetoresConfig()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- PADRONIZAR NOMES DE PRODUTO -->
+<div class="overlay" id="ovPadronizar" onclick="if(event.target===this)fecharPadronizar()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tit">🏷️ Padronizar produtos</div>
+    <div class="modal-body">
+      <div style="font-size:.74rem;color:var(--c);line-height:1.5;margin-bottom:12px;">Une insumos duplicados por nome divergente. Edite o nome e toque em <b>Renomear</b> — para <b>unir</b> dois, escreva exatamente o mesmo nome (use a sugestão). A troca vale em <b>todos os planos</b> e no relatório da Gestão.</div>
+      <div id="padLista"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="fecharPadronizar()">Fechar</button>
     </div>
   </div>
 </div>
