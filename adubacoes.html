@@ -12,6 +12,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { nivelDoPerfil, semAcessoAoModulo } from './acesso.js';
 import { gerarMenu } from './menu.js';
+import { exportarPdf } from './exportar.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",
@@ -1273,7 +1274,7 @@ window.imprimirMes = function() {
     }`;
     document.head.appendChild(styleEl);
   }
-  setTimeout(()=>window.print(), 120);
+  exportarPdf(area, { nome: ('Adubacao-' + talhaoSel.id + '-' + mesSel.mesAno).replace(/[^\w\-]+/g,'_') + '.pdf', titulo: 'Programa de adubação', avisar: toast });
 };
 
 window.fazerLogout=async()=>{await signOut(auth);window.location.href='login.html';};
