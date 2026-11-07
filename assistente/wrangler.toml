@@ -17,6 +17,10 @@ ESFORCO = "medium"
 #   ANTHROPIC_API_KEY         chave da API do Claude
 #   FIREBASE_SERVICE_ACCOUNT  JSON da conta de serviço (o mesmo do GitHub Actions do clima)
 
+# Notificações push (src/notificacoes.js): checa os eventos a cada 5 minutos.
+[triggers]
+crons = ["*/5 * * * *"]
+
 # Workers AI (Whisper) para transcrever as mensagens de voz.
 [ai]
 binding = "AI"

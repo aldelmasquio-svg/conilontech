@@ -78,6 +78,23 @@ O `FIREBASE_SERVICE_ACCOUNT` **já existe** (é o mesmo que o coletor do clima u
 
 A partir daí, cada pessoa vê pelo bot o mesmo que vê no app.
 
+## Notificações push (cron do mesmo Worker)
+Além do bot, o Worker roda a cada 5 minutos (`[triggers] crons` no `wrangler.toml`) o
+`src/notificacoes.js`, que manda notificações no celular **só quando o evento acontece**:
+- 💦 turno de irrigação aberto que passou 10 min da hora prevista de terminar (marca o turno com `avisoAtrasoEm`);
+- 🌧️ chuva lançada no pluviômetro (mm > 0), com o acumulado do mês e do ano (marca com `avisoEnviadoEm`);
+- 🧪 adubação e 💧 pulverização que **ficaram atrasadas** (data planejada < hoje), checadas 1x por dia a partir das 7h.
+
+Quem recebe: o dono marca em **Admin → usuário → 🔔 Notificações**; o envio respeita o acesso ao
+módulo e as fazendas do usuário. Cada pessoa ativa no próprio celular pelo menu **🔔 Notificações**
+(no iPhone, só com o site instalado na Tela de Início, iOS 16.4+), que grava o aparelho em `pushTokens`.
+O envio é pelo **FCM** (Firebase Cloud Messaging) com a mesma `FIREBASE_SERVICE_ACCOUNT` — nada a
+configurar além dela. Para conferir: o botão **Enviar notificação de teste** no painel do menu, e o
+doc `notificacoesEstado/ultimo` no console do Firebase (último envio e erros). Se der erro de
+permissão do FCM, a conta de serviço precisa do papel *Firebase Cloud Messaging API Admin* (a conta
+padrão `firebase-adminsdk` já tem) e a API *Firebase Cloud Messaging API (V1)* ativada no Google Cloud.
+Testes: `node testes/notificacoes.test.mjs`.
+
 ## Custos
 
 - **Cloudflare:** o plano gratuito cobre o volume de mensagens.

@@ -6,7 +6,7 @@
 // - Firestore/Auth e o resto não passam por aqui: os dados offline já são do Firebase
 //   (enableMultiTabIndexedDbPersistence).
 // Ao mudar a lista de pré-cache ou a estratégia, suba a VERSAO para descartar o cache antigo.
-const VERSAO = 'v1';
+const VERSAO = 'v2';
 const CACHE_APP = 'conilon-app-' + VERSAO;
 const CACHE_CDN = 'conilon-cdn-v1';
 const TIMEOUT_MS = 4000;
@@ -52,3 +52,31 @@ async function cachePrimeiro(req) {
   if (r.ok || r.type === 'opaque') cache.put(req, r.clone());
   return r;
 }
+
+// ── Notificações push (FCM; quem envia é o cron do Worker em assistente/src/notificacoes.js) ──
+// A mensagem vem só com `data` {titulo, corpo, url, tag}; aqui é que vira notificação.
+self.addEventListener('push', e => {
+  let j = {};
+  try { j = e.data ? e.data.json() : {}; } catch (err) { j = { data: { corpo: e.data && e.data.text() } }; }
+  const d = j.data || j;
+  const n = j.notification || {};
+  const titulo = d.titulo || n.title || 'Conilon Tech';
+  e.waitUntil(self.registration.showNotification(titulo, {
+    body: d.corpo || n.body || '',
+    icon: 'icones/icone-192.png',
+    badge: 'icones/icone-192.png',
+    tag: d.tag || undefined,
+    renotify: !!d.tag,
+    data: { url: d.url || 'index.html' },
+  }));
+});
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const alvo = new URL(e.notification.data?.url || 'index.html', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(lista => {
+    const aberta = lista.find(c => c.url.startsWith(self.registration.scope));
+    if (aberta) return aberta.focus().then(c => (c || aberta).navigate(alvo)).catch(() => self.clients.openWindow(alvo));
+    return self.clients.openWindow(alvo);
+  }));
+});

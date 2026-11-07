@@ -23,6 +23,17 @@ por cima** (é preciso desinstalar a antiga). Para fixar a chave, crie dois *sec
 
 Guarde o `.jks` e a senha em lugar seguro: sem eles não dá para publicar atualizações do mesmo app.
 
+### Notificações push no app
+O WebView do app não recebe Web Push; no app as notificações vêm do plugin nativo
+`@capacitor/push-notifications`, que **só entra no APK quando existe o secret `GOOGLE_SERVICES_JSON`**
+(sem o arquivo, o plugin faria o app fechar). Para ligar (uma vez):
+1. Console do Firebase (projeto `talhoes-df836`) → ⚙️ Configurações do projeto → **Adicionar app** → Android,
+   nome do pacote `com.conilontech.app` → baixar o `google-services.json`.
+2. GitHub → Settings → Secrets and variables → Actions → novo secret `GOOGLE_SERVICES_JSON` com o
+   **conteúdo** do arquivo.
+3. Actions → "App Android (APK)" → Run workflow (na `main`), e reinstalar o APK nos celulares.
+Depois, no app: menu → 🔔 Notificações → Ativar. Quem envia é o cron do Worker (`assistente/README.md`).
+
 ### Google Play (quando quiser)
 Conta de desenvolvedor (US$ 25 uma vez) e gerar `bundleRelease` (`.aab`) em vez de `assembleRelease`.
 

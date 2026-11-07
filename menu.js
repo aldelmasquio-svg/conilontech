@@ -45,7 +45,64 @@ export function gerarMenu(perfil) {
     return html ? `<div class="menu-secao">${s.label}</div>${html}` : '';
   }).join('');
   itemInstalar();
+  itemNotificacoes(perfil);
 }
+
+// "🔔 Notificações": só para quem o dono marcou algum aviso em Admin (usuarios.notificacoes).
+// O módulo (notificacoes.js) é carregado só nesse caso; ele também renova o token do aparelho.
+let notif = null, perfilNotif = null;
+async function itemNotificacoes(perfil) {
+  const tipos = Object.keys(perfil?.notificacoes || {}).filter(k => perfil.notificacoes[k]);
+  if (!tipos.length) return;
+  try { notif = notif || await import('./notificacoes.js'); } catch (e) { return; }
+  if (!notif.suporte()) return;
+  perfilNotif = perfil;
+  notif.renovar();
+  const cont = document.getElementById('menuModulos');
+  if (!cont || document.getElementById('menuNotif')) return;
+  cont.insertAdjacentHTML('beforeend',
+    `<a class="menu-item" id="menuNotif" data-ico="notificacoes" href="#" onclick="abrirNotificacoes();return false;"><span class="menu-ico">🔔</span><span>Notificações</span></a>`);
+}
+window.abrirNotificacoes = function() {
+  window.fecharMenu?.();
+  document.getElementById('painelNotif')?.remove();
+  const tipos = Object.keys(perfilNotif?.notificacoes || {}).filter(k => perfilNotif.notificacoes[k] && notif.TIPOS[k]);
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="painelNotif" onclick="if(event.target===this)this.remove()" style="position:fixed;inset:0;background:rgba(10,20,14,.5);z-index:5000;display:flex;align-items:flex-end;justify-content:center;">
+      <div style="background:var(--surface,#fff);color:var(--t);width:100%;max-width:480px;border-radius:18px 18px 0 0;padding:20px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.2);">
+        <div style="font-family:var(--font-display);font-weight:700;font-size:1.05rem;">🔔 Notificações</div>
+        <div style="font-size:.8rem;color:var(--c);margin:4px 0 10px;">Avisos que você recebe (escolhidos pelo administrador), só das suas fazendas:</div>
+        ${tipos.map(k => `<div style="font-size:.88rem;padding:5px 0;">${notif.TIPOS[k].ico} ${notif.TIPOS[k].label}</div>`).join('')}
+        <div id="notifEstado" style="margin-top:14px;"></div>
+        <button onclick="document.getElementById('painelNotif').remove()" style="margin-top:10px;width:100%;border:none;border-radius:10px;background:var(--surface-2,#f3f4f6);color:var(--t);font-size:.9rem;padding:11px;">Fechar</button>
+      </div>
+    </div>`);
+  estadoNotif();
+};
+const btnNotif = (txt, fn) => `<button onclick="${fn}" style="width:100%;border:none;border-radius:10px;background:var(--v);color:#fff;font-weight:600;font-size:.92rem;padding:12px;">${txt}</button>`;
+function estadoNotif(msg) {
+  const el = document.getElementById('notifEstado'); if (!el) return;
+  const aviso = msg ? `<div style="font-size:.82rem;margin-bottom:10px;line-height:1.45;">${msg}</div>` : '';
+  const s = notif.suporte();
+  if (s === 'instalar-ios') {
+    el.innerHTML = `<div style="font-size:.85rem;line-height:1.45;margin-bottom:10px;">No iPhone, as notificações só funcionam com o Conilon Tech <b>instalado na Tela de Início</b> (iOS 16.4 ou mais novo). Instale e abra pelo ícone, depois volte aqui.</div>${btnNotif('Como instalar', 'document.getElementById(\'painelNotif\').remove();instalarApp()')}`;
+  } else if (notif.negadoNeste()) {
+    el.innerHTML = `<div style="font-size:.85rem;line-height:1.45;">⛔ As notificações estão <b>bloqueadas</b> neste aparelho. Libere nas configurações (${ehIOS ? 'Ajustes → Notificações → Conilon Tech' : 'cadeado ao lado do endereço → Notificações → Permitir'}) e abra este painel de novo.</div>`;
+  } else if (notif.ativadoNeste()) {
+    el.innerHTML = aviso + `<div style="font-size:.88rem;font-weight:600;color:var(--v);margin-bottom:10px;">✅ Ativadas neste aparelho</div>${btnNotif('Enviar notificação de teste', 'testarNotificacao()')}`;
+  } else {
+    el.innerHTML = aviso + btnNotif('Ativar neste aparelho', 'ativarNotificacao()');
+  }
+}
+window.ativarNotificacao = async function() {
+  const el = document.getElementById('notifEstado'); if (el) el.innerHTML = '<div style="font-size:.85rem;">⏳ Ativando...</div>';
+  try { await notif.ativar(); estadoNotif('Pronto! Os avisos vão chegar mesmo com o app fechado.'); }
+  catch (e) { estadoNotif(e.message === 'permissao' ? '⚠️ Sem permissão: toque em <b>Permitir</b> quando o aparelho perguntar.' : '❌ Não deu para ativar: ' + (e.message || e)); }
+};
+window.testarNotificacao = async function() {
+  try { await notif.pedirTeste(); estadoNotif('📨 Teste pedido. A notificação chega em até <b>5 minutos</b>.'); }
+  catch (e) { estadoNotif('❌ Erro: ' + (e.message || e)); }
+};
 
 // "Instalar aplicativo" no fim do menu, fora do app já instalado:
 // - Chrome/Android avisa (beforeinstallprompt) quando dá para instalar; o item dispara o pedido.

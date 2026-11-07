@@ -10,13 +10,14 @@ function b64url(bytes) {
   return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function tokenAcesso(sa) {
+// Um token só para Firestore e FCM (envio das notificações push).
+export async function tokenAcesso(sa) {
   const agora = Math.floor(Date.now() / 1000);
   if (_token && _token.expira - 60 > agora) return _token.valor;
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claims = b64url(JSON.stringify({
     iss: sa.client_email,
-    scope: 'https://www.googleapis.com/auth/datastore',
+    scope: 'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/firebase.messaging',
     aud: 'https://oauth2.googleapis.com/token',
     iat: agora,
     exp: agora + 3600,
