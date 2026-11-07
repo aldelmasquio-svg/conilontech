@@ -311,7 +311,7 @@ function renderAvaliacoesList(id){
         <div class="cmp-side"><div class="cmp-lbl antes">ANTES</div><img src="${fa.dataURI}" onclick="abrirLightbox('${fa._docId}')"></div>
         <div class="cmp-side"><div class="cmp-lbl depois">DEPOIS</div><img src="${fd.dataURI}" onclick="abrirLightbox('${fd._docId}')"></div>
       </div></div>`:''}
-      ${outras.length?`<div class="aval-fotos">${outras.map(f=>`<img class="foto-thumb" src="${f.dataURI}" onclick="abrirLightbox('${f._docId}')">`).join('')}</div>`:''}
+      ${outras.length?`<div class="aval-fotos">${outras.map(f=>`<img class="foto-thumb" src="${f.dataURI}" loading="lazy" decoding="async" onclick="abrirLightbox('${f._docId}')">`).join('')}</div>`:''}
       <div class="aval-por">${sanitizar(r.criadoPor||'')}</div>
     </div>`;
   }).join('');
@@ -340,7 +340,7 @@ function _cmpStrip(fs){
   return fs.map(f=>{
     const isA=f._docId===compA, isB=f._docId===compB;
     return `<div class="cmp-item ${isA?'is-a':''} ${isB?'is-b':''}">
-      <img src="${f.dataURI}" onclick="abrirLightbox('${f._docId}')">
+      <img src="${f.dataURI}" loading="lazy" decoding="async" onclick="abrirLightbox('${f._docId}')">
       <div class="cmp-item-data">${formatarData(f.data)}</div>
       <div class="cmp-item-btns">
         <button class="cmp-ab ${isA?'on-a':''}" onclick="setCmpFoto('a','${f._docId}')">Antes</button>

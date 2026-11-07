@@ -57,7 +57,7 @@ Several collections carry data shapes that evolved over time; new code reads old
 
 
 ### Gestão (`gestao.html`) vs. per-module pages
-`gestao.html` is a read-only, cross-module reporting surface (KPIs, PDF/Excel export via `xlsx.full.min.js`, filters). Tab-by-tab details (Geral, Nutrientes, Pulverizações, Adubação sub-views and their helpers) are in [`docs/paginas.md`](docs/paginas.md#gestaohtml). It has historically had zero Firestore writes; if you add a write there (e.g. a persisted filter/config), that's a new pattern for that file — consider whether the write belongs in the operational page instead (e.g. planning/scheduling config belongs in `drench.html`'s admin-only Planejamento tab, not in the Gestão report, per prior product decision).
+`gestao.html` is a read-only, cross-module reporting surface (KPIs, PDF/Excel export — SheetJS `xlsx.full.min.js` is loaded on demand by `carregarXlsx()` only when Excel is clicked, filters). Tab-by-tab details (Geral, Nutrientes, Pulverizações, Adubação sub-views and their helpers) are in [`docs/paginas.md`](docs/paginas.md#gestaohtml). It has historically had zero Firestore writes; if you add a write there (e.g. a persisted filter/config), that's a new pattern for that file — consider whether the write belongs in the operational page instead (e.g. planning/scheduling config belongs in `drench.html`'s admin-only Planejamento tab, not in the Gestão report, per prior product decision).
 
 ### Consistent per-page details worth reusing rather than reinventing
 - `formatarData(d)` (`YYYY-MM-DD` → `DD/MM/YYYY`), `sanitizar(str)` (basic HTML-escape), `corFazenda(nome)` — repeated near-verbatim in most pages.

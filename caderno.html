@@ -191,7 +191,7 @@ function renderLista(){
     const cat=catDe(n.categoria);
     const local=n.talhaoId ? `<span class="chip chip-tal">🌳 ${sanitizar(n.talhaoId)}${n.talhaoNome?' · '+sanitizar(n.talhaoNome):''}</span>` : `<span class="chip chip-avulsa">📝 Avulsa</span>`;
     html+=`<div class="nota" onclick="abrirNota('${n._id}')">
-      ${n.miniatura?`<div class="nota-mini"><img src="${n.miniatura}" alt="">${n.nFotos>1?`<span class="nota-nfotos">${n.nFotos}</span>`:''}</div>`:''}
+      ${n.miniatura?`<div class="nota-mini"><img src="${n.miniatura}" alt="" loading="lazy" decoding="async">${n.nFotos>1?`<span class="nota-nfotos">${n.nFotos}</span>`:''}</div>`:''}
       <div class="nota-corpo">
         <div class="nota-chips"><span class="chip chip-cat">${cat.ico} ${cat.label}</span>${local}${n.fazenda?`<span class="chip">${sanitizar(n.fazenda)}</span>`:''}${n.privada?'<span class="chip">🔒</span>':''}</div>
         ${n.titulo?`<div class="nota-tit">${sanitizar(n.titulo)}</div>`:''}
@@ -243,7 +243,7 @@ function renderVer(n){
 }
 function renderFotosVer(){
   document.getElementById('verFotos').innerHTML=fotosVer.length
-    ? `<div class="galeria">${fotosVer.map((f,i)=>`<img src="${f.dataURI}" alt="" onclick="verFoto(${i})">`).join('')}</div>`
+    ? `<div class="galeria">${fotosVer.map((f,i)=>`<img src="${f.dataURI}" alt="" loading="lazy" decoding="async" onclick="verFoto(${i})">`).join('')}</div>`
     : '';
 }
 window.verFoto=function(i){
