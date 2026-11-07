@@ -407,6 +407,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { semAcessoAoModulo } from './acesso.js';
 import { gerarMenu } from './menu.js';
+import { exportarPdf, compartilharArquivo, precisaCompartilhar } from './exportar.js';
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -3403,7 +3404,7 @@ window.exportarPDF = function() {
     </div>
   </div>`;
   document.getElementById('area-impressao').innerHTML = html;
-  setTimeout(() => window.print(), 120);
+  exportarPdf(document.getElementById('area-impressao'), { nome: `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.pdf`.replace(/[^\w.\-]+/g,'_'), titulo: 'Relatório de Gestão', avisar: toast });
 };
 
 window.exportarExcel = function() {
@@ -3435,7 +3436,14 @@ window.exportarExcel = function() {
     });
   }
   if (!wb.SheetNames.length) { toast('⚠️ Nenhum dado exportável nesta aba.'); return; }
-  XLSX.writeFile(wb, `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const nomeXlsx = `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  // App/iPhone instalado: o download do XLSX some (ou prende a tela) — compartilha o arquivo.
+  if (precisaCompartilhar()) {
+    const dados = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    compartilharArquivo(new Blob([dados], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nomeXlsx, 'Planilha de Gestão', toast);
+    return;
+  }
+  XLSX.writeFile(wb, nomeXlsx);
   toast('📊 Excel exportado!');
 };
 </script>
