@@ -30,11 +30,27 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Dependências e sync do Capacitor
+      - name: Dependências
+        working-directory: app
+        run: npm ci --no-audit --no-fund
+
+      # Notificações push nativas: só com o secret GOOGLE_SERVICES_JSON (conteúdo do arquivo baixado
+      # no Firebase → app Android com.conilontech.app). Sem ele, o plugin não entra no APK — se
+      # entrasse sem o arquivo, o app fecharia ao ativar as notificações (ver app/README.md).
+      - name: Push nativo (se configurado)
+        env:
+          GS: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        if: env.GS != ''
         working-directory: app
         run: |
-          npm ci --no-audit --no-fund
-          npx cap sync android
+          printf '%s' "$GS" > android/app/google-services.json
+          node -e "const j=require('./android/app/google-services.json');if(!(j.client||[]).some(c=>c.client_info?.android_client_info?.package_name==='com.conilontech.app')){console.error('::error::google-services.json não tem o app com.conilontech.app');process.exit(1)}"
+          npm i --no-save --no-audit --no-fund @capacitor/push-notifications@^8.0.0
+          echo "::notice::APK com notificações push nativas"
+
+      - name: Sync do Capacitor
+        working-directory: app
+        run: npx cap sync android
 
       - name: Chave de assinatura (se configurada)
         env:

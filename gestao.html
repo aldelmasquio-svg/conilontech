@@ -303,7 +303,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 .nut-bar-labels b{color:var(--ve);font-family:var(--font-mono);}
 .nl-feito{color:var(--v);} .nl-hoje{color:#92400e;} .nl-safra{color:var(--c);}
 </style>
-<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#1d6b3f">
 <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
@@ -407,6 +406,7 @@ import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/fi
 import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { semAcessoAoModulo } from './acesso.js';
 import { gerarMenu } from './menu.js';
+import { exportarPdf, compartilharArquivo, precisaCompartilhar } from './exportar.js';
 
 const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
 const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
@@ -3403,11 +3403,28 @@ window.exportarPDF = function() {
     </div>
   </div>`;
   document.getElementById('area-impressao').innerHTML = html;
-  setTimeout(() => window.print(), 120);
+  exportarPdf(document.getElementById('area-impressao'), { nome: `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.pdf`.replace(/[^\w.\-]+/g,'_'), titulo: 'Relatório de Gestão', avisar: toast });
 };
 
-window.exportarExcel = function() {
+// Biblioteca do Excel (~1 MB) baixada só quando alguém exporta, não a cada abertura da Gestão.
+// O sw.js guarda no celular depois do 1º uso (cdn.sheetjs.com está na lista de CDN).
+function carregarXlsx() {
+  return new Promise((resolve, reject) => {
+    if (window.XLSX) return resolve(window.XLSX);
+    const s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () => { s.remove(); reject(new Error('cdn')); };
+    document.head.appendChild(s);
+  });
+}
+
+window.exportarExcel = async function() {
   const cont = document.getElementById('tabContent');
+  if (!window.XLSX) {
+    toast('⏳ Preparando o Excel...');
+    try { await carregarXlsx(); } catch (e) { toast('❌ Sem internet para gerar o Excel agora.'); return; }
+  }
   const wb = XLSX.utils.book_new();
   const labelTab = {geral:'Geral',produtividade:'Produtividade',pulverizacoes:'Pulverizacoes',estoque:'Estoque',adubacao:'Adubacao',compras:'Compras',nutrientes:'Nutrientes',calendario:'Calendario'}[tabAtual] || tabAtual;
   const tables = cont.querySelectorAll('table');
@@ -3435,7 +3452,14 @@ window.exportarExcel = function() {
     });
   }
   if (!wb.SheetNames.length) { toast('⚠️ Nenhum dado exportável nesta aba.'); return; }
-  XLSX.writeFile(wb, `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const nomeXlsx = `ConilonTech_${labelTab}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  // App/iPhone instalado: o download do XLSX some (ou prende a tela) — compartilha o arquivo.
+  if (precisaCompartilhar()) {
+    const dados = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    compartilharArquivo(new Blob([dados], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nomeXlsx, 'Planilha de Gestão', toast);
+    return;
+  }
+  XLSX.writeFile(wb, nomeXlsx);
   toast('📊 Excel exportado!');
 };
 </script>
