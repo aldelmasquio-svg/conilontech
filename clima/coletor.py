@@ -1,8 +1,13 @@
 """Coletor da estação meteorológica Tuya "Estação Km 18" → Firestore.
 
-Roda no GitHub Actions (plano gratuito). A cada execução:
+Roda no GitHub Actions (plano gratuito). Duas fontes:
+  * Smart Life (padrão quando existe login em climaSegredos/smartlife — ver
+    smartlife.py): só o estado atual, 1 amostra por execução (~5 min);
+  * Tuya IoT Core (TUYA_ACCESS_ID/SECRET; depende do trial da plataforma):
+    report-logs com cada mudança de valor + snapshot.
+A cada execução:
   1. lê o cursor em clima/estacao-km18/status/cursor;
-  2. busca os report-logs da Tuya do cursor até agora (paginado) + 1 snapshot;
+  2. busca os dados do cursor até agora (logs paginados e/ou snapshot);
   3. monta a série de 1 minuto (carry-forward; máximo do minuto p/ rajada);
   4. grava os brutos, mescla os minutos nos docs de dia e recalcula o resumo
      (incl. ETo FAO-56) de cada dia tocado; só então avança o cursor.
@@ -26,6 +31,7 @@ import requests
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eto import altitude_pela_pressao, eto_diaria, fator_u2  # noqa: E402
+import smartlife  # noqa: E402
 
 # ---------------------------------------------------------------- config ----
 ESTACAO_ID = "estacao-km18"
@@ -282,7 +288,8 @@ def _ms(t):
 
 
 # ----------------------------------------------------------- série 1 min ----
-def montar_serie(logs, snapshot, estado, ultimo_reporte, inicio_ms, fim_ms):
+def montar_serie(logs, snapshot, estado, ultimo_reporte, inicio_ms, fim_ms,
+                 so_snapshot=CODES_SO_SNAPSHOT):
     """Retorna (pontos {minuto_ms: [valores]}, estado, ultimo_reporte).
 
     estado: {code: {"t": ms, "v": raw}} — último valor conhecido antes de `inicio`.
@@ -310,7 +317,7 @@ def montar_serie(logs, snapshot, estado, ultimo_reporte, inicio_ms, fim_ms):
                 estado[code] = {"t": ts, "v": p.get("value")}
             if ultimo_reporte is None or ts > ultimo_reporte:
                 ultimo_reporte = ts
-        elif code in CODES_SO_SNAPSHOT:
+        elif code in so_snapshot:
             eventos.append((min(ts, fim_ms - 1), code, p.get("value")))
     eventos.sort(key=lambda e: e[0])
 
@@ -440,7 +447,7 @@ def registrar_falha(base, mensagem):
     falhas = ((ant.to_dict() or {}).get("falhasSeguidas", 0) if ant.exists else 0) + 1
     ref.set({"ok": False, "mensagem": mensagem, "data": datetime.now(timezone.utc),
              "falhasSeguidas": falhas})
-    print(f"::warning::Tuya falhou ({falhas}ª seguida): {mensagem}")
+    print(f"::warning::coleta falhou ({falhas}ª seguida): {mensagem}")
 
 
 def gravar_bruto(base, agora, inicio_ms, fim_ms, logs, snapshot):
@@ -554,17 +561,56 @@ def diagnostico(horas):
     print(f"== {tuya.chamadas} chamadas")
     return 0
 
+def diagnostico_smartlife(cli):
+    """Só leitura: o que a conta Smart Life devolve para a estação."""
+    device = os.environ["TUYA_DEVICE_ID"]
+    print("== aparelhos na conta Smart Life")
+    for d in cli.listar_dispositivos():
+        marca = "  ← estação" if d.get("id") == device else ""
+        print(f"  {d.get('name')!s:30} {d.get('category')!s:6} "
+              f"{'online' if d.get('online') else 'offline':7} {d.get('id')}{marca}")
+    print("== especificação (escala/unidade) dos códigos usados")
+    esp = cli.especificacao(device)
+    for item in esp.get("status") or []:
+        if item.get("code") in CODES:
+            print(f"  {item.get('code'):24} {item.get('type')} {str(item.get('values'))[:200]}")
+    props, d = cli.snapshot(device, int(time.time() * 1000))
+    print(f"== estado atual (online={d.get('online')}, update_time={d.get('update_time')})")
+    for s in sorted(d.get("status") or [], key=lambda s: str(s.get("code"))):
+        code = s.get("code")
+        conv = converter(code, s.get("value")) if code in CODES else {}
+        print(f"  {code!s:28} | {str(s.get('value'))[:40]:40} | "
+              f"{conv if conv else ('' if code in CODES else '(fora da lista)')}")
+    faltam = [c for c in CODES if c not in {s.get("code") for s in d.get("status") or []}]
+    if faltam:
+        print(f"::warning::códigos que o Smart Life NÃO devolveu: {', '.join(faltam)}")
+    print(f"== {cli.chamadas} chamadas")
+    return 0
+
+
 # ------------------------------------------------------------------ main ----
 def main():
-    for nome in ("TUYA_ACCESS_ID", "TUYA_ACCESS_SECRET", "TUYA_DEVICE_ID",
-                 "FIREBASE_SERVICE_ACCOUNT"):
+    for nome in ("TUYA_DEVICE_ID", "FIREBASE_SERVICE_ACCOUNT"):
         if not os.environ.get(nome):
             print(f"::error::variável {nome} ausente")
             return 1
-    if os.environ.get("DIAGNOSTICO") == "true":
-        return diagnostico(int(os.environ.get("DIAGNOSTICO_HORAS") or 24))
 
     db = iniciar_firestore()
+    login = smartlife.carregar(db)
+    tem_iot = bool(os.environ.get("TUYA_ACCESS_ID") and os.environ.get("TUYA_ACCESS_SECRET"))
+    if not login and not tem_iot:
+        print("::error::sem fonte: faça o login Smart Life (workflow 'Clima — login "
+              "Smart Life') ou configure TUYA_ACCESS_ID/TUYA_ACCESS_SECRET")
+        return 1
+    if os.environ.get("DIAGNOSTICO") == "true":
+        if login:
+            try:
+                return diagnostico_smartlife(smartlife.SmartLife(db, login))
+            except smartlife.SmartLifeErro as e:
+                print(f"::error::Smart Life: {e}")
+                return 1
+        return diagnostico(int(os.environ.get("DIAGNOSTICO_HORAS") or 24))
+
     base = db.collection("clima").document(ESTACAO_ID)
     agora = datetime.now(timezone.utc).replace(microsecond=0)
     agora_ms = int(agora.timestamp() * 1000)
@@ -577,34 +623,60 @@ def main():
         inicio_ms = (agora_ms - JANELA_INICIAL_MS) // 60_000 * 60_000
         print("Sem cursor: começando 24 h atrás")
     fim_ms = (agora_ms - LAG_MS) // 60_000 * 60_000
-    fim_ms = min(fim_ms, inicio_ms + JANELA_MAX_POR_EXECUCAO_MS)
+    if not login:  # IoT: recupera atraso em fatias (logs paginados)
+        fim_ms = min(fim_ms, inicio_ms + JANELA_MAX_POR_EXECUCAO_MS)
+    else:
+        # Smart Life: só há o valor de agora → vai direto até agora; atraso
+        # maior que 24 h é descartado (não há o que recuperar).
+        inicio_ms = max(inicio_ms, fim_ms - JANELA_MAX_POR_EXECUCAO_MS)
     if fim_ms <= inicio_ms:
         print("Nada a processar ainda (intervalo < 1 min)")
         return 0
     fmt = lambda ms: datetime.fromtimestamp(ms / 1000, FUSO).strftime("%d/%m %H:%M")  # noqa: E731
     print(f"Intervalo: {fmt(inicio_ms)} → {fmt(fim_ms)} ({(fim_ms - inicio_ms) // 60000} min)")
 
-    # ---- Tuya
-    tuya = Tuya(os.environ["TUYA_ACCESS_ID"], os.environ["TUYA_ACCESS_SECRET"])
     device = os.environ["TUYA_DEVICE_ID"]
     aviso = None
-    try:
-        tuya.autenticar()
-        logs = tuya.report_logs(device, CODES_LOG, inicio_ms, fim_ms)
+    if login:
+        # ---- Smart Life: só o estado atual → todos os códigos viram evento
+        # no último minuto do intervalo (os anteriores repetem o valor anterior).
+        fonte, so_snapshot, logs = "smartlife", set(CODES), []
+        cli = smartlife.SmartLife(db, login)
         try:
-            snapshot = tuya.snapshot(device)
-        except TuyaErro as e:
-            snapshot, aviso = [], f"snapshot falhou: {e}"
+            snapshot, det = cli.snapshot(device, agora_ms)
+        except smartlife.SmartLifeErro as e:
+            registrar_falha(base, f"Smart Life: {e} — se persistir, refaça o login "
+                                  "(workflow 'Clima — login Smart Life')")
+            return 0
+        if not snapshot:
+            aviso = "estação offline no Smart Life (sem dados novos)"
             print(f"::warning::{aviso}")
-    except TuyaErro as e:
-        registrar_falha(base, str(e))
-        return 0
-    print(f"Tuya: {len(logs)} logs, {len(snapshot)} propriedades no snapshot, "
-          f"{tuya.chamadas} chamadas")
+        chamadas = cli.chamadas
+        print(f"Smart Life: {len(snapshot)} propriedades, online={det.get('online')}, "
+              f"{chamadas} chamadas{', token renovado' if cli.ouvinte.renovou else ''}")
+    else:
+        # ---- Tuya IoT Core
+        fonte, so_snapshot = "iot", CODES_SO_SNAPSHOT
+        tuya = Tuya(os.environ["TUYA_ACCESS_ID"], os.environ["TUYA_ACCESS_SECRET"])
+        try:
+            tuya.autenticar()
+            logs = tuya.report_logs(device, CODES_LOG, inicio_ms, fim_ms)
+            try:
+                snapshot = tuya.snapshot(device)
+            except TuyaErro as e:
+                snapshot, aviso = [], f"snapshot falhou: {e}"
+                print(f"::warning::{aviso}")
+        except TuyaErro as e:
+            registrar_falha(base, f"Tuya IoT: {e}")
+            return 0
+        chamadas = tuya.chamadas
+        print(f"Tuya IoT: {len(logs)} logs, {len(snapshot)} propriedades no snapshot, "
+              f"{chamadas} chamadas")
 
     # ---- série por minuto
     pontos, estado, ultimo_rep = montar_serie(
-        logs, snapshot, cur.get("estado"), cur.get("ultimoReporte"), inicio_ms, fim_ms)
+        logs, snapshot, cur.get("estado"), cur.get("ultimoReporte"), inicio_ms, fim_ms,
+        so_snapshot)
 
     por_dia = {}
     for m, vals in pontos.items():
@@ -662,7 +734,8 @@ def main():
         "logsRecebidos": len(logs),
         "minutosGravados": len(pontos),
         "diasTocados": sorted(dias),
-        "chamadasTuya": tuya.chamadas,
+        "chamadasTuya": chamadas,
+        "fonte": fonte,
     })
     for linha in resumo_log:
         print("  " + linha)

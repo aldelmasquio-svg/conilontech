@@ -153,11 +153,14 @@ service cloud.firestore {
     match /assistenteConversas/{doc=**} { allow read, write: if false; }
     match /assistentePropostas/{doc=**} { allow read, write: if false; }
 
+    // Token do login Smart Life do coletor do clima (clima/README.md): só o Admin SDK
+    match /climaSegredos/{doc=**} { allow read, write: if false; }
+
     // Demais coleções operacionais (inclui subcoleções): ler = ativo; gravar = módulo dono.
     // As exclusões evitam reabrir as coleções acima (regras do Firestore são OR).
     function comRegraPropria() {
       return ['usuarios', 'config', 'catalogo_adubos', 'logs', 'clima', 'vazaoMedidores', 'vazaoAlertas',
-              'vazaoConfig', 'assistenteConversas', 'assistentePropostas'];
+              'vazaoConfig', 'assistenteConversas', 'assistentePropostas', 'climaSegredos'];
     }
     match /{col}/{doc=**} {
       allow read:  if ativo() && !(col in comRegraPropria());
