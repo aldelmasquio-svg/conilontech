@@ -1,5 +1,8 @@
 name: Clima — coletor Tuya (Estação Km 18)
 
+# Fonte: conta Smart Life se houver login salvo (workflow clima-login.yml);
+# senão Tuya IoT Core (TUYA_ACCESS_ID/SECRET). Ver clima/README.md.
+
 on:
   schedule:
     # A cada 5 min, deslocado 2 min (…:02, :07, :12…) para fugir do pico de
@@ -8,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       diagnostico:
-        description: 'Só diagnóstico (lê a Tuya e imprime; não grava no Firestore)'
+        description: 'Só diagnóstico (lê a estação e imprime; não grava dados)'
         type: boolean
         default: false
 
@@ -35,7 +38,7 @@ jobs:
 
       - run: pip install -r clima/requirements.txt
 
-      - name: Coletar Tuya → Firestore
+      - name: Coletar estação → Firestore
         run: python clima/coletor.py
         env:
           TUYA_ACCESS_ID: ${{ secrets.TUYA_ACCESS_ID }}

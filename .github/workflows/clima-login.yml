@@ -1,0 +1,52 @@
+name: Clima — login Smart Life
+
+# Roda 1× (ou quando o login expirar): autoriza o coletor do clima a ler a
+# estação pela conta do app Smart Life, sem a Tuya IoT Core. Passo a passo em
+# clima/README.md ("Login Smart Life").
+on:
+  workflow_dispatch:
+    inputs:
+      codigo:
+        description: 'Código de usuário (app Smart Life → Eu → ⚙️ → Conta e segurança → Código de usuário)'
+        required: true
+        type: string
+
+concurrency:
+  group: clima-login
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  login:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SMARTLIFE_USER_CODE: ${{ inputs.codigo }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: clima/requirements.txt
+
+      - run: pip install -r clima/requirements.txt
+
+      - name: 1) Gerar QR code — leia com o app Smart Life
+        run: python clima/smartlife_login.py qr
+
+      - name: QR em imagem (artefato qr-login)
+        uses: actions/upload-artifact@v4
+        with:
+          name: qr-login
+          path: qr.png
+          retention-days: 1
+
+      - name: 2) Aguardar a confirmação no app e salvar o login
+        run: python clima/smartlife_login.py aguardar
+        env:
+          TUYA_DEVICE_ID: ${{ secrets.TUYA_DEVICE_ID }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

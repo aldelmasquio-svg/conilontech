@@ -87,6 +87,7 @@ await caso('ESP32 atualiza último valor', assertSucceeds(updateDoc(doc(db('esp3
 await caso('ESP32 cria alerta', assertSucceeds(addDoc(collection(db('esp32'), 'vazaoAlertas'), { texto: 'x' })));
 await caso('ESP32 lê config de vazão', assertSucceeds(getDoc(doc(db('esp32'), 'vazaoConfig', 'geral'))));
 await caso('vazaoConfig: operador sem irrigação não grava', assertFails(setDoc(doc(db('operador'), 'vazaoConfig', 'geral'), { x: 1 })));
+await caso('climaSegredos: nem o dono lê', assertFails(getDoc(doc(db('dono'), 'climaSegredos', 'smartlife'))));
 await caso('assistente: app não lê conversas', assertFails(getDoc(doc(db('dono'), 'assistenteConversas', 'c'))));
 
 console.log(`\n${ok} ok, ${falhas} falha(s)`);

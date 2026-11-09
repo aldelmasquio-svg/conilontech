@@ -1,3 +1,7 @@
 firebase-admin>=6.5,<7
 requests>=2.31,<3
 tzdata
+# Login Smart Life (smartlife.py). Versão fixa: usamos a API interna do SDK.
+tuya-device-sharing-sdk==0.2.15
+cryptography>=42  # o SDK importa, mas não declara
+qrcode[pil]==8.2
