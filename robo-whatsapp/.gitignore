@@ -1,0 +1,6 @@
+# NUNCA comitar: segredos e sessão
+service-account.json
+config.js
+auth_info/
+node_modules/
+*.log
