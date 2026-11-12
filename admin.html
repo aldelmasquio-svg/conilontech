@@ -123,6 +123,7 @@ function renderizarUsuarios() {
     {id:'estoque',label:'Estoque'},
     {id:'recebimentos',label:'Recebimentos'},
     {id:'gestao',label:'Gestão'},
+    {id:'atividade',label:'Atividade (conferência)'},
     {id:'analises',label:'Análises'},
     {id:'recomendacoes',label:'Recomendações'},
     {id:'planejamento',label:'Planejamento'},
@@ -132,7 +133,7 @@ function renderizarUsuarios() {
   const GRUPOS = [
     {titulo:'Operação de campo', ids:['mapa','adubacao','pulverizacao','drench','irrigacao','clima','herbicida','calibracao','avaliacoes','amostragem','caderno','equipe']},
     {titulo:'Compras e estoque', ids:['estoque','recebimentos','pedidos','cotacoes']},
-    {titulo:'Análise e gestão', ids:['gestao','analises','recomendacoes','planejamento']},
+    {titulo:'Análise e gestão', ids:['gestao','atividade','analises','recomendacoes','planejamento']},
   ];
   const _cobertos = new Set(GRUPOS.flatMap(g=>g.ids));
   const _outros = MODS.filter(m=>!_cobertos.has(m.id)).map(m=>m.id);
@@ -238,6 +239,7 @@ window.abrirFazendasUsuario = function(uid) {
     {id:'estoque',label:'Estoque',ico:'🏬'},
     {id:'recebimentos',label:'Recebimentos',ico:'📥'},
     {id:'gestao',label:'Gestão',ico:'📊'},
+    {id:'atividade',label:'Atividade',ico:'🧾'},
     {id:'analises',label:'Análises',ico:'🔬'},
     {id:'recomendacoes',label:'Recomendações',ico:'💊'},
     {id:'planejamento',label:'Planejamento',ico:'🗓️'},

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Conilon Tech · Atividade</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
+<style>
+:root{--v:#1a5c1a;--ve:#0b1c0d;--vb:#e2f0e2;--c:#5a6b48;--cb:#c6c0b0;--cl:#f0ece3;--t:#1a1a1a;--danger:#ef4444;--warn:#f59e0b;--ok:#22c55e;--s:0 2px 8px rgba(0,0,0,.1);--sf:0 4px 16px rgba(0,0,0,.2);--rad:12px;--rs:8px;--menu-w:260px;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height:100dvh;display:flex;flex-direction:column;}
+.loading-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;z-index:9000;}
+.loading-spinner{width:48px;height:48px;border:4px solid var(--cb);border-top-color:var(--v);border-radius:50%;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.loading-text{font-family:var(--font-display);font-weight:700;color:var(--v);font-size:1.1rem;letter-spacing:.04em;}
+.app-header{background:var(--ve);color:white;padding:0 16px;height:54px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.3);position:sticky;top:0;z-index:200;}
+.header-left{display:flex;align-items:center;gap:12px;}
+.header-titles{line-height:1;}
+.header-title-main{font-family:var(--font-display);font-weight:800;font-size:1.05rem;letter-spacing:.02em;}
+.header-title-sub{font-size:.65rem;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.1em;margin-top:3px;}
+.header-user{font-size:.78rem;color:rgba(255,255,255,.85);}
+.btn-menu{background:rgba(255,255,255,.12);border:none;color:white;font-size:20px;width:40px;height:40px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.menu-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;display:none;}
+.menu-overlay.aberto{display:block;}
+.menu-lateral{position:fixed;left:0;top:0;bottom:0;width:var(--menu-w);background:var(--ve);z-index:2000;transform:translateX(-100%);transition:transform .3s;display:flex;flex-direction:column;box-shadow:4px 0 20px rgba(0,0,0,.3);}
+.menu-lateral.aberto{transform:translateX(0);}
+.menu-header{padding:18px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.menu-user-nome{color:white;font-weight:700;font-size:.95rem;}
+.menu-user-email{color:rgba(255,255,255,.6);font-size:.75rem;margin-top:2px;}
+.menu-body{flex:1;padding:10px;overflow-y:auto;}
+.menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:12px;border:none;background:transparent;color:rgba(255,255,255,.7);cursor:pointer;border-radius:var(--rs);font-family:var(--font-body);font-size:.9rem;transition:all .2s;margin-bottom:2px;text-decoration:none;}
+.menu-item:hover,.menu-item.ativo{background:rgba(255,255,255,.15);color:white;font-weight:700;}
+.menu-ico{font-size:1.1rem;}
+.menu-footer{padding:14px;}
+.btn-logout{width:100%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);color:#fca5a5;border-radius:8px;padding:10px;font-family:var(--font-display);font-weight:700;font-size:.9rem;cursor:pointer;}
+
+.wrap{padding:12px 14px 90px;display:flex;flex-direction:column;gap:10px;max-width:680px;margin:0 auto;width:100%;}
+.filtros{display:flex;gap:8px;align-items:center;flex-wrap:wrap;position:sticky;top:54px;background:var(--bg);padding:6px 0;z-index:50;}
+.campo-sel{border:1.5px solid var(--cb);border-radius:8px;padding:9px 11px;font-size:.9rem;font-family:var(--font-body);outline:none;background:white;flex:1;min-width:120px;}
+.campo-sel:focus{border-color:var(--v);}
+.btn-ref{background:var(--v);border:none;color:#fff;border-radius:var(--rs);padding:9px 14px;font-family:var(--font-display);font-weight:800;font-size:.85rem;cursor:pointer;white-space:nowrap;}
+.resumo{font-size:.72rem;color:var(--c);padding:0 2px;}
+
+.ev{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:11px 13px;border-left:4px solid var(--cb);}
+.ev.auto{border-left-color:#2563eb;}
+.ev.tg{border-left-color:#0891b2;}
+.ev-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.ev-badge{font-size:.64rem;font-weight:800;border-radius:99px;padding:2px 8px;white-space:nowrap;}
+.ev-badge.app{background:var(--cl);color:var(--c);}
+.ev-badge.auto{background:#dbeafe;color:#1e40af;}
+.ev-badge.tg{background:#cffafe;color:#155e75;}
+.ev-quando{font-family:var(--font-mono);font-size:.72rem;color:var(--c);margin-left:auto;}
+.ev-desc{font-size:.9rem;font-weight:600;color:var(--t);margin-top:6px;line-height:1.35;}
+.ev-quem{font-size:.68rem;color:var(--c);margin-top:4px;}
+.dia-sep{font-family:var(--font-display);font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--v);margin:8px 2px 2px;}
+.vazio{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;color:var(--c);}
+.vazio .ico{font-size:3rem;margin-bottom:10px;opacity:.5;}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1d6b3f">
+<link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Conilon Tech">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="loading-screen" id="loadingScreen"><div class="loading-spinner"></div><div class="loading-text">Carregando...</div></div>
+
+<header class="app-header" id="appHeader" style="display:none;">
+  <div class="header-left">
+    <button class="btn-menu" onclick="toggleMenu()">☰</button>
+    <div class="header-titles"><div class="header-title-main">Conilon Tech</div><div class="header-title-sub">Atividade</div></div>
+  </div>
+  <div class="header-user" id="userNome">—</div>
+</header>
+
+<div class="menu-overlay" id="menuOverlay" onclick="fecharMenu()"></div>
+<aside class="menu-lateral" id="menuLateral">
+  <div class="menu-header"><div class="menu-user-nome" id="menuUserNome">—</div><div class="menu-user-email" id="menuUserEmail">—</div></div>
+  <div class="menu-body" id="menuModulos"></div>
+  <div class="menu-footer"><button class="btn-logout" onclick="fazerLogout()">↩ Sair</button></div>
+</aside>
+
+<div id="appContent" style="display:none;">
+  <div class="wrap">
+    <div class="filtros">
+      <select class="campo-sel" id="fPeriodo" onchange="setPeriodo(this.value)">
+        <option value="2">Últimos 2 dias</option>
+        <option value="7" selected>Últimos 7 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="0">Tudo (recente)</option>
+      </select>
+      <select class="campo-sel" id="fOrigem" onchange="setOrigem(this.value)">
+        <option value="todos">Todas as origens</option>
+        <option value="auto">Só automáticos (robô/Telegram)</option>
+        <option value="app">Só feitos no app</option>
+      </select>
+      <button class="btn-ref" onclick="carregar()">↻ Atualizar</button>
+    </div>
+    <div class="resumo" id="resumo"></div>
+    <div id="feed"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getFirestore, enableMultiTabIndexedDbPersistence, doc, getDoc, getDocs, collection, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { adminDoSistema, nivelDoPerfil } from './acesso.js';
+import { gerarMenu } from './menu.js';
+
+const firebaseConfig={apiKey:"AIzaSyDvdDBTN6UUN4-Ep4qqXruFDSNee7IAzfg",authDomain:"talhoes-df836.firebaseapp.com",projectId:"talhoes-df836",storageBucket:"talhoes-df836.firebasestorage.app",messagingSenderId:"1047022702039",appId:"1:1047022702039:web:001cf6a3c028c494ab8f92"};
+const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getFirestore(app);
+enableMultiTabIndexedDbPersistence(db).catch(()=>{});
+
+let usuarioAtual=null, perfilAtual={};
+let eventos=[], nomePorUid={}, nomePorEmail={};
+let filtroPeriodo='7', filtroOrigem='todos';
+const TETO=300;   // pega os mais recentes de cada coleção
+
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2600); }
+function sanitizar(s){ return String(s==null?'':s).replace(/[<>&"']/g, c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmt(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:2}); }
+function quandoISO(e){ return e.criadoEm || e.editadoEm || ''; }
+function dataHora(iso){ const d=new Date(iso); if(isNaN(d)) return '—'; return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}); }
+function diaLabel(iso){ const d=new Date(iso); if(isNaN(d)) return '—'; const h=new Date(); const o=new Date(h-864e5);
+  const mesmo=(a,b)=>a.toDateString()===b.toDateString();
+  if(mesmo(d,h)) return 'Hoje'; if(mesmo(d,o)) return 'Ontem';
+  return d.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit'}); }
+function quem(e){
+  const por = e.criadoPor || e.editadoPor || (e.uid && nomePorUid[e.uid]) || '';
+  return nomePorEmail[String(por).toLowerCase()] || por || '—';
+}
+function origemDe(e){ const o=(e.origem||'').toLowerCase(); if(o==='whatsapp') return 'auto'; if(o==='telegram') return 'tg'; return 'app'; }
+
+onAuthStateChanged(auth, async (user)=>{
+  if(!user){ window.location.href='login.html'; return; }
+  usuarioAtual=user;
+  const snap=await getDoc(doc(db,'usuarios',user.uid));
+  if(!snap.exists()){ await signOut(auth); return; }
+  perfilAtual=snap.data();
+  if(nivelDoPerfil(perfilAtual,'atividade')==='nenhum'){ window.location.href='index.html'; return; }
+  document.getElementById('userNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserNome').textContent=perfilAtual.nome||user.email;
+  document.getElementById('menuUserEmail').textContent=user.email;
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appHeader').style.display='flex';
+  document.getElementById('appContent').style.display='block';
+  gerarMenu(perfilAtual);
+  await carregarUsuarios();
+  carregar();
+});
+
+async function carregarUsuarios(){
+  try{
+    const s=await getDocs(collection(db,'usuarios'));
+    s.forEach(d=>{ const u=d.data(); if(u.nome){ nomePorUid[d.id]=u.nome; if(u.email) nomePorEmail[String(u.email).toLowerCase()]=u.nome; } });
+  }catch(e){ /* nomes ficam como e-mail/uid */ }
+}
+
+// Pega os mais recentes (por criadoEm) de cada coleção e monta uma lista única de eventos.
+async function recentes(col){
+  try{ const s=await getDocs(query(collection(db,col), orderBy('criadoEm','desc'), limit(TETO)));
+    return s.docs.map(d=>({_docId:d.id,...d.data()})); }
+  catch(e){ console.error('falha em '+col, e); return []; }
+}
+window.carregar=async function(){
+  const feed=document.getElementById('feed'); feed.innerHTML='<div class="resumo">Carregando…</div>';
+  const [recs, movs]=await Promise.all([recentes('recebimentos'), recentes('estoque_movimentacoes')]);
+  eventos=[
+    ...recs.map(r=>({ _kind:'recebimento', ...r })),
+    ...movs.map(m=>({ _kind:'estoque', ...m })),
+  ].filter(e=>quandoISO(e)).sort((a,b)=>quandoISO(b).localeCompare(quandoISO(a)));
+  render();
+};
+window.setPeriodo=v=>{ filtroPeriodo=v; render(); };
+window.setOrigem=v=>{ filtroOrigem=v; render(); };
+
+function descricao(e){
+  if(e._kind==='recebimento'){
+    const itens=(e.itens||[]).map(i=>`${sanitizar(i.produto)} ${fmt(i.quantidade)}${sanitizar(i.unidade||'')}`).join(', ');
+    if(e.tipo==='transferencia'){
+      return `⇄ Recebimento · Transferência · ${sanitizar(e.origemFazenda||'—')} → ${sanitizar(e.fazenda||'—')} · ${itens||'—'}${e.transportador?' · 🚚 '+sanitizar(e.transportador):''}`;
+    }
+    return `🛒 Recebimento · Compra · ${sanitizar(e.fazenda||'—')} · ${itens||'—'}${e.nota?' · NF '+sanitizar(e.nota):''}${e.fornecedor?' · '+sanitizar(e.fornecedor):''}`;
+  }
+  // estoque_movimentacoes
+  const t=e.tipo;
+  const rot={entrada:'Entrada',saida:'Saída',transferencia_saida:'Transf. saída',transferencia_entrada:'Transf. entrada',aplicacao:'Aplicação'}[t]||t||'Mov.';
+  const q=`${fmt(e.quantidade)} ${sanitizar(e.unidade||'')}`;
+  let rota;
+  if(t==='transferencia_saida') rota=` · ${sanitizar(e.fazenda||'')} → ${sanitizar(e.fazendaDestino||'')}`;
+  else if(t==='transferencia_entrada') rota=` · ${sanitizar(e.fazendaOrigem||'')} → ${sanitizar(e.fazenda||'')}`;
+  else rota=` · ${sanitizar(e.fazenda||'')}`;
+  return `📦 Estoque · ${rot} · ${sanitizar(e.produtoNome||'')} ${q}${rota}${e.motivo?' · '+sanitizar(e.motivo):''}`;
+}
+
+function render(){
+  const feed=document.getElementById('feed');
+  const corte = filtroPeriodo==='0' ? 0 : Date.now()-Number(filtroPeriodo)*864e5;
+  let lista=eventos.filter(e=>{
+    const t=new Date(quandoISO(e)).getTime();
+    if(corte && (isNaN(t)||t<corte)) return false;
+    const o=origemDe(e);
+    if(filtroOrigem==='auto' && o==='app') return false;
+    if(filtroOrigem==='app' && o!=='app') return false;
+    return true;
+  });
+  document.getElementById('resumo').textContent = `${lista.length} lançamento(s)`;
+  if(!lista.length){ feed.innerHTML=`<div class="vazio"><div class="ico">🗂️</div><p>Nenhum lançamento no período/filtro.</p></div>`; return; }
+  let html='', diaAtual='';
+  for(const e of lista){
+    const iso=quandoISO(e), dia=diaLabel(iso), o=origemDe(e);
+    if(dia!==diaAtual){ html+=`<div class="dia-sep">${dia}</div>`; diaAtual=dia; }
+    const badge = o==='auto'?'<span class="ev-badge auto">🤖 WhatsApp</span>' : o==='tg'?'<span class="ev-badge tg">✈️ Telegram</span>' : '<span class="ev-badge app">👤 App</span>';
+    html+=`<div class="ev ${o==='auto'?'auto':o==='tg'?'tg':''}">
+      <div class="ev-top">${badge}<span class="ev-quando">${dataHora(iso)}</span></div>
+      <div class="ev-desc">${descricao(e)}</div>
+      <div class="ev-quem">👤 ${sanitizar(quem(e))}</div>
+    </div>`;
+  }
+  feed.innerHTML=html;
+}
+
+window.toggleMenu=()=>{ document.getElementById('menuLateral').classList.toggle('aberto'); document.getElementById('menuOverlay').classList.toggle('aberto'); };
+window.fecharMenu=()=>{ document.getElementById('menuLateral').classList.remove('aberto'); document.getElementById('menuOverlay').classList.remove('aberto'); };
+window.fazerLogout=async()=>{ await signOut(auth); window.location.href='login.html'; };
+</script>
+</body>
+</html>
