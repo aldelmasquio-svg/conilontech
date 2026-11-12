@@ -24,6 +24,7 @@ const SECOES = [
   ]},
   { label: 'Análise', items: [
     { href:'gestao.html',        ico:'📈', label:'Gestão',            acesso:'gestao' },
+    { href:'atividade.html',     ico:'🧾', label:'Atividade',         acesso:'atividade' },
     { href:'analises.html',      ico:'🔬', label:'Análises',          acesso:'analises' },
     { href:'recomendacoes.html', ico:'💊', label:'Recomendações',     acesso:'recomendacoes' },
     { href:'planejamento.html',  ico:'🗓️', label:'Planejamento',      acesso:'planejamento' },
