@@ -209,6 +209,11 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 /* TOAST */
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--ve);color:white;padding:11px 20px;border-radius:10px;font-size:.85rem;font-weight:600;opacity:0;transition:all .3s;pointer-events:none;z-index:9999;box-shadow:0 4px 14px rgba(0,0,0,.3);max-width:90vw;text-align:center;}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.loc-ctrl a{font-size:16px;line-height:30px;text-align:center;}
+.loc-ctrl a.loc-buscando{opacity:.5;}
+.loc-pulse{width:20px;height:20px;display:flex;align-items:center;justify-content:center;position:relative;}
+.loc-dot{width:14px;height:14px;background:#4285f4;border:2.5px solid white;border-radius:50%;box-shadow:0 0 0 rgba(66,133,244,.5);animation:locpulse 2s infinite;}
+@keyframes locpulse{0%{box-shadow:0 0 0 0 rgba(66,133,244,.5);}70%{box-shadow:0 0 0 14px rgba(66,133,244,0);}100%{box-shadow:0 0 0 0 rgba(66,133,244,0);}}
 
 /* IMPRESSAO */
 #area-impressao{display:none;}
@@ -1032,11 +1037,44 @@ function _statusCor(info) {
   if (info.pend.length) return '#2563eb';           // programado (futuro, ainda no prazo) — não é pendência
   return '#94a3b8';
 }
+// Botão "minha localização" nos mapas da Gestão: marca a posição GPS do usuário e centraliza.
+function addBotaoLocalizacao(map) {
+  if (typeof L === 'undefined' || !navigator.geolocation) return;
+  const ctrl = L.control({ position: 'topleft' });
+  ctrl.onAdd = function () {
+    const d = L.DomUtil.create('div', 'leaflet-bar loc-ctrl');
+    d.innerHTML = '<a href="#" role="button" title="Minha localização" aria-label="Minha localização">📍</a>';
+    L.DomEvent.disableClickPropagation(d);
+    d.querySelector('a').addEventListener('click', e => { e.preventDefault(); _localizarNoMapa(map, d); });
+    return d;
+  };
+  ctrl.addTo(map);
+}
+function _localizarNoMapa(map, ctrlEl) {
+  const a = ctrlEl && ctrlEl.querySelector('a');
+  if (a) a.classList.add('loc-buscando');
+  navigator.geolocation.getCurrentPosition(pos => {
+    if (a) a.classList.remove('loc-buscando');
+    const { latitude: lat, longitude: lng, accuracy } = pos.coords, ll = [lat, lng];
+    if (map._locMarker) { map._locMarker.setLatLng(ll); map._locAcc.setLatLng(ll).setRadius(accuracy); }
+    else {
+      const icon = L.divIcon({ className: '', html: '<div class="loc-pulse"><div class="loc-dot"></div></div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+      map._locMarker = L.marker(ll, { icon, zIndexOffset: 1000 }).addTo(map);
+      map._locAcc = L.circle(ll, { radius: accuracy, color: '#4285f4', fillColor: '#4285f4', fillOpacity: .1, weight: 1 }).addTo(map);
+    }
+    map.setView(ll, Math.max(map.getZoom(), 16));
+  }, err => {
+    if (a) a.classList.remove('loc-buscando');
+    toast(err.code === 1 ? '📍 Permissão de localização negada.' : '📍 Não foi possível obter a localização.');
+  }, { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 });
+}
+
 function _desenharGeralMapa(statusMap) {
   if (typeof L === 'undefined') return;
   const el = document.getElementById('geralMap'); if (!el) return;
   const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _geralMap = map;
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  addBotaoLocalizacao(map);
   const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
   const bounds = [];
   talhoesFiltrados().forEach(t => {
@@ -1964,6 +2002,7 @@ function _desenharPulvMapa(porTal) {
   const el = document.getElementById('pulvMap'); if (!el) return;
   const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _pulvMap = map;
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  addBotaoLocalizacao(map);
   const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
   const max = Math.max(1, ...Object.values(porTal).map(v=>v.qtd));
   const cor = q => { if (q<=0) return '#94a3b8'; const r=Math.min(1,q/max); const c1=[191,219,254], c2=[30,64,175]; const mix=c1.map((c,i)=>Math.round(c+(c2[i]-c)*r)); return `rgb(${mix[0]},${mix[1]},${mix[2]})`; };
@@ -2339,6 +2378,7 @@ function _desenharAdubMapa(porTal) {
   const el = document.getElementById('adubMap'); if (!el) return;
   const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _adubMap = map;
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  addBotaoLocalizacao(map);
   const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
   const max = Math.max(1, ...Object.values(porTal).map(v=>v.qtd));
   const cor = q => { if (q<=0) return '#94a3b8'; const r=Math.min(1,q/max); const c1=[187,247,208], c2=[21,101,52]; const mix=c1.map((c,i)=>Math.round(c+(c2[i]-c)*r)); return `rgb(${mix[0]},${mix[1]},${mix[2]})`; };
@@ -2925,6 +2965,7 @@ function _nutriDesenharMapa(d, talhoesSel) {
   const el = document.getElementById('nutriMap'); if (!el) return;
   const map = L.map(el, { center:[-18.7166,-40.4000], zoom:13, scrollWheelZoom:true }); _nutriMap = map;
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution:'© Esri', maxZoom:19 }).addTo(map);
+  addBotaoLocalizacao(map);
   const norm = c => (c||[]).map(p => Array.isArray(p)?[p[0],p[1]]:(p.lat!==undefined?[p.lat,p.lng]:[p.latitude,p.longitude]));
   // kg/ha por talhão para o nutriente escolhido → escala de cor
   const vals = {};
