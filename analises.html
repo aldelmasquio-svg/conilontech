@@ -208,24 +208,105 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 .diag-check-wrap{display:flex;align-items:center;justify-content:center;padding:10px 4px 10px 12px;cursor:pointer;flex-shrink:0;}
 .diag-check{width:18px;height:18px;cursor:pointer;accent-color:var(--v);}
 .an-card-body{flex:1;min-width:0;cursor:pointer;}
-.diag-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--rad);background:white;box-shadow:var(--s);margin-bottom:10px;}
-.diag-table{border-collapse:collapse;min-width:100%;font-size:.74rem;}
-.diag-table th,.diag-table td{padding:5px 6px;border:1px solid var(--cl);text-align:center;white-space:nowrap;}
-.diag-table th.col-talhao,.diag-table td.col-talhao{text-align:left;position:sticky;left:0;background:white;z-index:2;min-width:110px;max-width:150px;white-space:normal;font-weight:700;font-size:.72rem;border-right:2px solid var(--cb);}
-.diag-table thead th{background:#f0ece3;font-family:var(--font-display);font-weight:800;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:var(--ve);position:sticky;top:0;z-index:1;}
-.diag-table thead th.col-talhao{z-index:3;}
-.diag-cell{display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:42px;border-radius:5px;padding:3px 5px;cursor:default;}
-.diag-cell-val{font-family:var(--font-mono);font-weight:700;font-size:.76rem;color:white;}
-.diag-cell-lbl{font-size:.56rem;color:rgba(255,255,255,.85);font-weight:600;text-transform:uppercase;letter-spacing:.02em;}
-.diag-cell.cls-ne{background:#e5e7eb;}
-.diag-cell.cls-ne .diag-cell-val,.diag-cell.cls-ne .diag-cell-lbl{color:var(--c);}
-.diag-alertas{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;}
-.diag-alerta-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:99px;font-size:.74rem;font-weight:700;font-family:var(--font-display);}
-.diag-alerta-chip.critico{background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;}
-.diag-alerta-chip.baixo{background:#fef3c7;color:#92400e;border:1px solid #fde68a;}
-.diag-alerta-chip.ok{background:#dcfce7;color:#166534;border:1px solid #86efac;}
-.diag-secao-hdr{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);margin:12px 0 7px;display:flex;align-items:center;gap:7px;}
-.diag-badge-tipo{font-size:.65rem;padding:2px 8px;border-radius:99px;color:white;font-weight:700;}
+/* ━━ Diagnóstico visual (dg-*) ━━ */
+.dg{display:flex;flex-direction:column;gap:12px;}
+.dg-tabs{display:flex;gap:4px;background:white;border-radius:10px;padding:4px;box-shadow:var(--s);overflow-x:auto;}
+.dg-tabs button{flex:1;white-space:nowrap;font-family:var(--font-display);font-weight:700;font-size:.84rem;border:0;background:transparent;color:var(--c);padding:9px 12px;border-radius:7px;cursor:pointer;}
+.dg-tabs button[aria-selected="true"]{background:var(--ve);color:white;}
+.dg-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:.72rem;color:var(--c);}
+.dg-legend span{display:inline-flex;align-items:center;gap:5px;}
+.dg-legend i{width:11px;height:11px;border-radius:3px;display:inline-block;}
+.dg-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.dg-chip{font-family:var(--font-body);font-size:.8rem;font-weight:600;border:1px solid var(--cb);background:white;color:var(--t);border-radius:99px;padding:6px 8px 6px 11px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;}
+.dg-chip .b{font-family:var(--font-mono);font-size:.7rem;font-weight:700;border-radius:99px;padding:1px 7px;color:white;}
+.dg-chip[aria-pressed="true"]{background:var(--ve);color:white;border-color:var(--ve);}
+.dg-g2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;}
+.dg-g3{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;}
+.dg-col{display:flex;flex-direction:column;gap:12px;min-width:0;}
+@media(max-width:860px){.dg-g2{grid-template-columns:minmax(0,1fr);}}
+.dg-card{background:white;border-radius:var(--rad);box-shadow:var(--s);overflow:hidden;min-width:0;display:flex;flex-direction:column;}
+.dg-card>h3{background:var(--ve);color:white;font-family:var(--font-display);font-size:.78rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;text-align:center;padding:8px 12px;}
+.dg-body{padding:12px;display:flex;flex-direction:column;gap:9px;min-width:0;}
+.dg-sub{font-size:.72rem;color:var(--c);}
+.dg-foot{font-size:.7rem;color:var(--c);line-height:1.4;}
+.dg-div{font-family:var(--font-display);font-weight:800;font-size:.7rem;color:var(--c);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--cl);padding-top:8px;margin-top:2px;}
+.dg-vazio-mini{font-size:.78rem;color:var(--c);text-align:center;padding:14px;}
+.dg-click{cursor:pointer;}
+/* medidor */
+.dg-gh{display:grid;grid-template-columns:104px minmax(0,1fr) 78px;align-items:center;gap:10px;border-radius:6px;}
+.dg-gh.dg-click:hover{background:var(--cl);}
+.dg-gname{font-size:.8rem;line-height:1.2;min-width:0;}
+.dg-gname b{font-family:var(--font-display);font-weight:800;}
+.dg-gname span{color:var(--c);font-size:.7rem;}
+.dg-gname small{display:block;font-family:var(--font-mono);color:var(--c);font-size:.64rem;}
+.dg-gauge{position:relative;height:14px;border-radius:7px;margin:0 9px;}
+.dg-pin{position:absolute;top:50%;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2.5px white,0 1px 4px rgba(0,0,0,.35);}
+.dg-gval{text-align:right;line-height:1.15;}
+.dg-gval b{font-family:var(--font-mono);font-size:.86rem;}
+.dg-gval small{display:block;font-size:.64rem;font-weight:700;}
+@media(max-width:520px){.dg-gh{grid-template-columns:78px minmax(0,1fr) 66px;gap:6px;}.dg-gname span{display:none;}}
+/* radar / dial */
+.dg-radar{width:100%;max-width:380px;margin:0 auto;display:block;}
+.dg-radar text,.dg-dial text,.dg-cols text{font-family:var(--font-body);}
+.dg-dial{width:100%;max-width:230px;margin:0 auto;display:block;}
+/* relações */
+.dg-rt{display:grid;grid-template-columns:50px minmax(0,1fr) 62px;gap:8px;align-items:center;font-size:.78rem;}
+.dg-rt b{font-family:var(--font-display);}
+.dg-rbar{position:relative;height:14px;border-radius:7px;}
+.dg-rbar i{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--c);}
+.dg-rbar span{position:absolute;top:50%;width:13px;height:13px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px white,0 1px 3px rgba(0,0,0,.35);}
+.dg-rv{text-align:right;font-family:var(--font-mono);font-weight:700;line-height:1.1;}
+.dg-rv small{display:block;font-family:var(--font-body);font-weight:500;font-size:.6rem;color:var(--c);}
+.dg-rax{display:flex;justify-content:space-between;font-size:.66rem;color:var(--c);padding:0 70px 0 58px;}
+/* panorama */
+.dg-pan{display:grid;grid-template-columns:44px minmax(0,1fr);gap:8px;align-items:center;cursor:pointer;padding:3px 4px;border-radius:6px;}
+.dg-pan:hover,.dg-pan.on{background:var(--vb);}
+.dg-pan b{font-family:var(--font-display);font-size:.84rem;}
+.dg-stack{display:flex;height:22px;border-radius:5px;overflow:hidden;gap:2px;}
+.dg-stack div{display:grid;place-items:center;font-family:var(--font-mono);font-size:.72rem;font-weight:700;color:white;min-width:0;}
+/* comparar */
+.dg-ncs{display:flex;flex-wrap:wrap;gap:4px;}
+.dg-ncs button{font-family:var(--font-display);font-weight:700;font-size:.76rem;border:1px solid var(--cb);background:white;color:var(--t);border-radius:6px;padding:4px 8px;cursor:pointer;}
+.dg-ncs button[aria-pressed="true"]{background:var(--ve);color:white;border-color:var(--ve);}
+.dg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.dg-cols{width:100%;display:block;}
+/* matriz */
+table.dg-mx{border-collapse:separate;border-spacing:3px;width:100%;}
+.dg-mx th{font-family:var(--font-display);font-size:.7rem;color:var(--c);font-weight:800;padding:4px;}
+.dg-mx thead th.on{color:var(--ve);text-decoration:underline;}
+.dg-mx th.r{text-align:left;color:var(--t);cursor:pointer;font-size:.74rem;min-width:110px;max-width:170px;white-space:normal;line-height:1.2;position:sticky;left:0;background:white;z-index:1;}
+.dg-mx th.r small{display:block;font-family:var(--font-body);font-weight:500;font-size:.6rem;color:var(--c);}
+.dg-mx td{border-radius:5px;text-align:center;font-family:var(--font-mono);font-size:.74rem;padding:7px 3px;cursor:pointer;color:#1a1a1a;font-weight:600;min-width:42px;white-space:nowrap;}
+.dg-mx tr.on th.r{color:var(--v);}
+.dg-mx tr.on td{box-shadow:inset 0 0 0 2px #0b1c0d;}
+.dg-mx-x td{font-family:var(--font-body);font-size:.66rem;font-weight:700;min-width:64px;}
+/* solo */
+.dg-stats{display:flex;flex-wrap:wrap;gap:8px;}
+.dg-stat{background:white;border-radius:8px;box-shadow:var(--s);padding:7px 12px;display:flex;flex-direction:column;border-left:4px solid #c9cfc6;min-width:96px;}
+.dg-stat span{font-size:.66rem;color:var(--c);}
+.dg-stat b{font-family:var(--font-mono);font-size:1.02rem;}
+.dg-textura{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.76rem;color:var(--c);}
+.dg-textura select{border:1px solid var(--cb);border-radius:6px;padding:5px 8px;font-size:.78rem;background:white;}
+/* solo × folha */
+.dg-par{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:.82rem;}
+.dg-par select{max-width:100%;border:1px solid var(--cb);border-radius:6px;padding:6px 8px;font-size:.8rem;background:white;margin-top:2px;}
+.dg-tag{display:inline-block;color:white;font-family:var(--font-display);font-weight:800;font-size:.66rem;border-radius:99px;padding:2px 9px;white-space:nowrap;}
+.dg-quad{display:flex;align-items:stretch;gap:6px;}
+.dg-quad-ylab{writing-mode:vertical-rl;transform:rotate(180deg);font-family:var(--font-display);font-weight:800;font-size:.66rem;letter-spacing:.12em;color:var(--c);text-align:center;}
+.dg-quad-grid{flex:1;display:grid;grid-template-columns:62px repeat(3,minmax(0,1fr));gap:4px;}
+.dg-quad-rl,.dg-quad-cl{font-size:.66rem;font-weight:700;color:var(--c);display:flex;align-items:center;justify-content:center;text-align:center;}
+.dg-quad-cel{border:1.5px solid;border-radius:8px;padding:6px;min-height:78px;display:flex;flex-direction:column;gap:5px;}
+.dg-quad-t{font-family:var(--font-display);font-weight:800;font-size:.66rem;line-height:1.15;}
+.dg-quad-n{display:flex;flex-wrap:wrap;gap:3px;}
+.dg-quad-n span{color:white;font-family:var(--font-display);font-weight:800;font-size:.74rem;border-radius:5px;padding:2px 6px;}
+.dg-quad-xlab{font-family:var(--font-display);font-weight:800;font-size:.66rem;letter-spacing:.12em;color:var(--c);text-align:center;padding-left:84px;}
+.dg-leitura{font-size:.76rem;line-height:1.4;gap:6px;}
+.dg-x{display:grid;grid-template-columns:36px minmax(0,1.3fr) minmax(0,1fr);gap:10px;align-items:center;border-top:1px solid var(--cl);padding-top:9px;}
+.dg-x-sig{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);text-align:center;}
+.dg-x-g{display:flex;flex-direction:column;gap:5px;min-width:0;}
+.dg-x-g .dg-gname span{display:none;}
+.dg-x-d small{display:block;font-size:.7rem;color:var(--c);margin-top:3px;line-height:1.35;}
+@media(max-width:640px){.dg-x{grid-template-columns:30px minmax(0,1fr);}.dg-x-d{grid-column:2;}}
 .diag-sem-sel{background:white;border-radius:var(--rad);padding:40px 22px;text-align:center;box-shadow:var(--s);}
 .diag-sem-sel .ico{font-size:3rem;margin-bottom:12px;opacity:.4;}
 .diag-sem-sel p{color:var(--c);font-size:.9rem;line-height:1.55;}
@@ -684,10 +765,12 @@ onAuthStateChanged(auth, async (user) => {
   onSnapshot(collection(db,'analises'), snap => {
     analises = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
     renderLista();
+    if (tabAtual === 'diag') renderDiagnostico();
   });
   onSnapshot(collection(db,'amostras'), snap => {
     amostras = snap.docs.map(d=>({_docId:d.id, ...d.data()}));
     renderLista();
+    if (tabAtual === 'diag') renderDiagnostico();
   });
   // Faixas customizadas (1 doc só, ID fixo)
   onSnapshot(doc(db,'analises_faixas','global'), snap => {
@@ -699,6 +782,7 @@ onAuthStateChanged(auth, async (user) => {
     }
     // Re-renderiza se está numa tela que usa faixas
     if (tabAtual === 'comparar') renderComparar();
+    if (tabAtual === 'diag') renderDiagnostico();
   });
 });
 
@@ -941,125 +1025,553 @@ window.limparDiagSel = function() {
   if (tabAtual === 'lista') window.renderLista();
 };
 
+// ━━━━━━━━━━ DIAGNÓSTICO VISUAL ━━━━━━━━━━
+// Três visões sobre as análises marcadas na lista: Folha, Solo e Solo × Folha.
+// Tudo é derivado de classificar()/faixaEfetiva(), então as cores dos medidores,
+// do radar e da matriz seguem as faixas do catálogo + as personalizadas do admin.
+const DG_COR  = {mb:'#d23b2e', bx:'#e9a92f', md:'#2f9c4a', ad:'#2f9c4a', id:'#2f9c4a', fora:'#e9a92f', at:'#4a90d9', ma:'#2b5fab', ne:'#c9cfc6'};
+const DG_TINT = {mb:'#f3c0ba', bx:'#f7e1a6', md:'#bfe4c8', ad:'#bfe4c8', id:'#bfe4c8', fora:'#f7e1a6', at:'#c6dcf3', ma:'#a9bfe3', ne:'#eceee9'};
+const DG_SIG = {n:'N',p:'P',k:'K',ca:'Ca',mg:'Mg',s:'S',b:'B',cu:'Cu',fe:'Fe',mn:'Mn',zn:'Zn',
+  calcio:'Ca',magnesio:'Mg',potassio:'K',p_mehlich:'P',enxofre:'S',mo:'MO',boro:'B',cobre:'Cu',ferro:'Fe',manganes:'Mn',zinco:'Zn',
+  h_al:'H+Al',aluminio:'Al',sat_ca:'Ca/T',sat_mg:'Mg/T',sat_k:'K/T',ph_h2o:'pH',v:'V%',sat_al:'m%',
+  ctc_ph7:'CTC (T)',ctc_efetiva:'CTC efetiva',sb:'Soma de bases',p_remanescente:'P remanescente',sodio:'Sódio'};
+const DG_FOLHA_NUT = ['n','p','k','ca','mg','s','b','cu','fe','mn','zn'];
+const DG_SOLO_NUT  = ['calcio','magnesio','potassio','p_mehlich','enxofre','mo','boro','cobre','ferro','manganes','zinco'];
+const DG_SOLO_ACID = ['h_al','aluminio'];
+const DG_SOLO_SAT  = ['sat_ca','sat_mg','sat_k'];
+const DG_SOLO_DIAL = ['ph_h2o','v','sat_al'];
+const DG_SOLO_STAT = ['ctc_ph7','ctc_efetiva','sb','p_remanescente','sodio'];
+const DG_DIAL_FAIXA = {ph_h2o:[3.5,8], v:[0,100], sat_al:[0,80]};
+// [id da relação, numerador, denominador, rótulo] — o valor do laudo vale; senão é calculado
+const DG_REL = {
+  folha:[['rel_n_k','n','k','N/K'],['rel_n_s','n','s','N/S'],['rel_n_mg','n','mg','N/Mg'],['rel_k_mg','k','mg','K/Mg'],
+         ['rel_k_ca','k','ca','K/Ca'],['rel_ca_mg_f','ca','mg','Ca/Mg'],['rel_fe_mn','fe','mn','Fe/Mn'],['rel_p_zn','p','zn','P/Zn']],
+  solo:[['rel_ca_mg','calcio','magnesio','Ca/Mg'],['rel_ca_k','calcio','potassio','Ca/K'],['rel_mg_k','magnesio','potassio','Mg/K']]
+};
+// Nutrientes presentes nos dois laudos: [id solo, id folha]
+const DG_COMUNS = [['p_mehlich','p'],['potassio','k'],['calcio','ca'],['magnesio','mg'],['enxofre','s'],
+                   ['boro','b'],['cobre','cu'],['ferro','fe'],['manganes','mn'],['zinco','zn']];
+// Leitura cruzada: <grupo do solo>-<grupo da folha>  (b = baixo, o = adequado, a = alto)
+const DG_DIAG = {
+  'b-b':{cor:'#d23b2e', c:'Falta', t:'Falta no solo',       d:'Solo e folha baixos: repor no solo (adubação / calagem).'},
+  'o-b':{cor:'#e07b24', c:'Absorção', t:'Absorção limitada',   d:'O solo tem, mas a planta não absorve: ver pH, alumínio, umidade, raízes e antagonismos.'},
+  'a-b':{cor:'#a8431f', c:'Bloqueio', t:'Bloqueio',            d:'Solo alto e folha baixa: provável antagonismo ou desequilíbrio (veja as relações).'},
+  'b-o':{cor:'#e9a92f', c:'Res. baixa', t:'Reserva baixa',       d:'A planta ainda está bem, mas o solo está baixo: manter a reposição.'},
+  'o-o':{cor:'#2f9c4a', c:'OK', t:'Equilibrado',         d:'Solo e folha adequados.'},
+  'a-o':{cor:'#3a8f8a', c:'Res. alta', t:'Reserva alta',        d:'Solo acima do necessário: dá para reduzir a dose.'},
+  'b-a':{cor:'#4a90d9', c:'Conferir', t:'Folha alta, solo baixo', d:'Pode ser adubação foliar recente ou efeito de concentração: conferir.'},
+  'o-a':{cor:'#4a90d9', c:'Luxo', t:'Consumo de luxo',     d:'Folha acima do adequado: avaliar redução.'},
+  'a-a':{cor:'#2b5fab', c:'Excesso', t:'Excesso',             d:'Solo e folha altos: suspender ou reduzir a aplicação.'}
+};
+let dg = {vista:null, am:{folha:null, solo:null}, nut:{folha:'k', solo:'potassio'}, par:null, outro:{}};
+
+function dgParam(tipo, id) { return PARAMS[tipo].find(p => p.id === id); }
+function dgNome(p) { return p.label.replace(/\s*\(.*\)/,''); }
+function dgGrupo(cls) { return ['mb','bx','fora'].includes(cls) ? 'b' : ['md','ad','id'].includes(cls) ? 'o' : ['at','ma'].includes(cls) ? 'a' : null; }
+function dgOk(cls) { return dgGrupo(cls) === 'o'; }
+function dgNum(v) {
+  if (v == null || !isFinite(v)) return '—';
+  const a = Math.abs(v);
+  return v.toLocaleString('pt-BR', {maximumFractionDigits: a < 10 ? 2 : a < 100 ? 1 : 0});
+}
+function dgVal(am, id) {
+  const v = am?.parametros?.[id];
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(v);
+  return isFinite(n) ? n : null;
+}
+// Completa saturações e relações que o laudo não trouxe (K do solo em mg/dm³ → cmolc: ÷ 391)
+function dgEnriquecer(am) {
+  const p = {...(am.parametros || {})};
+  const val = id => { const v = p[id]; return (v === null || v === undefined || v === '' || !isFinite(Number(v))) ? null : Number(v); };
+  const conv = (tipo, id) => (tipo === 'solo' && id === 'potassio') ? 1/391 : 1;
+  if (am.tipo === 'solo') {
+    const T = val('ctc_ph7');
+    if (T) {
+      if (val('sat_ca') == null && val('calcio') != null) p.sat_ca = val('calcio') / T * 100;
+      if (val('sat_mg') == null && val('magnesio') != null) p.sat_mg = val('magnesio') / T * 100;
+      if (val('sat_k') == null && val('potassio') != null) p.sat_k = val('potassio') / 391 / T * 100;
+    }
+  }
+  (DG_REL[am.tipo] || []).forEach(([id, a, b]) => {
+    if (val(id) != null) return;
+    const va = val(a), vb = val(b);
+    if (va != null && vb) p[id] = (va * conv(am.tipo, a)) / (vb * conv(am.tipo, b));
+  });
+  return {...am, parametros: p};
+}
+function dgRotulo(am) {
+  const tal = am.talhaoIdVinculado ? talhoes.find(t => t.id === am.talhaoIdVinculado) : null;
+  let r = tal ? (tal.nome || tal.id) : (am.nome || '—');
+  if (am.tipo === 'solo' && am.profundidade) r += ' · ' + am.profundidade;
+  return r;
+}
+function dgSub(am) {
+  const an = analises.find(a => a._docId === am.analiseId);
+  return [an?.fazendaVinculada || an?.propriedade, formatarData(an?.dataLaudo || an?.dataEntrada)].filter(x => x && x !== '—').join(' · ');
+}
+function dgData(am) { const an = analises.find(a => a._docId === am.analiseId); return an?.dataLaudo || an?.dataEntrada || ''; }
+function dgClass(p, tipo, v) { return v == null ? {cls:'ne', label:'—'} : classificar(p, v, tipo, window.texturaAtiva); }
+
+// Limites da faixa adequada: {lo, hi, min}. lo=null → parâmetro "quanto menos melhor" (Al, m%, H+Al)
+function dgLimites(p, tipo) {
+  if (!p) return null;
+  if (p.faixaEspecial === 'ph') return {lo:5.5, hi:6.9, min:3.5};
+  const ef = faixaEfetiva(p, tipo);
+  if (!ef || ef.tipo === 'ideal' || ef.tipo === 'ph') return null;
+  const f = ef.tipo === 'textura' ? ef.faixa[window.texturaAtiva || 'medio'] : ef.faixa;
+  if (!f) return null;
+  if (p.inverter) {
+    const hi = isFinite(f.alto) ? f.alto : f.baixo;
+    return isFinite(hi) && hi > 0 ? {lo:null, hi, min:0} : null;
+  }
+  if (!isFinite(f.baixo) || f.baixo <= 0) return null;
+  return {lo:f.baixo, hi: isFinite(f.alto) ? f.alto : Infinity, min:0};
+}
+// Posição 0–1 no medidor: abaixo da faixa 0–0,5 · faixa 0,5–0,75 · acima 0,75–1 (1 = 1,5× o máximo)
+function dgPos(v, L) {
+  if (L.lo == null) return v <= L.hi ? 0.75 * Math.max(0, v) / L.hi : Math.min(1, 0.75 + 0.25 * (v - L.hi) / (L.hi * 0.5));
+  if (v < L.lo) return Math.max(0, 0.5 * (v - L.min) / (L.lo - L.min));
+  if (!isFinite(L.hi)) return 0.5 + 0.25 * Math.min(1, (v - L.lo) / L.lo);
+  if (v <= L.hi) return 0.5 + 0.25 * (v - L.lo) / (L.hi - L.lo);
+  return Math.min(1, 0.75 + 0.25 * (v - L.hi) / (L.hi * 0.5));
+}
+function dgInv(t, L) {
+  if (L.lo == null) return t <= 0.75 ? t / 0.75 * L.hi : L.hi + (t - 0.75) / 0.25 * L.hi * 0.5;
+  if (t < 0.5) return L.min + t / 0.5 * (L.lo - L.min);
+  if (!isFinite(L.hi)) return L.lo + (t - 0.5) / 0.25 * L.lo;
+  if (t <= 0.75) return L.lo + (t - 0.5) / 0.25 * (L.hi - L.lo);
+  return L.hi + (t - 0.75) / 0.25 * L.hi * 0.5;
+}
+// Fundo do medidor: amostra a classificação ao longo da escala → as cores batem com o rótulo
+function dgFaixasCor(clsDe, n = 60) {
+  const runs = [];
+  for (let i = 0; i < n; i++) {
+    const cls = clsDe((i + 0.5) / n);
+    const last = runs[runs.length - 1];
+    if (last && last.cls === cls) last.b = (i + 1) / n; else runs.push({cls, a:i / n, b:(i + 1) / n});
+  }
+  return runs;
+}
+function dgGradiente(runs) {
+  return 'linear-gradient(90deg,' + runs.map(r => `${DG_TINT[r.cls] || DG_TINT.ne} ${(r.a*100).toFixed(1)}% ${(r.b*100).toFixed(1)}%`).join(',') + ')';
+}
+function dgFaixaTxt(L, p) {
+  if (!L) return '';
+  const f = x => dgNum(x);
+  if (L.lo == null) return `até ${f(L.hi)}`;
+  if (!isFinite(L.hi)) return `≥ ${f(L.lo)}`;
+  return `${f(L.lo)}–${f(L.hi)}`;
+}
+
+// ━━ Peças visuais ━━
+function dgGauge(p, tipo, am, onclick, rotulo) {
+  if (!p) return '';
+  const v = dgVal(am, p.id), L = dgLimites(p, tipo), c = dgClass(p, tipo, v);
+  const fundo = L ? dgGradiente(dgFaixasCor(t => classificar(p, Math.max(0, dgInv(t, L)), tipo, window.texturaAtiva).cls)) : DG_TINT.ne;
+  const pin = (v != null && L) ? `<span class="dg-pin" style="left:${(dgPos(v, L)*100).toFixed(1)}%;background:${DG_COR[c.cls]}"></span>` : '';
+  return `<div class="dg-gh${onclick?' dg-click':''}" ${onclick?`onclick="${onclick}"`:''} title="${escAttr(p.label)}: ${escAttr(dgNum(v))} ${escAttr(p.un)} — ${escAttr(c.label)}">
+    <div class="dg-gname"><b>${escHtml(rotulo || DG_SIG[p.id] || dgNome(p))}</b> <span>${rotulo ? '' : escHtml(dgNome(p))}</span><small>${escHtml(dgFaixaTxt(L, p))}</small></div>
+    <div class="dg-gauge" style="background:${fundo}">${pin}</div>
+    <div class="dg-gval"><b>${dgNum(v)}</b><small style="color:${c.cls==='ne'?'var(--c)':DG_COR[c.cls]}">${escHtml(c.label)}</small></div>
+  </div>`;
+}
+
+function dgRadar(eixos) { // [{label, t, cls, tip}]
+  if (eixos.length < 3) return '<div class="dg-vazio-mini">Poucos parâmetros para o radar.</div>';
+  const cx = 180, cy = 180, R = 150, n = eixos.length;
+  const pt = (i, r) => { const a = -Math.PI/2 + i * 2 * Math.PI / n; return [cx + Math.cos(a) * R * r, cy + Math.sin(a) * R * r]; };
+  const poly = r => eixos.map((_, i) => pt(i, r).map(x => x.toFixed(1)).join(',')).join(' ');
+  let h = '';
+  [[1, DG_TINT.at], [0.75, DG_TINT.md], [0.5, DG_TINT.bx], [0.3, DG_TINT.mb]].forEach(([r, c]) => h += `<polygon points="${poly(r)}" fill="${c}" stroke="none"/>`);
+  [0.25, 0.5, 0.75, 1].forEach(r => h += `<polygon points="${poly(r)}" fill="none" stroke="#5a6b48" stroke-opacity=".25"/>`);
+  eixos.forEach((_, i) => { const [x, y] = pt(i, 1); h += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#5a6b48" stroke-opacity=".25"/>`; });
+  const pts = eixos.map((e, i) => e.t == null ? null : pt(i, Math.max(e.t, 0.03)));
+  const validos = pts.filter(Boolean);
+  if (validos.length >= 3) h += `<polygon points="${validos.map(p => p.map(x => x.toFixed(1)).join(',')).join(' ')}" fill="#0b1c0d" fill-opacity=".07" stroke="#0b1c0d" stroke-width="2.2" stroke-linejoin="round"/>`;
+  pts.forEach((p, i) => { if (p) h += `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="6.5" fill="${DG_COR[eixos[i].cls]}" stroke="#0b1c0d" stroke-width="1.8"><title>${escHtml(eixos[i].tip)}</title></circle>`; });
+  eixos.forEach((e, i) => {
+    const [x, y] = pt(i, 1.13); const anc = Math.abs(x - cx) < 8 ? 'middle' : x > cx ? 'start' : 'end';
+    h += `<text x="${x.toFixed(1)}" y="${(y + 5).toFixed(1)}" text-anchor="${anc}" font-size="15" font-weight="700" fill="${e.t == null ? '#9ca3af' : '#1a1a1a'}">${escHtml(e.label)}</text>`;
+  });
+  return `<svg class="dg-radar" viewBox="-44 -30 448 420" role="img" aria-label="Radar de equilíbrio">${h}</svg>
+    <div class="dg-foot" style="text-align:center">Faixa verde = adequado · para dentro = falta · para fora = sobra</div>`;
+}
+function dgRadarEixos(am, tipo, ids) {
+  return ids.map(id => dgParam(tipo, id)).filter(Boolean).map(p => {
+    const v = dgVal(am, p.id), L = dgLimites(p, tipo), c = dgClass(p, tipo, v);
+    return {label: DG_SIG[p.id] || dgNome(p), t: (v != null && L) ? dgPos(v, L) : null, cls: c.cls, tip: `${p.label}: ${dgNum(v)} ${p.un} — ${c.label}`};
+  });
+}
+
+function dgRelacoes(am, tipo) {
+  const linhas = DG_REL[tipo].map(([id, , , lab]) => {
+    const p = dgParam(tipo, id); if (!p) return '';
+    const ef = faixaEfetiva(p, tipo); const ideal = ef?.faixa?.ideal;
+    const r = dgVal(am, id);
+    if (!ideal) return '';
+    const posDe = x => 50 + Math.max(-1.5, Math.min(1.5, Math.log2(x / ideal))) / 1.5 * 46;
+    const deP = t => ideal * Math.pow(2, ((t * 100 - 50) / 46) * 1.5);
+    const fundo = dgGradiente(dgFaixasCor(t => classificar(p, deP(t), tipo).cls));
+    const c = dgClass(p, tipo, r);
+    return `<div class="dg-rt" title="${escAttr(lab)}: ${escAttr(dgNum(r))} (ideal ${escAttr(dgNum(ideal))}) — ${escAttr(c.label)}">
+      <b>${escHtml(lab)}</b>
+      <div class="dg-rbar" style="background:${fundo}"><i></i>${r != null && r > 0 ? `<span style="left:${posDe(r).toFixed(1)}%;background:${DG_COR[c.cls]}"></span>` : ''}</div>
+      <span class="dg-rv">${dgNum(r)}<small>ideal ${dgNum(ideal)}</small></span>
+    </div>`;
+  }).join('');
+  if (!linhas) return '<div class="dg-vazio-mini">Sem relações com valor ideal cadastrado.</div>';
+  return linhas + `<div class="dg-rax"><span>menor</span><span>ideal</span><span>maior</span></div>`;
+}
+
+function dgPanorama(lista, tipo, ids, sel) {
+  const ordem = [['mb','muito baixo'],['bx','baixo'],['md','adequado'],['at','alto'],['ma','muito alto']];
+  const grupoCls = c => ['ad','id'].includes(c) ? 'md' : c === 'fora' ? 'bx' : c;
+  return ids.map(id => dgParam(tipo, id)).filter(Boolean).map(p => {
+    const cont = {};
+    lista.forEach(am => { const c = grupoCls(dgClass(p, tipo, dgVal(am, p.id)).cls); if (c !== 'ne') cont[c] = (cont[c] || 0) + 1; });
+    const segs = ordem.map(([c, lab]) => cont[c] ? `<div style="flex:${cont[c]};background:${DG_COR[c]}" title="${cont[c]} ${lab}">${cont[c]}</div>` : '').join('');
+    return `<div class="dg-pan${p.id === sel ? ' on' : ''}" onclick="dgSet('nut','${p.id}')">
+      <b>${escHtml(DG_SIG[p.id] || dgNome(p))}</b>
+      <div class="dg-stack">${segs || '<div style="flex:1;background:#eceee9;color:var(--c)">sem dado</div>'}</div>
+    </div>`;
+  }).join('') + `<div class="dg-foot" style="padding-left:52px">nº de amostras · ← abaixo · adequado · acima →</div>`;
+}
+
+function dgColunas(lista, tipo, p, selAm) {
+  if (!p) return '';
+  const L = dgLimites(p, tipo);
+  const vals = lista.map(am => dgVal(am, p.id));
+  const n = lista.length, bw = 52, Lm = 46, B = 70, T = 16, H = 290;
+  const W = Math.max(520, Lm + 8 + n * bw);
+  const ref = L ? (L.lo == null ? L.hi : isFinite(L.hi) ? L.hi * 1.2 : L.lo * 1.6) : 0;
+  const max = Math.max(ref, ...vals.filter(v => v != null), 0.0001) * 1.1;
+  const y = v => T + (H - T - B) * (1 - Math.max(0, v) / max);
+  let h = '';
+  if (L) {
+    const lo = L.lo == null ? 0 : L.lo, hi = isFinite(L.hi) ? Math.min(L.hi, max) : max;
+    h += `<rect x="${Lm}" y="${y(hi).toFixed(1)}" width="${W - Lm}" height="${(y(lo) - y(hi)).toFixed(1)}" fill="${DG_TINT.md}"/>`;
+    [L.lo, isFinite(L.hi) && L.hi <= max ? L.hi : null].filter(v => v != null).forEach(v =>
+      h += `<line x1="${Lm}" x2="${W}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#2f9c4a" stroke-dasharray="4 3"/>
+            <text x="${Lm - 6}" y="${(y(v) + 4).toFixed(1)}" text-anchor="end" font-size="11" fill="#5a6b48">${dgNum(v)}</text>`);
+  }
+  h += `<line x1="${Lm}" x2="${W}" y1="${y(0)}" y2="${y(0)}" stroke="#9ca3af"/>`;
+  lista.forEach((am, i) => {
+    const v = vals[i], x = Lm + 4 + i * bw, c = dgClass(p, tipo, v);
+    const nome = dgRotulo(am); const curto = nome.length > 14 ? nome.slice(0, 13) + '…' : nome;
+    h += `<g class="dg-click" onclick="dgSet('am','${am._docId}')"><title>${escHtml(nome)}: ${dgNum(v)} ${escHtml(p.un)} — ${escHtml(c.label)}</title>
+      <rect x="${x}" y="${T}" width="${bw}" height="${H - T}" fill="transparent"/>`;
+    if (v != null) h += `<rect x="${(x + bw * 0.18).toFixed(1)}" y="${y(v).toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${Math.max(1, y(0) - y(v)).toFixed(1)}" rx="3" fill="${DG_COR[c.cls]}" ${am._docId === selAm ? 'stroke="#0b1c0d" stroke-width="2.5"' : ''}/>
+      <text x="${x + bw / 2}" y="${(y(v) - 5).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="700" fill="#1a1a1a">${dgNum(v)}</text>`;
+    else h += `<text x="${x + bw / 2}" y="${y(0) - 6}" text-anchor="middle" font-size="11" fill="#9ca3af">—</text>`;
+    h += `<text transform="translate(${x + bw / 2 + 4},${H - B + 12}) rotate(-38)" text-anchor="end" font-size="11" fill="${am._docId === selAm ? '#0b1c0d' : '#5a6b48'}" font-weight="${am._docId === selAm ? 700 : 400}">${escHtml(curto)}</text></g>`;
+  });
+  return `<div class="dg-scroll"><svg class="dg-cols" viewBox="0 0 ${W} ${H}" style="min-width:${Math.min(W, 50 + n * 36)}px" role="img" aria-label="Comparação entre amostras">${h}</svg></div>`;
+}
+
+function dgMatriz(lista, tipo, ids, selAm, selNut) {
+  const ps = ids.map(id => dgParam(tipo, id)).filter(Boolean);
+  let h = `<table class="dg-mx"><thead><tr><th></th>${ps.map(p => `<th class="${p.id === selNut ? 'on' : ''}" title="${escAttr(p.label)} (${escAttr(p.un)})">${escHtml(DG_SIG[p.id] || dgNome(p))}</th>`).join('')}</tr></thead><tbody>`;
+  lista.forEach(am => {
+    h += `<tr class="${am._docId === selAm ? 'on' : ''}"><th class="r" onclick="dgSet('am','${am._docId}')">${escHtml(dgRotulo(am))}<small>${escHtml(dgSub(am))}</small></th>`;
+    ps.forEach(p => {
+      const v = dgVal(am, p.id), c = dgClass(p, tipo, v);
+      h += `<td style="background:${DG_TINT[c.cls]}" onclick="dgCel('${am._docId}','${p.id}')" title="${escAttr(p.label)}: ${escAttr(dgNum(v))} ${escAttr(p.un)} — ${escAttr(c.label)}">${dgNum(v)}</td>`;
+    });
+    h += '</tr>';
+  });
+  return `<div class="dg-scroll">${h}</tbody></table></div>`;
+}
+
+function dgDial(p, am) {
+  if (!p) return '';
+  const v = dgVal(am, p.id), c = dgClass(p, 'solo', v), L = dgLimites(p, 'solo');
+  const [mn, mx] = DG_DIAL_FAIXA[p.id] || [0, 100];
+  const cx = 120, cy = 112, R = 88;
+  const ang = x => Math.PI * (1 - (Math.min(Math.max(x, mn), mx) - mn) / (mx - mn));
+  const P = (a, r) => [cx + Math.cos(a) * r, cy - Math.sin(a) * r];
+  let h = '';
+  dgFaixasCor(t => classificar(p, mn + t * (mx - mn), 'solo').cls, 48).forEach(run => {
+    const [x1, y1] = P(ang(mn + run.a * (mx - mn)), R), [x2, y2] = P(ang(mn + run.b * (mx - mn)), R);
+    h += `<path d="M${x1.toFixed(1)} ${y1.toFixed(1)} A${R} ${R} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}" stroke="${DG_COR[run.cls]}" stroke-width="20" fill="none"/>`;
+  });
+  if (v != null) {
+    const [nx, ny] = P(ang(v), R - 6);
+    h += `<line x1="${cx}" y1="${cy}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#0b1c0d" stroke-width="4" stroke-linecap="round"/>`;
+  }
+  h += `<circle cx="${cx}" cy="${cy}" r="8" fill="#0b1c0d"/>
+    <text x="${cx - R}" y="${cy + 20}" text-anchor="middle" font-size="11" fill="#5a6b48">${dgNum(mn)}</text>
+    <text x="${cx + R}" y="${cy + 20}" text-anchor="middle" font-size="11" fill="#5a6b48">${dgNum(mx)}</text>
+    <text x="${cx}" y="${cy + 44}" text-anchor="middle" font-size="26" font-weight="800" fill="#1a1a1a">${dgNum(v)}</text>`;
+  return `<div class="dg-card"><h3>${escHtml(p.label)}</h3><div class="dg-body">
+    <svg class="dg-dial" viewBox="0 0 240 166" role="img" aria-label="${escAttr(p.label)}: ${escAttr(dgNum(v))}">${h}</svg>
+    <div class="dg-foot" style="text-align:center"><b style="color:${c.cls === 'ne' ? 'var(--c)' : DG_COR[c.cls]}">${escHtml(c.label)}</b> · ideal ${escHtml(dgFaixaTxt(L, p))}</div>
+  </div></div>`;
+}
+
+function dgChips(lista, tipo, ids, sel, acao = 'am') {
+  return `<div class="dg-chips">${lista.map(am => {
+    const n = ids.map(id => dgParam(tipo, id)).filter(Boolean).filter(p => { const c = dgClass(p, tipo, dgVal(am, p.id)).cls; return c !== 'ne' && !dgOk(c); }).length;
+    const cor = n >= 5 ? DG_COR.mb : n >= 2 ? DG_COR.bx : DG_COR.md;
+    return `<button type="button" class="dg-chip" aria-pressed="${am._docId === sel}" onclick="dgSet('${acao}','${am._docId}')" title="${escAttr(dgSub(am))}">
+      ${am.tipo === 'solo' ? '🧪' : '🍃'} ${escHtml(dgRotulo(am))}<span class="b" style="background:${cor}" title="${n} fora da faixa">${n}</span></button>`;
+  }).join('')}</div>`;
+}
+
+function dgLegenda() {
+  return `<div class="dg-legend">
+    <span><i style="background:${DG_COR.mb}"></i>Muito baixo</span><span><i style="background:${DG_COR.bx}"></i>Baixo</span>
+    <span><i style="background:${DG_COR.md}"></i>Adequado</span><span><i style="background:${DG_COR.at}"></i>Alto</span>
+    <span><i style="background:${DG_COR.ma}"></i>Muito alto</span><span style="margin-left:auto">nº no chip = itens fora da faixa</span>
+  </div>`;
+}
+function dgSeletorTextura() {
+  return `<div class="dg-textura"><label>Textura do solo (muda a faixa do P):</label>
+    <select onchange="window.texturaAtiva=this.value;renderDiagnostico()">
+      ${TEXTURAS.map(t => `<option value="${t.id}" ${window.texturaAtiva === t.id ? 'selected' : ''}>${t.label}</option>`).join('')}
+    </select></div>`;
+}
+function dgOrdenar(lista) {
+  return lista.sort((a, b) => (dgSub(a).split(' · ')[0] || '').localeCompare(dgSub(b).split(' · ')[0] || '', 'pt') || dgRotulo(a).localeCompare(dgRotulo(b), 'pt', {numeric:true}));
+}
+
+// ━━ Visões ━━
+function dgVistaFolha(lista) {
+  const am = lista.find(a => a._docId === dg.am.folha) || lista[0];
+  dg.am.folha = am._docId;
+  const pNut = dgParam('folha', dg.nut.folha) ? dg.nut.folha : 'k';
+  const multi = lista.length > 1;
+  return `${dgChips(lista, 'folha', DG_FOLHA_NUT, am._docId)}
+  <div class="dg-g2">
+    <div class="dg-card"><h3>${escHtml(dgRotulo(am))} · nutrientes</h3><div class="dg-body">
+      <div class="dg-sub">${escHtml(dgSub(am))}${am.nome && dgRotulo(am) !== am.nome ? ' · amostra ' + escHtml(am.nome) : ''}</div>
+      ${DG_FOLHA_NUT.map(id => dgGauge(dgParam('folha', id), 'folha', am, multi ? `dgSet('nut','${id}')` : '')).join('')}
+    </div></div>
+    <div class="dg-col">
+      <div class="dg-card"><h3>Equilíbrio</h3><div class="dg-body">${dgRadar(dgRadarEixos(am, 'folha', DG_FOLHA_NUT))}</div></div>
+      <div class="dg-card"><h3>Relações</h3><div class="dg-body">${dgRelacoes(am, 'folha')}</div></div>
+    </div>
+  </div>
+  ${multi ? dgBlocoComparar(lista, 'folha', DG_FOLHA_NUT, DG_FOLHA_NUT, am._docId, pNut) : ''}`;
+}
+
+function dgVistaSolo(lista) {
+  const am = lista.find(a => a._docId === dg.am.solo) || lista[0];
+  dg.am.solo = am._docId;
+  const pNut = dgParam('solo', dg.nut.solo) ? dg.nut.solo : 'potassio';
+  const multi = lista.length > 1;
+  const stats = DG_SOLO_STAT.map(id => {
+    const p = dgParam('solo', id), v = dgVal(am, id); if (!p || v == null) return '';
+    const c = dgClass(p, 'solo', v);
+    return `<div class="dg-stat" style="border-left-color:${c.cls === 'ne' ? '#c9cfc6' : DG_COR[c.cls]}"><span>${escHtml(DG_SIG[id])}</span><b>${dgNum(v)}</b><span>${escHtml(p.un)}${c.cls !== 'ne' ? ' · ' + escHtml(c.label) : ''}</span></div>`;
+  }).join('');
+  const clk = id => multi ? `dgSet('nut','${id}')` : '';
+  return `${dgChips(lista, 'solo', [...DG_SOLO_DIAL, ...DG_SOLO_NUT], am._docId)}
+  ${dgSeletorTextura()}
+  <div class="dg-sub" style="margin:-2px 0 0">${escHtml(dgRotulo(am))} · ${escHtml(dgSub(am))}</div>
+  ${stats ? `<div class="dg-stats">${stats}</div>` : ''}
+  <div class="dg-g3">${DG_SOLO_DIAL.map(id => dgDial(dgParam('solo', id), am)).join('')}</div>
+  <div class="dg-g2">
+    <div class="dg-card"><h3>Nutrientes do solo</h3><div class="dg-body">
+      ${DG_SOLO_NUT.map(id => dgGauge(dgParam('solo', id), 'solo', am, clk(id))).join('')}
+      <div class="dg-div">Acidez</div>
+      ${DG_SOLO_ACID.map(id => dgGauge(dgParam('solo', id), 'solo', am, clk(id))).join('')}
+    </div></div>
+    <div class="dg-col">
+      <div class="dg-card"><h3>Equilíbrio</h3><div class="dg-body">${dgRadar(dgRadarEixos(am, 'solo', DG_SOLO_NUT))}</div></div>
+      <div class="dg-card"><h3>Saturação na CTC</h3><div class="dg-body">${DG_SOLO_SAT.map(id => dgGauge(dgParam('solo', id), 'solo', am, clk(id))).join('')}</div></div>
+      <div class="dg-card"><h3>Relação entre bases</h3><div class="dg-body">${dgRelacoes(am, 'solo')}</div></div>
+    </div>
+  </div>
+  ${multi ? dgBlocoComparar(lista, 'solo', [...DG_SOLO_DIAL, ...DG_SOLO_NUT, ...DG_SOLO_SAT], [...DG_SOLO_DIAL, ...DG_SOLO_NUT, ...DG_SOLO_SAT, ...DG_SOLO_ACID], am._docId, pNut) : ''}`;
+}
+
+// Panorama + colunas do nutriente escolhido + mapa — a comparação entre talhões
+function dgBlocoComparar(lista, tipo, idsPan, idsMx, selAm, selNut) {
+  const ids = [...new Set([...idsPan, ...idsMx])];
+  const p = dgParam(tipo, ids.includes(selNut) ? selNut : idsPan[0]);
+  return `<div class="dg-g2">
+    <div class="dg-card"><h3>Panorama · ${lista.length} amostras</h3><div class="dg-body">${dgPanorama(lista, tipo, idsPan, p.id)}</div></div>
+    <div class="dg-card"><h3>Comparar · ${escHtml(dgNome(p))} (${escHtml(p.un)})</h3><div class="dg-body">
+      <div class="dg-ncs">${ids.map(id => dgParam(tipo, id)).filter(Boolean).map(q => `<button type="button" aria-pressed="${q.id === p.id}" onclick="dgSet('nut','${q.id}')">${escHtml(DG_SIG[q.id] || dgNome(q))}</button>`).join('')}</div>
+      ${dgColunas(lista, tipo, p, selAm)}
+    </div></div>
+  </div>
+  <div class="dg-card"><h3>Mapa das amostras</h3><div class="dg-body">${dgMatriz(lista, tipo, idsMx, selAm, p.id)}
+    <div class="dg-foot">Toque numa célula para abrir a amostra e o nutriente.</div></div></div>`;
+}
+
+// ━━ Solo × Folha ━━
+// Acha a amostra do outro tipo do mesmo talhão (vínculo; senão, mesmo nome). Prefere as marcadas,
+// 0–20 cm no solo e a data mais próxima. dg.outro guarda a escolha manual.
+function dgCandidatos(am) {
+  const outroTipo = am.tipo === 'folha' ? 'solo' : 'folha';
+  const mesmo = x => am.talhaoIdVinculado ? x.talhaoIdVinculado === am.talhaoIdVinculado : normalizar(x.nome) === normalizar(am.nome);
+  const d0 = dgData(am);
+  const dist = x => { const d = dgData(x); return (d && d0) ? Math.abs(new Date(d) - new Date(d0)) : 9e15; };
+  return amostras.filter(x => x.tipo === outroTipo && mesmo(x)).sort((a, b) =>
+    (diagSelecionadas.has(b.analiseId) - diagSelecionadas.has(a.analiseId)) ||
+    ((/^0-20/.test(b.profundidade || '0-20')) - (/^0-20/.test(a.profundidade || '0-20'))) ||
+    (dist(a) - dist(b)));
+}
+function dgPares(amSel) {
+  const pares = [], usados = new Set();
+  const base = [...amSel.filter(a => a.tipo === 'folha'), ...amSel.filter(a => a.tipo === 'solo')];
+  base.forEach(am => {
+    if (usados.has(am._docId)) return;
+    let outro;
+    if (dg.outro[am._docId] !== undefined) outro = amostras.find(x => x._docId === dg.outro[am._docId]) || null;
+    else outro = dgCandidatos(am).find(x => !usados.has(x._docId)) || null;
+    if (am.tipo === 'solo' && !outro) return; // solo sem folha: já aparece na aba Solo
+    usados.add(am._docId); if (outro) usados.add(outro._docId);
+    const folha = am.tipo === 'folha' ? am : outro, solo = am.tipo === 'solo' ? am : outro;
+    pares.push({key: am._docId, base: am, folha: folha ? dgEnriquecer(folha) : null, solo: solo ? dgEnriquecer(solo) : null});
+  });
+  // talhões com os dois laudos primeiro
+  return pares.sort((a, b) => (!!(b.solo && b.folha)) - (!!(a.solo && a.folha)));
+}
+function dgCruzar(par) {
+  return DG_COMUNS.map(([idS, idF]) => {
+    const pS = dgParam('solo', idS), pF = dgParam('folha', idF);
+    const vS = dgVal(par.solo, idS), vF = dgVal(par.folha, idF);
+    const cS = dgClass(pS, 'solo', vS), cF = dgClass(pF, 'folha', vF);
+    const gS = dgGrupo(cS.cls), gF = dgGrupo(cF.cls);
+    return {sig: DG_SIG[idF], pS, pF, vS, vF, cS, cF, chave: (gS && gF) ? gS + '-' + gF : null};
+  });
+}
+function dgVistaCruz(amSel) {
+  const pares = dgPares(amSel);
+  if (!pares.length) return `<div class="diag-sem-sel"><div class="ico">🔗</div><p>Marque uma análise de <strong>folha</strong> (o solo do mesmo talhão é achado sozinho) para cruzar solo × folha.</p></div>`;
+  const par = pares.find(p => p.key === dg.par) || pares[0];
+  dg.par = par.key;
+  const itens = dgCruzar(par);
+  const chips = `<div class="dg-chips">${pares.map(p => {
+    const prob = dgCruzar(p).filter(i => i.chave && i.chave !== 'o-o').length;
+    const semPar = !p.solo || !p.folha;
+    const cor = semPar ? '#9ca3af' : prob >= 4 ? DG_COR.mb : prob >= 2 ? DG_COR.bx : DG_COR.md;
+    return `<button type="button" class="dg-chip" aria-pressed="${p.key === par.key}" onclick="dgSet('par','${p.key}')">🔗 ${escHtml(dgRotulo(p.base).replace(/ · .*$/, ''))}<span class="b" style="background:${cor}">${semPar ? '?' : prob}</span></button>`;
+  }).join('')}</div>`;
+  // Seletor da amostra parceira
+  const outroTipo = par.base.tipo === 'folha' ? 'solo' : 'folha';
+  const cands = dgCandidatos(par.base);
+  const ids = new Set(cands.map(c => c._docId));
+  const resto = amostras.filter(x => x.tipo === outroTipo && !ids.has(x._docId)).sort((a, b) => dgRotulo(a).localeCompare(dgRotulo(b), 'pt', {numeric:true}));
+  const atual = (outroTipo === 'solo' ? par.solo : par.folha)?._docId || '';
+  const opt = x => `<option value="${x._docId}" ${x._docId === atual ? 'selected' : ''}>${escHtml(dgRotulo(x))} — ${escHtml(dgSub(x))}</option>`;
+  const seletor = `<div class="dg-par">
+    <div><span class="dg-tag" style="background:${par.base.tipo === 'folha' ? '#1e5631' : '#5d3a1a'}">${par.base.tipo === 'folha' ? '🍃 Folha' : '🧪 Solo'}</span> <b>${escHtml(dgRotulo(par.base))}</b> <span class="dg-sub">${escHtml(dgSub(par.base))}</span></div>
+    <div><span class="dg-tag" style="background:${outroTipo === 'folha' ? '#1e5631' : '#5d3a1a'}">${outroTipo === 'folha' ? '🍃 Folha' : '🧪 Solo'}</span>
+      <select onchange="dgSetOutro('${par.key}',this.value)">
+        <option value="">— escolher amostra de ${outroTipo} —</option>
+        ${cands.length ? `<optgroup label="Mesmo talhão">${cands.map(opt).join('')}</optgroup>` : ''}
+        ${resto.length ? `<optgroup label="Outras">${resto.map(opt).join('')}</optgroup>` : ''}
+      </select></div>
+  </div>`;
+  if (!par.solo || !par.folha) {
+    return `${chips}${seletor}<div class="diag-sem-sel"><div class="ico">🔍</div><p>Não achei amostra de <strong>${outroTipo}</strong> vinculada a este talhão.<br>Escolha uma no seletor acima.</p></div>${pares.length > 1 ? dgTabelaPares(pares) : ''}`;
+  }
+  // Quadro 3×3: colunas = solo, linhas = folha
+  const col = ['b', 'o', 'a'], lin = ['a', 'o', 'b'];
+  const NOME_G = {b:'Baixo', o:'Adequado', a:'Alto'};
+  let quad = `<div class="dg-quad"><div class="dg-quad-ylab">FOLHA</div><div class="dg-quad-grid">`;
+  lin.forEach(gF => {
+    quad += `<div class="dg-quad-rl">${NOME_G[gF]}</div>`;
+    col.forEach(gS => {
+      const k = gS + '-' + gF, d = DG_DIAG[k];
+      const nut = itens.filter(i => i.chave === k);
+      quad += `<div class="dg-quad-cel" style="background:${d.cor}${nut.length ? '26' : '0d'};border-color:${d.cor}${nut.length ? '' : '33'}" title="${escAttr(d.d)}">
+        <div class="dg-quad-t" style="color:${d.cor}">${escHtml(d.t)}</div>
+        <div class="dg-quad-n">${nut.map(i => `<span style="background:${d.cor}">${escHtml(i.sig)}</span>`).join('')}</div>
+      </div>`;
+    });
+  });
+  quad += `<div></div>${col.map(g => `<div class="dg-quad-cl">${NOME_G[g]}</div>`).join('')}</div></div><div class="dg-quad-xlab">SOLO</div>`;
+  const semDado = itens.filter(i => !i.chave).map(i => i.sig);
+  if (semDado.length) quad += `<div class="dg-foot">Sem dado em um dos laudos: ${escHtml(semDado.join(', '))}</div>`;
+  // Nutriente a nutriente
+  const linhas = itens.map(i => {
+    const d = i.chave ? DG_DIAG[i.chave] : null;
+    return `<div class="dg-x">
+      <div class="dg-x-sig">${escHtml(i.sig)}</div>
+      <div class="dg-x-g">${dgGauge(i.pS, 'solo', par.solo, '', '🧪 Solo')}${dgGauge(i.pF, 'folha', par.folha, '', '🍃 Folha')}</div>
+      <div class="dg-x-d">${d ? `<span class="dg-tag" style="background:${d.cor}">${escHtml(d.t)}</span><small>${escHtml(d.d)}</small>` : '<small>Sem dado para cruzar.</small>'}</div>
+    </div>`;
+  }).join('');
+  return `${chips}${seletor}${dgSeletorTextura()}
+  <div class="dg-g2">
+    <div class="dg-card"><h3>Solo × Folha</h3><div class="dg-body">${quad}</div></div>
+    <div class="dg-card"><h3>Como ler</h3><div class="dg-body dg-leitura">
+      ${Object.values(DG_DIAG).map(d => `<div><span class="dg-tag" style="background:${d.cor}">${escHtml(d.t)}</span> ${escHtml(d.d)}</div>`).join('')}
+      <div class="dg-foot">O laudo de folha mostra o que a planta absorveu; o de solo mostra o que está disponível. A leitura cruzada aponta se o problema é falta no solo ou dificuldade de absorção.</div>
+    </div></div>
+  </div>
+  <div class="dg-card"><h3>Nutriente a nutriente · ${escHtml(dgRotulo(par.base).replace(/ · .*$/, ''))}</h3><div class="dg-body">
+    <div class="dg-foot">Em cada nutriente: 1ª barra = solo, 2ª = folha.</div>${linhas}</div></div>
+  ${pares.length > 1 ? dgTabelaPares(pares) : ''}`;
+}
+function dgTabelaPares(pares) {
+  let h = `<table class="dg-mx dg-mx-x"><thead><tr><th></th>${DG_COMUNS.map(([, f]) => `<th>${DG_SIG[f]}</th>`).join('')}</tr></thead><tbody>`;
+  pares.forEach(p => {
+    h += `<tr class="${p.key === dg.par ? 'on' : ''}"><th class="r" onclick="dgSet('par','${p.key}')">${escHtml(dgRotulo(p.base).replace(/ · .*$/, ''))}<small>${escHtml(dgSub(p.base))}</small></th>`;
+    if (!p.solo || !p.folha) { h += `<td colspan="${DG_COMUNS.length}" style="background:#f3f4f1;color:var(--c);font-family:inherit">sem amostra de ${p.solo ? 'folha' : 'solo'} para cruzar</td></tr>`; return; }
+    dgCruzar(p).forEach(i => {
+      const d = i.chave ? DG_DIAG[i.chave] : null;
+      h += d ? `<td style="background:${d.cor};color:white" onclick="dgSet('par','${p.key}')" title="${escAttr(i.sig)}: ${escAttr(d.t)} — solo ${escAttr(dgNum(i.vS))} (${escAttr(i.cS.label)}), folha ${escAttr(dgNum(i.vF))} (${escAttr(i.cF.label)})">${escHtml(d.c)}</td>`
+             : `<td style="background:#eceee9;color:#9ca3af">—</td>`;
+    });
+    h += '</tr>';
+  });
+  return `<div class="dg-card"><h3>Comparar talhões · solo × folha</h3><div class="dg-body"><div class="dg-scroll">${h}</tbody></table></div>
+    <div class="dg-foot">Cada célula é a leitura cruzada daquele nutriente. Passe o dedo/mouse para ver os valores; toque na linha para abrir o talhão.</div></div></div>`;
+}
+
+// ━━ Render principal ━━
 function renderDiagnostico() {
   const cont = document.getElementById('content');
   if (diagSelecionadas.size === 0) {
     cont.innerHTML = `<div class="diag-sem-sel">
       <div class="ico">🩺</div>
       <p><strong>Nenhuma análise selecionada.</strong><br><br>
-      Volte para <strong>📋 Análises</strong>, marque as análises que deseja incluir no diagnóstico e clique em <strong>🩺 Ver diagnóstico</strong>.</p>
+      Volte para <strong>📋 Análises</strong>, marque as análises que deseja incluir no diagnóstico e clique em <strong>🩺 Ver diagnóstico</strong>.<br><br>
+      <span style="font-size:.8rem">Dica: marcando só a análise de folha, a aba <strong>🔗 Solo × Folha</strong> acha sozinha o laudo de solo do mesmo talhão.</span></p>
     </div>`;
     return;
   }
   const amSel = amostras.filter(am => diagSelecionadas.has(am.analiseId));
-  const amFolha = amSel.filter(am => am.tipo === 'folha');
-  const amSolo  = amSel.filter(am => am.tipo === 'solo');
-  let html = '';
-  if (amFolha.length) html += renderDiagSecao(amFolha, 'folha');
-  if (amSolo.length)  html += renderDiagSecao(amSolo, 'solo');
-  if (!html) html = `<div class="diag-sem-sel"><div class="ico">📭</div><p>As análises selecionadas não possuem amostras cadastradas.</p></div>`;
-  cont.innerHTML = html;
+  const folha = dgOrdenar(amSel.filter(am => am.tipo === 'folha').map(dgEnriquecer));
+  const solo  = dgOrdenar(amSel.filter(am => am.tipo === 'solo').map(dgEnriquecer));
+  if (!folha.length && !solo.length) {
+    cont.innerHTML = `<div class="diag-sem-sel"><div class="ico">📭</div><p>As análises selecionadas não possuem amostras cadastradas.</p></div>`;
+    return;
+  }
+  const vistas = [];
+  if (folha.length) vistas.push(['folha', `🍃 Folha · ${folha.length}`]);
+  if (solo.length)  vistas.push(['solo',  `🧪 Solo · ${solo.length}`]);
+  vistas.push(['cruz', '🔗 Solo × Folha']);
+  if (!vistas.some(v => v[0] === dg.vista)) dg.vista = vistas[0][0];
+  let corpo;
+  if (dg.vista === 'folha') corpo = dgVistaFolha(folha);
+  else if (dg.vista === 'solo') corpo = dgVistaSolo(solo);
+  else corpo = dgVistaCruz(amSel);
+  cont.innerHTML = `<div class="dg">
+    <div class="dg-tabs" role="tablist">${vistas.map(([id, lab]) => `<button type="button" role="tab" aria-selected="${dg.vista === id}" onclick="dgSet('vista','${id}')">${lab}</button>`).join('')}</div>
+    ${dg.vista !== 'cruz' ? dgLegenda() : ''}
+    ${corpo}
+  </div>`;
 }
 window.renderDiagnostico = renderDiagnostico;
 
-function renderDiagSecao(amos, tipo) {
-  const params = PARAMS[tipo].filter(p => p.destaque && !p.faixaIdeal);
-  const textura = window.texturaAtiva || 'medio';
-  const ABREV = {
-    'Nitrogênio (N)':'N','Fósforo (P)':'P','Potássio (K)':'K','Cálcio (Ca)':'Ca','Magnésio (Mg)':'Mg','Enxofre (S)':'S',
-    'Ferro (Fe)':'Fe','Zinco (Zn)':'Zn','Cobre (Cu)':'Cu','Manganês (Mn)':'Mn','Boro (B)':'B',
-    'Fósforo (Mehlich-1)':'P','Potássio':'K','Enxofre':'S','Cálcio':'Ca','Magnésio':'Mg',
-    'Matéria orgânica':'MO','pH em H₂O':'pH','Ferro':'Fe','Zinco':'Zn','Cobre':'Cu','Manganês':'Mn','Boro':'B',
-    'Saturação de bases (V)':'V%','Saturação de Alumínio (m)':'m%'
-  };
-  const BG = {mb:'#991b1b',bx:'#dc2626',md:'#16a34a',ad:'#16a34a',at:'#2563eb',ma:'#7c3aed',id:'#16a34a',fora:'#f59e0b',ne:'#e5e7eb'};
+// Pontes para os onclick inline (estado é do módulo — ver CLAUDE.md)
+window.dgSet = function(k, v) {
+  if (k === 'vista') dg.vista = v;
+  else if (k === 'am') dg.am[dg.vista] = v;
+  else if (k === 'nut') dg.nut[dg.vista] = v;
+  else if (k === 'par') dg.par = v;
+  renderDiagnostico();
+};
+window.dgCel = function(amId, nutId) { dg.am[dg.vista] = amId; dg.nut[dg.vista] = nutId; renderDiagnostico(); window.scrollTo({top:0, behavior:'smooth'}); };
+window.dgSetOutro = function(key, id) { dg.outro[key] = id || null; renderDiagnostico(); };
 
-  const linhas = amos.map(am => {
-    const an = analises.find(a => a._docId === am.analiseId);
-    const tal = am.talhaoIdVinculado ? talhoes.find(t => t.id === am.talhaoIdVinculado) : null;
-    const rotulo = tal ? (tal.nome || tal.id) : am.nome || '—';
-    const fazenda = an?.fazendaVinculada || '';
-    const cells = params.map(p => {
-      const val = am.parametros?.[p.id];
-      if (val == null) return {cls:'ne', val:null, label:'—', param:p};
-      const c = classificar(p, val, tipo, textura);
-      return {cls:c.cls, val, label:c.label, param:p};
-    });
-    return {rotulo, fazenda, cells};
-  });
-
-  // Alertas por nutriente
-  const alertas = params.map((p, ci) => {
-    const def = linhas.filter(l => ['mb','bx'].includes(l.cells[ci].cls));
-    if (!def.length) return null;
-    const crit = def.some(l => l.cells[ci].cls === 'mb');
-    const abrev = ABREV[p.label] || p.label.replace(/\s*\(.*\)/,'');
-    return {abrev, n:def.length, total:linhas.length, crit};
-  }).filter(Boolean).sort((a,b) => b.n - a.n);
-
-  const ico = tipo==='folha' ? '🍃' : '🧪';
-  const corBadge = tipo==='folha' ? '#1e5631' : '#5d3a1a';
-  const titulo = tipo==='folha' ? 'Análise Foliar' : 'Análise de Solo';
-
-  let html = `<div class="diag-secao-hdr">${ico} ${titulo}
-    <span class="diag-badge-tipo" style="background:${corBadge};">${amos.length} amostra${amos.length>1?'s':''}</span>
-  </div>`;
-
-  if (tipo === 'solo') {
-    html += `<div class="textura-box" style="margin-bottom:8px;">
-      <label>Textura do solo (afeta P-Mehlich):</label>
-      <select onchange="window.texturaAtiva=this.value;renderDiagnostico()">
-        ${TEXTURAS.map(t => `<option value="${t.id}" ${window.texturaAtiva===t.id?'selected':''}>${t.label}</option>`).join('')}
-      </select>
-    </div>`;
-  }
-
-  html += `<div class="diag-alertas">`;
-  if (alertas.length) {
-    alertas.forEach(al => {
-      const cls = al.crit ? 'critico' : 'baixo';
-      const dot = al.crit ? '🔴' : '🟡';
-      html += `<div class="diag-alerta-chip ${cls}">${dot} ${escHtml(al.abrev)} — ${al.n}/${al.total}</div>`;
-    });
-  } else {
-    html += `<div class="diag-alerta-chip ok">✅ Sem deficiências nas amostras selecionadas</div>`;
-  }
-  html += `</div>`;
-
-  // Cabeçalho da tabela
-  const colHeaders = params.map(p => {
-    const abrev = ABREV[p.label] || p.label.replace(/\s*\(.*\)/,'');
-    return `<th title="${escAttr(p.label)} (${escAttr(p.un)})">${escHtml(abrev)}<br><span style="font-size:.56rem;font-weight:500;opacity:.65;">${escHtml(p.un)}</span></th>`;
-  }).join('');
-
-  const rows = linhas.map(l => {
-    const cels = l.cells.map(c => {
-      const bg = BG[c.cls] || '#9ca3af';
-      const valFmt = c.val != null
-        ? (c.val < 10 ? c.val.toLocaleString('pt-BR',{maximumFractionDigits:2})
-          : c.val < 100 ? c.val.toLocaleString('pt-BR',{maximumFractionDigits:1})
-          : Math.round(c.val).toLocaleString('pt-BR'))
-        : '—';
-      const titleAttr = c.val != null ? `title="${escAttr(c.param.label)}: ${c.val} ${escAttr(c.param.un)} — ${escAttr(c.label)}"` : '';
-      const textColor = c.cls === 'ne' ? 'color:var(--c);' : 'color:white;';
-      return `<td><div class="diag-cell cls-${c.cls}" style="background:${bg};" ${titleAttr}>
-        <span class="diag-cell-val" style="${textColor}">${valFmt}</span>
-        <span class="diag-cell-lbl" style="${c.cls==='ne'?'color:var(--c);':''}">${escHtml(c.label)}</span>
-      </div></td>`;
-    }).join('');
-    return `<tr>
-      <td class="col-talhao">${escHtml(l.rotulo)}${l.fazenda?`<br><span style="font-size:.63rem;color:var(--c);font-weight:600;">${escHtml(l.fazenda)}</span>`:''}</td>
-      ${cels}
-    </tr>`;
-  }).join('');
-
-  html += `<div class="diag-wrap"><table class="diag-table">
-    <thead><tr><th class="col-talhao">Talhão / Amostra</th>${colHeaders}</tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
-
-  return html;
-}
 
 window.renderComparar = function() {
   const cont = document.getElementById('content');
