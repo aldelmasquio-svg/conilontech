@@ -478,6 +478,7 @@ let nutrSafra = '';
 let nutrView = 'painel';        // 'painel' | 'mapa' | 'tabela'
 let nutrNutrienteSel = 'n';     // nutriente destacado no painel/mapa
 let _nutriMap = null, _nutriCharts = [];
+let _nutriUltimo = null;        // filtros da última renderização de Nutrientes (para o Excel por talhão)
 
 // Filtros da aba "Drench"
 let drenchFiltroFazenda = '';
@@ -2836,6 +2837,7 @@ function renderNutrientes() {
   // No mapa e no painel usamos TODOS os talhões da fazenda (a seleção é por clique no mapa); na tabela respeita o dropdown
   const talhoesSel = (nutrView === 'tabela' && nutrTalhaoId) ? talhoesBase.filter(t => t.id === nutrTalhaoId) : talhoesBase;
   const d = _calcNutrientes(talhoesSel, inicio, fim);
+  _nutriUltimo = { inicio, fim, lblPeriodo, faz, talhoesBase };
 
   // Destrói mapa/charts anteriores (o tabContent vai ser reescrito)
   if (_nutriMap) { try { _nutriMap.remove(); } catch(e){} _nutriMap = null; }
@@ -3025,6 +3027,7 @@ function _nutriTabelaHtml(d, talhoesBase, faz, lblPeriodo, talhoesSel) {
   } else {
     html += `<div class="vazio"><div class="ico">🌿</div><p>Nenhum produto aplicado tem composição no catálogo de adubos.<br><span style="font-size:.78rem;">Cadastre a composição NPK em Administração → Catálogo de adubos.</span></p></div>`;
   }
+  if (!nutrTalhaoId && nutrientesOrd.length) html += _nutriPorTalhaoHtml(d, talhoesSel, nutrientesOrd, !faz);
   const naoContOrd = Object.values(d.naoContabilizados).sort((a, b) => a.produto.localeCompare(b.produto, 'pt-BR'));
   if (naoContOrd.length) {
     html += `<div class="secao"><div class="secao-tit">⚠️ Produtos não contabilizados</div>
@@ -3036,6 +3039,67 @@ function _nutriTabelaHtml(d, talhoesBase, faz, lblPeriodo, talhoesSel) {
   html += `<div class="secao" style="font-size:.78rem;color:var(--c);text-align:center;font-style:italic;">Baseado nas aplicações confirmadas em "Adubações" · ${escHtml(lblPeriodo)}${faz ? ' · ' + escHtml(faz) : ''}${nutrTalhaoId && talhoesSel[0] ? ' · ' + escHtml(talhoesSel[0].nome || '') : ''}</div>`;
   return html;
 }
+
+// Tabela talhão × nutriente (kg/ha aplicado) + botão do Excel por talhão
+function _nutriPorTalhaoHtml(d, talhoesSel, nutrientesOrd, mostraFaz) {
+  const linhas = talhoesSel.filter(t => d.porTalhao[t.id])
+    .sort((a, b) => (a.fazenda || '').localeCompare(b.fazenda || '', 'pt-BR') || (a.nome || '').localeCompare(b.nome || '', 'pt-BR', {numeric:true}));
+  const semAplic = talhoesSel.length - linhas.length;
+  return `<div class="secao">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap;">
+      <div><div class="secao-tit">🌱 Por talhão (kg/ha aplicado)</div>
+        <div class="secao-sub">${linhas.length} talhão(ões) com aplicação confirmada${semAplic ? ` · ${semAplic} sem aplicação (aparecem zerados no Excel)` : ''}.</div></div>
+      <button class="btn-pdf-aba" style="background:#217346;" onclick="exportarNutriTalhoes()">📥 Excel por talhão</button>
+    </div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Talhão</th><th class="num">Área (ha)</th>${nutrientesOrd.map(k => `<th class="num">${escHtml(NUTRIENTE_LABELS[k].replace(/^.*\(|\)$/g, ''))}</th>`).join('')}</tr></thead><tbody>
+    ${linhas.map(t => {
+      const area = parseDose(t.area);
+      return `<tr><td><strong>${escHtml(t.nome || t.id)}</strong>${mostraFaz ? `<br><span style="font-size:.7rem;color:var(--c);">${escHtml(t.fazenda || '')}</span>` : ''}</td>
+        <td class="num">${fmt(area, 2)}</td>
+        ${nutrientesOrd.map(k => { const kg = d.porTalhao[t.id][k] || 0; return `<td class="num">${kg && area > 0 ? fmt(kg / area, 1) : '—'}</td>`; }).join('')}</tr>`;
+    }).join('')}
+    <tr style="background:var(--cl);"><td><strong>Média (ponderada pela área)</strong></td><td class="num">${fmt(d.areaAdubada, 2)}</td>
+      ${nutrientesOrd.map(k => `<td class="num">${d.areaAdubada > 0 ? fmt((d.total[k] || 0) / d.areaAdubada, 1) : '—'}</td>`).join('')}</tr>
+    </tbody></table></div></div>`;
+}
+
+// Excel com uma linha por talhão (todos os talhões do filtro de fazenda, mesmo sem aplicação):
+// planilhas kg/ha aplicado, kg total aplicado e kg/ha planejado na safra. Células numéricas.
+window.exportarNutriTalhoes = function() {
+  if (!_nutriUltimo) { toast('⚠️ Abra a aba Nutrientes primeiro.'); return; }
+  const { inicio, fim, lblPeriodo, faz, talhoesBase } = _nutriUltimo;
+  const d = _calcNutrientes(talhoesBase, inicio, fim);
+  const nks = Object.keys(NUTRIENTE_LABELS).filter(k => (d.total[k] || 0) > 0 || (d.plan[k]?.total || 0) > 0);
+  if (!nks.length) { toast('⚠️ Nenhum nutriente aplicado ou planejado no período.'); return; }
+  const ts = talhoesBase.slice().sort((a, b) => (a.fazenda || '').localeCompare(b.fazenda || '', 'pt-BR') || (a.nome || '').localeCompare(b.nome || '', 'pt-BR', {numeric:true}));
+  const r2 = x => Math.round(x * 100) / 100;
+  const cab = ['Fazenda', 'Talhão', 'Área (ha)', ...nks.map(k => NUTRIENTE_LABELS[k])];
+  const planilha = (valor, rodapeTotal) => {
+    const rows = [[`Nutrientes por talhão · ${lblPeriodo}${faz ? ' · ' + faz : ''} · ${formatarData(inicio)} a ${formatarData(fim)}`], [], cab];
+    ts.forEach(t => {
+      const area = parseDose(t.area) || 0;
+      rows.push([t.fazenda || '', t.nome || t.id, r2(area), ...nks.map(k => r2(valor(t, k, area)))]);
+    });
+    rows.push([]);
+    rows.push(['', rodapeTotal.rotulo, r2(rodapeTotal.area), ...nks.map(k => r2(rodapeTotal.valor(k)))]);
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:22}, {wch:26}, {wch:10}, ...nks.map(() => ({wch:15}))];
+    return ws;
+  };
+  const areaTot = ts.reduce((s, t) => s + (parseDose(t.area) || 0), 0);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, planilha(
+    (t, k, area) => area > 0 ? (d.porTalhao[t.id]?.[k] || 0) / area : 0,
+    { rotulo: 'Média (área adubada)', area: d.areaAdubada, valor: k => d.areaAdubada > 0 ? (d.total[k] || 0) / d.areaAdubada : 0 }), 'kg por ha aplicado');
+  XLSX.utils.book_append_sheet(wb, planilha(
+    (t, k) => d.porTalhao[t.id]?.[k] || 0,
+    { rotulo: 'Total', area: areaTot, valor: k => d.total[k] || 0 }), 'kg total aplicado');
+  XLSX.utils.book_append_sheet(wb, planilha(
+    (t, k, area) => area > 0 ? (d.porTalhaoPlan[t.id]?.[k]?.total || 0) / area : 0,
+    { rotulo: 'Média (área total)', area: areaTot, valor: k => areaTot > 0 ? (d.plan[k]?.total || 0) / areaTot : 0 }), 'kg por ha planejado');
+  XLSX.writeFile(wb, `ConilonTech_Nutrientes_por_talhao_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('📥 Excel por talhão exportado!');
+};
 
 // ════════════════════════════════════════════════════
 // ABA 8 — CALENDÁRIO (pendências: pulverizações, drench preventivo e adubações)

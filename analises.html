@@ -208,6 +208,31 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 .diag-check-wrap{display:flex;align-items:center;justify-content:center;padding:10px 4px 10px 12px;cursor:pointer;flex-shrink:0;}
 .diag-check{width:18px;height:18px;cursor:pointer;accent-color:var(--v);}
 .an-card-body{flex:1;min-width:0;cursor:pointer;}
+/* ━━ Comparar · gráficos (cmp-*) ━━ */
+.cmp-todos{display:block;width:100%;margin-top:12px;background:white;border:1.5px dashed var(--cb);border-radius:var(--rad);padding:11px;font-family:var(--font-display);font-weight:700;font-size:.84rem;color:var(--ve);cursor:pointer;}
+.cmp-badge{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;color:white;font-family:var(--font-display);font-weight:800;font-size:.72rem;flex-shrink:0;}
+.cmp-resumo{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-bottom:8px;}
+.cmp-res{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:10px 12px;display:flex;gap:10px;align-items:flex-start;}
+.cmp-res-txt{min-width:0;font-size:.82rem;}
+.cmp-res-txt small{display:block;font-size:.66rem;color:var(--c);}
+.cmp-res-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+.cmp-tag{font-size:.7rem;font-weight:700;border-radius:6px;padding:3px 7px;line-height:1.3;}
+.cmp-sec{font-family:var(--font-display);font-weight:800;font-size:.86rem;color:var(--ve);margin:14px 2px 7px;}
+.cmp-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:10px;}
+@media(max-width:520px){.cmp-grade{grid-template-columns:minmax(0,1fr);}}
+.cmp-card{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:11px 12px;display:flex;flex-direction:column;gap:9px;min-width:0;}
+.cmp-card-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-bottom:1px solid var(--cl);padding-bottom:6px;}
+.cmp-card-h b{font-family:var(--font-display);font-weight:800;font-size:.9rem;color:var(--ve);}
+.cmp-card-h span{font-size:.68rem;color:var(--c);text-align:right;}
+.cmp-sig{font-family:var(--font-mono);font-size:.72rem;color:var(--c);font-weight:600;margin-left:3px;}
+.cmp-row{display:grid;grid-template-columns:20px minmax(0,.9fr) minmax(0,1.3fr) 76px;gap:8px;align-items:center;}
+.cmp-row-nome{font-size:.76rem;font-weight:600;line-height:1.2;min-width:0;overflow-wrap:anywhere;}
+.cmp-row-nome small{display:block;font-weight:500;font-size:.62rem;color:var(--c);}
+@media(max-width:520px){.cmp-row{grid-template-columns:20px minmax(0,1fr) 70px;row-gap:4px;}.cmp-row .dg-gauge{grid-column:2/4;grid-row:2;}}
+table.cmp-outros{border-collapse:separate;border-spacing:3px;width:100%;font-size:.76rem;}
+.cmp-outros td,.cmp-outros th{padding:5px 6px;text-align:center;border-radius:5px;}
+.cmp-outros td:first-child{text-align:left;font-weight:600;white-space:nowrap;}
+.cmp-outros td:not(:first-child){font-family:var(--font-mono);font-weight:600;min-width:54px;}
 /* ━━ Diagnóstico visual (dg-*) ━━ */
 .dg{display:flex;flex-direction:column;gap:12px;}
 .dg-tabs{display:flex;gap:4px;background:white;border-radius:10px;padding:4px;box-shadow:var(--s);overflow-x:auto;}
@@ -358,21 +383,11 @@ table.dg-mx{border-collapse:separate;border-spacing:3px;width:100%;}
 .cmp-cel-vazia{text-align:center;color:var(--t4);font-style:italic;font-size:.78rem;}
 
 /* GRÁFICOS */
-.grafico-grupo{background:white;border-radius:var(--rad);box-shadow:var(--s);padding:12px;margin-bottom:10px;}
-.grafico-grupo-tit{font-family:var(--font-display);font-weight:800;font-size:1rem;color:var(--ve);margin-bottom:3px;}
-.grafico-grupo-sub{font-size:.74rem;color:var(--c);margin-bottom:11px;line-height:1.4;}
-.grafico-param{margin-bottom:14px;padding-bottom:11px;border-bottom:1px solid var(--cl);}
-.grafico-param:last-child{margin-bottom:0;padding-bottom:0;border-bottom:none;}
-.grafico-param-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;}
-.grafico-param-nome{font-family:var(--font-display);font-weight:700;font-size:.88rem;color:var(--ve);}
-.grafico-param-un{font-size:.7rem;color:var(--c);font-family:var(--font-mono);}
-.grafico-bar{position:relative;height:22px;background:var(--cl);border-radius:5px;margin-bottom:24px;overflow:visible;}
 .seg-faixa{position:absolute;top:0;bottom:0;opacity:.55;}
 .seg-faixa:first-child{border-radius:5px 0 0 5px;}
 .seg-faixa:last-child{border-radius:0 5px 5px 0;}
 .seg-marker{position:absolute;top:-3px;bottom:-3px;width:3px;border-radius:99px;box-shadow:0 0 0 2px white;z-index:2;}
 .seg-marker-val{position:absolute;bottom:-19px;left:50%;transform:translateX(-50%);font-family:var(--font-mono);font-weight:700;font-size:.62rem;background:white;padding:1px 4px;border-radius:4px;border:1px solid var(--cb);white-space:nowrap;color:var(--ve);box-shadow:0 1px 2px rgba(0,0,0,.1);}
-.grafico-valores{display:flex;flex-direction:column;gap:3px;}
 .zonas-leg{display:flex;flex-wrap:wrap;gap:8px;margin:5px 0 8px;font-size:.66rem;color:var(--c);}
 .zona-leg{display:inline-flex;align-items:center;gap:4px;}
 .zona-leg-cor{width:10px;height:10px;border-radius:2px;display:inline-block;opacity:.7;}
@@ -382,9 +397,6 @@ table.dg-mx{border-collapse:separate;border-spacing:3px;width:100%;}
 .cmp-val-num{font-family:var(--font-mono);font-weight:700;font-size:.74rem;color:var(--ve);}
 .cmp-val-cls{display:inline-block;padding:1px 6px;border-radius:99px;font-size:.6rem;color:white;font-weight:700;}
 
-.grafico-misto{background:#fffbeb;border:1px dashed #fde68a;border-radius:8px;padding:10px;}
-.grafico-misto-sub{margin-top:8px;}
-.grafico-misto-tit{font-family:var(--font-display);font-weight:700;font-size:.72rem;color:var(--c);text-transform:uppercase;letter-spacing:.04em;margin-bottom:3px;}
 
 /* SELETOR de amostra (lista) */
 .sel-amostra-lista{display:flex;flex-direction:column;gap:0;}
@@ -1759,222 +1771,109 @@ function renderCelulaCmp(val, param, tipo) {
 }
 
 // ━━━ GRÁFICOS COMPARATIVOS ━━━
-function renderGraficosCmp(selecionadas, misto) {
-  const ehSolo = a => a.tipo === 'solo';
-  const ehFolha = a => a.tipo === 'folha';
-  const selSolo = selecionadas.filter(ehSolo);
-  const selFolha = selecionadas.filter(ehFolha);
-  let html = '';
-  // Se misto, mostra os comuns no topo (dupla barra solo + folha)
-  const COMUNS = {
-    p_mehlich:'p', potassio:'k', calcio:'ca', magnesio:'mg', enxofre:'s',
-    ferro:'fe', zinco:'zn', cobre:'cu', manganes:'mn', boro:'b'
-  };
-  if (misto) {
-    html += `<div class="grafico-grupo">
-      <div class="grafico-grupo-tit">🔗 Nutrientes comuns (solo × folha)</div>
-      <div class="grafico-grupo-sub">Comparação por classificação — solo e folha em barras separadas</div>`;
-    for (const [idSolo, idFolha] of Object.entries(COMUNS)) {
-      const pSolo = PARAM_SOLO.find(p => p.id === idSolo);
-      const pFolha = PARAM_FOLHA.find(p => p.id === idFolha);
-      if (!pSolo || !pFolha) continue;
-      html += renderGraficoMisto(selecionadas, pSolo, pFolha);
-    }
-    html += `</div>`;
-  }
-  // Gráficos por tipo (só solo / só folha)
-  if (selSolo.length) {
-    html += `<div class="grafico-grupo">
-      <div class="grafico-grupo-tit">🧪 Solo</div>`;
-    PARAM_SOLO.forEach(p => {
-      html += renderGraficoParam(selSolo, p, 'solo', selecionadas);
-    });
-    html += `</div>`;
-  }
-  if (selFolha.length) {
-    html += `<div class="grafico-grupo">
-      <div class="grafico-grupo-tit">🍃 Folha</div>`;
-    PARAM_FOLHA.forEach(p => {
-      html += renderGraficoParam(selFolha, p, 'folha', selecionadas);
-    });
-    html += `</div>`;
-  }
-  return html;
-}
+// Mesma linguagem do Diagnóstico: um cartão por nutriente, uma linha por amostra (letra A–D),
+// cada uma com o seu medidor. Como o medidor é relativo à faixa de cada tipo, solo e folha
+// ficam comparáveis lado a lado nos nutrientes comuns.
+const CMP_COR = ['#1f5f8b', '#9a5b13', '#7b2d6e', '#2c6e5a'];
+function cmpBadge(i) { return `<span class="cmp-badge" style="background:${CMP_COR[i % CMP_COR.length]}">${String.fromCharCode(65 + i)}</span>`; }
 
-// Renderiza UM gráfico horizontal pra um parâmetro com várias amostras
-// Gera segmentos SIMPLIFICADOS de 3 cores (baixo/bom/alto) a partir da faixa efetiva
-// Retorna {segmentos:[{ate,cor,lab}], maxEscala}
-function gerarSegmentos3(param, tipo, valores) {
-  const ef = faixaEfetiva(param, tipo);
-  const COR_BAIXO = '#dc2626', COR_BOM = '#16a34a', COR_ALTO = '#2563eb';
-  if (!ef) return null;
-  // pH especial
-  if (ef.tipo === 'ph') {
-    return {
-      maxEscala: 8.0,
-      segmentos: [
-        {ate:6.0, cor:COR_BAIXO, lab:'Ácido'},
-        {ate:6.9, cor:COR_BOM,   lab:'Bom (6,0-6,9)'},
-        {ate:8.0, cor:COR_ALTO,  lab:'Alcalino'}
-      ]
-    };
-  }
-  // Faixa ideal (relações)
-  if (ef.tipo === 'ideal') {
-    const ideal = ef.faixa.ideal;
-    const baixoLim = ideal * 0.85;
-    const altoLim = ideal * 1.15;
-    const max = Math.max(ideal * 1.6, ...valores) * 1.1;
-    return {
-      maxEscala: max,
-      segmentos: [
-        {ate:baixoLim, cor:COR_BAIXO, lab:'Abaixo do ideal'},
-        {ate:altoLim,  cor:COR_BOM,   lab:`Ideal (~${fmt(ideal, ideal<1?2:1)})`},
-        {ate:max,      cor:COR_ALTO,  lab:'Acima do ideal'}
-      ]
-    };
-  }
-  // Faixa por textura (P-Mehlich)
-  let faixa;
-  if (ef.tipo === 'textura') {
-    faixa = ef.faixa[window.texturaAtiva || 'medio'];
-  } else if (ef.tipo === 'simples') {
-    faixa = ef.faixa;
-  }
-  if (!faixa) return null;
-  const inv = param.inverter;
-  // Folha: baixo/adequado/alto
-  if (tipo === 'folha' && faixa.baixo !== undefined && faixa.muitoBaixo === undefined) {
-    const max = Math.max(faixa.alto * 1.5, ...valores) * 1.05;
-    return {
-      maxEscala: max,
-      segmentos: [
-        {ate:faixa.baixo, cor:COR_BAIXO, lab:'Baixo'},
-        {ate:faixa.alto,  cor:COR_BOM,   lab:'Adequado'},
-        {ate:max,         cor:COR_ALTO,  lab:'Alto'}
-      ]
-    };
-  }
-  // Solo: simplificar p 3 segmentos (baixo / bom / alto)
-  // "baixo" = abaixo do faixa.baixo
-  // "bom" = entre faixa.baixo e faixa.alto
-  // "alto" = acima do faixa.alto
-  const limBaixo = faixa.baixo;
-  const limAlto = isFinite(faixa.alto) ? faixa.alto : Math.max(faixa.baixo * 3, ...valores);
-  const max = Math.max(limAlto * 1.3, ...valores) * 1.05;
-  return {
-    maxEscala: max,
-    segmentos: [
-      {ate:limBaixo, cor: inv ? COR_BOM : COR_BAIXO, lab: inv ? 'Bom (baixo)' : 'Baixo'},
-      {ate:limAlto,  cor: COR_BOM,                   lab: 'Médio/Bom'},
-      {ate:max,      cor: inv ? COR_BAIXO : COR_ALTO, lab: inv ? 'Alto (ruim)' : 'Alto'}
-    ]
-  };
-}
-
-function renderGraficoParam(amostrasTipo, param, tipo, todasSelecionadas) {
-  const temValor = amostrasTipo.some(a => a.parametros?.[param.id] !== undefined && a.parametros?.[param.id] !== null);
-  if (!temValor) return '';
-  const valores = amostrasTipo.map(a => a.parametros?.[param.id]).filter(v => v != null && isFinite(v));
-  const seg = gerarSegmentos3(param, tipo, valores);
-  if (!seg) {
-    // Sem faixa definida — só mostra os valores numéricos
-    const cores = ['#1e3a5f', '#8b6914', '#722f37'];
-    const idxCor = {};
-    (todasSelecionadas || amostrasTipo).forEach((a,i) => { idxCor[a._docId] = cores[i % cores.length]; });
-    const lst = amostrasTipo.map(a => {
-      const v = a.parametros?.[param.id];
-      if (v == null) return '';
-      return `<div class="cmp-val-item">
-        <span class="cmp-val-dot" style="background:${idxCor[a._docId]};"></span>
-        <span class="cmp-val-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</span>
-        <span class="cmp-val-num">${fmt(v, v<10?2:(v<100?1:0))} ${escHtml(param.un)}</span>
-      </div>`;
-    }).join('');
-    return `<div class="grafico-param">
-      <div class="grafico-param-head">
-        <div class="grafico-param-nome">${escHtml(param.label)}</div>
-        <div class="grafico-param-un">${escHtml(param.un)}</div>
-      </div>
-      <div class="grafico-valores">${lst}</div>
-    </div>`;
-  }
-  const {segmentos, maxEscala} = seg;
-  // Renderizar 3 segmentos
-  let anterior = 0;
-  const segBg = segmentos.map(s => {
-    const inicio = (anterior / maxEscala) * 100;
-    const fim = Math.min(100, (s.ate / maxEscala) * 100);
-    anterior = s.ate;
-    return `<div class="seg-faixa" style="left:${inicio}%;width:${fim-inicio}%;background:${s.cor};" title="${escAttr(s.lab)} (até ${fmt(s.ate, s.ate<10?2:0)})"></div>`;
-  }).join('');
-  // Marcadores (paleta consistente entre slots)
-  const cores = ['#1e3a5f', '#8b6914', '#722f37'];
-  const idxCor = {};
-  (todasSelecionadas || amostrasTipo).forEach((a,i) => { idxCor[a._docId] = cores[i % cores.length]; });
-  const marcadores = amostrasTipo.map(a => {
-    const v = a.parametros?.[param.id];
-    if (v == null || !isFinite(v)) return '';
-    const pos = Math.min(99, (v / maxEscala) * 100);
-    return `<div class="seg-marker" style="left:${pos}%;background:${idxCor[a._docId]};" title="${escAttr(a.nome+': '+v+' '+param.un)}">
-      <div class="seg-marker-val">${fmt(v, v < 10 ? 2 : (v < 100 ? 1 : 0))}</div>
-    </div>`;
-  }).join('');
-  // Legenda dos pontos
-  const legendaValores = amostrasTipo.map(a => {
-    const v = a.parametros?.[param.id];
-    if (v == null) return '';
-    const c = classificar(param, v, tipo, window.texturaAtiva);
-    return `<div class="cmp-val-item">
-      <span class="cmp-val-dot" style="background:${idxCor[a._docId]};"></span>
-      <span class="cmp-val-nome">${escHtml(a.nome)}${a.profundidade?' ('+escHtml(a.profundidade)+')':''}</span>
-      <span class="cmp-val-num">${fmt(v, v<10?2:(v<100?1:0))} ${escHtml(param.un)}</span>
-      <span class="cmp-val-cls cls-${c.cls}">${escHtml(c.label)}</span>
-    </div>`;
-  }).join('');
-  // Legenda das 3 zonas (com cor + label)
-  const legendaZonas = segmentos.map(s =>
-    `<span class="zona-leg"><span class="zona-leg-cor" style="background:${s.cor};"></span>${escHtml(s.lab)}</span>`
-  ).join('');
-  return `<div class="grafico-param">
-    <div class="grafico-param-head">
-      <div class="grafico-param-nome">${escHtml(param.label)}</div>
-      <div class="grafico-param-un">${escHtml(param.un)}</div>
-    </div>
-    <div class="grafico-bar">
-      ${segBg}
-      ${marcadores}
-    </div>
-    <div class="zonas-leg">${legendaZonas}</div>
-    <div class="grafico-valores">${legendaValores}</div>
+function cmpLinha(am, i, p, tipo, mostraFaixa) {
+  const v = dgVal(am, p.id), L = dgLimites(p, tipo), c = dgClass(p, tipo, v);
+  const fundo = L ? dgGradiente(dgFaixasCor(t => classificar(p, Math.max(0, dgInv(t, L)), tipo, window.texturaAtiva).cls)) : DG_TINT.ne;
+  const pin = (v != null && L) ? `<span class="dg-pin" style="left:${(dgPos(v, L) * 100).toFixed(1)}%;background:${DG_COR[c.cls]}"></span>` : '';
+  return `<div class="cmp-row" title="${escAttr(dgRotulo(am))}: ${escAttr(dgNum(v))} ${escAttr(p.un)} — ${escAttr(c.label)}">
+    ${cmpBadge(i)}
+    <div class="cmp-row-nome">${escHtml(dgRotulo(am))}${mostraFaixa ? `<small>${tipo === 'solo' ? '🧪 solo' : '🍃 folha'} · ${escHtml(p.un)} · faixa ${escHtml(dgFaixaTxt(L))}</small>` : ''}</div>
+    <div class="dg-gauge" style="background:${fundo}">${pin}</div>
+    <div class="dg-gval"><b>${dgNum(v)}</b><small style="color:${c.cls === 'ne' ? 'var(--c)' : DG_COR[c.cls]}">${escHtml(c.label)}</small></div>
   </div>`;
 }
 
-// Gráfico misto solo+folha (só pra parâmetros comuns)
-function renderGraficoMisto(selecionadas, paramSolo, paramFolha) {
-  const selSolo = selecionadas.filter(a => a.tipo === 'solo');
-  const selFolha = selecionadas.filter(a => a.tipo === 'folha');
-  const temSolo = selSolo.some(a => a.parametros?.[paramSolo.id] != null);
-  const temFolha = selFolha.some(a => a.parametros?.[paramFolha.id] != null);
-  if (!temSolo && !temFolha) return '';
-  const nomeNutri = paramFolha.label.replace(/ \([^)]+\)/, '');
-  let html = `<div class="grafico-param grafico-misto">
-    <div class="grafico-param-head">
-      <div class="grafico-param-nome">${escHtml(nomeNutri)}</div>
+function renderGraficosCmp(selecionadas, misto) {
+  const lista = selecionadas.map(dgEnriquecer);
+  const idx = am => lista.indexOf(am);
+  const sig = p => DG_SIG[p.id] || dgNome(p);
+  const temValor = (p, ams) => ams.some(a => dgVal(a, p.id) != null);
+  const comMedidor = (tipo, ams, todos) => PARAMS[tipo].filter(p => dgLimites(p, tipo) && temValor(p, ams) && (todos || window.cmpTodos || p.destaque));
+
+  // 1) Resumo: o que está fora da faixa em cada amostra
+  let html = `<div class="cmp-resumo">${lista.map((am, i) => {
+    const ps = comMedidor(am.tipo, [am], true);
+    const fora = g => ps.filter(p => dgGrupo(dgClass(p, am.tipo, dgVal(am, p.id)).cls) === g).map(dgNome);
+    const b = fora('b'), a = fora('a');
+    return `<div class="cmp-res">
+      ${cmpBadge(i)}
+      <div class="cmp-res-txt"><b>${am.tipo === 'solo' ? '🧪' : '🍃'} ${escHtml(dgRotulo(am))}</b><small>${escHtml(dgSub(am))}</small>
+        <div class="cmp-res-tags">
+          ${b.length ? `<span class="cmp-tag" style="background:${DG_TINT.mb};color:#8a1f15">↓ Baixo: ${escHtml(b.join(', '))}</span>` : ''}
+          ${a.length ? `<span class="cmp-tag" style="background:${DG_TINT.at};color:#1d4f86">↑ Alto: ${escHtml(a.join(', '))}</span>` : ''}
+          ${!b.length && !a.length ? `<span class="cmp-tag" style="background:${DG_TINT.md};color:#1d6b33">✓ Tudo na faixa</span>` : ''}
+        </div>
+      </div>
     </div>`;
-  // 1 bloco solo + 1 bloco folha
-  if (temSolo) {
-    const sub = renderGraficoParam(selSolo, paramSolo, 'solo', selecionadas);
-    if (sub) html += `<div class="grafico-misto-sub"><div class="grafico-misto-tit">🧪 Solo (${escHtml(paramSolo.un)})</div>${sub}</div>`;
+  }).join('')}</div>`;
+
+  html += `<div class="dg-legend" style="margin:2px 0 10px">
+    <span><i style="background:${DG_COR.mb}"></i>Muito baixo</span><span><i style="background:${DG_COR.bx}"></i>Baixo</span>
+    <span><i style="background:${DG_COR.md}"></i>Adequado</span><span><i style="background:${DG_COR.at}"></i>Alto</span>
+    <span><i style="background:${DG_COR.ma}"></i>Muito alto</span><span>· a bolinha mostra onde a amostra cai na faixa</span>
+  </div>`;
+
+  const card = (titulo, sub, corpo) => `<div class="cmp-card"><div class="cmp-card-h"><b>${titulo}</b><span>${sub}</span></div>${corpo}</div>`;
+  const grade = (tit, cards) => cards ? `<div class="cmp-sec">${tit}</div><div class="cmp-grade">${cards}</div>` : '';
+  const jaMostrados = new Set();
+
+  // 2) Solo × folha: nutrientes comuns, cada amostra na escala da sua própria faixa
+  if (misto) {
+    const cards = DG_COMUNS.map(([idS, idF]) => {
+      const pS = dgParam('solo', idS), pF = dgParam('folha', idF);
+      const linhas = lista.map(am => {
+        const p = am.tipo === 'solo' ? pS : pF;
+        return dgVal(am, p.id) != null ? cmpLinha(am, idx(am), p, am.tipo, true) : '';
+      }).join('');
+      if (!linhas) return '';
+      jaMostrados.add('solo:' + idS); jaMostrados.add('folha:' + idF);
+      return card(`${escHtml(dgNome(pF))} <span class="cmp-sig">${escHtml(DG_SIG[idF])}</span>`, 'solo e folha, cada um na sua faixa', linhas);
+    }).join('');
+    html += grade('🔗 Nutrientes comuns — solo × folha', cards);
   }
-  if (temFolha) {
-    const sub = renderGraficoParam(selFolha, paramFolha, 'folha', selecionadas);
-    if (sub) html += `<div class="grafico-misto-sub"><div class="grafico-misto-tit">🍃 Folha (${escHtml(paramFolha.un)})</div>${sub}</div>`;
-  }
-  html += `</div>`;
+
+  // 3) Por tipo, agrupado como no laudo
+  ['solo', 'folha'].forEach(tipo => {
+    const ams = lista.filter(a => a.tipo === tipo);
+    if (!ams.length) return;
+    const grupos = {};
+    comMedidor(tipo, ams).filter(p => !jaMostrados.has(tipo + ':' + p.id)).forEach(p => { (grupos[p.grupo] = grupos[p.grupo] || []).push(p); });
+    Object.entries(grupos).forEach(([g, ps]) => {
+      const cards = ps.map(p => card(`${escHtml(dgNome(p))} <span class="cmp-sig">${escHtml(sig(p))}</span>`,
+        `${escHtml(p.un)} · faixa ${escHtml(dgFaixaTxt(dgLimites(p, tipo)))}`,
+        ams.map(am => cmpLinha(am, idx(am), p, tipo, false)).join(''))).join('');
+      html += grade(`${tipo === 'solo' ? '🧪 Solo' : '🍃 Folha'} · ${escHtml(g)}`, cards);
+    });
+    // Valores sem faixa (P rem, CTC, relações…): tabela simples
+    const outros = window.cmpTodos ? PARAMS[tipo].filter(p => !dgLimites(p, tipo) && temValor(p, ams)) : [];
+    if (outros.length) {
+      html += `<div class="cmp-sec">${tipo === 'solo' ? '🧪 Solo' : '🍃 Folha'} · outros valores</div>
+      <div class="cmp-card"><div class="dg-scroll"><table class="cmp-outros"><thead><tr><th></th>${ams.map(am => `<th>${cmpBadge(idx(am))}</th>`).join('')}</tr></thead><tbody>
+        ${outros.map(p => {
+          const ef = faixaEfetiva(p, tipo), ideal = ef?.tipo === 'ideal' ? ef.faixa.ideal : null;
+          return `<tr><td>${escHtml(p.label)} <span class="cmp-un">${escHtml(p.un)}${ideal ? ' · ideal ' + dgNum(ideal) : ''}</span></td>${ams.map(am => {
+            const v = dgVal(am, p.id), c = ideal ? dgClass(p, tipo, v) : {cls:'ne'};
+            return `<td style="${c.cls !== 'ne' ? 'background:' + DG_TINT[c.cls] : ''}">${dgNum(v)}</td>`;
+          }).join('')}</tr>`;
+        }).join('')}
+      </tbody></table></div></div>`;
+    }
+  });
+  const ocultos = ['solo', 'folha'].reduce((n, tipo) => {
+    const ams = lista.filter(a => a.tipo === tipo);
+    return n + (ams.length ? PARAMS[tipo].filter(p => temValor(p, ams) && !(dgLimites(p, tipo) && p.destaque)).length : 0);
+  }, 0);
+  if (ocultos) html += `<button type="button" class="cmp-todos" onclick="setCmpTodos(${!window.cmpTodos})">${window.cmpTodos ? '▲ Mostrar só os principais' : `▼ Ver todos os parâmetros (+${ocultos}: saturações, CTC, relações…)`}</button>`;
   return html;
 }
+window.cmpTodos = false;
+window.setCmpTodos = function(v) { window.cmpTodos = v; renderComparar(); };
 
 // ━━━ SELETOR DE AMOSTRA (slot) ━━━
 function renderSeletorItens(itens, busca) {
