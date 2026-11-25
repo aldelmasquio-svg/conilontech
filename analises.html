@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..800&display=swap" rel="stylesheet">
-<!-- PDF.js para leitura de laudos Fullin -->
+<!-- PDF.js para leitura de laudos (Fullin, Agrolandes) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>
 if (window['pdfjsLib']) {
@@ -504,7 +504,7 @@ table.dg-mx{border-collapse:separate;border-spacing:3px;width:100%;}
 
 <!-- FAB grupo: importar PDF + novo manual -->
 <div class="fab-grupo" id="fabGrupo" style="display:none;">
-  <button class="fab fab-pdf" id="fabImportar" onclick="document.getElementById('inpPDF').click()" title="Importar PDF Fullin">📄</button>
+  <button class="fab fab-pdf" id="fabImportar" onclick="document.getElementById('inpPDF').click()" title="Importar PDF do laboratório (Fullin, Agrolandes)">📄</button>
   <button class="fab" id="fabNovo" onclick="abrirNovaAnalise()" title="Nova análise manual">+</button>
 </div>
 <input type="file" id="inpPDF" accept=".pdf,application/pdf" style="display:none;" onchange="importarPDF(event)">
@@ -2255,16 +2255,18 @@ window.importarPDF = async function(event) {
       const items = tc.items.map(it => ({
         str: it.str,
         x: Math.round(it.transform[4]),
-        y: Math.round(it.transform[5])
+        y: Math.round(it.transform[5]),
+        w: Math.round(it.width || 0)
       })).filter(it => it.str && it.str.trim());
       todasPaginas.push(items);
     }
     stat.textContent = 'Analisando conteúdo...';
-    const resultado = parsearLaudoFullin(todasPaginas);
+    // Laboratório: Agrolandes é reconhecido pelo texto; o resto segue no leitor da Fullin
+    const resultado = ehLaudoAgrolandes(todasPaginas) ? parsearLaudoAgrolandes(todasPaginas) : parsearLaudoFullin(todasPaginas);
     console.log('📄 PDF parseado:', resultado);
     ov.classList.remove('aberto');
     if (!resultado) {
-      toast('❌ Não consegui identificar o formato. Verifique se é laudo Fullin.');
+      toast('❌ Não reconheci o laudo. Hoje leio PDFs da Fullin e da Agrolandes.', 4500);
       return;
     }
     // Abrir formulário pré-preenchido pra revisar
@@ -2306,6 +2308,142 @@ function parsearLaudoFullin(paginas) {
     tipo,
     laboratorio: 'Fullin',
     ...cabecalho,
+    amostras: amostrasArray
+  };
+}
+
+// ━━━━━━━━━━ IMPORTADOR DE PDF AGROLANDES (Jaguaré/ES) ━━━━━━━━━━
+// Usa só as páginas-resumo ("ANÁLISE DE SOLO" / "ANÁLISE DE TECIDO VEGETAL"): até 4 amostras por
+// página, uma por coluna, alinhadas sob a linha "Nº Amostra". As páginas de detalhe por amostra
+// ("ANÁLISE QUÍMICA DE SOLO") repetem os mesmos valores e são ignoradas.
+// Chave = sigla antes do " (" no rótulo do PDF (diferencia maiúscula: t = CTC efetiva, T = CTC pH 7).
+const MAPA_PARAM_AGROLANDES = {
+  solo: {
+    'P meh':'p_mehlich', 'P rem':'p_remanescente', 'Ca':'calcio', 'Mg':'magnesio', 'K':'potassio', 'Na':'sodio',
+    'S':'enxofre', 'B':'boro', 'Cu':'cobre', 'Fe':'ferro', 'Mn':'manganes', 'Zn':'zinco',
+    'pH':'ph_h2o', 'H+Al':'h_al', 'H':'h_extraivel', 'Al':'aluminio', 'M.O.':'mo',
+    't':'ctc_efetiva', 'T':'ctc_ph7', 'SB':'sb',
+    'Ca/T':'sat_ca', 'Mg/T':'sat_mg', 'K/T':'sat_k', 'Na/T':'sat_na', 'm':'sat_al', 'V':'v',
+    'Ca/Mg':'rel_ca_mg', 'Ca/K':'rel_ca_k', 'Mg/K':'rel_mg_k'
+  },
+  folha: {
+    'N':'n', 'P':'p', 'K':'k', 'Ca':'ca', 'Mg':'mg', 'S':'s', 'B':'b', 'Cu':'cu', 'Fe':'fe', 'Mn':'mn', 'Zn':'zn',
+    'N/P':'rel_n_p', 'N/K':'rel_n_k', 'N/S':'rel_n_s', 'N/Mg':'rel_n_mg', 'N/Cu':'rel_n_cu', 'N/B':'rel_n_b',
+    'N/Ca':'rel_n_ca', 'P/Mg':'rel_p_mg', 'P/Zn':'rel_p_zn', 'P/Cu':'rel_p_cu', 'P/K':'rel_p_k', 'P/S':'rel_p_s',
+    'K/Ca':'rel_k_ca', 'K/Mg':'rel_k_mg', 'K/Mn':'rel_k_mn', 'K/S':'rel_k_s',
+    'Ca/Mg':'rel_ca_mg_f', 'Ca/Mn':'rel_ca_mn', 'Ca/B':'rel_ca_b', 'Fe/Mn':'rel_fe_mn'
+  }
+};
+const MESES_PT = ['janeiro','fevereiro','marco','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+function ehLaudoAgrolandes(paginas) {
+  if (normalizar(paginas.flat().map(it => it.str).join(' ')).includes('agrolandes')) return true;
+  // O logo é imagem (o laudo de solo não traz o nome em texto): reconhece pelo layout exato da página-resumo
+  return paginas.some(items => {
+    const s = new Set(items.map(it => it.str.trim()));
+    return (s.has('ANÁLISE DE SOLO') || s.has('ANÁLISE DE TECIDO VEGETAL')) && s.has('Nº Amostra') && s.has('Descrição da Amostra');
+  });
+}
+
+// Agrupa itens em linhas (mesmo y ± 2), de cima para baixo
+function linhasPorY(items) {
+  const ord = [...items].sort((a, b) => b.y - a.y || a.x - b.x);
+  const linhas = [];
+  for (const it of ord) {
+    const l = linhas[linhas.length - 1];
+    if (l && Math.abs(l.y - it.y) <= 2) l.items.push(it); else linhas.push({y: it.y, items: [it]});
+  }
+  linhas.forEach(l => l.items.sort((a, b) => a.x - b.x));
+  return linhas;
+}
+
+function numeroPt(s) {
+  const t = String(s || '').trim();
+  if (!/^-?[\d.]*,?\d+$/.test(t)) return null;
+  const n = parseFloat(t.replace(/\./g, '').replace(',', '.'));
+  return isFinite(n) ? n : null;
+}
+
+function parsearLaudoAgrolandes(paginas) {
+  const textoTodo = paginas.flat().map(it => it.str).join(' ');
+  const tn = normalizar(textoTodo);
+  const tipo = tn.includes('tecido vegetal') ? 'folha' : tn.includes('analise de solo') ? 'solo' : null;
+  if (!tipo) return null;
+  const mapa = MAPA_PARAM_AGROLANDES[tipo];
+  const amostrasMapa = {};   // nº amostra → {nome, profundidade, protocolo, parametros}
+  for (const items of paginas) {
+    const linhas = linhasPorY(items);
+    const lNum = linhas.find(l => l.items[0].str.trim() === 'Nº Amostra');
+    if (!lNum) continue;   // página de detalhe ou sem tabela
+    const cols = lNum.items.slice(1).filter(it => /^\d+$/.test(it.str.trim()))
+      .map(it => ({num: it.str.trim(), cx: it.x + (it.w || 0) / 2}));
+    if (!cols.length) continue;
+    const passo = cols.length > 1 ? (cols[cols.length - 1].cx - cols[0].cx) / (cols.length - 1) : 80;
+    const colDe = it => {
+      const cx = it.x + (it.w || 0) / 2;
+      let melhor = null, dist = Infinity;
+      cols.forEach((c, i) => { const d = Math.abs(c.cx - cx); if (d < dist) { dist = d; melhor = i; } });
+      return dist <= passo * 0.45 ? melhor : null;
+    };
+    const rotuloDe = l => l.items[0].str.trim();
+    const yDe = nome => linhas.find(l => normalizar(rotuloDe(l)) === normalizar(nome))?.y;
+    const yCultura = yDe('Cultura') ?? lNum.y;
+    const yProf = yDe('Profundidade');
+    const yParam = yDe('Parâmetro');
+    // Descrição pode quebrar em 2 linhas, acima e abaixo do rótulo: tudo entre "Cultura" e a próxima linha-rótulo
+    const yFimDesc = Math.max(yProf ?? -1, yParam ?? -1);
+    const desc = cols.map(() => []);
+    items.forEach(it => {
+      if (it.y < yCultura - 1 && it.y > yFimDesc + 1) { const c = colDe(it); if (c != null) desc[c].push(it); }
+    });
+    const prof = cols.map(() => '');
+    if (yProf != null) linhas.find(l => l.y === yProf).items.forEach(it => { const c = colDe(it); if (c != null) prof[c] = it.str.trim(); });
+    cols.forEach((c, i) => {
+      if (!amostrasMapa[c.num]) {
+        amostrasMapa[c.num] = {
+          nome: desc[i].sort((a, b) => b.y - a.y || a.x - b.x).map(it => it.str.trim()).join(' ').replace(/\s+/g, ' ') || ('Amostra ' + c.num),
+          profundidade: prof[i].replace(/\b0+(\d)/g, '$1'),
+          protocolo: c.num,
+          parametros: {}
+        };
+      }
+    });
+    if (yParam == null) continue;
+    linhas.filter(l => l.y < yParam).forEach(l => {
+      const chave = rotuloDe(l).split(' (')[0].trim();
+      const id = mapa[chave];
+      if (!id) return;
+      const unidade = (l.items[1]?.str || '').toLowerCase();
+      l.items.slice(1).forEach(it => {
+        const c = colDe(it); if (c == null) return;
+        let v = numeroPt(it.str); if (v == null) return;   // "ns" = não solicitado
+        if (tipo === 'solo' && id === 'potassio' && unidade.includes('cmol')) v = v * 391;   // app guarda K em mg/dm³
+        if (tipo === 'solo' && id === 'sodio' && unidade.includes('cmol')) v = v * 230;
+        amostrasMapa[cols[c].num].parametros[id] = v;
+      });
+    });
+  }
+  const amostrasArray = Object.values(amostrasMapa).filter(a => Object.keys(a.parametros).length);
+  if (!amostrasArray.length) return null;
+  // Cabeçalho
+  const campo = rotulo => { const m = textoTodo.match(new RegExp(rotulo + '\\s*:\\s*(.+?)\\s+(?:CPF|Matrícula|Telefone|Convênio|Pedido|Laudo|Entrada|Gerado|Município|Propriedade|Proprietário)\\s*:', 'i')); return m ? limparTexto(m[1]) : ''; };
+  const data = rotulo => { const m = textoTodo.match(new RegExp(rotulo + '\\s*:\\s*(\\d{2}\\/\\d{2}\\/\\d{4})', 'i')); return m ? converterData(m[1]) : ''; };
+  let dataLaudo = '';
+  const mExt = normalizar(textoTodo).match(/(\d{1,2}) de ([a-z]+) de (\d{4})/);
+  if (mExt && MESES_PT.includes(mExt[2])) dataLaudo = `${mExt[3]}-${String(MESES_PT.indexOf(mExt[2]) + 1).padStart(2, '0')}-${mExt[1].padStart(2, '0')}`;
+  const mRT = textoTodo.match(/([A-ZÁÉÍÓÚÂÊÔÃÇ][A-ZÁÉÍÓÚÂÊÔÃÇ.\- ]{6,60}?)\s+Responsável\s+Técnico/);
+  const nLaudo = (textoTodo.match(/Laudo\s*:\s*([\d\/]+)/i) || [])[1];
+  const nPedido = (textoTodo.match(/Pedido\s*:\s*([\d\/]+)/i) || [])[1];
+  return {
+    tipo,
+    laboratorio: 'Agrolandes',
+    importadoDe: 'pdf_agrolandes',
+    cliente: campo('Proprietário'),
+    propriedade: campo('Propriedade'),
+    dataEntrada: data('Entrada'),
+    dataLaudo: dataLaudo || data('Gerado'),
+    responsavelTecnico: mRT ? limparTexto(mRT[1]) : '',
+    observacoes: [nLaudo && 'Laudo ' + nLaudo, nPedido && 'Pedido ' + nPedido].filter(Boolean).join(' · '),
     amostras: amostrasArray
   };
 }
@@ -2562,8 +2700,8 @@ function abrirFormImportado(dados) {
     dataEntrada: dados.dataEntrada || hoje(),
     dataLaudo: dados.dataLaudo || hoje(),
     responsavelTecnico: dados.responsavelTecnico || '',
-    observacoes: '',
-    importadoDe: 'pdf_fullin',
+    observacoes: dados.observacoes || '',
+    importadoDe: dados.importadoDe || 'pdf_fullin',
     amostras: dados.amostras.map(a => ({
       nome: a.nome,
       profundidade: a.profundidade || '',
