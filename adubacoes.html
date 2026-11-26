@@ -1129,6 +1129,7 @@ window.abrirEdicaoAp=function(pid,aid){
   document.getElementById('overlayEdit').classList.add('open');
 };
 function renderizarEProds(){
+  const ehFert = document.getElementById('eModo')?.value === 'Fertinox';
   document.getElementById('eProds').innerHTML=_eProds.map((p,i)=>`
     <div class="ep-row">
       <input class="ep-nome" value="${sanitizar(p.produto)}" list="prodSug" onchange="setEProdNome(${i},this.value)" placeholder="Produto">
@@ -1136,6 +1137,7 @@ function renderizarEProds(){
       <select class="ep-und" onchange="setEProdUnd(${i},this.value)">
         ${['kg','g','L','mL','t','sc'].map(u=>`<option ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
       </select>
+      ${ehFert?`<input class="ep-fert" type="number" step="0.1" min="0" value="${sanitizar(p.doseFertinox||'')}" onchange="setEProdFertinox(${i},this.value)" placeholder="g/m" title="Dose Fertinox (g/m)"><span class="ep-fert-u">g/m</span>`:''}
       <button onclick="remEProd(${i})" class="btn-rm">✕</button>
     </div>`).join('');
 }
@@ -1144,12 +1146,20 @@ function renderizarEProds(){
 window.setEProdNome=function(i,v){ if(_eProds[i]) _eProds[i].produto=v; };
 window.setEProdDose=function(i,v){ if(_eProds[i]) _eProds[i].dose=v; };
 window.setEProdUnd=function(i,v){ if(_eProds[i]) _eProds[i].unidade=v; };
+window.setEProdFertinox=function(i,v){ if(_eProds[i]) _eProds[i].doseFertinox=v; };
+window._eModoMudou=function(){ renderizarEProds(); };   // mostra/esconde o campo g/m ao trocar o modo
 window.addEProd=function(){_eProds.push({produto:'',dose:'',unidade:'kg'});renderizarEProds();};
 window.remEProd=function(i){_eProds.splice(i,1);renderizarEProds();};
 window.fecharEdicao=function(){document.getElementById('overlayEdit').classList.remove('open');};
 window.salvarEdicao=async function(){
   const pl=planosAdubacao.find(p=>p._docId===_ePid); if(!pl) return;
-  await updateDoc(doc(db,'planosAdubacao',_ePid),{aplicacoes:pl.aplicacoes.map(a=>a.id!==_eAid?a:{...a,semana:document.getElementById('eSemana').value,modo:document.getElementById('eModo').value,obs:document.getElementById('eObs').value,produtos:_eProds.filter(p=>p.produto&&p.dose)})});
+  const modo=document.getElementById('eModo').value;
+  // Mantém doseFertinox só quando o modo é Fertinox (preserva os demais campos do produto, ex.: feito).
+  const produtos=_eProds.filter(p=>p.produto&&p.dose).map(p=>{
+    const {doseFertinox,...rest}=p;
+    return (modo==='Fertinox' && doseFertinox!=null && doseFertinox!=='') ? {...rest,doseFertinox} : rest;
+  });
+  await updateDoc(doc(db,'planosAdubacao',_ePid),{aplicacoes:pl.aplicacoes.map(a=>a.id!==_eAid?a:{...a,semana:document.getElementById('eSemana').value,modo,obs:document.getElementById('eObs').value,produtos})});
   fecharEdicao(); toast('✅ Atualizado!');
 };
 
@@ -1549,7 +1559,9 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
 .modal-handle{width:40px;height:4px;background:var(--cb);border-radius:2px;margin:12px auto 0;}
 .modal-tit{padding:12px 20px;border-bottom:1px solid var(--cb);font-family:var(--font-display);font-weight:800;font-size:1.2rem;}
 .modal-body{padding:14px 20px;}
-.ep-row{display:flex;gap:6px;align-items:center;margin-bottom:7px;background:var(--cl);border-radius:var(--rs);padding:8px;}
+.ep-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:7px;background:var(--cl);border-radius:var(--rs);padding:8px;}
+.ep-fert{width:68px;border:1.5px solid var(--v);border-radius:6px;padding:7px;font-size:.83rem;font-family:var(--font-body);outline:none;background:#f9fff9;}
+.ep-fert-u{font-size:.72rem;font-weight:700;color:var(--v);}
 .ep-nome{flex:2;border:1.5px solid var(--cb);border-radius:6px;padding:7px;font-size:.83rem;font-family:var(--font-body);outline:none;min-width:0;}
 .ep-dose{width:65px;border:1.5px solid var(--cb);border-radius:6px;padding:7px;font-size:.83rem;font-family:var(--font-body);outline:none;}
 .ep-und{width:58px;border:1.5px solid var(--cb);border-radius:6px;padding:7px;font-size:.8rem;font-family:var(--font-body);outline:none;-webkit-appearance:none;}
@@ -1779,7 +1791,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--t);min-height
       <div class="campo" style="margin-bottom:10px;"><label>Semana</label><input type="text" id="eSemana"></div>
       <div class="campo-row" style="margin-bottom:10px;">
         <div class="campo"><label>Modo</label>
-          <select id="eModo"><option value="">—</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Fertinox">Fertinox</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
+          <select id="eModo" onchange="_eModoMudou()"><option value="">—</option><option value="Lanço">Lanço</option><option value="Fertirrigação">Fertirrigação</option><option value="Fertinox">Fertinox</option><option value="Incorporado">Incorporado</option><option value="Foliar">Foliar</option><option value="Drench">Drench</option></select>
         </div>
         <div class="campo"><label>Obs.</label><input type="text" id="eObs" placeholder="Opcional..."></div>
       </div>
