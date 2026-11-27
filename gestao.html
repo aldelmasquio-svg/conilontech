@@ -2226,6 +2226,11 @@ function renderEstoque() {
 // ════════════════════════════════════════════════════
 // ABA 5 — ADUBAÇÃO
 // ════════════════════════════════════════════════════
+// "Só Adubações": ignora aplicações originadas no Planejamento (marcadas com origemPlanejamentoId),
+// para os relatórios de adubação (Compras/Adubação/Nutrientes) refletirem o que é mantido na página
+// Adubações e não duplicarem quando um plano antigo do Planejamento continua no mesmo talhão/mês.
+function apsAdub(plano){ return (plano && Array.isArray(plano.aplicacoes) ? plano.aplicacoes : []).filter(a => a && !a.origemPlanejamentoId); }
+
 function renderAdubacao() {
   const cont = document.getElementById('tabContent');
   if (_adubMap) { try { _adubMap.remove(); } catch(e){} _adubMap = null; }
@@ -2343,7 +2348,7 @@ function _adubAgrupaPorTalhao() {
     if (!Array.isArray(plano.aplicacoes) || !plano.aplicacoes.length) return;
     const t = talhoes.find(x => x.id === plano.talhaoId);
     if (faz && (!t || t.fazenda !== faz)) return;
-    plano.aplicacoes.forEach(ap => {
+    apsAdub(plano).forEach(ap => {
       if (!ap.feito) return;
       const data = ap.dataFeito || _dataPlanejadaAp(plano, ap) || '';
       if (data && (data < inicio || data > fim)) return; // fora do período selecionado
@@ -2631,7 +2636,7 @@ function renderCompras() {
     const planos = planosAdubacao.filter(p => p.talhaoId === t.id && mesesSel.includes(p.mesAno));
     const porProdutoTalhao = {};
     planos.forEach(plano => {
-      (plano.aplicacoes || []).forEach(ap => {
+      apsAdub(plano).forEach(ap => {
         (ap.produtos || []).forEach(p => {
           const dose = parseDose(p.dose);
           if (!dose) return;
@@ -2781,7 +2786,7 @@ function _calcNutrientes(talhoesSel, inicio, fim) {
   talhoesSel.forEach(t => {
     const area = parseDose(t.area);
     planosAdubacao.filter(p => p.talhaoId === t.id).forEach(plano => {
-      (plano.aplicacoes || []).forEach(ap => {
+      apsAdub(plano).forEach(ap => {
         const dataPlan = _dataPlanejadaAp(plano, ap);
         const naSafra = dataPlan && dataPlan >= inicio && dataPlan <= fim;   // aplicação planejada dentro do período/safra
         const feitoNoPeriodo = ap.feito && (!ap.dataFeito || (ap.dataFeito >= inicio && ap.dataFeito <= fim));
