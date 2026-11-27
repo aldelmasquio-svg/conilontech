@@ -14,7 +14,7 @@
     'Tipologia: descritivo caracteriza (verbo de estado: "A riqueza é..."); narrativo conta ações em sequência ("Trabalhei, economizei, fiquei rico"); injuntivo orienta (imperativo: "Seja feliz!"); dissertativo defende ideia.',
     'Discurso direto reproduz a fala; indireto a relata com verbo dicendi + "que" ("Já foi dito que..."). Indireto livre mistura a fala da personagem à do narrador.',
     'Linguagem figurada: palavra fora do sentido literal (metáfora "serviço sem pagamento é castigo"; metonímia; hipérbole).',
-    'Adjetivo de estado (resultado de ação: "mesa arranhada") × qualidade ("homem alto") × relação ("discurso presidencial", "produto importado"). Essa questão foi anulada na PCMG 2025, mas o conceito cai em outras provas.',
+    'Adjetivo de estado (resultado de ação: "mesa arranhada") × qualidade ("homem alto") × relação ("discurso presidencial", "produto importado"). Caiu na PCMG 2025 (Q5, resposta: "mesa arranhada").',
     'Elementos da comunicação: emissor (quem produz a mensagem — a loja/empresa, não quem afixa o cartaz), receptor, mensagem, código (palavras e imagens), canal, referente.',
     'Inferência adequada = conclusão que o texto autoriza. Inadequada = juízo de valor sem base ("muita gente vive em favelas" não implica "favelas são aprazíveis").'
   ]]);
