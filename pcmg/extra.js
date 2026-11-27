@@ -96,4 +96,28 @@
     ['crim', 'A prevenção terciária volta-se ao condenado, buscando evitar a reincidência.', 0, 'Primária: causas; secundária: grupos de risco; terciária: o apenado.']
   ];
   CE.forEach((q, i) => D.questoes.push({ id: 'ce' + i, m: q[0], e: q[1], a: ['Certo', 'Errado'], c: q[2], x: q[3], ce: true }));
+  // ---------- Constitucional: emendas recentes e PEC da Segurança ----------
+  R.const.push(['Emendas constitucionais que importam para a prova', [
+    'EC 104/2019: criou as polícias penais (art. 144, VI e §5º-A), vinculadas ao órgão administrador do sistema penal. Caiu na PCMG 2025.',
+    'EC 115/2022: proteção de dados pessoais, inclusive nos meios digitais, virou direito fundamental (art. 5º, LXXIX). Compete à União organizar e fiscalizar a proteção de dados (art. 21, XXVI) e legislar privativamente sobre o tema (art. 22, XXX).',
+    'EC 45/2004 (sempre cobrada): tratados de direitos humanos com rito especial equivalem a emenda (art. 5º, §3º); incidente de deslocamento de competência (art. 109, §5º).',
+    'Emendas de 2025 e 2026 (EC 136 a EC 140) trataram de precatórios, IPVA, acumulação de cargos de professor, Tribunais de Contas e aposentadoria de agentes de saúde. Fora a EC 138 (acumulação de cargos), não têm relação com o edital de Investigador.'
+  ]]);
+  R.const.push(['PEC da Segurança Pública (PEC 18/2025) — aprovada, aguardando promulgação', [
+    'Situação: aprovada na Câmara (mar/2026) e no Senado em dois turnos (03/11/2026). Até o fim de novembro de 2026 não encontrei a promulgação. Só vira texto da Constituição quando promulgada pelas Mesas da Câmara e do Senado; até lá, o art. 144 em vigor é o atual. Se o novo edital sair depois da promulgação, ela entra com força em Constitucional.',
+    'SUSP na Constituição: novo art. 144-A. Os órgãos de segurança atuam de forma integrada no Sistema Único de Segurança Pública, para a prevenção, a persecução penal e a execução das penas.',
+    'Polícias municipais: os municípios PODEM criar polícia municipal (não é automático), cumpridos requisitos de formação, capacidade financeira e fiscalização, com controle externo do Ministério Público e ouvidorias.',
+    'Polícia Federal: passa a investigar também crimes de organizações criminosas e milícias de repercussão interestadual ou internacional e crimes ambientais.',
+    'PRF: absorve a antiga Polícia Ferroviária Federal e atua também em ferrovias e hidrovias federais.',
+    'Fundos: FNSP, Funpen e Funapol protegidos contra bloqueio e desvio de finalidade; parte do Fundo Social (pré-sal) vai para a segurança pública; repasse de parte dos fundos aos estados e ao DF.',
+    'Competência legislativa: segundo as reportagens, segurança pública, organização das polícias, guardas municipais e sistema socioeducativo passam a ser matéria de legislação compartilhada entre os entes. Confira a redação exata após a promulgação.',
+    'A redução da maioridade penal ficou FORA do texto (destaque aprovado no Senado). Continua 18 anos (art. 228).',
+    'Atenção: esses pontos vêm de reportagens sobre o texto aprovado. Quando a emenda for promulgada, a redação oficial no Planalto prevalece. Me peça para revisar este resumo nessa data.'
+  ]]);
+  D.materias.find(m => m.id === 'const').topicos.push('Emendas recentes (EC 104, EC 115) e PEC da Segurança Pública');
+  [
+    ['const', 'A proteção dos dados pessoais, inclusive nos meios digitais, é direito fundamental expresso na Constituição Federal.', 0, 'Art. 5º, LXXIX (EC 115/2022).'],
+    ['const', 'Compete aos Estados legislar sobre proteção e tratamento de dados pessoais.', 1, 'Competência privativa da União (art. 22, XXX, EC 115/2022).'],
+    ['const', 'As polícias penais integram o rol de órgãos de segurança pública do art. 144 da Constituição desde a EC 104/2019.', 0, 'Art. 144, VI.']
+  ].forEach((q, i) => D.questoes.push({ id: 'ce-ec' + i, m: q[0], e: q[1], a: ['Certo', 'Errado'], c: q[2], x: q[3], ce: true }));
 })();
