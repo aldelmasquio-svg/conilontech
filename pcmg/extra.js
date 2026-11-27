@@ -27,6 +27,7 @@
     'Remição (arts. 126 a 130): 1 dia de pena a cada 3 dias de trabalho; 1 dia a cada 12 horas de estudo, divididas em no mínimo 3 dias; +1/3 ao concluir ensino fundamental, médio ou superior; falta grave pode revogar até 1/3 do tempo remido (art. 127).',
     'Faltas graves (art. 50): incitar movimento de subversão, fugir, possuir instrumento capaz de ofender, provocar acidente, descumprir condições do regime aberto, ter aparelho celular, recusar a identificação do perfil genético.',
     'RDD (art. 52): até 2 anos, sem prejuízo de repetição por nova falta; cela individual; visitas quinzenais de 2 pessoas por 2 horas; banho de sol de 2 horas diárias.',
+    'Atenção: a Lei Antifacção (15.358/2026) endureceu a execução penal para integrantes de facção. Confira no art. 112 da LEP compilada se mudou algum percentual de progressão antes da prova.',
     'Monitoração eletrônica (art. 146-B): pode ser usada na saída temporária, na prisão domiciliar, no livramento condicional e nos regimes aberto e semiaberto.'
   ]]);
   D.materias.find(m => m.id === 'leg').topicos.push('Execução Penal (LEP): saídas, progressão, remição, faltas e RDD');
@@ -120,4 +121,39 @@
     ['const', 'Compete aos Estados legislar sobre proteção e tratamento de dados pessoais.', 1, 'Competência privativa da União (art. 22, XXX, EC 115/2022).'],
     ['const', 'As polícias penais integram o rol de órgãos de segurança pública do art. 144 da Constituição desde a EC 104/2019.', 0, 'Art. 144, VI.']
   ].forEach((q, i) => D.questoes.push({ id: 'ce-ec' + i, m: q[0], e: q[1], a: ['Certo', 'Errado'], c: q[2], x: q[3], ce: true }));
+  // ---------- Atualizações 2025–2026 (processo penal e penal) ----------
+  R.pp.push(['Novidades de 2025 e 2026 no CPP (alta chance de prova)', [
+    'Lei 15.272/2025 — art. 312, §4º: é INCABÍVEL a preventiva com base na gravidade abstrata do delito; é preciso demonstrar concretamente a periculosidade e o risco à ordem pública ou econômica, à instrução ou à aplicação da lei penal.',
+    'Lei 15.272/2025 — art. 312, §3º: critérios para aferir a periculosidade, entre eles o modus operandi (violência ou grave ameaça reiterada, premeditação), a participação em organização criminosa, a natureza e quantidade de drogas, armas ou munições apreendidas e o receio fundado de reiteração.',
+    'Lei 15.272/2025 — art. 310, §§5º e 6º: circunstâncias que RECOMENDAM (não obrigam) converter o flagrante em preventiva, e o juiz deve examiná-las expressamente na audiência de custódia.',
+    'Lei 15.272/2025 — art. 310-A: coleta de material biológico (DNA) do preso em flagrante por crimes graves.',
+    'Lei 15.358/2026 (Lei Antifacção) — art. 310: a audiência de custódia continua em até 24 horas, mas passa a ser, em regra, por VIDEOCONFERÊNCIA, com presença do preso, da defesa e do MP e entrevista prévia reservada com o defensor. A presencial fica para situações excepcionais, com decisão justificada.',
+    'Lei 15.358/2026 — art. 313, VI: nova hipótese de admissibilidade da preventiva ligada aos crimes de facção (organização criminosa ultraviolenta). Há divergência sobre se dispensa os requisitos do art. 312, e a lei é questionada no STF (ADI 7952).',
+    'A Lei Antifacção também prevê bloqueio de ativos digitais, perdimento de bens e um Banco Nacional de Dados de Organizações Criminosas.'
+  ]]);
+  R.leg.push(['Lei Antifacção (Lei 15.358/2026 — "Lei Raul Jungmann")', [
+    'Em vigor desde 25/03/2026; alterou o CP, o CPP, a LEP, a Lei de Crimes Hediondos e outras leis.',
+    'Cria a figura da organização criminosa ultraviolenta (facção) e os crimes de domínio social estruturado e de favorecimento ao domínio social estruturado, considerados hediondos.',
+    'Endurece a execução penal para integrantes de facção e veda o auxílio-reclusão aos dependentes dos condenados por esses crimes.',
+    'Pontos questionados no STF (ADI 7952): aumento automático de penas, preventiva automática e confisco de bens sem condenação. Acompanhe o julgamento.',
+    'As penas exatas variam entre as fontes que consultei. Leia os arts. 2º e 3º da lei no Planalto antes da prova.'
+  ]]);
+  R.penal.push(['Lei 15.397/2026 — crimes patrimoniais (em vigor desde maio/2026)', [
+    'Furto simples (art. 155): reclusão de 1 a 6 anos (era 1 a 4). Furto de celular, computador ou tablet: 4 a 10 anos.',
+    'Roubo (art. 157): reclusão de 6 a 10 anos (era 4 a 10). Latrocínio: 24 a 30 anos (mínimo era 20).',
+    'Receptação (art. 180): reclusão de 2 a 6 anos (era 1 a 4). Novo art. 180-A: receptação de animal doméstico, 3 a 8 anos.',
+    'Estelionato: ação penal pública incondicionada (o §5º do art. 171 foi revogado). A lei também trata da cessão de conta bancária para golpes (conta laranja).',
+    'Com o furto simples chegando a 6 anos, passa a caber preventiva (art. 313, I: pena máxima superior a 4 anos).',
+    'Houve veto parcial. Confira no CP compilado do Planalto se o veto foi mantido ou derrubado.'
+  ]]);
+  D.materias.find(m => m.id === 'pp').topicos.push('Novidades: Lei 15.272/2025 (preventiva) e Lei 15.358/2026 (custódia por videoconferência)');
+  D.materias.find(m => m.id === 'leg').topicos.push('Lei Antifacção (Lei 15.358/2026)');
+  D.materias.find(m => m.id === 'penal').topicos.push('Lei 15.397/2026: novas penas de furto, roubo, receptação e estelionato');
+  [
+    ['pp', 'Segundo o CPP, com a redação da Lei 15.272/2025, é incabível a decretação da prisão preventiva com base em alegações de gravidade abstrata do delito.', 0, 'Art. 312, §4º.'],
+    ['pp', 'Após a Lei 15.358/2026, a audiência de custódia passou a ser realizada, em regra, por videoconferência, no prazo de até 24 horas da prisão.', 0, 'Art. 310, com a redação da Lei Antifacção; presencial só em situação excepcional justificada.'],
+    ['pp', 'As circunstâncias do art. 310, §5º, do CPP obrigam o juiz a converter a prisão em flagrante em preventiva.', 1, 'Elas RECOMENDAM a conversão; o juiz deve examiná-las expressamente (§6º), mas a decisão continua dependendo do art. 312.'],
+    ['penal', 'Após a Lei 15.397/2026, o estelionato comum voltou a ser crime de ação penal pública incondicionada.', 0, 'Revogação do §5º do art. 171.'],
+    ['penal', 'A pena mínima do roubo simples, após a Lei 15.397/2026, é de 4 anos de reclusão.', 1, 'Passou a 6 anos (6 a 10).']
+  ].forEach((q, i) => D.questoes.push({ id: 'ce-26-' + i, m: q[0], e: q[1], a: ['Certo', 'Errado'], c: q[2], x: q[3], ce: true }));
 })();
