@@ -103,12 +103,6 @@ select, input[type=date], input[type=text], input[type=url], textarea { border: 
 .exp.err { border-left-color: var(--bad) }
 .meta { font-size: 12.5px; color: var(--muted) }
 
-/* Alertas de lei (vermelho) */
-.alerta { border: 1.5px solid var(--bad); background: var(--bad-soft); border-radius: var(--r); padding: 12px 14px; font-size: 14px }
-.alerta .at { color: var(--bad); font-weight: 700; display: flex; gap: 8px; align-items: center; margin-bottom: 4px }
-.alerta .antes { color: var(--bad); font-size: 13px; margin-top: 6px }
-.alerta .antes s { opacity: .9 }
-.alerta a { color: var(--bad); font-weight: 600 }
 
 /* Flashcards */
 .card-flip { min-height: 190px; display: grid; place-items: center; text-align: center; padding: 26px 18px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-size: 18px; line-height: 1.45; width: 100% }
@@ -235,10 +229,6 @@ function hm(sec) { const h = Math.floor(sec / 3600), m = Math.round(sec % 3600 /
 function toast(t) { const el = document.createElement('div'); el.className = 'toast'; el.textContent = t; document.body.appendChild(el); setTimeout(() => el.remove(), 2200); }
 function chip(id) { const m = M[id]; return `<span class="chip"><span class="dot" style="background:${m.cor}"></span>${esc(m.curto)}</span>`; }
 function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-function alertaHtml(k) {
-  const a = D.alertas[k]; if (!a) return '';
-  return `<div class="alerta"><div class="at">⚠ ATUALIZAÇÃO · ${esc(a.titulo)}</div><div>${esc(a.texto)}</div>${a.antes ? `<div class="antes">Antes: <s>${esc(a.antes)}</s></div>` : ''}<div style="margin-top:6px"><a href="${a.link}" target="_blank" rel="noopener">Ler a norma nova: ${esc(a.lei)} ↗</a></div></div>`;
-}
 
 // ---------- cronograma ----------
 // Dia 15, 30, 45... = simulado. Domingo = revisão. Demais dias = próximo par do ciclo.
@@ -297,7 +287,7 @@ function vHoje() {
   } else if (dia.tipo === 'sim') {
     corpo = `<div class="special"><h3>Dia de simulado nº ${dia.n}</h3><p style="margin:0 0 10px">Faça o simulado de uma vez, cronometrado, como na prova. Depois revise cada erro.</p><a class="btn pri" href="#simulados">Abrir simulado</a></div>`;
   } else if (dia.tipo === 'rev') {
-    corpo = `<div class="special"><h3>Domingo de revisão</h3><p style="margin:0 0 10px">Sem matéria nova. Zere os flashcards pendentes, refaça as questões que você errou na semana e releia os alertas de lei seca.</p><div class="row"><a class="btn pri" href="#flashcards">Flashcards (${dev})</a><button class="btn" data-act="erradas">Refazer erradas</button><a class="btn" href="#leiseca">Alertas de lei</a></div></div>`;
+    corpo = `<div class="special"><h3>Domingo de revisão</h3><p style="margin:0 0 10px">Sem matéria nova. Zere os flashcards pendentes, refaça as questões que você errou na semana e releia a lei seca da semana.</p><div class="row"><a class="btn pri" href="#flashcards">Flashcards (${dev})</a><button class="btn" data-act="erradas">Refazer erradas</button><a class="btn" href="#leiseca">Lei seca</a></div></div>`;
   } else {
     corpo = `<div class="grid2">${dia.par.map((m, i) => mcard(m, dia.temas[i], h)).join('')}</div>`;
   }
@@ -313,11 +303,9 @@ function vHoje() {
 function mcard(m, tema, h) {
   const mt = M[m]; const feito = S.feitos[h] && S.feitos[h][m];
   const t = tempoPor(s => s.d === h && s.m === m)[m] || 0;
-  const al = (mt.alertas || []).length;
   return `<div class="mcard ${feito ? 'feito' : ''}" style="--mc:${mt.cor}">
     <div class="mhead"><div><div class="label">Módulo ${mt.mod} · ${mt.q} questões no edital</div><h3 style="margin:2px 0 0">${esc(mt.nome)}</h3></div>${t ? `<span class="chip">${hm(t)}</span>` : ''}</div>
     <div class="tema"><span class="label">Tema de hoje</span><br>${esc(tema)}</div>
-    ${al ? `<div style="color:var(--bad);font-size:13px;font-weight:600">⚠ ${al} alteração(ões) de lei nesta matéria</div>` : ''}
     <div class="row">
       <button class="btn pri sm" data-act="estudar" data-m="${m}">⏱ Estudar</button>
       ${linksDe(m).slice(0, 2).map(l => `<a class="btn sm" href="${l.u}" target="_blank" rel="noopener">▶ ${esc(l.n)}</a>`).join('')}
@@ -364,7 +352,6 @@ function vMaterias() {
   <div class="row" style="margin-bottom:14px"><select id="mSel" aria-label="Matéria">${D.materias.map(x => `<option value="${x.id}" ${x.id === m.id ? 'selected' : ''}>${esc(x.nome)} (${x.q} q.)</option>`).join('')}</select>
   <button class="btn pri" id="pdfBtn" hidden>Baixar resumo em PDF</button></div>
   <div class="stack">
-    ${(m.alertas || []).map(alertaHtml).join('')}
     <div class="grid2">
       <div class="panel"><h3>Aulas no YouTube</h3><div class="stack" style="gap:8px">${linksDe(m.id).map((l, i) => `<div class="row" style="justify-content:space-between"><a href="${l.u}" target="_blank" rel="noopener">▶ ${esc(l.n)}</a>${i < meus.length ? `<button class="btn sm" data-act="rmlink" data-i="${i}">Remover</button>` : ''}</div>`).join('')}</div>
       <p class="meta">Os links padrão abrem a busca do professor no YouTube. Adicione abaixo a playlist exata que você escolher.</p>
@@ -387,7 +374,6 @@ async function baixarPdf(mid, dl) {
   const linha = (txt, size, bold, cor) => { doc.setFont('helvetica', bold ? 'bold' : 'normal'); doc.setFontSize(size); doc.setTextColor(...(cor || [20, 32, 51])); doc.splitTextToSize(latin(txt), W).forEach(l => { if (y > 282) { doc.addPage(); y = 18; } doc.text(l, 15, y); y += size * 0.45; }); };
   linha('PCMG - Investigador de Policia | ' + m.nome, 15, true); y += 2;
   linha('Resumo objetivo. Base: Edital 04/2024 (FGV), ' + m.q + ' questoes. Confira o novo edital.', 9, false, [90, 100, 120]); y += 4;
-  (m.alertas || []).forEach(k => { const a = D.alertas[k]; linha('ATUALIZACAO: ' + a.titulo, 10, true, [196, 35, 31]); linha(a.texto, 9.5, false, [196, 35, 31]); if (a.antes) linha('Antes: ' + a.antes, 9, false, [196, 35, 31]); linha('Norma: ' + a.lei + ' - ' + a.link, 8.5, false, [196, 35, 31]); y += 3; });
   (D.resumos[mid] || []).forEach(([t, itens]) => { y += 2; linha(t, 12, true); itens.forEach(i => linha('- ' + i, 10)); });
   y += 4; linha('Lei seca: ' + (m.lei ? m.lei.u : 'ver materiais da materia'), 8.5, false, [90, 100, 120]);
   try { await dl.save({ filename: 'PCMG-' + m.curto.replace(/\s+/g, '-') + '.pdf', data: doc.output('blob') }); toast('PDF pronto'); } catch (e) { toast('Download cancelado'); }
@@ -410,7 +396,7 @@ function vQuestoes() {
   return `<h2>Banco de questões</h2>${filtros}
   <div class="panel q"><div class="row" style="justify-content:space-between"><span>${chip(q.m)}</span><span class="meta">Questão ${UI.qIdx + 1} de ${ids.length}${hist ? ' · já respondida ' + hist.n + '×' : ''}</span></div>
   <div class="enun">${esc(q.e)}</div><div class="alts">${alts}</div>
-  ${r != null ? `<div class="exp ${r === q.c ? '' : 'err'}"><b>${r === q.c ? 'Correta.' : 'Errada. Gabarito: ' + LETRAS[q.c] + '.'}</b> ${esc(q.x)}</div>${q.al ? alertaHtml(q.al) : ''}` : ''}
+  ${r != null ? `<div class="exp ${r === q.c ? '' : 'err'}"><b>${r === q.c ? 'Correta.' : 'Errada. Gabarito: ' + LETRAS[q.c] + '.'}</b> ${esc(q.x)}</div>` : ''}
   <div class="row" style="justify-content:space-between"><button class="btn" data-act="qprev" ${UI.qIdx ? '' : 'disabled'}>← Anterior</button><button class="btn pri" data-act="qnext">${UI.qIdx + 1 < ids.length ? 'Próxima →' : 'Recomeçar'}</button></div></div>${nota}`;
 }
 AFTER.questoes = () => {
@@ -446,7 +432,7 @@ function vSim() {
   const qs = sim.ids.map(id => D.questoes.find(q => q.id === id));
   const fim = !!sim.fim; let ac = 0;
   const html = qs.map((q, n) => { const r = sim.resp[q.id]; if (fim && r === q.c) ac++;
-    return `<div class="panel q" id="s${n}"><div class="row" style="justify-content:space-between"><b>Questão ${n + 1}</b>${chip(q.m)}</div><div class="enun">${esc(q.e)}</div><div class="alts">${q.a.map((t, i) => { let c = ''; if (fim) { if (i === q.c) c = 'certa'; else if (i === r) c = 'errada'; } else if (i === r) c = 'marcada'; return `<button class="alt ${c}" data-act="smark" data-q="${q.id}" data-i="${i}" ${fim ? 'disabled' : ''}><span class="lt">${LETRAS[i]}</span><span>${esc(t)}</span></button>`; }).join('')}</div>${fim ? `<div class="exp ${r === q.c ? '' : 'err'}">${r == null ? 'Em branco. ' : ''}Gabarito ${LETRAS[q.c]}. ${esc(q.x)}</div>${q.al ? alertaHtml(q.al) : ''}` : ''}</div>`; }).join('');
+    return `<div class="panel q" id="s${n}"><div class="row" style="justify-content:space-between"><b>Questão ${n + 1}</b>${chip(q.m)}</div><div class="enun">${esc(q.e)}</div><div class="alts">${q.a.map((t, i) => { let c = ''; if (fim) { if (i === q.c) c = 'certa'; else if (i === r) c = 'errada'; } else if (i === r) c = 'marcada'; return `<button class="alt ${c}" data-act="smark" data-q="${q.id}" data-i="${i}" ${fim ? 'disabled' : ''}><span class="lt">${LETRAS[i]}</span><span>${esc(t)}</span></button>`; }).join('')}</div>${fim ? `<div class="exp ${r === q.c ? '' : 'err'}">${r == null ? 'Em branco. ' : ''}Gabarito ${LETRAS[q.c]}. ${esc(q.x)}</div>` : ''}</div>`; }).join('');
   const resp = Object.keys(sim.resp).length;
   return `<h2>Simulado em andamento</h2><p class="sub">${qs.length} questões · ${fim ? `Resultado: <b>${ac}/${qs.length} (${Math.round(ac / qs.length * 100)}%)</b>` : `respondidas ${resp}/${qs.length} · tempo <span id="simClock">${hms((Date.now() - sim.ini) / 1000)}</span>`}</p>
   <div class="stack">${html}</div>
@@ -455,11 +441,11 @@ function vSim() {
 
 // ---------- LEI SECA ----------
 function vLei() {
-  const leis = [['Constituição Federal', D.materias.find(m => m.id === 'const').lei.u], ['Código Penal (compilado)', 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'], ['Código de Processo Penal (compilado)', 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'], ['LC 129/2013 — Lei Orgânica da PCMG', 'https://www.almg.gov.br/legislacao-mineira/texto/LCP/129/2013/'], ['Lei 14.735/2023 — Lei Orgânica Nacional das Polícias Civis', D.alertas.loncpc.link], ['Lei de Drogas 11.343/2006', 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm'], ['Crimes Hediondos 8.072/1990', 'https://www.planalto.gov.br/ccivil_03/leis/l8072.htm'], ['Maria da Penha 11.340/2006', 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11340.htm'], ['Estatuto do Desarmamento 10.826/2003', 'https://www.planalto.gov.br/ccivil_03/leis/2003/l10.826.htm'], ['Organizações Criminosas 12.850/2013', 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12850.htm'], ['Tortura 9.455/1997', 'https://www.planalto.gov.br/ccivil_03/leis/l9455.htm'], ['Abuso de Autoridade 13.869/2019', D.alertas.abuso.link], ['Interceptação Telefônica 9.296/1996', 'https://www.planalto.gov.br/ccivil_03/leis/l9296.htm'], ['Prisão Temporária 7.960/1989', 'https://www.planalto.gov.br/ccivil_03/leis/l7960.htm'], ['Uso da força 13.060/2014', 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l13060.htm']];
-  return `<h2>Lei seca atualizada</h2><p class="sub">Em vermelho: o que mudou ou foi revogado, com o link da norma nova. Estude sempre pelo texto <b>compilado</b> do Planalto, que já traz as alterações. Seu Vade Mecum impresso pode estar desatualizado nesses pontos: anote neles à caneta.</p>
-  <div class="stack">${Object.keys(D.alertas).map(alertaHtml).join('')}
+  const leis = [['Constituição Federal', D.materias.find(m => m.id === 'const').lei.u], ['Código Penal (compilado)', 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm'], ['Código de Processo Penal (compilado)', 'https://www.planalto.gov.br/ccivil_03/decreto-lei/del3689compilado.htm'], ['LC 129/2013 — Lei Orgânica da PCMG', 'https://www.almg.gov.br/legislacao-mineira/texto/LCP/129/2013/'], ['Lei 14.735/2023 — Lei Orgânica Nacional das Polícias Civis', 'https://www.planalto.gov.br/ccivil_03/_ato2023-2026/2023/lei/l14735.htm'], ['Lei de Drogas 11.343/2006', 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11343.htm'], ['Crimes Hediondos 8.072/1990', 'https://www.planalto.gov.br/ccivil_03/leis/l8072.htm'], ['Maria da Penha 11.340/2006', 'https://www.planalto.gov.br/ccivil_03/_ato2004-2006/2006/lei/l11340.htm'], ['Estatuto do Desarmamento 10.826/2003', 'https://www.planalto.gov.br/ccivil_03/leis/2003/l10.826.htm'], ['Organizações Criminosas 12.850/2013', 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2013/lei/l12850.htm'], ['Tortura 9.455/1997', 'https://www.planalto.gov.br/ccivil_03/leis/l9455.htm'], ['Abuso de Autoridade 13.869/2019', 'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2019/lei/l13869.htm'], ['Racismo e injúria racial 7.716/1989', 'https://www.planalto.gov.br/ccivil_03/leis/l7716.htm'], ['Improbidade Administrativa 8.429/1992', 'https://www.planalto.gov.br/ccivil_03/leis/l8429.htm'], ['Licitações 14.133/2021', 'https://www.planalto.gov.br/ccivil_03/_ato2019-2022/2021/lei/l14133.htm'], ['Execução Penal 7.210/1984', 'https://www.planalto.gov.br/ccivil_03/leis/l7210.htm'], ['Interceptação Telefônica 9.296/1996', 'https://www.planalto.gov.br/ccivil_03/leis/l9296.htm'], ['Prisão Temporária 7.960/1989', 'https://www.planalto.gov.br/ccivil_03/leis/l7960.htm'], ['Uso da força 13.060/2014', 'https://www.planalto.gov.br/ccivil_03/_ato2011-2014/2014/lei/l13060.htm']];
+  return `<h2>Lei seca</h2><p class="sub">Textos compilados do Planalto, já com as alterações. Os resumos de cada matéria trazem a redação em vigor.</p>
+  <div class="stack">
   <div class="panel"><h3>Textos compilados para leitura</h3><div class="grid2" style="gap:6px">${leis.map(([n, u]) => `<a href="${u}" target="_blank" rel="noopener">${esc(n)} ↗</a>`).join('')}</div>
-  <p class="meta" style="margin-top:10px">Alertas revisados com base na legislação conhecida até meados de 2026. Para leis publicadas depois disso, confira a <a href="https://www4.planalto.gov.br/legislacao/" target="_blank" rel="noopener">legislação recente no Planalto ↗</a> antes da prova.</p></div></div>`;
+  <p class="meta" style="margin-top:10px">Resumos escritos com a legislação em vigor até meados de 2026. Para leis publicadas depois disso, confira a <a href="https://www4.planalto.gov.br/legislacao/" target="_blank" rel="noopener">legislação recente no Planalto ↗</a> antes da prova.</p></div></div>`;
 }
 
 // ---------- DESEMPENHO ----------
