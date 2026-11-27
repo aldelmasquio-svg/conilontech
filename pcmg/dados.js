@@ -1,0 +1,417 @@
+// Conteúdo da plataforma PCMG Investigador.
+// Base: Edital 04/2024 (FGV) — Investigador de Polícia I. Confirmar tudo no novo edital.
+window.PCMG = (function () {
+  const P = 'https://www.planalto.gov.br/ccivil_03/';
+  const yt = q => 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q);
+
+  // ---------- Alterações legislativas (destacadas em vermelho na plataforma) ----------
+  const alertas = {
+    feminicidio: {
+      titulo: 'Feminicídio virou crime autônomo (art. 121-A do CP)',
+      texto: 'A Lei 14.994/2024 (Pacote Antifeminicídio) revogou a qualificadora do art. 121, §2º, VI e criou o art. 121-A: reclusão de 20 a 40 anos. Também elevou a pena do descumprimento de medida protetiva (art. 24-A da Lei Maria da Penha) para reclusão de 2 a 5 anos.',
+      antes: 'Feminicídio era qualificadora do homicídio (art. 121, §2º, VI), pena 12 a 30 anos.',
+      lei: 'Lei 14.994/2024', link: P + '_ato2023-2026/2024/lei/l14994.htm'
+    },
+    stalking: {
+      titulo: 'Perseguição (stalking) — art. 147-A do CP',
+      texto: 'A Lei 14.132/2021 criou o crime de perseguição (art. 147-A, reclusão de 6 meses a 2 anos e multa) e REVOGOU o art. 65 da Lei de Contravenções Penais (molestar ou perturbar a tranquilidade).',
+      antes: 'A conduta era a contravenção do art. 65 da LCP (revogado).',
+      lei: 'Lei 14.132/2021', link: P + '_ato2019-2022/2021/lei/l14132.htm'
+    },
+    violpsico: {
+      titulo: 'Violência psicológica contra a mulher — art. 147-B do CP',
+      texto: 'A Lei 14.188/2021 criou o art. 147-B (violência psicológica contra a mulher) e o programa Sinal Vermelho.',
+      lei: 'Lei 14.188/2021', link: P + '_ato2019-2022/2021/lei/l14188.htm'
+    },
+    abuso: {
+      titulo: 'Abuso de autoridade — Lei 13.869/2019',
+      texto: 'A Lei 13.869/2019 REVOGOU a antiga Lei 4.898/1965. Os crimes exigem dolo específico: finalidade de prejudicar outrem, beneficiar a si ou a terceiro, ou mero capricho/satisfação pessoal (art. 1º, §1º). Divergência na interpretação da lei ou na avaliação de fatos e provas não configura abuso (art. 1º, §2º).',
+      antes: 'Lei 4.898/1965 (revogada).',
+      lei: 'Lei 13.869/2019', link: P + '_ato2019-2022/2019/lei/l13869.htm'
+    },
+    injuria: {
+      titulo: 'Injúria racial migrou para a Lei do Racismo',
+      texto: 'A Lei 14.532/2023 tirou a injúria racial do art. 140, §3º do CP e a tipificou no art. 2º-A da Lei 7.716/1989 (reclusão de 2 a 5 anos). É imprescritível e inafiançável. O art. 140, §3º continua para religião, idade e deficiência.',
+      antes: 'Injúria racial no art. 140, §3º do CP (pena de 1 a 3 anos).',
+      lei: 'Lei 14.532/2023', link: P + '_ato2023-2026/2023/lei/l14532.htm'
+    },
+    anticrime: {
+      titulo: 'Pacote Anticrime — Lei 13.964/2019 e decisão do STF',
+      texto: 'Criou o juiz das garantias (arts. 3º-A a 3º-F do CPP), o ANPP (art. 28-A), a cadeia de custódia (arts. 158-A a 158-F) e mudou o arquivamento do inquérito (art. 28). O STF (ADIs 6298, 6299, 6300 e 6305, julgadas em 2023) validou o juiz das garantias com ajustes e deu interpretação conforme ao art. 28: o MP deve submeter o arquivamento ao juiz, que pode remeter à instância de revisão do MP em caso de ilegalidade ou teratologia.',
+      lei: 'Lei 13.964/2019', link: P + '_ato2019-2022/2019/lei/l13964.htm'
+    },
+    drogas: {
+      titulo: 'STF: porte de maconha para uso pessoal (RE 635.659, Tema 506)',
+      texto: 'Em 2024 o STF decidiu que portar maconha para consumo pessoal não é crime: é ilícito administrativo. Presume-se usuário quem porta até 40 g ou 6 plantas fêmeas, presunção relativa. O art. 28 da Lei 11.343/2006 segue no texto e vale para as demais drogas. Isso é jurisprudência, não lei nova.',
+      lei: 'STF — RE 635.659', link: 'https://portal.stf.jus.br/processos/detalhe.asp?incidente=4034145'
+    },
+    improbidade: {
+      titulo: 'Improbidade administrativa — Lei 14.230/2021',
+      texto: 'A Lei 14.230/2021 reformou a Lei 8.429/1992: todo ato de improbidade exige DOLO (acabou a modalidade culposa do art. 10), o rol do art. 11 ficou taxativo e a prescrição passou a 8 anos.',
+      antes: 'Art. 10 admitia culpa; rol do art. 11 era exemplificativo.',
+      lei: 'Lei 14.230/2021', link: P + '_ato2019-2022/2021/lei/l14230.htm'
+    },
+    licitacao: {
+      titulo: 'Nova Lei de Licitações — Lei 14.133/2021',
+      texto: 'A Lei 8.666/1993 foi revogada (com as Leis 10.520/2002 e 12.462/2011) a partir de 30/12/2023. Modalidades atuais: pregão, concorrência, concurso, leilão e diálogo competitivo. Tomada de preços e convite deixaram de existir.',
+      antes: 'Lei 8.666/1993 (revogada).',
+      lei: 'Lei 14.133/2021', link: P + '_ato2019-2022/2021/lei/l14133.htm'
+    },
+    fraude: {
+      titulo: 'Fraude eletrônica — Lei 14.155/2021',
+      texto: 'Criou a fraude eletrônica (art. 171, §2º-A, reclusão de 4 a 8 anos), o furto mediante fraude eletrônica (art. 155, §4º-B) e aumentou a pena da invasão de dispositivo informático (art. 154-A: reclusão de 1 a 4 anos).',
+      lei: 'Lei 14.155/2021', link: P + '_ato2019-2022/2021/lei/l14155.htm'
+    },
+    saidinha: {
+      titulo: 'Saída temporária restringida — Lei 14.843/2024',
+      texto: 'Mudou a LEP: a saída temporária ficou restrita a estudo (curso supletivo, profissionalizante, ensino médio ou superior) e passou a exigir exame criminológico para a progressão de regime. Houve veto derrubado pelo Congresso; confira o texto compilado da LEP.',
+      lei: 'Lei 14.843/2024', link: P + '_ato2023-2026/2024/lei/l14843.htm'
+    },
+    bullying: {
+      titulo: 'Bullying e cyberbullying — art. 146-A do CP',
+      texto: 'A Lei 14.811/2024 criou o art. 146-A (intimidação sistemática) e ampliou o rol de crimes hediondos e do ECA. Confira na Lei 8.072/1990 compilada quais crimes entraram.',
+      lei: 'Lei 14.811/2024', link: P + '_ato2023-2026/2024/lei/l14811.htm'
+    },
+    loncpc: {
+      titulo: 'Lei Orgânica Nacional das Polícias Civis — Lei 14.735/2023',
+      texto: 'Lei nacional de normas gerais (art. 24, XVI da CF). Os estados devem adequar suas leis orgânicas. A LC 129/2013 (MG) segue valendo no que for compatível. Quando o novo edital sair, confira se ele cobra a LC 129/2013, a Lei 14.735/2023 ou as duas.',
+      lei: 'Lei 14.735/2023', link: P + '_ato2023-2026/2023/lei/l14735.htm'
+    },
+    penais: {
+      titulo: 'Polícias penais no art. 144 da CF — EC 104/2019',
+      texto: 'A EC 104/2019 incluiu as polícias penais federal, estaduais e distrital no rol do art. 144 (inciso VI). Fique atento: provas antigas trazem o rol sem elas.',
+      lei: 'EC 104/2019', link: P + 'constituicao/emendas/emc/emc104.htm'
+    },
+    guardas: {
+      titulo: 'STF: guardas municipais e policiamento ostensivo (Tema 656)',
+      texto: 'O STF reconheceu as guardas municipais como integrantes do Sistema Único de Segurança Pública (ADPF 995, 2023) e, em 2025 (RE 608.588, Tema 656), admitiu que façam policiamento ostensivo e comunitário, sem atividade de polícia judiciária. Jurisprudência, não alteração do texto do art. 144.',
+      lei: 'STF — Tema 656', link: 'https://portal.stf.jus.br/jurisprudenciaRepercussao/tema.asp?num=656'
+    }
+  };
+
+  // ---------- Matérias (Edital 04/2024 — Investigador de Polícia I) ----------
+  // q = número de questões no edital passado. Total: 70 (30 básicas + 40 específicas).
+  const materias = [
+    { id: 'port', nome: 'Língua Portuguesa', curto: 'Português', mod: 'I', q: 10, cor: '#2f6fd6',
+      lei: null,
+      topicos: ['Compreensão e interpretação de textos', 'Tipologia e gêneros textuais', 'Coesão e conectivos', 'Concordância verbal e nominal', 'Regência e crase', 'Pontuação', 'Colocação pronominal', 'Classes de palavras e sintaxe do período', 'Semântica: sinonímia, ambiguidade, sentido figurado', 'Vozes verbais e reescrita'],
+      profs: [{ n: 'Prof. Noslen', u: yt('Professor Noslen ' ) }, { n: 'Português com Letícia', u: yt('Português com Letícia concurso') }] },
+    { id: 'rlm', nome: 'Raciocínio Lógico-Matemático', curto: 'RLM', mod: 'I', q: 6, cor: '#7c4dff',
+      lei: null,
+      topicos: ['Proposições e conectivos', 'Negação de proposições', 'Equivalências lógicas', 'Quantificadores (todo, algum, nenhum)', 'Porcentagem e regra de três', 'Análise combinatória', 'Probabilidade', 'Sequências e padrões'],
+      profs: [{ n: 'Equaciona (Paulo Pereira)', u: yt('Equaciona Paulo Pereira raciocínio lógico') }, { n: 'Prof. Brunno Lima', u: yt('Brunno Lima raciocínio lógico FGV') }] },
+    { id: 'info', nome: 'Informática Básica', curto: 'Informática', mod: 'I', q: 8, cor: '#00897b',
+      lei: null,
+      topicos: ['Windows: atalhos e gerenciamento de arquivos', 'Planilhas (Excel/Calc): fórmulas e referências', 'Editores de texto (Word/Writer)', 'Internet, navegadores e e-mail', 'Redes e protocolos', 'Segurança da informação e malwares', 'Backup e computação em nuvem'],
+      profs: [{ n: 'Prof. Rani Passos', u: yt('Rani Passos informática concurso') }, { n: 'Prof. Fabrício Melo', u: yt('Fabrício Melo informática concurso') }] },
+    { id: 'lo', nome: 'Lei Orgânica da PCMG (LC 129/2013)', curto: 'Lei Orgânica', mod: 'I', q: 6, cor: '#c0841a',
+      lei: { n: 'LC 129/2013 (ALMG)', u: 'https://www.almg.gov.br/legislacao-mineira/texto/LCP/129/2013/' },
+      topicos: ['Natureza, princípios e atribuições da PCMG', 'Estrutura orgânica (Chefia, Conselho Superior, Corregedoria, Acadepol)', 'Carreiras policiais civis e cargo de Investigador', 'Ingresso, estágio probatório e estabilidade', 'Direitos, prerrogativas e vantagens', 'Deveres e proibições', 'Regime disciplinar e processo administrativo', 'CF art. 144 e Lei 14.735/2023 (normas gerais)'],
+      alertas: ['loncpc'],
+      profs: [{ n: 'Aulas LC 129/2013', u: yt('LC 129/2013 lei orgânica PCMG aula') }, { n: 'Lei seca em áudio', u: yt('LC 129 2013 PCMG lei seca áudio') }] },
+    { id: 'const', nome: 'Direito Constitucional', curto: 'Constitucional', mod: 'II', q: 6, cor: '#d84315',
+      lei: { n: 'Constituição Federal', u: P + 'constituicao/constituicao.htm' },
+      topicos: ['Princípios fundamentais (arts. 1º a 4º)', 'Direitos e garantias individuais (art. 5º)', 'Remédios constitucionais', 'Direitos sociais e nacionalidade', 'Organização do Estado', 'Administração Pública (arts. 37 a 41)', 'Segurança pública (art. 144)', 'Poder Judiciário e funções essenciais à justiça'],
+      alertas: ['penais', 'guardas'],
+      profs: [{ n: 'Prof. Adriane Fauth', u: yt('Adriane Fauth direito constitucional') }, { n: 'Prof. Aragonê Fernandes', u: yt('Aragonê Fernandes direito constitucional') }] },
+    { id: 'adm', nome: 'Direito Administrativo', curto: 'Administrativo', mod: 'II', q: 6, cor: '#6d4c41',
+      lei: { n: 'Lei 14.133/2021', u: P + '_ato2019-2022/2021/lei/l14133.htm' },
+      topicos: ['Princípios da Administração', 'Organização administrativa', 'Poderes administrativos e poder de polícia', 'Atos administrativos', 'Agentes públicos', 'Improbidade administrativa (Lei 8.429/92 reformada)', 'Licitações (Lei 14.133/2021)', 'Responsabilidade civil do Estado', 'Controle da Administração'],
+      alertas: ['improbidade', 'licitacao'],
+      profs: [{ n: 'Prof. Herbert Almeida', u: yt('Herbert Almeida direito administrativo') }, { n: 'Prof. Gustavo Scatolino', u: yt('Gustavo Scatolino direito administrativo') }] },
+    { id: 'penal', nome: 'Direito Penal', curto: 'Penal', mod: 'II', q: 5, cor: '#b71c1c',
+      lei: { n: 'Código Penal compilado', u: P + 'decreto-lei/del2848compilado.htm' },
+      topicos: ['Aplicação da lei penal', 'Fato típico: conduta, resultado, nexo, tipicidade', 'Iter criminis, tentativa, desistência e arrependimento', 'Ilicitude e excludentes', 'Culpabilidade', 'Concurso de pessoas', 'Crimes contra a pessoa', 'Crimes contra o patrimônio', 'Crimes contra a dignidade sexual', 'Crimes contra a Administração Pública'],
+      alertas: ['feminicidio', 'stalking', 'violpsico', 'fraude', 'bullying'],
+      profs: [{ n: 'Prof. Evinis Talon', u: yt('Evinis Talon direito penal') }, { n: 'Prof. Michael Procopio', u: yt('Michael Procopio direito penal') }] },
+    { id: 'pp', nome: 'Direito Processual Penal', curto: 'Processo Penal', mod: 'II', q: 5, cor: '#4527a0',
+      lei: { n: 'CPP compilado', u: P + 'decreto-lei/del3689compilado.htm' },
+      topicos: ['Inquérito policial', 'Arquivamento e ANPP', 'Ação penal', 'Juiz das garantias', 'Provas e cadeia de custódia', 'Prisão em flagrante e audiência de custódia', 'Prisão preventiva e temporária', 'Medidas cautelares diversas da prisão'],
+      alertas: ['anticrime'],
+      profs: [{ n: 'Prof. Renan Araújo', u: yt('Renan Araujo processo penal') }, { n: 'Prof. Evinis Talon', u: yt('Evinis Talon processo penal inquérito') }] },
+    { id: 'leg', nome: 'Legislação Penal e Processual Extravagante', curto: 'Legislação', mod: 'II', q: 4, cor: '#ad1457',
+      lei: { n: 'Planalto — legislação', u: 'https://www4.planalto.gov.br/legislacao/' },
+      topicos: ['Lei de Drogas (11.343/06)', 'Crimes hediondos (8.072/90)', 'Abuso de autoridade (13.869/19)', 'Tortura (9.455/97)', 'Maria da Penha (11.340/06)', 'Estatuto do Desarmamento (10.826/03)', 'Organizações criminosas (12.850/13)', 'Interceptação telefônica (9.296/96)', 'Racismo (7.716/89)', 'Prisão temporária (7.960/89)'],
+      alertas: ['drogas', 'abuso', 'injuria', 'feminicidio', 'saidinha', 'bullying'],
+      profs: [{ n: 'Prof. Renan Araújo', u: yt('Renan Araujo legislação penal especial') }, { n: 'Leis penais especiais', u: yt('legislação penal especial concurso polícia civil aula') }] },
+    { id: 'dh', nome: 'Noções de Direitos Humanos', curto: 'Direitos Humanos', mod: 'II', q: 4, cor: '#2e7d32',
+      lei: { n: 'Pacto de San José (Dec. 678/92)', u: P + 'decreto/d0678.htm' },
+      topicos: ['Conceito, características e gerações', 'Sistema global (ONU) e DUDH', 'Sistema interamericano: CADH, Comissão e Corte IDH', 'Tratados de DH na CF (art. 5º, §§2º e 3º)', 'Uso da força e Lei 13.060/2014', 'Incidente de deslocamento de competência'],
+      profs: [{ n: 'Prof. Ricardo Torques', u: yt('Ricardo Torques direitos humanos') }, { n: 'Direitos humanos p/ polícia', u: yt('direitos humanos concurso polícia civil aula') }] },
+    { id: 'ml', nome: 'Noções de Medicina Legal', curto: 'Medicina Legal', mod: 'II', q: 5, cor: '#00838f',
+      lei: null,
+      topicos: ['Perícias e corpo de delito', 'Traumatologia: instrumentos e lesões', 'Balística forense: entrada, saída, distância', 'Asfixiologia', 'Tanatologia: fenômenos cadavéricos', 'Sexologia forense', 'Lesões corporais (art. 129 do CP)'],
+      profs: [{ n: 'Medicina legal p/ concursos', u: yt('medicina legal concurso polícia civil aula') }, { n: 'Traumatologia forense', u: yt('traumatologia forense medicina legal aula') }] },
+    { id: 'crim', nome: 'Noções de Criminologia', curto: 'Criminologia', mod: 'II', q: 5, cor: '#5d4037',
+      lei: null,
+      topicos: ['Conceito, objeto e método', 'Escolas: clássica e positiva', 'Teorias sociológicas (consenso e conflito)', 'Vitimologia', 'Prevenção do delito', 'Controle social', 'Cifras da criminalidade'],
+      profs: [{ n: 'Criminologia p/ concursos', u: yt('criminologia concurso polícia civil aula') }, { n: 'Teorias criminológicas', u: yt('teorias criminológicas resumo aula') }] }
+  ];
+
+  // ---------- Resumos objetivos ----------
+  const resumos = {
+    port: [
+      ['Interpretação (o forte da FGV)', ['A FGV cobra textos longos: leia a pergunta antes do texto.', 'Diferencie o que o texto AFIRMA do que ele PERMITE INFERIR. Inferência sem base no texto é distrator.', 'Desconfie de alternativas com "sempre", "nunca", "apenas", "todos": costumam extrapolar.', 'Questões de reescrita: a nova frase precisa manter sentido E correção gramatical.']],
+      ['Concordância', ['HAVER = existir → impessoal, singular: "Havia muitas provas".', 'FAZER indicando tempo → singular: "Faz dois anos".', 'Verbo + SE (partícula apassivadora) concorda com o sujeito: "Alugam-se salas".', 'Verbo + SE com preposição (índice de indeterminação) fica no singular: "Precisa-se de agentes".', 'Pronomes de tratamento levam o verbo à 3ª pessoa: "Vossa Excelência deve".']],
+      ['Crase', ['Crase = preposição A + artigo A. Só antes de palavra feminina que aceita artigo.', 'Não há crase antes de verbo, de palavra masculina, de pronomes de tratamento (salvo senhora, senhorita, dona), nem em "a" singular + palavra plural.', 'Locuções femininas levam crase: às pressas, à noite, à medida que.']],
+      ['Regência', ['Assistir (ver) → assistir A: "assistiu ao depoimento".', 'Aspirar (desejar) → aspirar A. Visar (objetivar) → visar A.', 'Obedecer/desobedecer → A. Preferir → uma coisa A outra (sem "mais" e sem "do que").', 'Esquecer/lembrar: sem pronome, transitivo direto; com pronome, exige DE ("esqueci-me do prazo").']],
+      ['Pontuação e colocação', ['Não se separa sujeito do verbo nem verbo do complemento por vírgula.', 'Oração adjetiva explicativa vem entre vírgulas; restritiva, sem vírgulas.', 'Adjunto adverbial deslocado pode vir com vírgula.', 'Palavras atrativas (não, ninguém, que, quando) puxam a próclise. Não se inicia frase com pronome oblíquo átono. Futuro do presente/pretérito → mesóclise ("far-te-ei").']],
+      ['Conectivos (coesão)', ['Concessivos: embora, conquanto, ainda que, mesmo que.', 'Causais: porque, visto que, já que, uma vez que.', 'Conclusivos: portanto, logo, por isso, por conseguinte.', 'Condicionais: se, caso, desde que (com subjuntivo).', 'Proporcionais: à medida que, à proporção que.']]
+    ],
+    rlm: [
+      ['Negações (decore)', ['~(p ∧ q) ≡ ~p ∨ ~q   |   ~(p ∨ q) ≡ ~p ∧ ~q.', '~(p → q) ≡ p ∧ ~q  (mantém o primeiro E nega o segundo).', '~(Todo A é B) ≡ Algum A não é B.', '~(Algum A é B) ≡ Nenhum A é B.']],
+      ['Equivalências do condicional', ['p → q ≡ ~q → ~p (contrapositiva).', 'p → q ≡ ~p ∨ q.', 'A recíproca (q → p) e a inversa (~p → ~q) NÃO são equivalentes.']],
+      ['Porcentagem e proporção', ['Aumentos e descontos sucessivos se multiplicam: +20% e -20% → 1,2 × 0,8 = 0,96 (perda de 4%).', 'Regra de três composta: verifique se cada grandeza é direta ou inversamente proporcional.']],
+      ['Contagem e probabilidade', ['Ordem importa → arranjo/permutação. Não importa → combinação C(n,p) = n!/(p!(n-p)!).', 'Probabilidade = casos favoráveis ÷ casos possíveis.', 'Eventos independentes: multiplique. Mutuamente exclusivos: some.']]
+    ],
+    info: [
+      ['Planilhas', ['Referência relativa (A1) muda ao copiar; absoluta ($A$1) não muda; mista ($A1 ou A$1) fixa só a coluna ou só a linha.', 'MÉDIA ignora células vazias e texto; CONT.VALORES conta células não vazias; CONT.NÚM conta só números.', 'SE(teste; valor_se_verdadeiro; valor_se_falso). PROCV procura na 1ª coluna do intervalo.']],
+      ['Windows', ['Win+L bloqueia; Win+D mostra a área de trabalho; Win+E abre o Explorador; Ctrl+Shift+Esc abre o Gerenciador de Tarefas.', 'Shift+Delete exclui sem passar pela Lixeira.']],
+      ['Internet e e-mail', ['HTTPS = HTTP + TLS, porta 443. HTTP usa a porta 80.', 'Destinatários em Cco não aparecem para os demais.', 'Navegação anônima não grava histórico e cookies no computador ao fim da sessão, mas não esconde a navegação do provedor ou da rede.']],
+      ['Segurança', ['Phishing: engana o usuário para obter dados (página ou e-mail falso).', 'Ransomware: criptografa dados e exige resgate. Spyware: espiona. Worm: se propaga sozinho pela rede. Trojan: parece legítimo e traz código malicioso.', 'Backup completo copia tudo; incremental copia o que mudou desde o último backup de qualquer tipo; diferencial, desde o último completo.']]
+    ],
+    lo: [
+      ['Como estudar esta matéria', ['São 6 questões de lei seca no edital passado. Leia a LC 129/2013 inteira, artigo por artigo, no site da ALMG (link acima) e marque prazos, órgãos e penalidades.', 'A FGV costuma trocar uma palavra do artigo (órgão, prazo, quórum). Leia devagar.']],
+      ['Base constitucional', ['CF art. 144, §4º: polícias civis, dirigidas por delegados de polícia de carreira, exercem as funções de polícia judiciária e a apuração de infrações penais, exceto as militares, ressalvada a competência da União.', 'CF art. 144, §6º: as polícias civis subordinam-se aos Governadores.', 'CF art. 24, XVI: competência concorrente sobre organização, garantias, direitos e deveres das polícias civis. A União edita normas gerais (Lei 14.735/2023) e o Estado suplementa (LC 129/2013).', 'CF art. 41: estabilidade após 3 anos de efetivo exercício e avaliação especial de desempenho.']],
+      ['O que marcar na LC 129/2013', ['Princípios institucionais e atribuições da PCMG.', 'Órgãos: Chefia da Polícia Civil, Conselho Superior de Polícia Civil, Corregedoria-Geral, Academia de Polícia Civil (Acadepol) e unidades de execução.', 'Carreiras e atribuições do Investigador de Polícia.', 'Deveres, proibições, penalidades e competência para aplicá-las.']]
+    ],
+    const: [
+      ['Art. 5º — o que mais cai em prova policial', ['XI: casa é asilo inviolável. Sem consentimento só se entra em flagrante delito, desastre ou para prestar socorro (a qualquer hora) ou por determinação judicial (durante o dia).', 'XII: sigilo das comunicações telefônicas cai só por ordem judicial, para investigação criminal ou instrução processual penal (Lei 9.296/96).', 'LXI: ninguém será preso senão em flagrante ou por ordem escrita e fundamentada de autoridade judiciária competente, salvo transgressão ou crime propriamente militar.', 'XLII: racismo → inafiançável e imprescritível. XLIV: ação de grupos armados contra a ordem constitucional → inafiançável e imprescritível.', 'XLIII: tortura, tráfico, terrorismo e hediondos (TTTH) → inafiançáveis e insuscetíveis de graça ou anistia.']],
+      ['Remédios', ['Habeas corpus: liberdade de locomoção. Habeas data: informações relativas à pessoa do impetrante. Mandado de segurança: direito líquido e certo não amparado por HC/HD. Mandado de injunção: falta de norma regulamentadora.']],
+      ['Art. 144 — Segurança pública', ['Órgãos: PF, PRF, PFF, polícias civis, polícias militares e corpos de bombeiros militares, polícias penais (EC 104/2019).', 'Guardas municipais estão no §8º (proteção de bens, serviços e instalações do município).']],
+      ['Tratados de direitos humanos', ['Aprovados em cada Casa, em 2 turnos, por 3/5 → equivalem a emenda constitucional (art. 5º, §3º).', 'Demais tratados de DH têm status supralegal (STF, RE 466.343).']]
+    ],
+    adm: [
+      ['Princípios', ['Art. 37: Legalidade, Impessoalidade, Moralidade, Publicidade e Eficiência (LIMPE; eficiência entrou com a EC 19/98).', 'Implícitos: supremacia e indisponibilidade do interesse público, razoabilidade, proporcionalidade, autotutela, segurança jurídica.']],
+      ['Atos administrativos', ['Elementos: competência, finalidade, forma, motivo e objeto.', 'Atributos: presunção de legitimidade, imperatividade, autoexecutoriedade e tipicidade.', 'Anulação: ilegalidade, efeitos ex tunc. Revogação: conveniência e oportunidade, efeitos ex nunc, só pela própria Administração (Súmula 473 do STF).']],
+      ['Poder de polícia', ['Ciclo: ordem, consentimento, fiscalização e sanção.', 'STF (RE 633.782, 2020): consentimento, fiscalização e sanção podem ser delegados a pessoa jurídica de direito privado da Administração indireta, de capital majoritariamente público, que preste serviço público em regime não concorrencial. A ordem de polícia não se delega.']],
+      ['Responsabilidade civil do Estado', ['Art. 37, §6º: objetiva, teoria do risco administrativo. Admite excludentes (culpa exclusiva da vítima, caso fortuito/força maior, fato de terceiro).', 'Regresso contra o agente só com dolo ou culpa. STF Tema 940: a vítima aciona o Estado, não o agente diretamente (dupla garantia).']]
+    ],
+    penal: [
+      ['Teoria do crime', ['Tentativa (art. 14, II): pena reduzida de 1 a 2/3.', 'Desistência voluntária e arrependimento eficaz (art. 15): o agente responde só pelos atos já praticados.', 'Arrependimento posterior (art. 16): crime sem violência ou grave ameaça, reparação até o recebimento da denúncia → redução de 1 a 2/3.', 'Crime impossível (art. 17): ineficácia absoluta do meio ou impropriedade absoluta do objeto.']],
+      ['Excludentes de ilicitude (art. 23)', ['Estado de necessidade, legítima defesa, estrito cumprimento do dever legal e exercício regular de direito.', 'Art. 25, parágrafo único (Lei 13.964/2019): também está em legítima defesa o agente de segurança pública que repele agressão ou risco de agressão a vítima mantida refém durante a prática de crimes.']],
+      ['Crimes contra a pessoa e o patrimônio', ['Feminicídio é crime autônomo (art. 121-A), reclusão de 20 a 40 anos.', 'Perseguição: art. 147-A. Violência psicológica contra a mulher: art. 147-B.', 'Roubo próprio: violência antes ou durante a subtração. Roubo impróprio (art. 157, §1º): violência logo depois, para garantir a impunidade ou a detenção da coisa.', 'Estelionato (art. 171, §5º): ação pública condicionada à representação, salvo se a vítima for a Administração Pública, criança ou adolescente, pessoa com deficiência mental, maior de 70 anos ou incapaz.']],
+      ['Crimes contra a Administração', ['Concussão (art. 316): EXIGIR vantagem indevida.', 'Corrupção passiva (art. 317): SOLICITAR, RECEBER ou ACEITAR promessa.', 'Peculato (art. 312): apropriar-se ou desviar bem de que tem a posse em razão do cargo. Peculato culposo: reparação antes da sentença irrecorrível extingue a punibilidade.', 'Prevaricação (art. 319): retardar ou deixar de praticar ato de ofício para satisfazer interesse ou sentimento pessoal.']]
+    ],
+    pp: [
+      ['Inquérito policial', ['Características: escrito, sigiloso, inquisitivo, dispensável, oficial e indisponível.', 'A autoridade policial NÃO pode mandar arquivar autos de inquérito (art. 17).', 'Prazos (art. 10): 10 dias se o indiciado estiver preso, 30 dias se solto. Lei de Drogas: 30 (preso) e 90 (solto), duplicáveis.', 'Súmula Vinculante 14: o defensor tem acesso aos elementos de prova já documentados.']],
+      ['Prisão em flagrante (art. 302)', ['Próprio: está cometendo ou acaba de cometer a infração.', 'Impróprio: é perseguido logo após, em situação que faça presumir ser o autor.', 'Presumido (ficto): é encontrado logo depois com instrumentos, armas ou objetos que façam presumir ser o autor.', 'Flagrante preparado é crime impossível (Súmula 145 do STF). Flagrante esperado é válido.', 'Audiência de custódia em até 24 horas (art. 310).']],
+      ['Pacote Anticrime', ['ANPP (art. 28-A): sem violência ou grave ameaça, pena mínima inferior a 4 anos, confissão formal e circunstanciada.', 'Cadeia de custódia (arts. 158-A a 158-F): reconhecimento, isolamento, fixação, coleta, acondicionamento, transporte, recebimento, processamento, armazenamento e descarte.', 'O juiz não decreta preventiva de ofício (art. 311).']],
+      ['Prisão temporária (Lei 7.960/89)', ['Só na fase de investigação. Decretada pelo juiz, mediante representação da autoridade policial ou requerimento do MP; nunca de ofício.', 'Prazo: 5 dias + 5. Crimes hediondos e equiparados: 30 + 30 (Lei 8.072/90).']]
+    ],
+    leg: [
+      ['Drogas (Lei 11.343/06)', ['Art. 28 (usuário): sem pena de prisão (advertência, prestação de serviços, medida educativa).', 'STF (RE 635.659, 2024): porte de maconha para uso pessoal é ilícito administrativo; até 40 g ou 6 plantas fêmeas presume-se usuário.', 'Tráfico (art. 33): 5 a 15 anos. Tráfico privilegiado (§4º): redução de 1/6 a 2/3 e não é hediondo (art. 112, §5º da LEP).']],
+      ['Abuso de autoridade (Lei 13.869/19)', ['Dolo específico: prejudicar outrem, beneficiar a si ou a terceiro, ou mero capricho/satisfação pessoal.', 'Divergência na interpretação da lei ou na avaliação de fatos e provas não é crime (crime de hermenêutica vedado).', 'Ação penal pública incondicionada.']],
+      ['Tortura (Lei 9.455/97)', ['A condenação acarreta a perda do cargo, função ou emprego público e a interdição para seu exercício pelo dobro do prazo da pena aplicada (efeito automático).', 'Omissão de quem tinha o dever de evitar ou apurar: detenção de 1 a 4 anos.']],
+      ['Maria da Penha e Desarmamento', ['Não se exige coabitação para a violência doméstica (Súmula 600 do STJ).', 'Descumprir medida protetiva (art. 24-A): reclusão de 2 a 5 anos (Lei 14.994/2024).', 'Posse irregular de arma de uso permitido (art. 12): detenção de 1 a 3 anos. Porte ilegal de uso permitido (art. 14): reclusão de 2 a 4 anos.', 'Posse ou porte de arma de fogo de uso PROIBIDO é hediondo (Lei 8.072/90, art. 1º, parágrafo único).']],
+      ['Organização criminosa (Lei 12.850/13)', ['4 ou mais pessoas, estruturalmente ordenada, com divisão de tarefas, para obter vantagem mediante infrações com penas máximas superiores a 4 anos ou de caráter transnacional.', 'Meios de obtenção de prova: colaboração premiada, ação controlada, infiltração de agentes (com autorização judicial), entre outros.']]
+    ],
+    dh: [
+      ['Características', ['Universalidade, indivisibilidade, interdependência, inalienabilidade, imprescritibilidade, historicidade e vedação ao retrocesso.', 'Gerações: 1ª liberdade (civis e políticos); 2ª igualdade (sociais, econômicos e culturais); 3ª fraternidade (paz, meio ambiente, desenvolvimento).']],
+      ['Sistema interamericano', ['Convenção Americana (Pacto de San José), promulgada pelo Decreto 678/1992.', 'Comissão IDH recebe petições individuais; a Corte IDH julga. O Brasil reconheceu a competência contenciosa da Corte em 1998.', 'Prisão civil do depositário infiel é ilícita (Súmula Vinculante 25).']],
+      ['Uso da força (Lei 13.060/2014)', ['Prioridade aos instrumentos de menor potencial ofensivo.', 'Não é legítimo usar arma de fogo contra pessoa em fuga desarmada, ou contra veículo que fure bloqueio, salvo risco imediato de morte ou lesão.']],
+      ['Federalização (IDC)', ['Art. 109, §5º da CF: em grave violação de DH, o Procurador-Geral da República pode suscitar perante o STJ o deslocamento para a Justiça Federal.']]
+    ],
+    ml: [
+      ['Traumatologia', ['Cortante (navalha) → ferida incisa. Perfurante (agulha) → punctória. Contundente (pedra) → contusa.', 'Perfurocortante (faca) → perfuroincisa. Cortocontundente (machado) → cortocontusa. Perfurocontundente (projétil) → perfurocontusa.']],
+      ['Balística', ['Entrada: orla de escoriação/contusão, bordas invertidas. Saída: maior e irregular, bordas evertidas, sem orla.', 'Tatuagem e esfumaçamento → disparo a curta distância. Câmara de mina de Hoffmann → tiro encostado em plano ósseo (crânio).']],
+      ['Asfixias', ['Enforcamento: força é o peso do corpo; sulco oblíquo, ascendente, descontínuo.', 'Estrangulamento: laço acionado por força externa; sulco horizontal e contínuo.', 'Esganadura: constrição do pescoço pelas mãos; não deixa sulco.']],
+      ['Tanatologia', ['Rigidez cadavérica: começa pela face e mandíbula (1 a 2 h), segue em sentido crânio-caudal (Lei de Nysten) e desaparece em 36 a 48 h.', 'Livores de hipóstase surgem em 2 a 3 h e fixam em cerca de 8 a 12 h.']],
+      ['Corpo de delito e lesões', ['Infração que deixa vestígios exige exame de corpo de delito; a confissão não supre (art. 158 do CPP). Basta 1 perito oficial (art. 159).', 'Lesão grave (art. 129, §1º): incapacidade para ocupações habituais por mais de 30 dias, perigo de vida, debilidade permanente, aceleração do parto.', 'Lesão gravíssima (§2º): incapacidade permanente para o trabalho, enfermidade incurável, perda ou inutilização de membro, sentido ou função, deformidade permanente, aborto.']]
+    ],
+    crim: [
+      ['Conceito', ['Ciência empírica e interdisciplinar. Objeto: delito, delinquente, vítima e controle social.']],
+      ['Escolas', ['Clássica (Beccaria, Carrara): livre-arbítrio, crime como ente jurídico, pena retributiva.', 'Positiva (Lombroso, Ferri, Garofalo): determinismo, criminoso nato (Lombroso), periculosidade, pena como defesa social.']],
+      ['Teorias sociológicas', ['Escola de Chicago: ecologia criminal, desorganização social nas cidades.', 'Anomia (Durkheim; Merton): ausência ou conflito de normas; descompasso entre metas culturais e meios.', 'Associação diferencial (Sutherland): o crime se aprende na interação; crimes de colarinho branco.', 'Labelling approach (Becker, Lemert): o desvio resulta da reação social; desvio primário e secundário.', 'Janelas quebradas (Wilson e Kelling): pequenas desordens toleradas levam a crimes maiores; base da tolerância zero.']],
+      ['Vitimologia e prevenção', ['Vitimização primária: o crime. Secundária: sofrimento causado pelas instâncias formais (polícia, justiça). Terciária: abandono pelo meio social e família.', 'Prevenção primária: raízes do crime (educação, saúde, emprego). Secundária: grupos e áreas de risco (policiamento). Terciária: o condenado (evitar reincidência).', 'Controle formal: polícia, MP, Judiciário. Informal: família, escola, igreja, comunidade.', 'Cifra negra: crimes que não chegam ao conhecimento oficial. Cifra dourada: crimes de colarinho branco não punidos.']]
+    ]
+  };
+
+  // ---------- Banco de questões (inéditas, no estilo FGV) ----------
+  // c = índice da correta (0 = A)
+  const questoes = [
+    // Português
+    { m: 'port', e: 'Assinale a frase em que a concordância verbal está de acordo com a norma-padrão.', a: ['Fazem dois anos que o inquérito foi instaurado.', 'Houveram muitas denúncias anônimas na delegacia.', 'Devem existir outras provas nos autos.', 'Aluga-se salas no prédio ao lado da delegacia.', 'Vossa Senhoria deveis comparecer à audiência.'], c: 2, x: '"Existir" é pessoal e concorda com "outras provas"; o auxiliar "devem" acompanha. "Fazer" (tempo) e "haver" (existir) são impessoais: "Faz", "Houve". "Alugam-se salas" (SE apassivador). Pronome de tratamento leva o verbo à 3ª pessoa.' },
+    { m: 'port', e: 'O acento grave indicativo de crase está corretamente empregado em:', a: ['O delegado referiu-se à investigações anteriores.', 'O relatório foi entregue à autoridade competente.', 'A equipe começou à investigar o caso ontem.', 'Os agentes fizeram a diligência à pé.', 'O ofício foi encaminhado à Vossa Excelência.'], c: 1, x: '"Entregue a + a autoridade" = à. Não há crase com "a" singular diante de plural, antes de verbo, de palavra masculina ou de pronome de tratamento.' },
+    { m: 'port', e: 'Está correta, quanto à regência, a frase:', a: ['O investigador assistiu o depoimento do suspeito, ao qual compareceu.', 'Prefiro mais trabalhar em campo do que no escritório.', 'Os agentes obedeceram o regulamento interno.', 'Esqueci-me do horário marcado para a audiência.', 'Desde jovem, aspirava o cargo de investigador.'], c: 3, x: 'Esquecer pronominal exige DE. Assistir (presenciar) pede A; preferir não admite "mais... do que"; obedecer pede A; aspirar (desejar) pede A.' },
+    { m: 'port', e: 'No período "Embora as provas fossem frágeis, o inquérito foi concluído", o conectivo destacado pode ser substituído, sem alteração de sentido, por:', a: ['porque', 'conquanto', 'portanto', 'desde que', 'à medida que'], c: 1, x: '"Embora" e "conquanto" são concessivos. "Porque" é causal, "portanto" conclusivo, "desde que" condicional, "à medida que" proporcional.' },
+    { m: 'port', e: 'Assinale a frase corretamente pontuada.', a: ['Os policiais, que participaram da operação foram elogiados.', 'O investigador, entregou o relatório ao delegado.', 'Ontem à noite, a equipe cumpriu três mandados de busca.', 'A testemunha disse, que viu o suspeito fugir.', 'Os suspeitos que, fugiram foram capturados.'], c: 2, x: 'Adjunto adverbial deslocado para o início pode vir separado por vírgula. Nas demais há vírgula entre sujeito e verbo, entre verbo e complemento ou oração explicativa sem a segunda vírgula.' },
+    { m: 'port', e: 'A transposição de "A perícia analisou os vestígios" para a voz passiva analítica, mantendo o tempo verbal, é:', a: ['Os vestígios foram analisados pela perícia.', 'Analisaram-se os vestígios pela perícia.', 'A perícia foi analisada pelos vestígios.', 'Os vestígios tinham sido analisados pela perícia.', 'Analisou-se os vestígios.'], c: 0, x: 'Voz passiva analítica = ser + particípio; o pretérito perfeito "analisou" vira "foram analisados". "Tinham sido" muda o tempo para o mais-que-perfeito.' },
+    { m: 'port', e: 'A colocação do pronome átono está de acordo com a norma-padrão em:', a: ['Me disseram que o laudo ficou pronto.', 'Não encontrou-se o corpo no local.', 'Ninguém o viu sair da residência.', 'Quando viu-me, o suspeito fugiu.', 'Farei-te um relatório completo amanhã.'], c: 2, x: '"Ninguém" é palavra atrativa → próclise. Não se inicia frase com pronome átono; "não" e "quando" atraem o pronome; futuro do presente pede mesóclise (far-te-ei).' },
+    // RLM
+    { m: 'rlm', e: 'A negação lógica de "Todo investigador é concursado" é:', a: ['Nenhum investigador é concursado.', 'Algum investigador não é concursado.', 'Todo investigador não é concursado.', 'Algum concursado não é investigador.', 'Nenhum concursado é investigador.'], c: 1, x: 'A negação de "Todo A é B" é "Algum A não é B" (basta um contraexemplo).' },
+    { m: 'rlm', e: 'A negação de "Se chove, então a rua fica molhada" é:', a: ['Se não chove, a rua não fica molhada.', 'Não chove e a rua fica molhada.', 'Chove e a rua não fica molhada.', 'Não chove ou a rua não fica molhada.', 'Se a rua não fica molhada, não chove.'], c: 2, x: '~(p → q) ≡ p ∧ ~q.' },
+    { m: 'rlm', e: '"Se o suspeito estava no local, então ele é o autor." Uma proposição logicamente equivalente é:', a: ['Se ele é o autor, então estava no local.', 'Se ele não estava no local, então não é o autor.', 'Se ele não é o autor, então não estava no local.', 'Ele estava no local e é o autor.', 'Ele não estava no local e não é o autor.'], c: 2, x: 'Contrapositiva: p → q ≡ ~q → ~p. As alternativas A e B são a recíproca e a inversa, que não são equivalentes.' },
+    { m: 'rlm', e: 'O valor de uma gratificação aumentou 20% em um mês e, no mês seguinte, diminuiu 20%. Em relação ao valor inicial, o valor final é:', a: ['igual', '4% maior', '4% menor', '2% menor', '10% menor'], c: 2, x: '1,20 × 0,80 = 0,96, ou seja, 4% menor.' },
+    { m: 'rlm', e: 'De um grupo de 6 investigadores, deseja-se formar uma equipe de 3, sem distinção de funções. O número de equipes possíveis é:', a: ['18', '20', '60', '120', '216'], c: 1, x: 'A ordem não importa: C(6,3) = 6!/(3!·3!) = 20.' },
+    { m: 'rlm', e: 'Dois dados honestos são lançados. A probabilidade de a soma das faces ser 7 é:', a: ['1/12', '1/9', '1/6', '7/36', '1/3'], c: 2, x: 'Há 6 pares com soma 7 em 36 resultados: 6/36 = 1/6.' },
+    { m: 'rlm', e: 'Na sequência 2, 6, 12, 20, 30, ..., o próximo termo é:', a: ['36', '40', '42', '44', '48'], c: 2, x: 'Termo n = n(n+1): 1·2, 2·3, 3·4, 4·5, 5·6, 6·7 = 42. As diferenças crescem de 2 em 2 (4, 6, 8, 10, 12).' },
+    { m: 'rlm', e: '4 agentes cumprem 12 mandados em 6 horas. Mantida a produtividade, 6 agentes cumprem 18 mandados em:', a: ['4 horas', '5 horas', '6 horas', '8 horas', '9 horas'], c: 2, x: 'Cada agente cumpre 12/(4·6) = 0,5 mandado por hora. 18 / (6 · 0,5) = 6 horas.' },
+    // Informática
+    { m: 'info', e: 'Numa planilha, A1 = 2, A2 = 3, A3 = 5 e A4 está vazia. O resultado de =MÉDIA(A1:A4) é, aproximadamente:', a: ['2,50', '3,33', '2,00', '10,00', 'erro #DIV/0!'], c: 1, x: 'MÉDIA ignora células vazias: (2+3+5)/3 ≈ 3,33.' },
+    { m: 'info', e: 'A célula C1 contém =$A$1*B1. Copiada para C2, a fórmula passa a ser:', a: ['=$A$1*B1', '=$A$2*B2', '=$A$1*B2', '=A2*B2', '=$A$1*C2'], c: 2, x: '$A$1 é absoluta e não muda; B1 é relativa e desce uma linha (B2).' },
+    { m: 'info', e: 'O malware que criptografa os arquivos da vítima e exige pagamento para liberá-los é o:', a: ['spyware', 'worm', 'ransomware', 'adware', 'keylogger'], c: 2, x: 'Ransomware sequestra os dados por criptografia e cobra resgate.' },
+    { m: 'info', e: 'O protocolo que garante a comunicação criptografada entre navegador e site, usando por padrão a porta 443, é o:', a: ['HTTP', 'FTP', 'HTTPS', 'SMTP', 'POP3'], c: 2, x: 'HTTPS = HTTP sobre TLS, porta 443. HTTP usa a 80.' },
+    { m: 'info', e: 'No Windows, o atalho que bloqueia imediatamente a sessão do usuário é:', a: ['Win + D', 'Win + E', 'Win + L', 'Ctrl + Shift + Esc', 'Alt + F4'], c: 2, x: 'Win+L bloqueia. Win+D mostra a área de trabalho, Win+E abre o Explorador, Ctrl+Shift+Esc o Gerenciador de Tarefas.' },
+    { m: 'info', e: 'Um investigador envia um e-mail para Ana (Para), Bruno (Cc) e Carla (Cco). É correto afirmar que:', a: ['Ana vê que Carla recebeu a mensagem.', 'Bruno vê que Carla recebeu a mensagem.', 'Carla vê Ana e Bruno, mas Ana e Bruno não veem Carla.', 'Ninguém vê os demais destinatários.', 'Carla só recebe se Bruno encaminhar.'], c: 2, x: 'Quem está em Cco (cópia oculta) não aparece para os demais, mas vê os destinatários de Para e Cc.' },
+    { m: 'info', e: 'O backup que copia apenas os arquivos alterados desde o último backup completo, independentemente de backups intermediários, é o:', a: ['incremental', 'diferencial', 'completo', 'espelhado', 'sintético'], c: 1, x: 'Diferencial: referência é o último completo. Incremental: referência é o último backup de qualquer tipo.' },
+    // Lei Orgânica / base constitucional
+    { m: 'lo', e: 'Segundo a Constituição Federal, às polícias civis, dirigidas por delegados de polícia de carreira, incumbem:', a: ['o policiamento ostensivo e a preservação da ordem pública.', 'as funções de polícia judiciária e a apuração de infrações penais, exceto as militares, ressalvada a competência da União.', 'a apuração de todas as infrações penais, inclusive as militares.', 'a segurança dos estabelecimentos penais.', 'o patrulhamento ostensivo das rodovias estaduais.'], c: 1, x: 'CF art. 144, §4º. Policiamento ostensivo é da PM (§5º) e a segurança de estabelecimentos penais é das polícias penais (§5º-A).' },
+    { m: 'lo', e: 'As polícias civis dos Estados subordinam-se:', a: ['ao Ministro da Justiça.', 'ao Tribunal de Justiça.', 'aos Governadores.', 'ao Ministério Público estadual.', 'à Polícia Federal.'], c: 2, x: 'CF art. 144, §6º: polícias militares, corpos de bombeiros, polícias penais estaduais e polícias civis subordinam-se aos Governadores.' },
+    { m: 'lo', e: 'Sobre a competência legislativa a respeito da organização, garantias, direitos e deveres das polícias civis, é correto afirmar que:', a: ['é privativa da União, cabendo ao Estado apenas regulamentar por decreto.', 'é exclusiva dos Estados, sem participação da União.', 'é concorrente: a União edita normas gerais e o Estado exerce competência suplementar.', 'é comum a todos os entes, inclusive Municípios.', 'é do Conselho Superior de cada Polícia Civil.'], c: 2, x: 'CF art. 24, XVI: competência concorrente. A Lei 14.735/2023 traz as normas gerais e a LC 129/2013 é a lei orgânica mineira.', al: 'loncpc' },
+    { m: 'lo', e: 'O servidor nomeado para cargo de provimento efetivo em virtude de concurso público adquire estabilidade após:', a: ['2 anos de efetivo exercício.', '3 anos de efetivo exercício, com avaliação especial de desempenho.', '3 anos, dispensada qualquer avaliação.', '5 anos de efetivo exercício.', 'a posse, se aprovado no curso de formação.'], c: 1, x: 'CF art. 41, caput e §4º (redação da EC 19/98).' },
+    // Constitucional
+    { m: 'const', e: 'Investigadores, sem mandado e sem consentimento do morador, ingressam em uma casa às 23h porque ali ocorre um crime em flagrante. À luz da CF, o ingresso é:', a: ['ilícito, pois à noite só se entra com ordem judicial.', 'lícito, pois em flagrante delito a entrada é permitida a qualquer hora.', 'lícito apenas se houver autorização do delegado por escrito.', 'ilícito, pois o flagrante só autoriza a entrada durante o dia.', 'lícito apenas para prestar socorro.'], c: 1, x: 'Art. 5º, XI: flagrante delito, desastre ou socorro autorizam a entrada a qualquer hora. A ordem judicial só se cumpre durante o dia. O STF exige fundadas razões, justificadas a posteriori (Tema 280).' },
+    { m: 'const', e: 'São inafiançáveis e imprescritíveis, segundo o art. 5º da CF:', a: ['a tortura e o tráfico de drogas.', 'o racismo e a ação de grupos armados contra a ordem constitucional e o Estado Democrático.', 'o terrorismo e os crimes hediondos.', 'todos os crimes dolosos contra a vida.', 'o racismo e a tortura.'], c: 1, x: 'Incisos XLII e XLIV. Tortura, tráfico, terrorismo e hediondos são inafiançáveis e insuscetíveis de graça ou anistia, mas não imprescritíveis (XLIII).' },
+    { m: 'const', e: 'O remédio constitucional para assegurar o conhecimento de informações relativas à pessoa do impetrante, constantes de banco de dados de entidade governamental, é:', a: ['habeas corpus', 'mandado de segurança', 'habeas data', 'mandado de injunção', 'ação popular'], c: 2, x: 'Art. 5º, LXXII.' },
+    { m: 'const', e: 'Integram o rol de órgãos do art. 144 da CF, entre outros:', a: ['as guardas municipais e as polícias penais.', 'as polícias penais federal, estaduais e distrital.', 'a Força Nacional de Segurança Pública.', 'o Ministério Público.', 'os agentes de trânsito.'], c: 1, x: 'A EC 104/2019 incluiu as polícias penais (inciso VI). As guardas municipais estão no §8º, não no rol dos incisos.', al: 'penais' },
+    { m: 'const', e: 'A interceptação de comunicações telefônicas é admitida pela CF:', a: ['por ordem do delegado, em investigação de crime grave.', 'por ordem judicial, para fins de investigação criminal ou instrução processual penal.', 'por ordem judicial, para qualquer processo, inclusive cível.', 'por requisição do Ministério Público.', 'em nenhuma hipótese.'], c: 1, x: 'Art. 5º, XII, regulamentado pela Lei 9.296/96.' },
+    { m: 'const', e: 'Um tratado internacional de direitos humanos aprovado pelo Congresso pelo rito comum (sem quórum qualificado) tem, segundo o STF, status:', a: ['constitucional', 'supralegal', 'de lei ordinária', 'de lei complementar', 'infralegal'], c: 1, x: 'RE 466.343: status supralegal. Com aprovação em 2 turnos, por 3/5, em cada Casa, equivale a emenda (art. 5º, §3º).' },
+    // Administrativo
+    { m: 'adm', e: 'São princípios expressos no caput do art. 37 da CF:', a: ['legalidade, impessoalidade, moralidade, publicidade e eficiência.', 'legalidade, razoabilidade, moralidade, publicidade e eficiência.', 'supremacia do interesse público, legalidade e publicidade.', 'legalidade, impessoalidade, motivação, publicidade e eficiência.', 'legalidade, moralidade, proporcionalidade, publicidade e eficiência.'], c: 0, x: 'LIMPE. Razoabilidade, proporcionalidade, motivação e supremacia são princípios implícitos ou de leis infraconstitucionais.' },
+    { m: 'adm', e: 'Sobre a Lei de Improbidade Administrativa após a Lei 14.230/2021, é correto afirmar:', a: ['Os atos que causam prejuízo ao erário admitem a modalidade culposa.', 'Todos os atos de improbidade exigem dolo.', 'O rol de atos que atentam contra os princípios é exemplificativo.', 'A ação prescreve em 5 anos após o término do mandato.', 'Basta a voluntariedade do agente para configurar o ato.'], c: 1, x: 'A reforma exigiu dolo para todas as modalidades, tornou taxativo o art. 11 e fixou prescrição de 8 anos.', al: 'improbidade' },
+    { m: 'adm', e: 'Na Lei 14.133/2021, NÃO é modalidade de licitação:', a: ['pregão', 'concorrência', 'leilão', 'tomada de preços', 'diálogo competitivo'], c: 3, x: 'Tomada de preços e convite eram da revogada Lei 8.666/93.', al: 'licitacao' },
+    { m: 'adm', e: 'A revogação de um ato administrativo:', a: ['decorre de ilegalidade e produz efeitos ex tunc.', 'pode ser feita pelo Judiciário no exercício da função jurisdicional.', 'decorre de conveniência e oportunidade e produz efeitos ex nunc.', 'atinge atos vinculados.', 'é obrigatória sempre que houver vício de forma.'], c: 2, x: 'Súmula 473 do STF. Ilegalidade gera anulação (ex tunc). O Judiciário só revoga seus próprios atos administrativos.' },
+    { m: 'adm', e: 'Viatura da Polícia Civil, em diligência, colide com veículo particular e causa danos. Segundo a CF e o STF:', a: ['a vítima deve acionar diretamente o motorista policial.', 'a responsabilidade do Estado é subjetiva, exigindo prova de culpa.', 'a vítima aciona o Estado, que responde objetivamente e pode cobrar do agente em regresso, se houver dolo ou culpa.', 'o Estado só responde se o agente for condenado criminalmente.', 'não há responsabilidade, pois a diligência é ato de império.'], c: 2, x: 'Art. 37, §6º (risco administrativo) e STF Tema 940 (dupla garantia).' },
+    { m: 'adm', e: 'São atributos do ato administrativo:', a: ['competência, finalidade e forma.', 'presunção de legitimidade, imperatividade, autoexecutoriedade e tipicidade.', 'motivo, objeto e finalidade.', 'discricionariedade e vinculação.', 'publicidade e eficiência.'], c: 1, x: 'Competência, finalidade, forma, motivo e objeto são ELEMENTOS (requisitos), não atributos.' },
+    // Penal
+    { m: 'penal', e: 'Após a Lei 14.994/2024, matar mulher por razões da condição do sexo feminino configura:', a: ['homicídio qualificado pelo feminicídio (art. 121, §2º, VI), pena de 12 a 30 anos.', 'crime autônomo de feminicídio (art. 121-A), pena de 20 a 40 anos.', 'homicídio simples com causa de aumento.', 'crime previsto apenas na Lei Maria da Penha.', 'homicídio privilegiado.'], c: 1, x: 'A Lei 14.994/2024 revogou o inciso VI do §2º do art. 121 e criou o art. 121-A.', al: 'feminicidio' },
+    { m: 'penal', e: 'Durante um assalto com refém, um policial civil atira no criminoso que ameaçava a vítima. Segundo o CP, o policial:', a: ['age em estrito cumprimento do dever legal, apenas.', 'está em legítima defesa, conforme o art. 25, parágrafo único.', 'responde por homicídio com pena reduzida.', 'age em estado de necessidade.', 'só fica isento se houver ordem superior.'], c: 1, x: 'O parágrafo único do art. 25 (Lei 13.964/2019) prevê a legítima defesa do agente de segurança pública que repele agressão ou risco de agressão a vítima mantida refém.' },
+    { m: 'penal', e: 'Após subtrair um celular sem violência, o agente agride a vítima que tentava recuperá-lo. Trata-se de:', a: ['furto qualificado.', 'furto seguido de lesão corporal, em concurso material.', 'roubo impróprio.', 'roubo próprio.', 'extorsão.'], c: 2, x: 'Art. 157, §1º: violência logo depois da subtração, para assegurar a detenção da coisa ou a impunidade.' },
+    { m: 'penal', e: 'Perseguir alguém reiteradamente, ameaçando sua integridade física ou psicológica e restringindo sua liberdade, configura atualmente:', a: ['a contravenção de perturbação da tranquilidade (art. 65 da LCP).', 'o crime de perseguição (art. 147-A do CP).', 'o crime de ameaça (art. 147), apenas.', 'constrangimento ilegal.', 'fato atípico.'], c: 1, x: 'A Lei 14.132/2021 criou o art. 147-A e revogou o art. 65 da LCP.', al: 'stalking' },
+    { m: 'penal', e: 'O funcionário público que EXIGE, para si, vantagem indevida em razão da função comete:', a: ['corrupção passiva', 'concussão', 'prevaricação', 'peculato', 'advocacia administrativa'], c: 1, x: 'Exigir = concussão (art. 316). Solicitar, receber ou aceitar promessa = corrupção passiva (art. 317).' },
+    { m: 'penal', e: 'Quanto ao estelionato comum, a ação penal, após a Lei 13.964/2019, é em regra:', a: ['pública incondicionada.', 'pública condicionada à representação, com exceções previstas em lei.', 'privada.', 'pública condicionada à requisição do Ministro da Justiça.', 'privada subsidiária.'], c: 1, x: 'Art. 171, §5º. É incondicionada se a vítima for a Administração Pública, criança ou adolescente, pessoa com deficiência mental, maior de 70 anos ou incapaz.' },
+    { m: 'penal', e: 'O agente que, depois de iniciar a execução, desiste voluntariamente de prosseguir:', a: ['responde pela tentativa com redução de pena.', 'responde apenas pelos atos já praticados.', 'fica isento de qualquer pena.', 'responde pelo crime consumado.', 'tem direito a perdão judicial.'], c: 1, x: 'Art. 15 do CP (desistência voluntária e arrependimento eficaz).' },
+    // Processo Penal
+    { m: 'pp', e: 'Sobre o inquérito policial, é correto afirmar:', a: ['A autoridade policial pode mandar arquivar os autos se não houver indícios.', 'É indispensável para o oferecimento da denúncia.', 'A autoridade policial não pode mandar arquivar os autos do inquérito.', 'É regido pelo contraditório e pela ampla defesa.', 'É sempre público.'], c: 2, x: 'Art. 17 do CPP. O IP é dispensável, inquisitivo e sigiloso, mas o defensor acessa os elementos já documentados (SV 14).' },
+    { m: 'pp', e: 'O sujeito é encontrado, logo depois do crime, com a arma e os objetos subtraídos, em situação que faz presumir ser ele o autor. É flagrante:', a: ['próprio', 'impróprio', 'presumido (ficto)', 'preparado', 'diferido'], c: 2, x: 'Art. 302, IV. Impróprio (III) é a perseguição logo após o crime.' },
+    { m: 'pp', e: 'A Súmula 145 do STF estabelece que não há crime quando:', a: ['a polícia aguarda o momento do crime para efetuar a prisão.', 'a preparação do flagrante pela polícia torna impossível a sua consumação.', 'o agente é preso por populares.', 'a prisão é feita sem mandado.', 'há ação controlada autorizada.'], c: 1, x: 'Flagrante preparado (provocado) = crime impossível. O flagrante esperado é válido.' },
+    { m: 'pp', e: 'O acordo de não persecução penal (art. 28-A do CPP) exige, entre outros requisitos:', a: ['crime com pena máxima inferior a 4 anos.', 'infração sem violência ou grave ameaça, com pena mínima inferior a 4 anos, e confissão formal e circunstanciada.', 'apenas a primariedade do investigado.', 'crime hediondo com colaboração.', 'homologação pelo delegado de polícia.'], c: 1, x: 'Art. 28-A, caput. A homologação é judicial.', al: 'anticrime' },
+    { m: 'pp', e: 'O preso em flagrante deve ser apresentado ao juiz em audiência de custódia no prazo de:', a: ['12 horas', '24 horas', '48 horas', '72 horas', '5 dias'], c: 1, x: 'Art. 310 do CPP (Lei 13.964/2019).' },
+    { m: 'pp', e: 'Sobre a prisão temporária, é correto afirmar:', a: ['Pode ser decretada de ofício pelo juiz durante a ação penal.', 'Cabe na fase investigativa, por representação da autoridade policial ou requerimento do MP, por 5 dias prorrogáveis por mais 5.', 'Tem prazo único de 30 dias para qualquer crime.', 'Pode ser decretada pelo delegado.', 'Substitui a prisão preventiva após a denúncia.'], c: 1, x: 'Lei 7.960/89. Nos hediondos e equiparados o prazo é de 30 + 30 dias.' },
+    { m: 'pp', e: 'Nos termos do CPP, sem prejuízo da prorrogação, o inquérito deve terminar em:', a: ['10 dias se o indiciado estiver preso e 30 dias se estiver solto.', '15 dias se preso e 30 se solto.', '30 dias em qualquer caso.', '5 dias se preso e 10 se solto.', '90 dias se solto.'], c: 0, x: 'Art. 10 do CPP. Na Lei de Drogas: 30 (preso) e 90 (solto).' },
+    // Legislação
+    { m: 'leg', e: 'Sobre o porte de maconha para consumo pessoal, segundo o STF (RE 635.659, 2024):', a: ['continua sendo crime, com pena de detenção.', 'é ilícito administrativo, presumindo-se usuário quem porta até 40 g ou 6 plantas fêmeas, presunção relativa.', 'é atípico em qualquer quantidade.', 'é tráfico privilegiado.', 'é contravenção penal.'], c: 1, x: 'Tese do Tema 506. O art. 28 continua a valer para as demais drogas.', al: 'drogas' },
+    { m: 'leg', e: 'Para configurar crime de abuso de autoridade (Lei 13.869/2019), exige-se:', a: ['apenas o dolo genérico.', 'finalidade específica de prejudicar outrem, beneficiar a si ou a terceiro, ou mero capricho ou satisfação pessoal.', 'a culpa grave do agente.', 'representação da vítima.', 'a divergência na interpretação da lei.'], c: 1, x: 'Art. 1º, §1º. A divergência interpretativa não configura o crime (§2º). A ação é pública incondicionada.', al: 'abuso' },
+    { m: 'leg', e: 'A condenação por crime de tortura (Lei 9.455/97) acarreta:', a: ['perda do cargo apenas se declarada motivadamente na sentença.', 'perda do cargo e interdição para seu exercício pelo dobro do prazo da pena aplicada.', 'suspensão do cargo por 1 ano.', 'nenhum efeito administrativo.', 'aposentadoria compulsória.'], c: 1, x: 'Art. 1º, §5º. Efeito automático, não precisa ser fundamentado na sentença.' },
+    { m: 'leg', e: 'Após a Lei 14.994/2024, o descumprimento de decisão que defere medida protetiva de urgência (Lei Maria da Penha) é punido com:', a: ['detenção de 3 meses a 2 anos.', 'reclusão de 2 a 5 anos e multa.', 'apenas multa.', 'reclusão de 1 a 4 anos.', 'detenção de 6 meses a 1 ano.'], c: 1, x: 'Art. 24-A da Lei 11.340/06, com a redação da Lei 14.994/2024.', al: 'feminicidio' },
+    { m: 'leg', e: 'É crime hediondo, nos termos da Lei 8.072/90:', a: ['a posse irregular de arma de fogo de uso permitido.', 'o porte ilegal de arma de fogo de uso permitido.', 'a posse ou o porte ilegal de arma de fogo de uso proibido.', 'o tráfico privilegiado.', 'a omissão de cautela.'], c: 2, x: 'Art. 1º, parágrafo único, II (redação da Lei 13.964/2019). Tráfico privilegiado não é hediondo.' },
+    { m: 'leg', e: 'Ofender alguém com elementos referentes a raça, cor, etnia ou procedência nacional configura hoje:', a: ['injúria qualificada do art. 140, §3º do CP.', 'injúria racial do art. 2º-A da Lei 7.716/89.', 'difamação.', 'contravenção penal.', 'crime de menor potencial ofensivo.'], c: 1, x: 'A Lei 14.532/2023 deslocou a injúria racial para a Lei do Racismo (reclusão de 2 a 5 anos).', al: 'injuria' },
+    { m: 'leg', e: 'Para a Lei 12.850/13, organização criminosa é a associação de:', a: ['3 ou mais pessoas para cometer crimes.', '4 ou mais pessoas, estruturalmente ordenada e com divisão de tarefas, para infrações com penas máximas superiores a 4 anos ou de caráter transnacional.', '2 ou mais pessoas para o tráfico.', '4 ou mais pessoas para qualquer contravenção.', '5 ou mais pessoas armadas.'], c: 1, x: 'Art. 1º, §1º. Associação criminosa do CP (art. 288) exige 3 ou mais pessoas.' },
+    // Direitos Humanos
+    { m: 'dh', e: 'São características dos direitos humanos:', a: ['relatividade cultural absoluta e disponibilidade.', 'universalidade, indivisibilidade, interdependência e inalienabilidade.', 'prescritibilidade e renunciabilidade.', 'hierarquia rígida entre gerações.', 'aplicação exclusiva aos nacionais.'], c: 1, x: 'Também: imprescritibilidade, historicidade e vedação ao retrocesso.' },
+    { m: 'dh', e: 'Os direitos de segunda geração (ou dimensão) estão ligados ao valor:', a: ['liberdade', 'igualdade', 'fraternidade', 'paz', 'democracia digital'], c: 1, x: '1ª liberdade, 2ª igualdade (sociais, econômicos e culturais), 3ª fraternidade.' },
+    { m: 'dh', e: 'Segundo a Lei 13.060/2014, NÃO é legítimo o uso de arma de fogo:', a: ['em legítima defesa própria.', 'contra pessoa em fuga que esteja desarmada ou que não represente risco imediato de morte ou lesão aos agentes ou a terceiros.', 'para defender terceiro de agressão armada.', 'em qualquer situação de risco à vida.', 'quando os instrumentos de menor potencial forem ineficazes diante de agressão letal.'], c: 1, x: 'Art. 2º, parágrafo único, I. O inciso II trata do veículo que desrespeita bloqueio.' },
+    { m: 'dh', e: 'O incidente de deslocamento de competência (IDC) para a Justiça Federal, em grave violação de direitos humanos:', a: ['é suscitado pelo Governador perante o STF.', 'é suscitado pelo Procurador-Geral da República perante o STJ.', 'é suscitado pela vítima perante o juiz estadual.', 'é automático em crimes contra policiais.', 'depende de lei estadual.'], c: 1, x: 'CF art. 109, §5º (EC 45/2004).' },
+    { m: 'dh', e: 'A prisão civil do depositário infiel, segundo o STF:', a: ['é lícita, pois prevista na CF.', 'é ilícita, qualquer que seja a modalidade do depósito.', 'é lícita apenas no depósito judicial.', 'é lícita se houver tratado autorizando.', 'só é possível por 30 dias.'], c: 1, x: 'Súmula Vinculante 25. O Pacto de San José (supralegal) só admite prisão civil do devedor de alimentos.' },
+    // Medicina Legal
+    { m: 'ml', e: 'Uma lesão produzida por faca, que penetra por ponta e corta por gume, é classificada como:', a: ['incisa', 'punctória', 'perfuroincisa', 'cortocontusa', 'contusa'], c: 2, x: 'Instrumento perfurocortante → ferida perfuroincisa.' },
+    { m: 'ml', e: 'Ferimento de entrada de projétil com zona de tatuagem e de esfumaçamento indica disparo:', a: ['a longa distância.', 'a curta distância.', 'encostado em plano ósseo, sempre.', 'de saída do projétil.', 'por arma branca.'], c: 1, x: 'Grãos de pólvora (tatuagem) e fuligem (esfumaçamento) chegam à pele em disparos próximos. Câmara de mina de Hoffmann indica tiro encostado sobre osso.' },
+    { m: 'ml', e: 'Sulco oblíquo, ascendente e descontínuo no pescoço, com a força constritora sendo o peso do próprio corpo, é típico de:', a: ['estrangulamento', 'esganadura', 'enforcamento', 'sufocação direta', 'afogamento'], c: 2, x: 'Estrangulamento: sulco horizontal e contínuo. Esganadura: pelas mãos, sem sulco.' },
+    { m: 'ml', e: 'A rigidez cadavérica, segundo a Lei de Nysten:', a: ['começa pelos membros inferiores.', 'progride em sentido crânio-caudal, iniciando pela face e mandíbula.', 'é permanente.', 'surge apenas após 24 horas.', 'é sinal de morte encefálica.'], c: 1, x: 'Inicia em 1 a 2 h pela mandíbula e nuca e desaparece em 36 a 48 h.' },
+    { m: 'ml', e: 'Lesão corporal que resulta em aceleração do parto é classificada como:', a: ['leve', 'grave', 'gravíssima', 'seguida de morte', 'culposa'], c: 1, x: 'Art. 129, §1º, IV. O aborto, por sua vez, torna a lesão gravíssima (§2º, V).' },
+    { m: 'ml', e: 'Quando a infração deixar vestígios, segundo o CPP:', a: ['a confissão do acusado supre o exame de corpo de delito.', 'é indispensável o exame de corpo de delito, direto ou indireto, não podendo supri-lo a confissão.', 'o exame é dispensável se houver testemunhas.', 'exigem-se sempre dois peritos oficiais.', 'o exame só pode ser feito com autorização judicial.'], c: 1, x: 'Art. 158. Basta um perito oficial com diploma superior (art. 159).' },
+    // Criminologia
+    { m: 'crim', e: 'A criminologia moderna tem como objeto de estudo:', a: ['apenas o delito, como ente jurídico.', 'o delito, o delinquente, a vítima e o controle social.', 'apenas a pena e sua execução.', 'a dogmática penal.', 'apenas o criminoso nato.'], c: 1, x: 'É ciência empírica e interdisciplinar com esses quatro objetos.' },
+    { m: 'crim', e: 'A teoria segundo a qual o comportamento criminoso é aprendido na interação com outras pessoas, usada para explicar os crimes de colarinho branco, é a:', a: ['teoria da anomia', 'associação diferencial', 'labelling approach', 'janelas quebradas', 'escola clássica'], c: 1, x: 'Edwin Sutherland.' },
+    { m: 'crim', e: 'O sofrimento adicional causado à vítima pelas instâncias formais de controle (polícia, Judiciário) é chamado de vitimização:', a: ['primária', 'secundária', 'terciária', 'quaternária', 'difusa'], c: 1, x: 'Primária: o próprio crime. Terciária: abandono pelo meio social.' },
+    { m: 'crim', e: 'A teoria que afirma que pequenas desordens toleradas geram ambiente propício a crimes mais graves, base da política de tolerância zero, é a:', a: ['teoria das janelas quebradas', 'teoria da subcultura delinquente', 'associação diferencial', 'teoria do etiquetamento', 'teoria da anomia'], c: 0, x: 'Wilson e Kelling (1982).' },
+    { m: 'crim', e: 'Programas de educação, emprego e saneamento voltados às causas da criminalidade são exemplos de prevenção:', a: ['primária', 'secundária', 'terciária', 'especial positiva', 'geral negativa'], c: 0, x: 'Secundária atua sobre grupos e áreas de risco; terciária sobre o condenado.' },
+    { m: 'crim', e: 'A expressão "cifra negra" designa:', a: ['os crimes cometidos por organizações criminosas.', 'as infrações que não chegam ao conhecimento das instâncias oficiais.', 'os crimes de colarinho branco.', 'os crimes com autoria desconhecida e já arquivados.', 'a taxa de reincidência.'], c: 1, x: 'Cifra dourada refere-se aos crimes de colarinho branco.' },
+    { m: 'crim', e: 'Para o labelling approach (teoria do etiquetamento):', a: ['o crime é escolha racional baseada no livre-arbítrio.', 'a criminalidade resulta de características biológicas.', 'o desvio é produto da reação social e da rotulação do indivíduo.', 'a pena deve ser retributiva.', 'o crime decorre apenas da pobreza.'], c: 2, x: 'Becker e Lemert. O desvio secundário surge da assunção do rótulo.' }
+  ];
+
+  // ---------- Flashcards ----------
+  const flash = [
+    ['port', 'HAVER no sentido de existir: singular ou plural?', 'Singular (impessoal): "Havia muitas provas".'],
+    ['port', '"Alugam-se casas" ou "Aluga-se casas"?', '"Alugam-se casas": SE apassivador, o verbo concorda com o sujeito.'],
+    ['port', 'Conectivos concessivos', 'Embora, conquanto, ainda que, mesmo que, se bem que.'],
+    ['port', 'Crase antes de pronome de tratamento?', 'Não, exceto senhora, senhorita e dona.'],
+    ['port', 'Regência de "assistir" (ver)', 'Transitivo indireto: assistir AO jogo.'],
+    ['port', 'Mesóclise: quando?', 'Futuro do presente ou do pretérito sem palavra atrativa: far-te-ei, dir-se-ia.'],
+    ['rlm', 'Negação de p → q', 'p ∧ ~q'],
+    ['rlm', 'Contrapositiva de p → q', '~q → ~p (equivalente)'],
+    ['rlm', 'Negação de "Todo A é B"', 'Algum A não é B.'],
+    ['rlm', 'Negação de "Algum A é B"', 'Nenhum A é B.'],
+    ['rlm', '+20% seguido de -20%', '× 0,96 → perda de 4%.'],
+    ['rlm', 'Combinação C(n,p)', 'n! / (p! (n-p)!) — quando a ordem não importa.'],
+    ['info', 'Referência $A$1 ao copiar', 'Não muda (absoluta).'],
+    ['info', 'Backup diferencial', 'Copia o que mudou desde o último backup COMPLETO.'],
+    ['info', 'Backup incremental', 'Copia o que mudou desde o último backup de QUALQUER tipo.'],
+    ['info', 'Porta do HTTPS', '443 (HTTP: 80).'],
+    ['info', 'Win + L', 'Bloqueia a sessão.'],
+    ['info', 'Ransomware', 'Criptografa os dados e exige resgate.'],
+    ['lo', 'CF 144 §4º: atribuições da Polícia Civil', 'Polícia judiciária e apuração de infrações penais, exceto militares, ressalvada a competência da União. Dirigida por delegados de carreira.'],
+    ['lo', 'A quem a Polícia Civil se subordina?', 'Ao Governador (CF 144 §6º).'],
+    ['lo', 'Competência para legislar sobre organização das polícias civis', 'Concorrente (CF 24, XVI): União normas gerais (Lei 14.735/23), Estado suplementa (LC 129/13).'],
+    ['lo', 'Estabilidade do servidor efetivo', '3 anos de efetivo exercício + avaliação especial de desempenho (CF 41).'],
+    ['const', 'Entrada em casa à noite sem consentimento', 'Só em flagrante delito, desastre ou para prestar socorro. Ordem judicial: só de dia.'],
+    ['const', 'Inafiançáveis e imprescritíveis', 'Racismo e ação de grupos armados contra a ordem constitucional.'],
+    ['const', 'TTTH', 'Tortura, tráfico, terrorismo e hediondos: inafiançáveis e insuscetíveis de graça ou anistia.'],
+    ['const', 'Habeas data', 'Conhecer ou retificar informações relativas à pessoa do impetrante.'],
+    ['const', 'Polícias penais no art. 144', 'Incluídas pela EC 104/2019 (inciso VI).'],
+    ['const', 'Tratado de DH com rito de EC', '2 turnos, 3/5, em cada Casa → equivale a emenda (art. 5º §3º).'],
+    ['adm', 'LIMPE', 'Legalidade, Impessoalidade, Moralidade, Publicidade, Eficiência.'],
+    ['adm', 'Atributos do ato (PATI)', 'Presunção de legitimidade, Autoexecutoriedade, Tipicidade, Imperatividade.'],
+    ['adm', 'Anulação × revogação', 'Anulação: ilegalidade, ex tunc. Revogação: mérito, ex nunc.'],
+    ['adm', 'Improbidade após Lei 14.230/21', 'Exige dolo em todas as modalidades; prescrição de 8 anos.'],
+    ['adm', 'Modalidades da Lei 14.133/21', 'Pregão, concorrência, concurso, leilão, diálogo competitivo.'],
+    ['adm', 'Tema 940 do STF', 'Vítima aciona o Estado, não o agente (dupla garantia).'],
+    ['penal', 'Feminicídio hoje', 'Crime autônomo, art. 121-A, reclusão de 20 a 40 anos (Lei 14.994/24).'],
+    ['penal', 'Concussão × corrupção passiva', 'Concussão: EXIGIR. Corrupção passiva: SOLICITAR, RECEBER, ACEITAR promessa.'],
+    ['penal', 'Roubo impróprio', 'Violência ou grave ameaça logo após a subtração, para garantir a coisa ou a impunidade (157 §1º).'],
+    ['penal', 'Tentativa: redução', '1 a 2/3 (art. 14, parágrafo único).'],
+    ['penal', 'Desistência voluntária', 'Responde só pelos atos já praticados (art. 15).'],
+    ['penal', 'Perseguição (stalking)', 'Art. 147-A (Lei 14.132/21); revogou o art. 65 da LCP.'],
+    ['penal', 'Legítima defesa com refém', 'Art. 25, parágrafo único: agente de segurança pública que repele agressão a vítima refém.'],
+    ['pp', 'Prazo do IP (CPP)', '10 dias preso, 30 dias solto.'],
+    ['pp', 'Prazo do IP (Lei de Drogas)', '30 dias preso, 90 dias solto, duplicáveis.'],
+    ['pp', 'Delegado pode arquivar IP?', 'Não (art. 17 do CPP).'],
+    ['pp', 'Flagrante impróprio', 'Perseguido logo após, em situação que faça presumir a autoria.'],
+    ['pp', 'Flagrante presumido', 'Encontrado logo depois com instrumentos, armas ou objetos do crime.'],
+    ['pp', 'Prisão temporária: prazo', '5 + 5 dias; hediondos 30 + 30.'],
+    ['pp', 'ANPP: requisitos', 'Sem violência/grave ameaça, pena mínima < 4 anos, confissão formal e circunstanciada.'],
+    ['pp', 'Audiência de custódia', 'Até 24 horas após a prisão (art. 310).'],
+    ['leg', 'Maconha para uso pessoal (STF 2024)', 'Ilícito administrativo; até 40 g ou 6 plantas fêmeas presume-se usuário.'],
+    ['leg', 'Abuso de autoridade: elemento subjetivo', 'Dolo específico: prejudicar, beneficiar ou capricho/satisfação pessoal.'],
+    ['leg', 'Tortura: perda do cargo', 'Efeito automático + interdição pelo dobro da pena.'],
+    ['leg', 'Organização criminosa', '4+ pessoas, estrutura, divisão de tarefas, penas máximas > 4 anos ou transnacional.'],
+    ['leg', 'Descumprir medida protetiva', 'Art. 24-A: reclusão de 2 a 5 anos (Lei 14.994/24).'],
+    ['leg', 'Injúria racial hoje', 'Art. 2º-A da Lei 7.716/89 (Lei 14.532/23).'],
+    ['leg', 'Arma de uso proibido: hediondo?', 'Sim: posse ou porte de arma de uso proibido.'],
+    ['dh', 'Gerações dos DH', '1ª liberdade, 2ª igualdade, 3ª fraternidade.'],
+    ['dh', 'Depositário infiel', 'Prisão ilícita (SV 25).'],
+    ['dh', 'IDC', 'PGR suscita no STJ o deslocamento para a Justiça Federal (CF 109 §5º).'],
+    ['dh', 'Pacto de San José no Brasil', 'Decreto 678/1992; status supralegal.'],
+    ['dh', 'Arma de fogo contra fugitivo desarmado', 'Não é legítimo (Lei 13.060/14, art. 2º).'],
+    ['ml', 'Faca', 'Perfurocortante → ferida perfuroincisa.'],
+    ['ml', 'Machado', 'Cortocontundente → ferida cortocontusa.'],
+    ['ml', 'Projétil de arma de fogo', 'Perfurocontundente → ferida perfurocontusa.'],
+    ['ml', 'Câmara de mina de Hoffmann', 'Tiro encostado sobre plano ósseo (crânio).'],
+    ['ml', 'Enforcamento × estrangulamento', 'Enforcamento: peso do corpo, sulco oblíquo descontínuo. Estrangulamento: força externa, sulco horizontal contínuo.'],
+    ['ml', 'Lei de Nysten', 'Rigidez em sentido crânio-caudal; começa na mandíbula.'],
+    ['ml', 'Aceleração de parto / aborto', 'Aceleração: lesão grave. Aborto: lesão gravíssima.'],
+    ['crim', 'Objetos da criminologia', 'Delito, delinquente, vítima, controle social.'],
+    ['crim', 'Associação diferencial', 'Sutherland: crime se aprende; colarinho branco.'],
+    ['crim', 'Labelling approach', 'Becker, Lemert: desvio como produto da reação social.'],
+    ['crim', 'Vitimização secundária', 'Causada pelas instâncias formais (polícia, justiça).'],
+    ['crim', 'Prevenção primária', 'Causas do crime: educação, saúde, emprego.'],
+    ['crim', 'Cifra dourada', 'Crimes de colarinho branco não punidos.']
+  ].map((f, i) => ({ id: 'f' + i, m: f[0], f: f[1], v: f[2] }));
+
+  questoes.forEach((q, i) => { q.id = 'q' + i; });
+
+  // ---------- Cronograma: 2 matérias por dia, ciclo de 14 dias de estudo ----------
+  // Uma básica + uma específica por dia, peso pelo nº de questões do edital.
+  const ciclo = [
+    ['port', 'penal'], ['info', 'const'], ['rlm', 'pp'], ['port', 'adm'], ['lo', 'leg'], ['info', 'ml'],
+    ['port', 'crim'], ['rlm', 'penal'], ['info', 'pp'], ['lo', 'const'], ['port', 'dh'], ['rlm', 'adm'],
+    ['info', 'leg'], ['lo', 'ml']
+  ];
+
+  return { alertas, materias, resumos, questoes, flash, ciclo,
+    fontes: {
+      edital: 'https://conhecimento.fgv.br/concursos/pcmg24',
+      editalPdf: 'https://conhecimento.fgv.br/sites/default/files/concursos/investigador-de-policia-edital-retificado-1_0.pdf'
+    } };
+})();
