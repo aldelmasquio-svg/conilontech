@@ -90,7 +90,9 @@ select, input[type=date], input[type=text], input[type=url], textarea { border: 
 
 /* Questões */
 .q { display: grid; gap: 12px }
-.q .enun { font-size: 16px; line-height: 1.55 }
+.q .enun { font-size: 16px; line-height: 1.55; white-space: pre-line }
+.tag-fgv { background: var(--navy); color: #fff; border-color: var(--navy) }
+.tag-ce { background: var(--brass-soft); color: var(--brass); border-color: var(--brass) }
 .alts { display: grid; gap: 8px }
 .alt { text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 12px; display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: start }
 .alt .lt { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--muted) }
@@ -169,6 +171,8 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="dados.js"></script>
+<script src="prova2025.js"></script>
+<script src="extra.js"></script>
 <script>
 (function () {
 const D = window.PCMG;
@@ -261,7 +265,7 @@ function cardsDevidos(m) { const h = HOJE(); return D.flash.filter(f => (!m || f
 
 // ---------- roteamento ----------
 const VIEWS = { hoje: vHoje, cronograma: vCrono, materias: vMaterias, questoes: vQuestoes, flashcards: vFlash, simulados: vSim, leiseca: vLei, desempenho: vDes };
-let UI = { mat: 'port', qMat: '', qErr: false, qIdx: 0, qLista: null, fMat: '', fVerso: false, fIdx: 0, sim: null, semanas: 6 };
+let UI = { mat: 'port', qMat: '', qOrig: '', qErr: false, qIdx: 0, qLista: null, fMat: '', fVerso: false, fIdx: 0, sim: null, semanas: 6 };
 function rota() { const h = (location.hash || '#hoje').slice(1); return VIEWS[h] ? h : 'hoje'; }
 function render() {
   const r = rota();
@@ -356,7 +360,7 @@ function vMaterias() {
       <div class="panel"><h3>Aulas no YouTube</h3><div class="stack" style="gap:8px">${linksDe(m.id).map((l, i) => `<div class="row" style="justify-content:space-between"><a href="${l.u}" target="_blank" rel="noopener">▶ ${esc(l.n)}</a>${i < meus.length ? `<button class="btn sm" data-act="rmlink" data-i="${i}">Remover</button>` : ''}</div>`).join('')}</div>
       <p class="meta">Os links padrão abrem a busca do professor no YouTube. Adicione abaixo a playlist exata que você escolher.</p>
       <div class="row"><input type="text" id="lN" placeholder="Professor / playlist" style="flex:1;min-width:140px"><input type="url" id="lU" placeholder="https://youtube.com/..." style="flex:2;min-width:180px"><button class="btn sm" data-act="addlink">Adicionar</button></div></div>
-      <div class="panel"><h3>Conteúdo programático</h3><ul class="topics">${m.topicos.map(t => `<li>${esc(t)}</li>`).join('')}</ul>${m.lei ? `<p style="margin:10px 0 0"><a href="${m.lei.u}" target="_blank" rel="noopener">Lei seca: ${esc(m.lei.n)} ↗</a></p>` : ''}</div>
+      <div class="panel"><h3>Conteúdo programático</h3><ul class="topics">${m.topicos.map(t => `<li>${esc(t)}</li>`).join('')}</ul>${m.lei ? `<p style="margin:10px 0 0"><a href="${m.lei.u}" target="_blank" rel="noopener">Lei seca: ${esc(m.lei.n)} ↗</a></p>` : ''}${m.lei2 ? `<p style="margin:4px 0 0"><a href="${m.lei2.u}" target="_blank" rel="noopener">Lei seca: ${esc(m.lei2.n)} ↗</a></p>` : ''}</div>
     </div>
     <div class="panel"><h3>Resumo objetivo</h3>${res.map(([t, itens]) => `<div class="res-sec"><div class="label">${esc(t)}</div><ul>${itens.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join('')}</div>
   </div>`;
@@ -380,27 +384,31 @@ async function baixarPdf(mid, dl) {
 }
 
 // ---------- QUESTÕES ----------
+function lt(q, i) { return q.ce ? 'CE'[i] : LETRAS[i]; }
+function tagQ(q) { return q.fgv ? `<span class="chip tag-fgv">FGV 2025 · Q${q.fgv}</span>` : q.ce ? '<span class="chip tag-ce">Certo/Errado</span>' : ''; }
+function origemOk(q) { return !UI.qOrig || (UI.qOrig === 'fgv' ? q.fgv : UI.qOrig === 'ce' ? q.ce : (!q.fgv && !q.ce)); }
 function listaQ() {
-  return D.questoes.filter(q => (!UI.qMat || q.m === UI.qMat) && (!UI.qErr || (S.resp[q.id] && !S.resp[q.id].ok)));
+  return D.questoes.filter(q => origemOk(q) && (!UI.qMat || q.m === UI.qMat) && (!UI.qErr || (S.resp[q.id] && !S.resp[q.id].ok)));
 }
 function vQuestoes() {
   if (!UI.qLista) { UI.qLista = shuffle(listaQ()).map(q => q.id); UI.qIdx = 0; }
   const ids = UI.qLista; const q = D.questoes.find(x => x.id === ids[UI.qIdx]);
   const tot = Object.keys(S.resp).length, ac = Object.values(S.resp).filter(r => r.ok).length;
-  const filtros = `<div class="row" style="margin-bottom:14px"><select id="qMat" aria-label="Filtrar matéria"><option value="">Todas as matérias</option>${D.materias.map(m => `<option value="${m.id}" ${UI.qMat === m.id ? 'selected' : ''}>${esc(m.nome)}</option>`).join('')}</select><label class="row" style="gap:6px;font-size:14px"><input type="checkbox" id="qErr" ${UI.qErr ? 'checked' : ''}> Só as que errei</label><span class="meta">Banco: ${D.questoes.length} questões · você respondeu ${tot} (${tot ? Math.round(ac / tot * 100) : 0}% de acerto)</span></div>`;
-  const nota = `<div class="panel" style="margin-top:14px"><div class="label">Sobre o banco</div><p style="margin:6px 0 0;font-size:14px">Questões inéditas no estilo FGV (enunciado longo, pegadinha na troca de palavra, lei seca literal). A prova oficial de Investigador 2025 fica no site da FGV: <a href="${D.fontes.edital}" target="_blank" rel="noopener">conhecimento.fgv.br/concursos/pcmg24 ↗</a>. Ela ainda não está misturada aqui: envie o PDF da prova e do gabarito e eu insiro as questões no banco.</p></div>`;
+  const filtros = `<div class="row" style="margin-bottom:14px"><select id="qMat" aria-label="Filtrar matéria"><option value="">Todas as matérias</option>${D.materias.map(m => `<option value="${m.id}" ${UI.qMat === m.id ? 'selected' : ''}>${esc(m.nome)}</option>`).join('')}</select><select id="qOrig" aria-label="Origem"><option value="">Todas as questões</option><option value="fgv" ${UI.qOrig === 'fgv' ? 'selected' : ''}>Prova FGV 2025 (oficial)</option><option value="ined" ${UI.qOrig === 'ined' ? 'selected' : ''}>Inéditas estilo FGV</option><option value="ce" ${UI.qOrig === 'ce' ? 'selected' : ''}>Certo/Errado (Cebraspe)</option></select><label class="row" style="gap:6px;font-size:14px"><input type="checkbox" id="qErr" ${UI.qErr ? 'checked' : ''}> Só as que errei</label><span class="meta">Banco: ${D.questoes.length} questões · você respondeu ${tot} (${tot ? Math.round(ac / tot * 100) : 0}% de acerto)</span></div>`;
+  const nota = `<div class="panel" style="margin-top:14px"><div class="label">Sobre o banco</div><p style="margin:6px 0 0;font-size:14px">Questões inéditas no estilo FGV (enunciado longo, pegadinha na troca de palavra, lei seca literal). A prova oficial de Investigador 2025 fica no site da FGV: <a href="${D.fontes.edital}" target="_blank" rel="noopener">conhecimento.fgv.br/concursos/pcmg24 ↗</a>. As 65 questões aproveitáveis da prova oficial já estão no banco, marcadas como "FGV 2025". Ficaram de fora a Q5 (anulada) e as Q25, Q26, Q28 e Q29, que dependem do texto da LC 129/2013 e da Lei 5.406/1969.</p></div>`;
   if (!q) return `<h2>Banco de questões</h2>${filtros}<div class="panel empty">${UI.qErr ? 'Nenhuma questão errada nesse filtro. Bom sinal.' : 'Nenhuma questão nesse filtro.'}</div>${nota}`;
   const r = UI.resposta;
-  const alts = q.a.map((t, i) => { let cls = ''; if (r != null) { if (i === q.c) cls = 'certa'; else if (i === r) cls = 'errada'; } return `<button class="alt ${cls}" data-act="resp" data-i="${i}" ${r != null ? 'disabled' : ''}><span class="lt">${LETRAS[i]}</span><span>${esc(t)}</span></button>`; }).join('');
+  const alts = q.a.map((t, i) => { let cls = ''; if (r != null) { if (i === q.c) cls = 'certa'; else if (i === r) cls = 'errada'; } return `<button class="alt ${cls}" data-act="resp" data-i="${i}" ${r != null ? 'disabled' : ''}><span class="lt">${lt(q, i)}</span><span>${esc(t)}</span></button>`; }).join('');
   const hist = S.resp[q.id];
   return `<h2>Banco de questões</h2>${filtros}
-  <div class="panel q"><div class="row" style="justify-content:space-between"><span>${chip(q.m)}</span><span class="meta">Questão ${UI.qIdx + 1} de ${ids.length}${hist ? ' · já respondida ' + hist.n + '×' : ''}</span></div>
+  <div class="panel q"><div class="row" style="justify-content:space-between"><span>${chip(q.m)} ${tagQ(q)}</span><span class="meta">Questão ${UI.qIdx + 1} de ${ids.length}${hist ? ' · já respondida ' + hist.n + '×' : ''}</span></div>
   <div class="enun">${esc(q.e)}</div><div class="alts">${alts}</div>
-  ${r != null ? `<div class="exp ${r === q.c ? '' : 'err'}"><b>${r === q.c ? 'Correta.' : 'Errada. Gabarito: ' + LETRAS[q.c] + '.'}</b> ${esc(q.x)}</div>` : ''}
+  ${r != null ? `<div class="exp ${r === q.c ? '' : 'err'}"><b>${r === q.c ? 'Correta.' : 'Errada. Gabarito: ' + (q.ce ? q.a[q.c] : LETRAS[q.c]) + '.'}</b> ${esc(q.x)}</div>` : ''}
   <div class="row" style="justify-content:space-between"><button class="btn" data-act="qprev" ${UI.qIdx ? '' : 'disabled'}>← Anterior</button><button class="btn pri" data-act="qnext">${UI.qIdx + 1 < ids.length ? 'Próxima →' : 'Recomeçar'}</button></div></div>${nota}`;
 }
 AFTER.questoes = () => {
   $('#qMat').onchange = e => { UI.qMat = e.target.value; UI.qLista = null; UI.resposta = null; render(); };
+  $('#qOrig').onchange = e => { UI.qOrig = e.target.value; UI.qLista = null; UI.resposta = null; render(); };
   $('#qErr').onchange = e => { UI.qErr = e.target.checked; UI.qLista = null; UI.resposta = null; render(); };
 };
 
@@ -417,24 +425,33 @@ function vFlash() {
 AFTER.flashcards = () => { $('#fMat').onchange = e => { UI.fMat = e.target.value; UI.fVerso = false; render(); }; };
 
 // ---------- SIMULADOS ----------
-function montarSim() {
+// fgv: 70 questões na proporção do edital, metade da prova oficial e metade inéditas (quando houver);
+// prova: a prova FGV 2025 inteira, na ordem; ce: todos os itens certo/errado (um errado anula um certo).
+function montarSim(tipo) {
   const qs = [];
-  D.materias.forEach(m => { shuffle(D.questoes.filter(q => q.m === m.id)).slice(0, m.q).forEach(q => qs.push(q.id)); });
-  return { ids: qs, resp: {}, ini: Date.now(), fim: null };
+  if (tipo === 'prova') D.questoes.filter(q => q.fgv).sort((a, b) => a.fgv - b.fgv).forEach(q => qs.push(q.id));
+  else if (tipo === 'ce') D.materias.forEach(m => shuffle(D.questoes.filter(q => q.ce && q.m === m.id)).forEach(q => qs.push(q.id)));
+  else D.materias.forEach(m => {
+    const of = shuffle(D.questoes.filter(q => q.m === m.id && q.fgv)), ine = shuffle(D.questoes.filter(q => q.m === m.id && !q.fgv && !q.ce));
+    const metade = Math.ceil(m.q / 2); let pick = of.slice(0, metade); pick = pick.concat(ine.slice(0, m.q - pick.length));
+    if (pick.length < m.q) pick = pick.concat(of.slice(metade, metade + m.q - pick.length));
+    pick.forEach(q => qs.push(q.id));
+  });
+  return { tipo: tipo || 'fgv', ids: qs, resp: {}, ini: Date.now(), fim: null };
 }
 function vSim() {
   const sim = UI.sim; const h = HOJE();
   const prox = plano(400).filter(d => d.tipo === 'sim' && d.data >= h).slice(0, 3);
-  const hist = S.sims.slice().reverse().map(s => `<tr><td>${br(s.d)}</td><td>${s.ac}/${s.tot}</td><td>${Math.round(s.ac / s.tot * 100)}%</td><td>${hm(s.dur)}</td></tr>`).join('');
-  if (!sim) return `<h2>Simulados</h2><p class="sub">Um a cada 15 dias. Distribuição igual à do edital passado (Português 10, Informática 8, RLM 6, Lei Orgânica 6, Constitucional 6, Administrativo 6, Penal 5, Processo Penal 5, Medicina Legal 5, Criminologia 5, Legislação 4, Direitos Humanos 4), limitada às questões que o banco já tem.</p>
-  <div class="grid2"><div class="panel"><h3>Próximos</h3>${prox.map(d => `<div class="row" style="justify-content:space-between;padding:4px 0"><span>Simulado nº ${d.n}</span><span class="meta">${br(d.data)}</span></div>`).join('')}<div class="row" style="margin-top:10px"><button class="btn pri" data-act="simgo">Iniciar simulado agora</button></div></div>
+  const hist = S.sims.slice().reverse().map(s => `<tr><td>${br(s.d)} ${s.tipo === 'ce' ? '(C/E)' : s.tipo === 'prova' ? '(FGV 25)' : ''}</td><td>${s.tipo === 'ce' ? 'nota ' + (s.ac - (s.er || 0)) : s.ac + '/' + s.tot}</td><td>${Math.round(s.ac / s.tot * 100)}%</td><td>${hm(s.dur)}</td></tr>`).join('');
+  if (!sim) return `<h2>Simulados</h2><p class="sub">Um a cada 15 dias. <b>FGV:</b> 70 questões, 4 horas, mesclando a prova oficial de 2025 com inéditas. <b>Cebraspe:</b> itens certo/errado, em que cada item errado anula um certo (deixe em branco quando não souber). Distribuição do FGV igual à do edital passado (Português 10, Informática 8, RLM 6, Lei Orgânica 6, Constitucional 6, Administrativo 6, Penal 5, Processo Penal 5, Medicina Legal 5, Criminologia 5, Legislação 4, Direitos Humanos 4), limitada às questões que o banco já tem.</p>
+  <div class="grid2"><div class="panel"><h3>Próximos</h3>${prox.map(d => `<div class="row" style="justify-content:space-between;padding:4px 0"><span>Simulado nº ${d.n}</span><span class="meta">${br(d.data)}</span></div>`).join('')}<div class="row" style="margin-top:10px"><button class="btn pri" data-act="simgo" data-t="fgv">Simulado FGV (70 questões, 4 h)</button><button class="btn" data-act="simgo" data-t="prova">Prova oficial FGV 2025</button><button class="btn" data-act="simgo" data-t="ce">Simulado Cebraspe (certo/errado)</button></div></div>
   <div class="panel"><h3>Histórico</h3>${hist ? `<div class="tscroll"><table><thead><tr><th>Data</th><th>Acertos</th><th>%</th><th>Tempo</th></tr></thead><tbody>${hist}</tbody></table></div>` : '<div class="empty">Nenhum simulado feito ainda.</div>'}</div></div>`;
   const qs = sim.ids.map(id => D.questoes.find(q => q.id === id));
   const fim = !!sim.fim; let ac = 0;
   const html = qs.map((q, n) => { const r = sim.resp[q.id]; if (fim && r === q.c) ac++;
-    return `<div class="panel q" id="s${n}"><div class="row" style="justify-content:space-between"><b>Questão ${n + 1}</b>${chip(q.m)}</div><div class="enun">${esc(q.e)}</div><div class="alts">${q.a.map((t, i) => { let c = ''; if (fim) { if (i === q.c) c = 'certa'; else if (i === r) c = 'errada'; } else if (i === r) c = 'marcada'; return `<button class="alt ${c}" data-act="smark" data-q="${q.id}" data-i="${i}" ${fim ? 'disabled' : ''}><span class="lt">${LETRAS[i]}</span><span>${esc(t)}</span></button>`; }).join('')}</div>${fim ? `<div class="exp ${r === q.c ? '' : 'err'}">${r == null ? 'Em branco. ' : ''}Gabarito ${LETRAS[q.c]}. ${esc(q.x)}</div>` : ''}</div>`; }).join('');
+    return `<div class="panel q" id="s${n}"><div class="row" style="justify-content:space-between"><b>${sim.tipo === 'ce' ? 'Item' : 'Questão'} ${n + 1}</b><span>${chip(q.m)} ${tagQ(q)}</span></div><div class="enun">${esc(q.e)}</div><div class="alts">${q.a.map((t, i) => { let c = ''; if (fim) { if (i === q.c) c = 'certa'; else if (i === r) c = 'errada'; } else if (i === r) c = 'marcada'; return `<button class="alt ${c}" data-act="smark" data-q="${q.id}" data-i="${i}" ${fim ? 'disabled' : ''}><span class="lt">${lt(q, i)}</span><span>${esc(t)}</span></button>`; }).join('')}</div>${fim ? `<div class="exp ${r === q.c ? '' : 'err'}">${r == null ? 'Em branco. ' : ''}Gabarito ${q.ce ? q.a[q.c] : LETRAS[q.c]}. ${esc(q.x)}</div>` : ''}</div>`; }).join('');
   const resp = Object.keys(sim.resp).length;
-  return `<h2>Simulado em andamento</h2><p class="sub">${qs.length} questões · ${fim ? `Resultado: <b>${ac}/${qs.length} (${Math.round(ac / qs.length * 100)}%)</b>` : `respondidas ${resp}/${qs.length} · tempo <span id="simClock">${hms((Date.now() - sim.ini) / 1000)}</span>`}</p>
+  return `<h2>Simulado em andamento</h2><p class="sub">${qs.length} questões · ${fim ? (sim.tipo === 'ce' ? `Resultado: <b>${ac} certos − ${Object.keys(sim.resp).length - ac} errados = nota ${2 * ac - Object.keys(sim.resp).length}</b>` : `Resultado: <b>${ac}/${qs.length} (${Math.round(ac / qs.length * 100)}%)</b>`) : `respondidas ${resp}/${qs.length} · tempo <span id="simClock">${hms((Date.now() - sim.ini) / 1000)}</span>`}</p>
   <div class="stack">${html}</div>
   <div class="row" style="margin-top:14px">${fim ? '<button class="btn pri" data-act="simsair">Fechar simulado</button>' : `<button class="btn pri" data-act="simfim">Entregar simulado</button>`}</div>`;
 }
@@ -484,9 +501,9 @@ document.addEventListener('click', e => {
   else if (a === 'qprev') { UI.resposta = null; UI.qIdx = Math.max(0, UI.qIdx - 1); render(); }
   else if (a === 'virar') { UI.fVerso = !UI.fVerso; render(); }
   else if (a === 'fok' || a === 'ferr') { const id = el.dataset.id; const c = S.cards[id] || { b: 0 }; const b = a === 'fok' ? Math.min(5, c.b + 1) : 1; S.cards[id] = { b, due: addDias(HOJE(), a === 'fok' ? INTERV[b] : 0) }; if (a === 'ferr') { const f = D.flash.find(x => x.id === id); S.cards[id].due = HOJE(); S.cards[id].t = Date.now(); } UI.fVerso = false; salvar(); ordenarErrados(); render(); }
-  else if (a === 'simgo') { UI.sim = montarSim(); render(); window.scrollTo(0, 0); }
+  else if (a === 'simgo') { UI.sim = montarSim(el.dataset.t); render(); window.scrollTo(0, 0); }
   else if (a === 'smark') { UI.sim.resp[el.dataset.q] = +el.dataset.i; render(); }
-  else if (a === 'simfim') { const sim = UI.sim; sim.fim = Date.now(); let ac = 0; sim.ids.forEach(id => { const q = D.questoes.find(x => x.id === id); const r = sim.resp[id]; if (r === q.c) ac++; if (r != null) { const prev = S.resp[id]; S.resp[id] = { ok: r === q.c, n: (prev ? prev.n : 0) + 1, d: HOJE() }; } }); S.sims.push({ d: HOJE(), ac, tot: sim.ids.length, dur: Math.round((sim.fim - sim.ini) / 1000) }); salvar(); render(); window.scrollTo(0, 0); toast('Simulado corrigido'); }
+  else if (a === 'simfim') { const sim = UI.sim; sim.fim = Date.now(); let ac = 0; sim.ids.forEach(id => { const q = D.questoes.find(x => x.id === id); const r = sim.resp[id]; if (r === q.c) ac++; if (r != null) { const prev = S.resp[id]; S.resp[id] = { ok: r === q.c, n: (prev ? prev.n : 0) + 1, d: HOJE() }; } }); const er = sim.ids.filter(id => sim.resp[id] != null && sim.resp[id] !== D.questoes.find(x => x.id === id).c).length; S.sims.push({ d: HOJE(), tipo: sim.tipo, ac, er, tot: sim.ids.length, dur: Math.round((sim.fim - sim.ini) / 1000) }); salvar(); render(); window.scrollTo(0, 0); toast('Simulado corrigido'); }
   else if (a === 'simsair') { UI.sim = null; render(); }
   else if (a === 'exp') { const txt = JSON.stringify(S); navigator.clipboard.writeText(txt).then(() => toast('Cópia copiada. Guarde num bloco de notas.')).catch(() => { $('#impBox').hidden = false; $('#impTxt').value = txt; $('#impTxt').select(); toast('Selecione e copie o texto'); }); }
   else if (a === 'impshow') { $('#impBox').hidden = false; }
