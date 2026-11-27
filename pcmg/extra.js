@@ -156,4 +156,107 @@
     ['penal', 'Após a Lei 15.397/2026, o estelionato comum voltou a ser crime de ação penal pública incondicionada.', 0, 'Revogação do §5º do art. 171.'],
     ['penal', 'A pena mínima do roubo simples, após a Lei 15.397/2026, é de 4 anos de reclusão.', 1, 'Passou a 6 anos (6 a 10).']
   ].forEach((q, i) => D.questoes.push({ id: 'ce-26-' + i, m: q[0], e: q[1], a: ['Certo', 'Errado'], c: q[2], x: q[3], ce: true }));
+  // ---------- Lei Orgânica: resumo pela letra da lei (LC 129/2013 e Lei 5.406/1969, textos atualizados da ALMG) ----------
+  const baseCF = R.lo.find(x => x[0] === 'Base constitucional');
+  R.lo = [
+    ['O que a FGV cobrou em 2025 (e como)', [
+      '6 questões: 3 da LC 129/2013 (competência para remoção por permuta, verbas indenizatórias, afastamento para curso) e 3 da Lei 5.406/1969 (penas de demissão, causa justificativa, revisão do processo disciplinar).',
+      'Padrão da banca: copiar o artigo e trocar UM número (45 → 30 dias; 3 → 6 meses; 3 → 5 anos) ou UMA palavra ("ex officio" → "a pedido"; "permite" → "vedada"). Decore os números.',
+      'Por que a Lei 5.406/1969 cai: a LC 129/2013 revogou quase toda a lei antiga, MAS manteve os arts. 142 a 205 (regime disciplinar) até sair o Estatuto Disciplinar próprio (LC 129, art. 116, parágrafo único).'
+    ]],
+    ['LC 129/2013 — natureza, princípios e competência (arts. 1º a 16)', [
+      'Art. 2º: PCMG é órgão AUTÔNOMO, essencial à segurança pública, à realização da justiça e à defesa das instituições democráticas.',
+      'Art. 3º: princípios do art. 37 da CF (LIMPE) + promoção dos direitos humanos, participação comunitária, mediação de conflitos, uso proporcional da força, hierarquia e disciplina, transparência e controle, integração com o Sistema de Defesa Social.',
+      'Art. 4º (investigação e polícia judiciária): indisponibilidade do interesse público, obrigatoriedade, oficialidade, sigilo, imparcialidade; inevitabilidade, inafastabilidade, indeclinabilidade, INDELEGABILIDADE, INDIVISIBILIDADE e interdisciplinaridade da investigação.',
+      'Art. 5º: autonomia administrativa e financeira (programação financeira, contabilidade própria, compra de viaturas e equipamentos).',
+      'Art. 11: a direção da polícia judiciária cabe aos Delegados de Polícia de carreira; os atos de polícia judiciária são fiscalizados pelo Corregedor-Geral.',
+      'Art. 13: carteira funcional válida em todo o território nacional.',
+      'Art. 14: polícia judiciária e apuração de infrações penais e ATOS INFRACIONAIS, exceto militares. Atividades PRIVATIVAS: polícia técnico-científica, identificação civil e criminal, registro e licenciamento de veículos e habilitação de condutor.',
+      'Art. 15: subordina-se DIRETAMENTE ao Governador e integra, para fins operacionais, o Sistema de Defesa Social.',
+      'Art. 16, parágrafo único: funções constitucionais da PCMG são INDELEGÁVEIS e só exercidas pelas carreiras que a integram.'
+    ]],
+    ['LC 129/2013 — estrutura (arts. 17 a 38)', [
+      'Administração SUPERIOR (art. 17, I): Chefia da PCMG, Chefia Adjunta, Conselho Superior e Corregedoria-Geral.',
+      'Administração (art. 17, II): Gabinete da Chefia, Academia de Polícia Civil e as Superintendências de Investigação e Polícia Judiciária, de Informações e Inteligência Policial, de Polícia Técnico-Científica e de Planejamento, Gestão e Finanças. (O Detran saiu da estrutura em 2023, pela Lei 24.313.)',
+      'Subordinações (art. 17, §§2º e 3º): Departamentos, Polinter e Casa de Custódia → Superintendência de Investigação e Polícia Judiciária; Instituto de Criminologia e Colégio Ordem e Progresso → Academia; IC, IML e postos de perícia → Superintendência de Polícia Técnico-Científica; Instituto de Identificação → Superintendência de Informações e Inteligência.',
+      'Chefe da PCMG (art. 18): nomeado pelo Governador dentre Delegados do nível final, em atividade, com no mínimo VINTE anos de serviço policial. Tem status de Secretário de Estado (art. 19). Chefe Adjunto: também 20 anos, escolhido pelo Chefe e nomeado pelo Governador (art. 23).',
+      'Substituição do Chefe (art. 20): Chefe Adjunto → Corregedor-Geral → Superintendente de Investigação e Polícia Judiciária → Chefe de Gabinete → Diretor da Academia → Sup. de Informações e Inteligência → Sup. de Planejamento → Delegado Assistente.',
+      'Diretores de Superintendências, Academia, Corregedoria etc.: Delegados-Gerais com no mínimo QUINZE anos de serviço (art. 17, §§7º e 8º).',
+      'Conselho Superior (arts. 24 a 31): presidido pelo Chefe; estrutura: Órgão Especial, Câmara Disciplinar (presidida pelo Chefe ADJUNTO, julga recursos contra atos do Corregedor) e Câmara de Planejamento e Orçamento. Inclui os Inspetores-Gerais de Escrivães e de Investigadores. Delibera sobre promoções, estabilidade, afastamento para curso e propõe remoção ex officio.',
+      'Corregedoria-Geral (arts. 32 a 34): órgão orientador, fiscalizador e correicional; pode avocar inquéritos; propõe afastamento preliminar de servidor por até NOVENTA dias (acima de 90 e abaixo de 180 dias, por ato do Chefe com deliberação do Conselho Superior); acompanha o estágio probatório.',
+      'Superintendência de Investigação e Polícia Judiciária (art. 38): pode incumbir Delegado ou policial de diligências por até 30 dias; remove Investigadores e Escrivães A PEDIDO OU POR PERMUTA dentro do mesmo Departamento (inciso V — caiu em 2025).'
+    ]],
+    ['LC 129/2013 — prerrogativas e direitos (arts. 45 a 51)', [
+      'Prerrogativas (art. 45): distintivo e identidade funcional válidos em todo o país; PORTE LIVRE de arma em todo o território nacional; livre acesso a locais sujeitos a intervenção policial; prioridade em transporte e comunicação em serviço urgente; busca pessoal e veicular com fundada suspeita; requisição de bens em iminente perigo público (com indenização); prisão especial; receber arma, munição, colete, algemas e distintivo na primeira designação.',
+      'Art. 47: preso provisoriamente, o policial é afastado SEM prejuízo da remuneração até o trânsito em julgado; condenado sem demissão, recebe só UM TERÇO da remuneração enquanto cumpre pena privativa de liberdade (salvo se puder exercer a função).',
+      'Verbas (art. 49): ajuda de custo (remoção EX OFFICIO ou designação que mude o domicílio, valor de UM mês de vencimento); diárias; transporte de dependentes (remoção ex officio); auxílio-funeral (até um mês de vencimento); translado quando ferido, acidentado ou falecido em serviço; 13º; 1/3 de férias; indenização securitária (20 vezes a remuneração, com teto); auxílio-natalidade (valor da remuneração, uma única percepção se pai e mãe forem da PCMG).',
+      'Art. 50: indenização de vestimenta = 40% do vencimento básico do nível I de Investigador, paga anualmente.',
+      'Art. 51, parágrafo único: reposições ao erário em parcelas de no máximo 1/10 dos vencimentos (salvo má-fé).'
+    ]],
+    ['LC 129/2013 — remoção, jornada, licenças e afastamentos (arts. 52 a 70)', [
+      'Remoção entre municípios (art. 52): com edital e vaga; hipóteses: a pedido ou permuta; acompanhar cônjuge servidor removido ex officio; saúde; ex officio no interesse do serviço (motivada); conveniência da disciplina (independe de vaga). Remoções a pedido/permuta, por cônjuge e por disciplina NÃO geram indenização (§1º).',
+      'Remoção durante férias ou licença saúde só produz efeito depois do afastamento (art. 56).',
+      'Jornada (arts. 58 e 82): 40 h semanais; máximo de 8 h diárias e plantão de no máximo 12 h ininterruptas; descanso mínimo de 12 h após plantão; dever de atuar ao presenciar infração, mesmo de folga ou férias; tempo em trânsito para diligência conta como trabalhado.',
+      'Licenças (art. 59): saúde, doença em pessoa da família, maternidade/paternidade/adoção, acidente em serviço, mandato sindical.',
+      'Licenciado para saúde não pode ter atividade remunerada (art. 61) — e isso é causa de DEMISSÃO (Lei 5.406, art. 158, VI).',
+      'Doença em pessoa da família (art. 65): até 90 dias com vencimentos + prorrogação sem remuneração por até 120 dias; não renovável em 12 meses. Acidente em serviço (art. 66): até 2 anos; prova em 30 dias.',
+      'Afastamento de 8 dias consecutivos (art. 67): casamento (comunicar antes) e falecimento de cônjuge/companheiro, ascendente, descendente ou irmão.',
+      'Curso (art. 68 — caiu em 2025): concedido pelo CHEFE da PCMG por TRÊS meses, prorrogável por mais TRÊS; vedado em estágio probatório ou com sindicância/PAD; relatório em 30 dias, senão não conta como tempo de serviço; depois, servir mais TRÊS anos ou ressarcir; exterior ou curso no país acima de SEIS meses depende do GOVERNADOR. Art. 69: afastado não pode exercer outra função, sob pena de cassação do afastamento.',
+      'Interesses particulares (art. 70, IV): até 2 anos, sem vencimentos, não conta como efetivo exercício; vedado a quem responde PAD, está em estágio probatório ou já pode se aposentar.'
+    ]],
+    ['LC 129/2013 — carreiras, ingresso, estágio e promoção (arts. 76 a 101)', [
+      'Carreiras (art. 76): Delegado, Escrivão, INVESTIGADOR, Médico-Legista e Perito Criminal. Não há hierarquia entre Escrivão, Investigador, Médico-Legista e Perito (art. 81, §6º).',
+      'O Investigador pode fazer busca pessoal e veicular com fundada suspeita e efetuar prisões (art. 79, §1º, I). Local de crime: coleta de vestígios com primazia do Perito; depois de liberado, análise pelos Investigadores (art. 79, §3º).',
+      'Concurso (art. 84): provas e títulos; psicotécnico; exames biomédicos; exames biofísicos (testes físicos); investigação social. Só a 1ª etapa é eliminatória E classificatória; as demais são eliminatórias. Realizado privativamente pela Academia (pode terceirizar).',
+      'Nível superior: Delegado = Direito; Médico-Legista = Medicina; Escrivão, Investigador e Perito = conforme o edital (art. 85).',
+      'Estágio probatório (art. 87): TRÊS anos a partir da POSSE. Comissão de policiais estáveis avalia; a estabilidade é deliberada pelo Conselho Superior; o Corregedor pode impugnar a permanência a qualquer tempo (suspende o estágio) e dá parecer até 90 dias antes do fim; o ato declaratório de estabilidade é do Chefe da PCMG (art. 91).',
+      'Progressão = grau seguinte no mesmo nível (1 ano no grau). Promoção = nível seguinte (2 anos no nível); por antiguidade, merecimento, ato de bravura, invalidez e post mortem; em junho e dezembro (art. 94).',
+      'Promoção especial de Escrivão e Investigador (art. 96): 8 anos no mesmo nível + avaliações satisfatórias + aperfeiçoamento.',
+      'Perde progressão/promoção no período quem for suspenso por 30 dias ou mais (art. 99).',
+      'Aposentadoria (art. 72): homem 30 anos de contribuição com 20 de cargo policial; mulher 30/20 ou 25/25. Compulsória aos 70 (art. 71).'
+    ]],
+    ['Lei 5.406/1969 — regime disciplinar (arts. 142 a 205, ainda em vigor)', [
+      'Ordens superiores: cumpridas prontamente salvo se MANIFESTAMENTE ilegais; responde quem ordenou, e o agente pelos excessos (art. 146).',
+      'Proibições (art. 148): atividade político-partidária (salvo licenciado para interesses particulares), aceitar presentes por missão policial, quebrar sigilo que prejudique investigação, censurar autoridades na imprensa, fomentar antagonismo entre carreiras.',
+      'Transgressões (art. 150): 35 incisos — ex.: faltar com a verdade, anonimato, frequentar lugares incompatíveis com o decoro, usar violência desnecessária, indicar advogado a investigado, apresentar-se embriagado, cobrar custas sem base legal.',
+      'Classificação (art. 151): leves, médias e graves. Sempre grave a infamante, ofensiva à dignidade policial, atentatória às instituições, deliberada contra o serviço ou contra a hierarquia (art. 152, §2º).',
+      'Causas JUSTIFICATIVAS (art. 153, §1º) — excluem a punição (§4º): ignorância comprovada; FORÇA MAIOR comprovada; ação meritória no interesse do serviço; obediência a ordem superior; legítima defesa; uso imperativo de meios violentos para compelir subordinado em perigo/calamidade.',
+      'ATENUANTES (§2º): bom comportamento, serviços relevantes, falta de prática, defesa própria ou de direitos, EVITAR MAL MAIOR, participação de somenos importância, ignorância aceitável, reparar o dano, CONFISSÃO espontânea.',
+      'AGRAVANTES (§3º): reincidência, mau comportamento, concurso de transgressões ou de agentes, abuso de autoridade, premeditação, presença de subordinados, lugar público, dificultar a apuração.',
+      'Penas (art. 154): repreensão, suspensão, multa, demissão, demissão a bem do serviço público e cassação de aposentadoria ou disponibilidade — sem sequência obrigatória.',
+      'Suspensão: até NOVENTA dias, por falta grave ou reincidência; pode ser convertida em multa de 50% por dia, ficando o servidor em serviço (art. 156).',
+      'DEMISSÃO (art. 158): abandono de cargo (mais de 30 dias CONSECUTIVOS); procedimento irregular grave; ineficiência (se impossível readaptar); aplicação indevida de dinheiro público; ausência sem justa causa por mais de QUARENTA E CINCO dias INTERPOLADOS em um ano; atividade remunerada durante licença para tratamento de saúde.',
+      'DEMISSÃO A BEM DO SERVIÇO PÚBLICO (art. 159): embriaguez habitual/drogas, crime contra a administração, revelar segredo dolosamente, insubordinação grave, ofensa física em serviço (salvo legítima defesa), receber propina, advocacia administrativa, contumácia em transgressões, usura, greve/sabotagem.',
+      'Competência (art. 161, texto original): Governador em qualquer caso; Corregedor-Geral até suspensão de 30 dias; Delegados de carreira até 5 dias (limitado aos subordinados). Hoje a LC 129 atribui ao Chefe da PCMG e ao Corregedor-Geral a instauração de PAD e a aplicação de sanções.',
+      'PAD obrigatório quando couber demissão (art. 166); sindicância quando faltarem elementos. "Verdade sabida" (art. 167): conhecimento pessoal e direto da falta pela autoridade.',
+      'Prazos do PAD: início em 8 dias da portaria; conclusão em 60 dias da citação; julgamento em 30 dias, prorrogáveis por igual período; publicação em 8 dias; não fica sobrestado aguardando ação penal (arts. 178, 188, 189, 191, 192).',
+      'REVISÃO (arts. 195 a 204 — caiu em 2025): a qualquer tempo; não agrava a pena; cabe quando a decisão contraria lei expressa ou a evidência dos autos, se funda em prova falsa, ou surgem novas provas de inocência; simples alegação de injustiça não basta; pedida pelo punido, procurador ou, se morto, cônjuge, ascendente, descendente ou irmão; quem integrou a comissão do PAD fica impedido; procedente → redução ou cancelamento da pena.'
+    ]]
+  ];
+  if (baseCF) R.lo.push(baseCF);
+  [
+    ['lo', 'Nos termos da LC 129/2013, o Chefe da PCMG é nomeado pelo Governador do Estado dentre integrantes, em atividade, do nível final da carreira de Delegado de Polícia que possuam, no mínimo,', ['dez anos de efetivo serviço policial.', 'quinze anos de efetivo serviço policial.', 'vinte anos de efetivo serviço policial.', 'vinte e cinco anos de efetivo serviço policial.', 'trinta anos de serviço público.'], 2, 'Art. 18, parágrafo único. Diretores de Superintendências e da Academia: quinze anos (art. 17, §8º).'],
+    ['lo', 'De acordo com a LC 129/2013, são atividades PRIVATIVAS da PCMG:', ['o policiamento ostensivo e a segurança de presídios.', 'a polícia técnico-científica, o processamento e arquivo de identificação civil e criminal, o registro e licenciamento de veículo automotor e a habilitação de condutor.', 'a apuração de infrações penais militares.', 'a fiscalização de trânsito nas rodovias estaduais.', 'a execução das penas privativas de liberdade.'], 1, 'Art. 14, parágrafo único.'],
+    ['lo', 'Segundo a LC 129/2013, o estágio probatório do policial civil tem duração de', ['dois anos, contados da nomeação.', 'três anos, contados do ato da posse.', 'três anos, contados do início do curso de formação.', 'dois anos, contados da posse.', 'quatro anos, contados da nomeação.'], 1, 'Art. 87. A estabilidade é deliberada pelo Conselho Superior (art. 88, §2º) e declarada pelo Chefe da PCMG (art. 91).'],
+    ['lo', 'Investigador da PCMG pretende remoção de um município para outro, a pedido. Segundo a LC 129/2013, essa remoção', ['independe de vaga e gera ajuda de custo.', 'depende de prévio edital e de vaga, e não gera direito a auxílio ou indenização.', 'gera ajuda de custo no valor de um mês de vencimento.', 'é vedada durante os dois primeiros anos de exercício.', 'depende de deliberação do Governador.'], 1, 'Art. 52, caput, I, e §1º. Ajuda de custo só na remoção ex officio (art. 49, I).'],
+    ['lo', 'Considerando a Lei 5.406/1969, constitui causa JUSTIFICATIVA da transgressão disciplinar, que afasta a punição:', ['ter o transgressor bom comportamento anterior.', 'ter sido a transgressão cometida em obediência a ordem superior.', 'ter o transgressor confessado espontaneamente a falta.', 'ter o transgressor reparado o dano antes da pena.', 'ter sido de somenos importância a participação do indiciado.'], 1, 'Art. 153, §1º, IV. As demais são atenuantes (§2º).'],
+    ['lo', 'Segundo a Lei 5.406/1969, considera-se abandono de cargo, punível com demissão, o não comparecimento do servidor ao serviço por mais de', ['quinze dias consecutivos.', 'trinta dias consecutivos.', 'quarenta e cinco dias interpolados.', 'sessenta dias interpolados.', 'noventa dias consecutivos.'], 1, 'Art. 158, §1º. Mais de 45 dias INTERPOLADOS em um ano também gera demissão (art. 158, V), mas é hipótese diferente.'],
+    ['lo', 'Policial civil de MG, sem justificativa, recebeu propina em razão de missão policial. Segundo a Lei 5.406/1969, a pena cabível é', ['suspensão de até noventa dias.', 'demissão.', 'demissão a bem do serviço público.', 'repreensão por escrito.', 'multa, convertida da suspensão.'], 2, 'Art. 159, VII.'],
+    ['lo', 'Pela LC 129/2013, o policial civil preso provisoriamente pela prática de infração penal', ['é demitido sumariamente.', 'é afastado do exercício das funções, sem prejuízo da remuneração, até decisão final transitada em julgado.', 'é afastado com um terço da remuneração.', 'continua no exercício das funções.', 'tem a remuneração suspensa até a sentença.'], 1, 'Art. 47, caput. Um terço da remuneração só após condenação que não implique demissão, durante o cumprimento da pena (art. 47, §2º, I).']
+  ].forEach((q, i) => D.questoes.push({ id: 'lo-n' + i, m: q[0], e: q[1], a: q[2], c: q[3], x: q[4] }));
+  [
+    ['lo', 'A PCMG subordina-se diretamente ao Governador do Estado e integra, para fins operacionais, o Sistema de Defesa Social.', 0, 'LC 129/2013, art. 15.'],
+    ['lo', 'O afastamento do policial civil para frequentar curso relacionado ao cargo pode ser concedido ao servidor em estágio probatório.', 1, 'Vedado (art. 68, §1º).'],
+    ['lo', 'Pela Lei 5.406/1969, a pena de suspensão não pode exceder noventa dias e pode ser convertida em multa de cinquenta por cento por dia de vencimento.', 0, 'Art. 156, caput e §2º.'],
+    ['lo', 'Não há subordinação hierárquica entre o Escrivão de Polícia, o Investigador de Polícia, o Médico-Legista e o Perito Criminal.', 0, 'LC 129/2013, art. 81, §6º.']
+  ].forEach((q, i) => D.questoes.push({ id: 'ce-lo' + i, m: q[0], e: q[1], a: ['Certo', 'Errado'], c: q[2], x: q[3], ce: true }));
+  [
+    ['lo', 'Chefe da PCMG: requisitos', 'Delegado do nível final, em atividade, 20 anos de serviço policial; nomeado pelo Governador; status de Secretário de Estado.'],
+    ['lo', 'Afastamento para curso (LC 129)', '3 meses + 3; Chefe da PCMG concede; depois servir 3 anos ou ressarcir; exterior ou mais de 6 meses: Governador.'],
+    ['lo', 'Ajuda de custo (LC 129)', 'Remoção EX OFFICIO ou designação que mude o domicílio: 1 mês de vencimento. A pedido não gera.'],
+    ['lo', 'Demissão por faltas (Lei 5.406)', 'Abandono: + de 30 dias consecutivos. Inassiduidade: + de 45 dias interpolados em 1 ano.'],
+    ['lo', 'Causa justificativa × atenuante', 'Justificativa afasta a pena (força maior, ordem superior, legítima defesa...). Atenuante só reduz (confissão, bom comportamento, evitar mal maior...).'],
+    ['lo', 'Revisão do PAD (Lei 5.406)', 'A qualquer tempo; não agrava; injustiça só não basta; morto → cônjuge, ascendente, descendente ou irmão; membro da comissão do PAD impedido.'],
+    ['lo', 'Por que a Lei 5.406/1969 ainda vale?', 'LC 129, art. 116, parágrafo único: arts. 142 a 205 seguem até o Estatuto Disciplinar próprio.']
+  ].forEach((f, i) => D.flash.push({ id: 'flo' + i, m: f[0], f: f[1], v: f[2] }));
 })();
